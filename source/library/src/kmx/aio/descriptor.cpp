@@ -27,7 +27,7 @@ namespace kmx::aio::descriptor
         if (this != &other)
         {
             close();
-            fd_ = std::exchange(other.fd_, -1);
+            fd_ = std::exchange(other.fd_, invalid_fd);
         }
 
         return *this;
@@ -38,7 +38,7 @@ namespace kmx::aio::descriptor
         if (fd_ >= 0)
         {
             ::close(fd_);
-            fd_ = -1;
+            fd_ = invalid_fd;
         }
     }
 
