@@ -57,7 +57,7 @@ namespace kmx::aio
     }
 
     /// @brief Helper to create a std::error_code from a specific error number.
-    [[nodiscard]] inline std::error_code error_from_errno(int err) noexcept
+    [[nodiscard]] inline std::error_code error_from_errno(const int err) noexcept
     {
         return std::error_code(err, std::generic_category());
     }

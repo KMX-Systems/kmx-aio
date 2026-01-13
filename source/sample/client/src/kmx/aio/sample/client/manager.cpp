@@ -2,6 +2,8 @@
 
 namespace kmx::aio::sample::client
 {
+    static constexpr auto mem_order = std::memory_order_relaxed;
+
     int manager::run() noexcept(false)
     {
         const auto start_time = std::chrono::high_resolution_clock::now();
@@ -10,16 +12,14 @@ namespace kmx::aio::sample::client
                     config_.num_workers, config_.server_addr, config_.server_port);
 
         // Create executor with thread pool
-        const kmx::aio::executor_config exec_config {
+        const executor_config exec_config {
             .thread_count = config_.scheduler_threads, .max_events = config_.max_events, .timeout_ms = config_.timeout_ms};
 
-        executor_ = std::make_shared<kmx::aio::executor>(exec_config);
+        executor_ = std::make_shared<executor>(exec_config);
 
         // Spawn all worker coroutines into the executor
         for (std::size_t i {}; i < static_cast<std::size_t>(config_.num_workers); ++i)
-        {
             executor_->spawn(worker(static_cast<int>(i)));
-        }
 
         // Run executor (blocks until all tasks complete)
         executor_->run();
@@ -29,17 +29,17 @@ namespace kmx::aio::sample::client
 
         print_summary(elapsed);
 
-        const auto failures = metrics_.failures.load(std::memory_order_relaxed);
+        const auto failures = metrics_.failures.load(mem_order);
         logger::log(logger::level::info, std::source_location::current(),
                     "Stress test completed in {} ms with {} successes and {} failures", elapsed.count(),
-                    metrics_.successes.load(std::memory_order_relaxed), failures);
+                    metrics_.successes.load(mem_order), failures);
 
         return failures > 0 ? 1 : 0;
     }
 
-    std::expected<kmx::aio::descriptor::file, std::error_code> manager::create_nonblocking_socket() noexcept
+    std::expected<descriptor::file, std::error_code> manager::create_nonblocking_socket() noexcept
     {
-        auto fd_result = kmx::aio::descriptor::file::create_socket(AF_INET, SOCK_STREAM, 0);
+        auto fd_result = descriptor::file::create_socket(AF_INET, SOCK_STREAM, 0);
         if (!fd_result)
             return std::unexpected(fd_result.error());
 
@@ -58,13 +58,11 @@ namespace kmx::aio::sample::client
         return fd;
     }
 
-    kmx::aio::task<std::expected<kmx::aio::tcp::stream, std::error_code>> manager::async_connect() noexcept
+    task<std::expected<tcp::stream, std::error_code>> manager::async_connect() noexcept
     {
         auto fd_result = create_nonblocking_socket();
         if (!fd_result)
-        {
             co_return std::unexpected(fd_result.error());
-        }
 
         auto fd_owner = std::move(*fd_result);
         const auto fd = fd_owner.get();
@@ -73,31 +71,23 @@ namespace kmx::aio::sample::client
         addr.sin_family = AF_INET;
         addr.sin_port = ::htons(config_.server_port);
 
-        if (auto pton_result = kmx::aio::inet_pton(AF_INET, config_.server_addr.data(), &addr.sin_addr); !pton_result)
-        {
+        if (auto pton_result = aio::inet_pton(AF_INET, config_.server_addr.data(), &addr.sin_addr); !pton_result)
             co_return std::unexpected(pton_result.error());
-        }
 
         // Attempt non-blocking connect using wrapper
         auto connect_result = fd_owner.connect(reinterpret_cast<const sockaddr*>(&addr), sizeof(addr));
         const bool in_progress = (!connect_result && connect_result.error().value() == EINPROGRESS);
 
         if (!connect_result && !in_progress)
-        {
             co_return std::unexpected(connect_result.error());
-        }
 
         // Register with executor for I/O events BEFORE waiting
         if (const auto reg_result = executor_->register_fd(fd); !reg_result)
-        {
             co_return std::unexpected(reg_result.error());
-        }
 
         // If connect is in progress, wait for socket to be writable
         if (in_progress)
-        {
-            co_await executor_->wait_io(fd, kmx::aio::event_type::write);
-        }
+            co_await executor_->wait_io(fd, event_type::write);
 
         // Check connection status using wrapper
         int so_error = 0;
@@ -115,12 +105,12 @@ namespace kmx::aio::sample::client
         }
 
         // On success, transfer ownership of the fd to the stream
-        co_return kmx::aio::tcp::stream(*executor_, std::move(fd_owner));
+        co_return tcp::stream(*executor_, std::move(fd_owner));
     }
 
-    kmx::aio::task<void> manager::worker(const int worker_id) noexcept(false)
+    task<void> manager::worker(const int worker_id) noexcept(false)
     {
-        metrics_.total_connections.fetch_add(1u, std::memory_order_relaxed);
+        metrics_.total_connections.fetch_add(1u, mem_order);
 
         try
         {
@@ -130,8 +120,8 @@ namespace kmx::aio::sample::client
             {
                 logger::log(logger::level::warn, std::source_location::current(), "Worker [{}]: Connection failed: {}", worker_id,
                             stream_result.error().message());
-                metrics_.failures.fetch_add(1u, std::memory_order_relaxed);
-                metrics_.completed.fetch_add(1u, std::memory_order_relaxed);
+                metrics_.failures.fetch_add(1u, mem_order);
+                metrics_.completed.fetch_add(1u, mem_order);
                 co_return;
             }
 
@@ -145,8 +135,8 @@ namespace kmx::aio::sample::client
             {
                 logger::log(logger::level::warn, std::source_location::current(), "Worker [{}]: Send failed: {}", worker_id,
                             send_result.error().message());
-                metrics_.failures.fetch_add(1u, std::memory_order_relaxed);
-                metrics_.completed.fetch_add(1u, std::memory_order_relaxed);
+                metrics_.failures.fetch_add(1u, mem_order);
+                metrics_.completed.fetch_add(1u, mem_order);
                 co_return;
             }
 
@@ -159,32 +149,32 @@ namespace kmx::aio::sample::client
             {
                 logger::log(logger::level::warn, std::source_location::current(), "Worker [{}]: Receive failed: {}", worker_id,
                             recv_result.error().message());
-                metrics_.failures.fetch_add(1u, std::memory_order_relaxed);
-                metrics_.completed.fetch_add(1u, std::memory_order_relaxed);
+                metrics_.failures.fetch_add(1u, mem_order);
+                metrics_.completed.fetch_add(1u, mem_order);
                 co_return;
             }
 
             const auto bytes_received = *recv_result;
             logger::log(logger::level::debug, std::source_location::current(), "Worker [{}]: Received {} bytes", worker_id, bytes_received);
 
-            metrics_.successes.fetch_add(1u, std::memory_order_relaxed);
+            metrics_.successes.fetch_add(1u, mem_order);
         }
         catch (const std::exception& e)
         {
             logger::log(logger::level::error, std::source_location::current(), "Worker [{}]: Exception: {}", worker_id, e.what());
-            metrics_.failures.fetch_add(1u, std::memory_order_relaxed);
+            metrics_.failures.fetch_add(1u, mem_order);
         }
 
-        metrics_.completed.fetch_add(1u, std::memory_order_relaxed);
+        metrics_.completed.fetch_add(1u, mem_order);
         // FD is now automatically unregistered by tcp::stream's destructor
         co_return;
     }
 
     void manager::print_summary(const std::chrono::milliseconds elapsed) const
     {
-        const auto total = metrics_.total_connections.load(std::memory_order_relaxed);
-        const auto successes = metrics_.successes.load(std::memory_order_relaxed);
-        const auto failures = metrics_.failures.load(std::memory_order_relaxed);
+        const auto total = metrics_.total_connections.load(mem_order);
+        const auto successes = metrics_.successes.load(mem_order);
+        const auto failures = metrics_.failures.load(mem_order);
         const auto success_rate = (total > 0) ? ((successes * 100) / total) : 0;
 
         std::println("\n");

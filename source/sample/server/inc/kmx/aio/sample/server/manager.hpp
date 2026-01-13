@@ -44,10 +44,10 @@ namespace kmx::aio::sample::server
 
     private:
         /// @brief Handles a single client connection asynchronously
-        [[nodiscard]] kmx::aio::task<void> handle_client(kmx::aio::tcp::stream stream, const std::uint64_t client_id) noexcept(false);
+        [[nodiscard]] task<void> handle_client(tcp::stream stream, const std::uint64_t client_id) noexcept(false);
 
         /// @brief Accepts incoming connections and spawns handler coroutines
-        [[nodiscard]] kmx::aio::task<void> connection_acceptor() noexcept(false);
+        [[nodiscard]] task<void> connection_acceptor() noexcept(false);
 
         /// @brief Print server statistics
         void print_statistics() const;
@@ -56,10 +56,10 @@ namespace kmx::aio::sample::server
         static void signal_handler(int signum) noexcept;
 
         config config_;
-        std::shared_ptr<kmx::aio::executor> executor_;
+        std::shared_ptr<executor> executor_;
         metrics stats_;
 
-        static inline std::atomic<kmx::aio::executor*> g_executor_ptr {};
+        static inline std::atomic<executor*> g_executor_ptr {};
     };
 
 } // namespace kmx::aio::sample::server

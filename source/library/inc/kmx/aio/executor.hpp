@@ -157,8 +157,8 @@ namespace kmx::aio
         std::unordered_map<event_key, std::coroutine_handle<>, event_key_hash> subscribers_;
         std::mutex subscribers_mutex_;
 
-        std::atomic_size_t active_work_ {0u};
-        std::atomic_bool running_ {false};
+        std::atomic_size_t active_work_ {};
+        std::atomic_bool running_ {};
         std::jthread io_thread_;
         std::mutex idle_mutex_;
         std::condition_variable idle_cv_;

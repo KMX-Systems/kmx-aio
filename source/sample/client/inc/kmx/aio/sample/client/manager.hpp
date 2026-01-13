@@ -31,10 +31,10 @@ namespace kmx::aio::sample::client
     // Metrics
     struct metrics
     {
-        std::atomic_size_t successes {0u};
-        std::atomic_size_t failures {0u};
-        std::atomic_size_t total_connections {0u};
-        std::atomic_size_t completed {0u};
+        std::atomic_size_t successes {};
+        std::atomic_size_t failures {};
+        std::atomic_size_t total_connections {};
+        std::atomic_size_t completed {};
     };
 
     /// @brief Stress test manager class
@@ -48,19 +48,19 @@ namespace kmx::aio::sample::client
 
     private:
         /// @brief Creates a non-blocking socket
-        [[nodiscard]] static std::expected<kmx::aio::descriptor::file, std::error_code> create_nonblocking_socket() noexcept;
+        [[nodiscard]] static std::expected<descriptor::file, std::error_code> create_nonblocking_socket() noexcept;
 
         /// @brief Asynchronously connects to the server and returns a TCP stream
-        [[nodiscard]] kmx::aio::task<std::expected<kmx::aio::tcp::stream, std::error_code>> async_connect() noexcept;
+        [[nodiscard]] task<std::expected<tcp::stream, std::error_code>> async_connect() noexcept;
 
         /// @brief Worker coroutine that performs an async stress test iteration
-        [[nodiscard]] kmx::aio::task<void> worker(const int worker_id) noexcept(false);
+        [[nodiscard]] task<void> worker(const int worker_id) noexcept(false);
 
         /// @brief Print test summary
         void print_summary(const std::chrono::milliseconds elapsed) const;
 
         config config_;
-        std::shared_ptr<kmx::aio::executor> executor_;
+        std::shared_ptr<executor> executor_;
         metrics metrics_;
     };
 }
