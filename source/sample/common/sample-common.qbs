@@ -1,10 +1,13 @@
 import qbs
 
-CppApplication {
-    Depends { name: "kmx-aio-lib" }
-    Depends { name: "kmx-aio-sample-common" }
+StaticLibrary {
+    Depends { name: "cpp" }
+    Depends
+    {
+        name: 'kmx-aio-lib'
+    }
 
-    name: "kmx-aio-sample-client"
+    name: "kmx-aio-sample-common"
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.debugInformation: true
@@ -16,8 +19,7 @@ CppApplication {
     cpp.staticLibraries: [
     ]
     files: [
-        "inc/kmx/aio/sample/client/**.hpp",
-        "src/kmx/aio/sample/client/**.cpp",
-        "src/main.cpp",
+        "inc/kmx/aio/sample/**.hpp",
+        "src/kmx/aio/sample/**.cpp",
     ]
 }

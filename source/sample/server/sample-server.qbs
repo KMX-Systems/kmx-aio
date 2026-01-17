@@ -1,10 +1,8 @@
 import qbs
 
 CppApplication {
-    Depends
-    {
-        name: 'kmx-aio-lib'
-    }
+    Depends { name: "kmx-aio-lib" }
+    Depends { name: "kmx-aio-sample-common" }
 
     name: "kmx-aio-sample-server"
     consoleApplication: true

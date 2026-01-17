@@ -1,44 +1,13 @@
 #include "kmx/aio/sample/client/manager.hpp"
+#include "kmx/aio/sample/common.hpp"
 
-#include <mutex>
+#include <algorithm>
 #include <span>
+#include <string>
 #include <string_view>
 #include <sys/socket.h>
-
-static void generate_random_buffer(std::vector<char>& buffer)
-{
-    static constexpr std::string_view charset = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    static std::mutex gen_mutex;
-    static std::mt19937 gen([] {
-        try
-        {
-            std::random_device rd;
-            std::seed_seq seq {rd(), rd(), rd(), rd(), rd(), rd(), rd(), rd()};
-            return std::mt19937(seq);
-        }
-        catch (...)
-        {
-            const auto now = static_cast<std::uint64_t>(
-                std::chrono::high_resolution_clock::now().time_since_epoch().count());
-            std::seed_seq seq {
-                static_cast<std::uint32_t>(now),
-                static_cast<std::uint32_t>(now >> 32),
-                0x9E3779B9u,
-                0x7F4A7C15u};
-            return std::mt19937(seq);
-        }
-    }());
-    static std::uniform_int_distribution<> size_dist(20, 500);
-    static std::uniform_int_distribution<> char_dist(0, 61);
-
-    std::lock_guard<std::mutex> lock(gen_mutex);
-    const std::size_t size = size_dist(gen);
-    buffer.resize(size);
-    for (size_t i = 0; i < size; ++i)
-    {
-        buffer[i] = charset[char_dist(gen)];
-    }
-}
+#include <thread>
+#include <vector>
 
 namespace kmx::aio::sample::client
 {
@@ -63,10 +32,21 @@ namespace kmx::aio::sample::client
 
         // Spawn all worker coroutines into the executor
         for (std::uint32_t i {}; i < config_.num_workers; ++i)
-            executor_->spawn(worker(i));
+        {
+            auto stats = create_connection_stats(i);
+            executor_->spawn(worker(i, std::move(stats)));
+        }
+
+        ui_thread_ = std::jthread([this](std::stop_token stop_token) { ui_loop(stop_token); });
 
         // Run executor (blocks until all tasks complete)
         executor_->run();
+
+        if (ui_thread_.joinable())
+        {
+            ui_thread_.request_stop();
+            ui_thread_.join();
+        }
 
         const auto end_time = std::chrono::high_resolution_clock::now();
         const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
@@ -152,7 +132,7 @@ namespace kmx::aio::sample::client
         co_return tcp::stream(*executor_, std::move(fd_owner));
     }
 
-    task<void> manager::worker(const std::uint32_t worker_id) noexcept(false)
+    task<void> manager::worker(const std::uint32_t worker_id, std::shared_ptr<connection_stats> stats) noexcept(false)
     {
         metrics_.total_connections.fetch_add(1u, mem_order);
 
@@ -166,15 +146,25 @@ namespace kmx::aio::sample::client
                             stream_result.error().message());
                 metrics_.failures.fetch_add(1u, mem_order);
                 metrics_.completed.fetch_add(1u, mem_order);
+                metrics_.errors.fetch_add(1u, mem_order);
+                if (stats)
+                {
+                    stats->errors.fetch_add(1u, mem_order);
+                    stats->closed.store(true, mem_order);
+                }
                 co_return;
             }
 
             auto stream_ptr = std::make_shared<tcp::stream>(std::move(*stream_result));
+            if (stats)
+            {
+                stats->rx_active.store(true, mem_order);
+            }
 
             logger::log(logger::level::debug, std::source_location::current(), "Worker [{}]: Connected", worker_id);
 
             try {
-                executor_->spawn(worker_sender(stream_ptr, worker_id));
+                executor_->spawn(worker_sender(stream_ptr, worker_id, stats));
             } catch (const std::exception& e) {
                 logger::log(logger::level::error, std::source_location::current(), "Worker [{}]: Spawn failed: {}", worker_id, e.what());
                 throw;
@@ -187,6 +177,11 @@ namespace kmx::aio::sample::client
                 auto recv_result = co_await stream_ptr->read(buffer);
                 if (!recv_result)
                 {
+                    metrics_.errors.fetch_add(1u, mem_order);
+                    if (stats)
+                    {
+                        stats->errors.fetch_add(1u, mem_order);
+                    }
                     break;
                 }
 
@@ -196,6 +191,11 @@ namespace kmx::aio::sample::client
                 }
 
                 received_bytes += *recv_result;
+                metrics_.bytes_received.fetch_add(*recv_result, mem_order);
+                if (stats)
+                {
+                    stats->bytes_received.fetch_add(*recv_result, mem_order);
+                }
                 if (received_bytes >= transfer_limit_bytes)
                 {
                     break;
@@ -215,6 +215,17 @@ namespace kmx::aio::sample::client
         {
             logger::log(logger::level::error, std::source_location::current(), "Worker [{}]: Exception: {}", worker_id, e.what());
             metrics_.failures.fetch_add(1u, mem_order);
+            metrics_.errors.fetch_add(1u, mem_order);
+            if (stats)
+            {
+                stats->errors.fetch_add(1u, mem_order);
+            }
+        }
+
+        if (stats)
+        {
+            stats->rx_active.store(false, mem_order);
+            update_closed_state(stats);
         }
 
         metrics_.completed.fetch_add(1u, mem_order);
@@ -222,13 +233,18 @@ namespace kmx::aio::sample::client
         co_return;
     }
 
-    kmx::aio::task<void> manager::worker_sender(std::shared_ptr<tcp::stream> stream, const std::uint32_t worker_id) noexcept(false)
+    kmx::aio::task<void> manager::worker_sender(std::shared_ptr<tcp::stream> stream, const std::uint32_t worker_id,
+                                                std::shared_ptr<connection_stats> stats) noexcept(false)
     {
         try
         {
             std::vector<char> buffer;
             buffer.reserve(512);
             std::size_t sent_bytes = 0;
+            if (stats)
+            {
+                stats->tx_active.store(true, mem_order);
+            }
             while (true)
             {
                 if (sent_bytes >= transfer_limit_bytes)
@@ -236,7 +252,7 @@ namespace kmx::aio::sample::client
                     break;
                 }
 
-                generate_random_buffer(buffer);
+                common::generate_random_buffer(buffer);
 
                 const auto remaining = transfer_limit_bytes - sent_bytes;
                 if (buffer.size() > remaining)
@@ -247,10 +263,20 @@ namespace kmx::aio::sample::client
                 const std::span<const char> buffer_span {buffer.data(), buffer.size()};
                 if (auto res = co_await stream->write_all(buffer_span); !res)
                 {
+                    metrics_.errors.fetch_add(1u, mem_order);
+                    if (stats)
+                    {
+                        stats->errors.fetch_add(1u, mem_order);
+                    }
                     break;
                 }
 
                 sent_bytes += buffer.size();
+                metrics_.bytes_sent.fetch_add(buffer.size(), mem_order);
+                if (stats)
+                {
+                    stats->bytes_sent.fetch_add(buffer.size(), mem_order);
+                }
             }
 
             ::shutdown(stream->get_fd(), SHUT_WR);
@@ -261,7 +287,139 @@ namespace kmx::aio::sample::client
         catch (...)
         {
         }
+        if (stats)
+        {
+            stats->tx_active.store(false, mem_order);
+            update_closed_state(stats);
+        }
         co_return;
+    }
+
+    std::shared_ptr<manager::connection_stats> manager::create_connection_stats(const std::uint32_t worker_id)
+    {
+        auto stats = std::make_shared<connection_stats>();
+        std::lock_guard<std::mutex> lock(connections_mutex_);
+        connections_[worker_id] = stats;
+        return stats;
+    }
+
+    void manager::update_closed_state(const std::shared_ptr<connection_stats>& stats)
+    {
+        if (!stats)
+        {
+            return;
+        }
+
+        const auto rx_active = stats->rx_active.load(mem_order);
+        const auto tx_active = stats->tx_active.load(mem_order);
+        if (!rx_active && !tx_active)
+        {
+            stats->closed.store(true, mem_order);
+        }
+    }
+
+    void manager::ui_loop(std::stop_token stop_token) const
+    {
+        using namespace std::chrono_literals;
+
+        while (!stop_token.stop_requested())
+        {
+            struct snapshot_entry
+            {
+                std::uint32_t worker_id {};
+                std::uint64_t tx {};
+                std::uint64_t rx {};
+                std::uint64_t errors {};
+                bool tx_active {};
+                bool rx_active {};
+                bool closed {};
+            };
+
+            std::vector<snapshot_entry> snapshot;
+            {
+                std::lock_guard<std::mutex> lock(connections_mutex_);
+                snapshot.reserve(connections_.size());
+                for (const auto& [worker_id, stats] : connections_)
+                {
+                    if (!stats)
+                    {
+                        continue;
+                    }
+                    snapshot.push_back(snapshot_entry {
+                        .worker_id = worker_id,
+                        .tx = stats->bytes_sent.load(mem_order),
+                        .rx = stats->bytes_received.load(mem_order),
+                        .errors = stats->errors.load(mem_order),
+                        .tx_active = stats->tx_active.load(mem_order),
+                        .rx_active = stats->rx_active.load(mem_order),
+                        .closed = stats->closed.load(mem_order),
+                    });
+                }
+            }
+
+            std::sort(snapshot.begin(), snapshot.end(),
+                      [](const auto& a, const auto& b) { return a.worker_id < b.worker_id; });
+
+            const auto total = metrics_.total_connections.load(mem_order);
+            const auto completed = metrics_.completed.load(mem_order);
+            const auto successes = metrics_.successes.load(mem_order);
+            const auto failures = metrics_.failures.load(mem_order);
+            const auto bytes_sent = metrics_.bytes_sent.load(mem_order);
+            const auto bytes_recv = metrics_.bytes_received.load(mem_order);
+            const auto errors = metrics_.errors.load(mem_order);
+
+            std::cout << "\x1b[2J\x1b[H";
+            std::cout << "Client Live Connection Stats\n";
+            std::cout << "────────────────────────────────────────────────────────────────────────\n";
+
+            if (snapshot.empty())
+            {
+                std::cout << "(no active connections)\n";
+            }
+            else
+            {
+                for (const auto& entry : snapshot)
+                {
+                    std::string_view state = "-";
+                    if (entry.closed)
+                    {
+                        state = "C";
+                    }
+                    else if (entry.tx_active && entry.rx_active)
+                    {
+                        state = "TX+RX";
+                    }
+                    else if (entry.tx_active)
+                    {
+                        state = "TX";
+                    }
+                    else if (entry.rx_active)
+                    {
+                        state = "RX";
+                    }
+
+                    std::cout << std::format("Connection {:07}: TX {:>10} | RX {:>10} | EC {:05} | {}\n",
+                                             entry.worker_id,
+                                             common::format_bytes(entry.tx),
+                                             common::format_bytes(entry.rx),
+                                             entry.errors,
+                                             state);
+                }
+            }
+
+            std::cout << "────────────────────────────────────────────────────────────────────────\n";
+            std::cout << std::format("Client Totals: TX {} | RX {} | EC {} | Completed {} | Total {} | OK {} | Fail {}\n",
+                                     common::format_bytes(bytes_sent),
+                                     common::format_bytes(bytes_recv),
+                                     errors,
+                                     completed,
+                                     total,
+                                     successes,
+                                     failures);
+            std::cout << std::flush;
+
+            std::this_thread::sleep_for(250ms);
+        }
     }
 
     void manager::print_summary(const std::chrono::milliseconds elapsed) const
@@ -271,16 +429,16 @@ namespace kmx::aio::sample::client
         const auto failures = metrics_.failures.load(mem_order);
         const auto success_rate = (total > 0) ? ((successes * 100) / total) : 0;
 
-        std::println("\n");
-        std::println("╔════════════════════════════════════════╗");
-        std::println("║       Client Test Results Summary      ║");
-        std::println("╠════════════════════════════════════════╣");
-        std::println("║ Total Connections: {:>19} ║", total);
-        std::println("║ Successes: {:>27} ║", successes);
-        std::println("║ Failures: {:>28} ║", failures);
-        std::println("║ Success Rate: {:>23}% ║", success_rate);
-        std::println("║ Elapsed Time: {:>21} ms ║", elapsed.count());
-        std::println("╚════════════════════════════════════════╝");
+        std::cout << "\n";
+        std::cout << "╔════════════════════════════════════════╗\n";
+        std::cout << "║       Client Test Results Summary      ║\n";
+        std::cout << "╠════════════════════════════════════════╣\n";
+        std::cout << std::format("║ Total Connections: {:>19} ║\n", total);
+        std::cout << std::format("║ Successes: {:>27} ║\n", successes);
+        std::cout << std::format("║ Failures: {:>28} ║\n", failures);
+        std::cout << std::format("║ Success Rate: {:>23}% ║\n", success_rate);
+        std::cout << std::format("║ Elapsed Time: {:>21} ms ║\n", elapsed.count());
+        std::cout << "╚════════════════════════════════════════╝\n";
     }
 
 } // namespace kmx::aio::sample::client

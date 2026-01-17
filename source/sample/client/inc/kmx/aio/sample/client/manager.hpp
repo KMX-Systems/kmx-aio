@@ -13,7 +13,12 @@
 #include <fcntl.h>
 #include <format>
 #include <iostream>
+#include <mutex>
 #include <random>
+#include <stop_token>
+#include <string>
+#include <thread>
+#include <unordered_map>
 #include <sys/socket.h>
 
 namespace kmx::aio::sample::client
@@ -37,6 +42,9 @@ namespace kmx::aio::sample::client
         std::atomic_size_t failures {};
         std::atomic_size_t total_connections {};
         std::atomic_size_t completed {};
+        std::atomic_uint64_t bytes_sent {};
+        std::atomic_uint64_t bytes_received {};
+        std::atomic_uint64_t errors {};
     };
 
     /// @brief Stress test manager class
@@ -52,6 +60,16 @@ namespace kmx::aio::sample::client
         [[nodiscard]] bool run() noexcept(false);
 
     private:
+        struct connection_stats
+        {
+            std::atomic_uint64_t bytes_received {};
+            std::atomic_uint64_t bytes_sent {};
+            std::atomic_uint64_t errors {};
+            std::atomic_bool rx_active {false};
+            std::atomic_bool tx_active {false};
+            std::atomic_bool closed {false};
+        };
+
         /// @brief Creates a non-blocking socket
         [[nodiscard]] static std::expected<descriptor::file, std::error_code> create_nonblocking_socket() noexcept;
 
@@ -59,10 +77,21 @@ namespace kmx::aio::sample::client
         [[nodiscard]] task<std::expected<tcp::stream, std::error_code>> async_connect() noexcept;
 
         /// @brief Worker coroutine that performs an async stress test iteration
-        [[nodiscard]] task<void> worker(const std::uint32_t worker_id) noexcept(false);
+        [[nodiscard]] task<void> worker(const std::uint32_t worker_id,
+                        std::shared_ptr<connection_stats> stats) noexcept(false);
 
         /// @brief Worker sender coroutine
-        [[nodiscard]] task<void> worker_sender(std::shared_ptr<tcp::stream> stream, const std::uint32_t worker_id) noexcept(false);
+        [[nodiscard]] task<void> worker_sender(std::shared_ptr<tcp::stream> stream, const std::uint32_t worker_id,
+                               std::shared_ptr<connection_stats> stats) noexcept(false);
+
+        /// @brief Periodically renders live connection stats UI
+        void ui_loop(std::stop_token stop_token) const;
+
+        /// @brief Create or fetch stats entry for a connection
+        std::shared_ptr<connection_stats> create_connection_stats(const std::uint32_t worker_id);
+
+        /// @brief Mark connection closed if both TX and RX are inactive
+        static void update_closed_state(const std::shared_ptr<connection_stats>& stats);
 
         /// @brief Print test summary
         void print_summary(const std::chrono::milliseconds elapsed) const;
@@ -70,5 +99,9 @@ namespace kmx::aio::sample::client
         config config_;
         std::shared_ptr<executor> executor_;
         metric_data metrics_;
+
+        mutable std::mutex connections_mutex_;
+        std::unordered_map<std::uint32_t, std::shared_ptr<connection_stats>> connections_;
+        std::jthread ui_thread_;
     };
 }

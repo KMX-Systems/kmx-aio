@@ -4,6 +4,7 @@ Project {
     references: [
         "library/lib.qbs",
         "library-test/unit-test.qbs",
+        "sample/common/sample-common.qbs",
         "sample/client/sample-client.qbs",
         "sample/server/sample-server.qbs",
         "sample/simple-client/sample-simple-client.qbs",

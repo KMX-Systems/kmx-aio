@@ -1,42 +1,13 @@
 #include "kmx/aio/sample/server/manager.hpp"
+#include "kmx/aio/sample/common.hpp"
 
+#include <algorithm>
+#include <chrono>
 #include <span>
+#include <string>
 #include <sys/socket.h>
-
-static void generate_random_buffer(std::vector<char>& buffer)
-{
-    static constexpr std::string_view charset = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    static std::mutex gen_mutex;
-    static std::mt19937 gen([] {
-        try
-        {
-            std::random_device rd;
-            std::seed_seq seq {rd(), rd(), rd(), rd(), rd(), rd(), rd(), rd()};
-            return std::mt19937(seq);
-        }
-        catch (...)
-        {
-            const auto now = static_cast<std::uint64_t>(
-                std::chrono::high_resolution_clock::now().time_since_epoch().count());
-            std::seed_seq seq {
-                               static_cast<std::uint32_t>(now),
-                               static_cast<std::uint32_t>(now >> 32),
-                               0x9E3779B9u,
-                               0x7F4A7C15u};
-            return std::mt19937(seq);
-        }
-    }());
-    static std::uniform_int_distribution<> size_dist(20, 500);
-    static std::uniform_int_distribution<> char_dist(0, 61);
-
-    std::lock_guard<std::mutex> lock(gen_mutex);
-    const std::size_t size = size_dist(gen);
-    buffer.resize(size);
-    for (size_t i = 0; i < size; ++i)
-    {
-        buffer[i] = charset[char_dist(gen)];
-    }
-}
+#include <thread>
+#include <vector>
 
 namespace kmx::aio::sample::server
 {
@@ -80,6 +51,8 @@ namespace kmx::aio::sample::server
         auto acceptor_task = connection_acceptor();
         executor_->spawn(std::move(acceptor_task));
 
+        ui_thread_ = std::jthread([this](std::stop_token stop_token) { ui_loop(stop_token); });
+
         logger::log(logger::level::info, std::source_location::current(),
                     "═══════════════════════════════════════════════════════════════");
         logger::log(logger::level::info, std::source_location::current(), "Server: Started. Listening on {}:{}", config_.bind_address,
@@ -95,6 +68,12 @@ namespace kmx::aio::sample::server
 
         logger::log(logger::level::info, std::source_location::current(), "Server: Event loop stopped");
 
+        if (ui_thread_.joinable())
+        {
+            ui_thread_.request_stop();
+            ui_thread_.join();
+        }
+
         print_metrics();
 
         logger::log(logger::level::info, std::source_location::current(),
@@ -106,7 +85,8 @@ namespace kmx::aio::sample::server
         return metrics_.errors == 0u;
     }
 
-    kmx::aio::task<void> manager::handle_client(kmx::aio::tcp::stream stream, const std::uint64_t client_id) noexcept(false)
+    kmx::aio::task<void> manager::handle_client(kmx::aio::tcp::stream stream, const std::uint64_t client_id,
+                                                std::shared_ptr<connection_stats> stats) noexcept(false)
     {
         logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Handler starting", client_id);
 
@@ -116,10 +96,11 @@ namespace kmx::aio::sample::server
                     metrics_.active_connections.load());
 
         auto stream_ptr = std::make_shared<kmx::aio::tcp::stream>(std::move(stream));
+        stats->rx_active.store(true, std::memory_order_relaxed);
 
         try
         {
-            executor_->spawn(client_sender(stream_ptr, client_id));
+            executor_->spawn(client_sender(stream_ptr, client_id, stats));
 
             std::vector<char> buffer(4096u);
             std::size_t messages_received = 0;
@@ -138,6 +119,7 @@ namespace kmx::aio::sample::server
                         logger::log(logger::level::warn, std::source_location::current(), "Client [{}]: Read error: {}", client_id,
                                     read_result.error().message());
                         metrics_.errors.fetch_add(1u, std::memory_order_relaxed);
+                        stats->errors.fetch_add(1u, std::memory_order_relaxed);
                     }
                     break;
                 }
@@ -158,6 +140,7 @@ namespace kmx::aio::sample::server
 
                 ++messages_received;
                 metrics_.bytes_received.fetch_add(bytes_read, std::memory_order_relaxed);
+                stats->bytes_received.fetch_add(bytes_read, std::memory_order_relaxed);
 
                 // logger::log(logger::level::debug, std::source_location::current(),
                 //            "Client [{}]: Received {} bytes (message #{}) | Total bytes: {}", client_id, bytes_read, messages_received,
@@ -173,7 +156,11 @@ namespace kmx::aio::sample::server
         {
             logger::log(logger::level::error, std::source_location::current(), "Client [{}]: Exception: {}", client_id, e.what());
             metrics_.errors.fetch_add(1u, std::memory_order_relaxed);
+            stats->errors.fetch_add(1u, std::memory_order_relaxed);
         }
+
+        stats->rx_active.store(false, std::memory_order_relaxed);
+        update_closed_state(stats);
 
         metrics_.active_connections.fetch_sub(1, std::memory_order_relaxed);
         logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Disconnected | Active connections: {}", client_id,
@@ -182,13 +169,15 @@ namespace kmx::aio::sample::server
         co_return;
     }
 
-    kmx::aio::task<void> manager::client_sender(std::shared_ptr<tcp::stream> stream, const std::uint64_t client_id) noexcept(false)
+    kmx::aio::task<void> manager::client_sender(std::shared_ptr<tcp::stream> stream, const std::uint64_t client_id,
+                                                std::shared_ptr<connection_stats> stats) noexcept(false)
     {
         try
         {
             std::vector<char> buffer;
             buffer.reserve(512);
             std::size_t sent_bytes = 0;
+            stats->tx_active.store(true, std::memory_order_relaxed);
             while (true)
             {
                 if (sent_bytes >= transfer_limit_bytes)
@@ -196,7 +185,7 @@ namespace kmx::aio::sample::server
                     break;
                 }
 
-                generate_random_buffer(buffer);
+                common::generate_random_buffer(buffer);
                 const auto size = buffer.size();
                 const auto remaining = transfer_limit_bytes - sent_bytes;
                 if (size > remaining)
@@ -206,10 +195,13 @@ namespace kmx::aio::sample::server
                 const std::span<const char> buffer_span {buffer.data(), buffer.size()};
                 if (auto res = co_await stream->write_all(buffer_span); !res)
                 {
+                    metrics_.errors.fetch_add(1u, std::memory_order_relaxed);
+                    stats->errors.fetch_add(1u, std::memory_order_relaxed);
                     break;
                 }
                 sent_bytes += buffer.size();
                 metrics_.bytes_sent.fetch_add(buffer.size(), std::memory_order_relaxed);
+                stats->bytes_sent.fetch_add(buffer.size(), std::memory_order_relaxed);
             }
 
             ::shutdown(stream->get_fd(), SHUT_WR);
@@ -220,6 +212,8 @@ namespace kmx::aio::sample::server
         catch (...)
         {
         }
+        stats->tx_active.store(false, std::memory_order_relaxed);
+        update_closed_state(stats);
         co_return;
     }
 
@@ -281,6 +275,8 @@ namespace kmx::aio::sample::server
                 metrics_.total_connections.fetch_add(1u, std::memory_order_relaxed);
                 const auto client_id = ++client_counter;
 
+                auto stats = create_connection_stats(client_id);
+
                 logger::log(logger::level::info, std::source_location::current(),
                             "Acceptor: Accepted connection #{} (total: {}, active: {})", client_id, metrics_.total_connections.load(),
                             metrics_.active_connections.load());
@@ -294,7 +290,7 @@ namespace kmx::aio::sample::server
                 // Spawn handler for this client as a new task
                 logger::log(logger::level::debug, std::source_location::current(), "Acceptor: Spawning handler for client [{}]", client_id);
 
-                auto handler_task = handle_client(std::move(client_stream), client_id);
+                auto handler_task = handle_client(std::move(client_stream), client_id, std::move(stats));
 
                 logger::log(logger::level::debug, std::source_location::current(), "Acceptor: Handler task created for client [{}]",
                             client_id);
@@ -320,6 +316,128 @@ namespace kmx::aio::sample::server
         co_return;
     }
 
+    std::shared_ptr<manager::connection_stats> manager::create_connection_stats(const std::uint64_t client_id)
+    {
+        auto stats = std::make_shared<connection_stats>();
+        std::lock_guard<std::mutex> lock(connections_mutex_);
+        connections_[client_id] = stats;
+        return stats;
+    }
+
+    void manager::update_closed_state(const std::shared_ptr<connection_stats>& stats)
+    {
+        if (!stats)
+        {
+            return;
+        }
+
+        const auto rx_active = stats->rx_active.load(std::memory_order_relaxed);
+        const auto tx_active = stats->tx_active.load(std::memory_order_relaxed);
+        if (!rx_active && !tx_active)
+        {
+            stats->closed.store(true, std::memory_order_relaxed);
+        }
+    }
+
+    void manager::ui_loop(std::stop_token stop_token) const
+    {
+        using namespace std::chrono_literals;
+
+        while (!stop_token.stop_requested())
+        {
+            struct snapshot_entry
+            {
+                std::uint64_t client_id {};
+                std::uint64_t tx {};
+                std::uint64_t rx {};
+                std::uint64_t errors {};
+                bool tx_active {};
+                bool rx_active {};
+                bool closed {};
+            };
+
+            std::vector<snapshot_entry> snapshot;
+            {
+                std::lock_guard<std::mutex> lock(connections_mutex_);
+                snapshot.reserve(connections_.size());
+                for (const auto& [client_id, stats] : connections_)
+                {
+                    if (!stats)
+                    {
+                        continue;
+                    }
+                    snapshot.push_back(snapshot_entry {
+                        .client_id = client_id,
+                        .tx = stats->bytes_sent.load(std::memory_order_relaxed),
+                        .rx = stats->bytes_received.load(std::memory_order_relaxed),
+                        .errors = stats->errors.load(std::memory_order_relaxed),
+                        .tx_active = stats->tx_active.load(std::memory_order_relaxed),
+                        .rx_active = stats->rx_active.load(std::memory_order_relaxed),
+                        .closed = stats->closed.load(std::memory_order_relaxed),
+                    });
+                }
+            }
+
+            std::sort(snapshot.begin(), snapshot.end(), [](const auto& a, const auto& b) { return a.client_id < b.client_id; });
+
+            const auto total_conn = metrics_.total_connections.load(std::memory_order_relaxed);
+            const auto active_conn = metrics_.active_connections.load(std::memory_order_relaxed);
+            const auto bytes_recv = metrics_.bytes_received.load(std::memory_order_relaxed);
+            const auto bytes_sent = metrics_.bytes_sent.load(std::memory_order_relaxed);
+            const auto errors = metrics_.errors.load(std::memory_order_relaxed);
+
+            std::cout << "\x1b[2J\x1b[H";
+            std::cout << "Live Connection Stats\n";
+            std::cout << "────────────────────────────────────────────────────────────────────────\n";
+
+            if (snapshot.empty())
+            {
+                std::cout << "(no active connections)\n";
+            }
+            else
+            {
+                for (const auto& entry : snapshot)
+                {
+                    std::string_view state = "-";
+                    if (entry.closed)
+                    {
+                        state = "C";
+                    }
+                    else if (entry.tx_active && entry.rx_active)
+                    {
+                        state = "TX+RX";
+                    }
+                    else if (entry.tx_active)
+                    {
+                        state = "TX";
+                    }
+                    else if (entry.rx_active)
+                    {
+                        state = "RX";
+                    }
+
+                    std::cout << std::format("Connection {:07}: TX {:>10} | RX {:>10} | EC {:05} | {}\n",
+                                             entry.client_id,
+                                             common::format_bytes(entry.tx),
+                                             common::format_bytes(entry.rx),
+                                             entry.errors,
+                                             state);
+                }
+            }
+
+            std::cout << "────────────────────────────────────────────────────────────────────────\n";
+            std::cout << std::format("Server Totals: TX {} | RX {} | EC {} | Active {} | Total {}\n",
+                                     common::format_bytes(bytes_sent),
+                                     common::format_bytes(bytes_recv),
+                                     errors,
+                                     active_conn,
+                                     total_conn);
+            std::cout << std::flush;
+
+            std::this_thread::sleep_for(250ms);
+        }
+    }
+
     void manager::print_metrics() const
     {
         const auto total_conn = metrics_.total_connections.load(std::memory_order_relaxed);
@@ -328,15 +446,15 @@ namespace kmx::aio::sample::server
         const auto bytes_sent = metrics_.bytes_sent.load(std::memory_order_relaxed);
         const auto errors = metrics_.errors.load(std::memory_order_relaxed);
 
-        std::println("\n╔════════════════════════════════════════╗");
-        std::println("║        Server Metrics (Shutdown)       ║");
-        std::println("╠════════════════════════════════════════╣");
-        std::println("║ Total Connections: {:>19} ║", total_conn);
-        std::println("║ Active Connections: {:>18} ║", active_conn);
-        std::println("║ Bytes Received: {:>22} ║", bytes_recv);
-        std::println("║ Bytes Sent: {:>26} ║", bytes_sent);
-        std::println("║ Errors: {:>30} ║", errors);
-        std::println("╚════════════════════════════════════════╝");
+        std::cout << "\n╔════════════════════════════════════════╗\n";
+        std::cout << "║        Server Metrics (Shutdown)       ║\n";
+        std::cout << "╠════════════════════════════════════════╣\n";
+        std::cout << std::format("║ Total Connections: {:>19} ║\n", total_conn);
+        std::cout << std::format("║ Active Connections: {:>18} ║\n", active_conn);
+        std::cout << std::format("║ Bytes Received: {:>22} ║\n", bytes_recv);
+        std::cout << std::format("║ Bytes Sent: {:>26} ║\n", bytes_sent);
+        std::cout << std::format("║ Errors: {:>30} ║\n", errors);
+        std::cout << "╚════════════════════════════════════════╝\n";
 
         logger::log(logger::level::info, std::source_location::current(),
                 "Server: Final metrics - {} total connections, {} bytes received, {} bytes sent, {} errors", total_conn, bytes_recv,
