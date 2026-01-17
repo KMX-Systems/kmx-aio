@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <system_error>
 #include <sys/socket.h>
 
 namespace kmx::aio::tcp
@@ -30,9 +31,15 @@ namespace kmx::aio::tcp
     {
         while (true)
         {
-            const ssize_t n = ::write(fd_.get(), buffer.data(), buffer.size());
-            if (n >= 0u)
+            const ssize_t n = ::send(fd_.get(), buffer.data(), buffer.size(), MSG_NOSIGNAL);
+            if (n > 0)
                 co_return static_cast<std::size_t>(n);
+
+            if (n == 0)
+            {
+                // Treat zero-byte write as a closed connection to prevent tight loops.
+                co_return std::unexpected(std::make_error_code(std::errc::broken_pipe));
+            }
 
             if (is_would_block(errno))
             {
@@ -44,7 +51,7 @@ namespace kmx::aio::tcp
         }
     }
 
-    task<std::expected<void, std::error_code>> stream::write_all(std::vector<char> buffer) noexcept(false)
+    task<std::expected<void, std::error_code>> stream::write_all(const std::span<const char> buffer) noexcept(false)
     {
         for (std::size_t offset {}; offset < buffer.size();)
         {

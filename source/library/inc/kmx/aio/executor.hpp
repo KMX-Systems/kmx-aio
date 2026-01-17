@@ -91,10 +91,10 @@ namespace kmx::aio
         void stop() noexcept;
 
         /// @brief Returns a reference to the executor's statistics.
-        [[nodiscard]] const statistics& get_stats() const noexcept { return stats_; }
+        [[nodiscard]] const statistics& get_stats() const noexcept { return metrics_; }
 
         /// @brief Reset all executor statistics.
-        void reset_stats() noexcept { stats_.reset(); }
+        void reset_stats() noexcept { metrics_.reset(); }
 
     private:
         struct event_key
@@ -163,7 +163,7 @@ namespace kmx::aio
         std::mutex idle_mutex_;
         std::condition_variable idle_cv_;
 
-        mutable statistics stats_;
+        mutable statistics metrics_;
     };
 
 } // namespace kmx::aio

@@ -2,6 +2,7 @@
 #include <co_srv/executor.hpp>
 #include <co_srv/logger.hpp>
 #include <co_srv/tcp_socket.hpp>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -38,7 +39,8 @@ task<void> handle_client(executor& exec, descriptor::file fd) noexcept(false)
             response.append(received);
 
             std::vector<char> resp_buf(response.begin(), response.end());
-            auto write_res = co_await stream.write_all(std::move(resp_buf));
+            const std::span<const char> resp_span {resp_buf.data(), resp_buf.size()};
+            auto write_res = co_await stream.write_all(resp_span);
 
             if (!write_res)
             {

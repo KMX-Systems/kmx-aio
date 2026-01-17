@@ -1,49 +1,10 @@
-#include "kmx/aio/sample/client/manager.hpp"
+#include "kmx/aio/sample/simple_client/manager.hpp"
 
-#include <mutex>
 #include <span>
-#include <string_view>
-#include <sys/socket.h>
 
-static void generate_random_buffer(std::vector<char>& buffer)
-{
-    static constexpr std::string_view charset = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    static std::mutex gen_mutex;
-    static std::mt19937 gen([] {
-        try
-        {
-            std::random_device rd;
-            std::seed_seq seq {rd(), rd(), rd(), rd(), rd(), rd(), rd(), rd()};
-            return std::mt19937(seq);
-        }
-        catch (...)
-        {
-            const auto now = static_cast<std::uint64_t>(
-                std::chrono::high_resolution_clock::now().time_since_epoch().count());
-            std::seed_seq seq {
-                static_cast<std::uint32_t>(now),
-                static_cast<std::uint32_t>(now >> 32),
-                0x9E3779B9u,
-                0x7F4A7C15u};
-            return std::mt19937(seq);
-        }
-    }());
-    static std::uniform_int_distribution<> size_dist(20, 500);
-    static std::uniform_int_distribution<> char_dist(0, 61);
-
-    std::lock_guard<std::mutex> lock(gen_mutex);
-    const std::size_t size = size_dist(gen);
-    buffer.resize(size);
-    for (size_t i = 0; i < size; ++i)
-    {
-        buffer[i] = charset[char_dist(gen)];
-    }
-}
-
-namespace kmx::aio::sample::client
+namespace kmx::aio::sample::simple_client
 {
     static constexpr auto mem_order = std::memory_order_relaxed;
-    static constexpr std::size_t transfer_limit_bytes = 200u * 1024u;
 
     bool manager::run() noexcept(false)
     {
@@ -51,9 +12,6 @@ namespace kmx::aio::sample::client
 
         logger::log(logger::level::info, std::source_location::current(), "Starting async stress test: {} concurrent connections to {}:{}",
                     config_.num_workers, config_.server_addr, config_.server_port);
-
-        // Prevent SIGPIPE from terminating the process on broken pipe writes.
-        std::signal(SIGPIPE, SIG_IGN);
 
         // Create executor with thread pool
         const executor_config exec_config {
@@ -169,47 +127,40 @@ namespace kmx::aio::sample::client
                 co_return;
             }
 
-            auto stream_ptr = std::make_shared<tcp::stream>(std::move(*stream_result));
+            auto stream = std::move(*stream_result);
 
             logger::log(logger::level::debug, std::source_location::current(), "Worker [{}]: Connected", worker_id);
 
-            try {
-                executor_->spawn(worker_sender(stream_ptr, worker_id));
-            } catch (const std::exception& e) {
-                logger::log(logger::level::error, std::source_location::current(), "Worker [{}]: Spawn failed: {}", worker_id, e.what());
-                throw;
-            }
-
-            std::vector<char> buffer(4096);
-            std::size_t received_bytes = 0;
-            while (true)
+            // Asynchronously send message using write_all
+            std::vector<char> message_buffer(config_.message.begin(), config_.message.end());
+            const std::span<const char> message_span {message_buffer.data(), message_buffer.size()};
+            if (auto send_result = co_await stream.write_all(message_span); !send_result)
             {
-                auto recv_result = co_await stream_ptr->read(buffer);
-                if (!recv_result)
-                {
-                    break;
-                }
-
-                if (*recv_result == 0)
-                {
-                    break;
-                }
-
-                received_bytes += *recv_result;
-                if (received_bytes >= transfer_limit_bytes)
-                {
-                    break;
-                }
-
-                if (worker_id % 100 == 0) {
-                     logger::log(logger::level::info, std::source_location::current(), "Worker [{}]: Received {} bytes", worker_id, *recv_result);
-                }
-
-                metrics_.successes.fetch_add(1u, mem_order);
+                logger::log(logger::level::warn, std::source_location::current(), "Worker [{}]: Send failed: {}", worker_id,
+                            send_result.error().message());
+                metrics_.failures.fetch_add(1u, mem_order);
+                metrics_.completed.fetch_add(1u, mem_order);
+                co_return;
             }
 
-            logger::log(logger::level::info, std::source_location::current(),
-                        "Worker [{}]: Received {} bytes", worker_id, received_bytes);
+            logger::log(logger::level::debug, std::source_location::current(), "Worker [{}]: Message sent", worker_id);
+
+            // Asynchronously receive response
+            std::vector<char> response_buffer(1024);
+            auto recv_result = co_await stream.read({response_buffer.data(), response_buffer.size()});
+            if (!recv_result)
+            {
+                logger::log(logger::level::warn, std::source_location::current(), "Worker [{}]: Receive failed: {}", worker_id,
+                            recv_result.error().message());
+                metrics_.failures.fetch_add(1u, mem_order);
+                metrics_.completed.fetch_add(1u, mem_order);
+                co_return;
+            }
+
+            const auto bytes_received = *recv_result;
+            logger::log(logger::level::debug, std::source_location::current(), "Worker [{}]: Received {} bytes", worker_id, bytes_received);
+
+            metrics_.successes.fetch_add(1u, mem_order);
         }
         catch (const std::exception& e)
         {
@@ -219,48 +170,6 @@ namespace kmx::aio::sample::client
 
         metrics_.completed.fetch_add(1u, mem_order);
         // FD is now automatically unregistered by tcp::stream's destructor
-        co_return;
-    }
-
-    kmx::aio::task<void> manager::worker_sender(std::shared_ptr<tcp::stream> stream, const std::uint32_t worker_id) noexcept(false)
-    {
-        try
-        {
-            std::vector<char> buffer;
-            buffer.reserve(512);
-            std::size_t sent_bytes = 0;
-            while (true)
-            {
-                if (sent_bytes >= transfer_limit_bytes)
-                {
-                    break;
-                }
-
-                generate_random_buffer(buffer);
-
-                const auto remaining = transfer_limit_bytes - sent_bytes;
-                if (buffer.size() > remaining)
-                {
-                    buffer.resize(remaining);
-                }
-
-                const std::span<const char> buffer_span {buffer.data(), buffer.size()};
-                if (auto res = co_await stream->write_all(buffer_span); !res)
-                {
-                    break;
-                }
-
-                sent_bytes += buffer.size();
-            }
-
-            ::shutdown(stream->get_fd(), SHUT_WR);
-
-            logger::log(logger::level::info, std::source_location::current(),
-                        "Worker [{}]: Sent {} bytes", worker_id, sent_bytes);
-        }
-        catch (...)
-        {
-        }
         co_return;
     }
 

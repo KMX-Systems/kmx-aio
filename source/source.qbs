@@ -6,5 +6,7 @@ Project {
         "library-test/unit-test.qbs",
         "sample/client/sample-client.qbs",
         "sample/server/sample-server.qbs",
+        "sample/simple-client/sample-simple-client.qbs",
+        "sample/simple-server/sample-simple-server.qbs",
     ]
 }

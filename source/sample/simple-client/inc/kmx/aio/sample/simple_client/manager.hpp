@@ -8,22 +8,20 @@
 #include <arpa/inet.h>
 #include <atomic>
 #include <chrono>
-#include <csignal>
 #include <expected>
 #include <fcntl.h>
 #include <format>
 #include <iostream>
-#include <random>
 #include <sys/socket.h>
 
-namespace kmx::aio::sample::client
+namespace kmx::aio::sample::simple_client
 {
     // Configuration
     struct config
     {
-        std::uint32_t num_workers = 1000u;
+        std::uint32_t num_workers = 1000;
         std::string_view server_addr = "127.0.0.1";
-        std::uint16_t server_port = 8080u;
+        std::uint16_t server_port = 8080;
         std::string_view message = "Is there anybody out there?";
         std::uint32_t scheduler_threads = 4u;
         std::uint16_t max_events = 1024u;
@@ -60,9 +58,6 @@ namespace kmx::aio::sample::client
 
         /// @brief Worker coroutine that performs an async stress test iteration
         [[nodiscard]] task<void> worker(const std::uint32_t worker_id) noexcept(false);
-
-        /// @brief Worker sender coroutine
-        [[nodiscard]] task<void> worker_sender(std::shared_ptr<tcp::stream> stream, const std::uint32_t worker_id) noexcept(false);
 
         /// @brief Print test summary
         void print_summary(const std::chrono::milliseconds elapsed) const;

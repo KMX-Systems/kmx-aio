@@ -9,10 +9,9 @@
 #include <format>
 #include <iostream>
 #include <memory>
-#include <random>
 #include <unistd.h>
 
-namespace kmx::aio::sample::server
+namespace kmx::aio::sample::simple_server
 {
     // Server configuration
     struct config
@@ -24,7 +23,7 @@ namespace kmx::aio::sample::server
         std::uint16_t epoll_timeout_ms = 200u;
     };
 
-    // Server metrics
+    // Server statistics
     struct metric_data
     {
         std::atomic_uint64_t total_connections {};
@@ -49,14 +48,11 @@ namespace kmx::aio::sample::server
         /// @brief Handles a single client connection asynchronously
         [[nodiscard]] task<void> handle_client(tcp::stream stream, const std::uint64_t client_id) noexcept(false);
 
-        /// @brief Handles sending random data to client asynchronously
-        [[nodiscard]] task<void> client_sender(std::shared_ptr<tcp::stream> stream, const std::uint64_t client_id) noexcept(false);
-
         /// @brief Accepts incoming connections and spawns handler coroutines
         [[nodiscard]] task<void> connection_acceptor() noexcept(false);
 
-        /// @brief Print server metrics
-        void print_metrics() const;
+        /// @brief Print server statistics
+        void print_statistics() const;
 
         /// @brief Signal handler for graceful shutdown
         static void signal_handler(int signum) noexcept;

@@ -38,22 +38,22 @@ namespace kmx::aio
 
     std::expected<void, std::error_code> executor::register_fd(const fd_t fd) noexcept
     {
-        stats_.total_registrations.fetch_add(1u, mem_order);
+        metrics_.total_registrations.fetch_add(1u, mem_order);
         const auto result = epoll_fd_.add_monitored_fd(fd, default_epoll_events);
         if (!result)
-            stats_.error_count.fetch_add(1u, mem_order);
+            metrics_.error_count.fetch_add(1u, mem_order);
 
         return result;
     }
 
     void executor::unregister_fd(const fd_t fd) noexcept
     {
-        stats_.total_unregistrations.fetch_add(1u, mem_order);
+        metrics_.total_unregistrations.fetch_add(1u, mem_order);
 
         const auto result = epoll_fd_.remove_monitored_fd(fd);
         if (!result)
         {
-            stats_.error_count.fetch_add(1u, mem_order);
+            metrics_.error_count.fetch_add(1u, mem_order);
         }
 
         {
@@ -72,7 +72,7 @@ namespace kmx::aio
     void executor::spawn(task<void>&& t) noexcept(false)
     {
         active_work_.fetch_add(1u, mem_order);
-        stats_.total_tasks_spawned.fetch_add(1u, mem_order);
+        metrics_.total_tasks_spawned.fetch_add(1u, mem_order);
         auto self = shared_from_this();
 
         // Create and execute the detached task
@@ -93,7 +93,7 @@ namespace kmx::aio
             logger::log(logger::level::error, std::source_location::current(), "Exception propagated to top-level task: {}", e.what());
         }
 
-        self->stats_.total_tasks_completed.fetch_add(1u, mem_order);
+        self->metrics_.total_tasks_completed.fetch_add(1u, mem_order);
         if (self->active_work_.fetch_sub(1u, std::memory_order_acq_rel) == 1u)
             self->idle_cv_.notify_one();
     }
@@ -161,15 +161,15 @@ namespace kmx::aio
             {
                 if (events_result.error().value() == EINTR)
                     continue;
-                stats_.error_count.fetch_add(1u, mem_order);
+                metrics_.error_count.fetch_add(1u, mem_order);
                 logger::log(logger::level::error, std::source_location::current(), "epoll_wait error: {}", events_result.error().message());
                 break;
             }
 
             if (!events.empty())
             {
-                stats_.total_epoll_waits.fetch_add(1u, mem_order);
-                stats_.total_events_received.fetch_add(events.size(), mem_order);
+                metrics_.total_epoll_waits.fetch_add(1u, mem_order);
+                metrics_.total_events_received.fetch_add(events.size(), mem_order);
                 for (const auto& item: events)
                 {
                     const auto fd = item.data.fd;
@@ -184,7 +184,7 @@ namespace kmx::aio
             }
             else
             {
-                stats_.timeout_count.fetch_add(1u, mem_order);
+                metrics_.timeout_count.fetch_add(1u, mem_order);
             }
 
             if (st.stop_requested())

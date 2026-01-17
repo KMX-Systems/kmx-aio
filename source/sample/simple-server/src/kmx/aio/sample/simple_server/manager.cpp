@@ -1,46 +1,7 @@
-#include "kmx/aio/sample/server/manager.hpp"
+#include "kmx/aio/sample/simple_server/manager.hpp"
 
-#include <span>
-#include <sys/socket.h>
-
-static void generate_random_buffer(std::vector<char>& buffer)
+namespace kmx::aio::sample::simple_server
 {
-    static constexpr std::string_view charset = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    static std::mutex gen_mutex;
-    static std::mt19937 gen([] {
-        try
-        {
-            std::random_device rd;
-            std::seed_seq seq {rd(), rd(), rd(), rd(), rd(), rd(), rd(), rd()};
-            return std::mt19937(seq);
-        }
-        catch (...)
-        {
-            const auto now = static_cast<std::uint64_t>(
-                std::chrono::high_resolution_clock::now().time_since_epoch().count());
-            std::seed_seq seq {
-                               static_cast<std::uint32_t>(now),
-                               static_cast<std::uint32_t>(now >> 32),
-                               0x9E3779B9u,
-                               0x7F4A7C15u};
-            return std::mt19937(seq);
-        }
-    }());
-    static std::uniform_int_distribution<> size_dist(20, 500);
-    static std::uniform_int_distribution<> char_dist(0, 61);
-
-    std::lock_guard<std::mutex> lock(gen_mutex);
-    const std::size_t size = size_dist(gen);
-    buffer.resize(size);
-    for (size_t i = 0; i < size; ++i)
-    {
-        buffer[i] = charset[char_dist(gen)];
-    }
-}
-
-namespace kmx::aio::sample::server
-{
-    static constexpr std::size_t transfer_limit_bytes = 200u * 1024u;
     bool manager::run() noexcept(false)
     {
         logger::log(logger::level::info, std::source_location::current(),
@@ -48,9 +9,6 @@ namespace kmx::aio::sample::server
         logger::log(logger::level::info, std::source_location::current(), "Echo Server Starting");
         logger::log(logger::level::info, std::source_location::current(),
                     "═══════════════════════════════════════════════════════════════");
-
-        // Prevent SIGPIPE from terminating the process on broken pipe writes.
-        std::signal(SIGPIPE, SIG_IGN);
 
         // Configure executor
         const executor_config exec_config {
@@ -95,7 +53,7 @@ namespace kmx::aio::sample::server
 
         logger::log(logger::level::info, std::source_location::current(), "Server: Event loop stopped");
 
-        print_metrics();
+        print_statistics();
 
         logger::log(logger::level::info, std::source_location::current(),
                     "═══════════════════════════════════════════════════════════════");
@@ -115,22 +73,18 @@ namespace kmx::aio::sample::server
         logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Connected | Active connections: {}", client_id,
                     metrics_.active_connections.load());
 
-        auto stream_ptr = std::make_shared<kmx::aio::tcp::stream>(std::move(stream));
-
         try
         {
-            executor_->spawn(client_sender(stream_ptr, client_id));
-
             std::vector<char> buffer(4096u);
             std::size_t messages_received = 0;
-            std::size_t received_bytes = 0;
+            std::size_t messages_sent = 0;
 
             while (true)
             {
                 // Read from client
-                // logger::log(logger::level::debug, std::source_location::current(), "Client [{}]: Waiting for data...", client_id);
+                logger::log(logger::level::debug, std::source_location::current(), "Client [{}]: Waiting for data...", client_id);
 
-                const auto read_result = co_await stream_ptr->read(buffer);
+                const auto read_result = co_await stream.read(buffer);
                 if (!read_result)
                 {
                     if (read_result.error().value() != 0)
@@ -150,24 +104,39 @@ namespace kmx::aio::sample::server
                     break;
                 }
 
-                received_bytes += bytes_read;
-                if (received_bytes >= transfer_limit_bytes)
-                {
-                    break;
-                }
-
                 ++messages_received;
                 metrics_.bytes_received.fetch_add(bytes_read, std::memory_order_relaxed);
 
-                // logger::log(logger::level::debug, std::source_location::current(),
-                //            "Client [{}]: Received {} bytes (message #{}) | Total bytes: {}", client_id, bytes_read, messages_received,
-                //            metrics_.bytes_received.load());
+                logger::log(logger::level::debug, std::source_location::current(),
+                            "Client [{}]: Received {} bytes (message #{}) | Total bytes: {}", client_id, bytes_read, messages_received,
+                            metrics_.bytes_received.load());
+
+                // Echo the message back to client
+                const std::string response = std::format("ECHO: {}", std::string_view(buffer.data(), bytes_read));
+
+                logger::log(logger::level::debug, std::source_location::current(), "Client [{}]: Sending {} bytes...", client_id,
+                            response.size());
+
+                const auto write_result = co_await stream.write(std::span<const char>(response.data(), response.size()));
+
+                if (!write_result)
+                {
+                    logger::log(logger::level::warn, std::source_location::current(), "Client [{}]: Write error: {}", client_id,
+                                write_result.error().message());
+                    metrics_.errors.fetch_add(1u, std::memory_order_relaxed);
+                    break;
+                }
+
+                ++messages_sent;
+                metrics_.bytes_sent.fetch_add(*write_result, std::memory_order_relaxed);
+
+                logger::log(logger::level::debug, std::source_location::current(),
+                            "Client [{}]: Sent {} bytes (message #{}) | Total bytes: {}", client_id, *write_result, messages_sent,
+                            metrics_.bytes_sent.load());
             }
 
-            logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Connection closed | Messages: {} recv",
-                        client_id, messages_received);
-            logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Received {} bytes", client_id,
-                        received_bytes);
+            logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Connection closed | Messages: {} recv, {} sent",
+                        client_id, messages_received, messages_sent);
         }
         catch (const std::exception& e)
         {
@@ -179,47 +148,6 @@ namespace kmx::aio::sample::server
         logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Disconnected | Active connections: {}", client_id,
                     metrics_.active_connections.load());
 
-        co_return;
-    }
-
-    kmx::aio::task<void> manager::client_sender(std::shared_ptr<tcp::stream> stream, const std::uint64_t client_id) noexcept(false)
-    {
-        try
-        {
-            std::vector<char> buffer;
-            buffer.reserve(512);
-            std::size_t sent_bytes = 0;
-            while (true)
-            {
-                if (sent_bytes >= transfer_limit_bytes)
-                {
-                    break;
-                }
-
-                generate_random_buffer(buffer);
-                const auto size = buffer.size();
-                const auto remaining = transfer_limit_bytes - sent_bytes;
-                if (size > remaining)
-                {
-                    buffer.resize(remaining);
-                }
-                const std::span<const char> buffer_span {buffer.data(), buffer.size()};
-                if (auto res = co_await stream->write_all(buffer_span); !res)
-                {
-                    break;
-                }
-                sent_bytes += buffer.size();
-                metrics_.bytes_sent.fetch_add(buffer.size(), std::memory_order_relaxed);
-            }
-
-            ::shutdown(stream->get_fd(), SHUT_WR);
-
-            logger::log(logger::level::info, std::source_location::current(),
-                        "Client [{}]: Sent {} bytes", client_id, sent_bytes);
-        }
-        catch (...)
-        {
-        }
         co_return;
     }
 
@@ -320,7 +248,7 @@ namespace kmx::aio::sample::server
         co_return;
     }
 
-    void manager::print_metrics() const
+    void manager::print_statistics() const
     {
         const auto total_conn = metrics_.total_connections.load(std::memory_order_relaxed);
         const auto active_conn = metrics_.active_connections.load(std::memory_order_relaxed);
@@ -329,7 +257,7 @@ namespace kmx::aio::sample::server
         const auto errors = metrics_.errors.load(std::memory_order_relaxed);
 
         std::println("\n╔════════════════════════════════════════╗");
-        std::println("║        Server Metrics (Shutdown)       ║");
+        std::println("║      Server Statistics (Shutdown)      ║");
         std::println("╠════════════════════════════════════════╣");
         std::println("║ Total Connections: {:>19} ║", total_conn);
         std::println("║ Active Connections: {:>18} ║", active_conn);
@@ -339,8 +267,8 @@ namespace kmx::aio::sample::server
         std::println("╚════════════════════════════════════════╝");
 
         logger::log(logger::level::info, std::source_location::current(),
-                "Server: Final metrics - {} total connections, {} bytes received, {} bytes sent, {} errors", total_conn, bytes_recv,
-                bytes_sent, errors);
+                    "Server: Final stats - {} total connections, {} bytes received, {} bytes sent, {} errors", total_conn, bytes_recv,
+                    bytes_sent, errors);
     }
 
     void manager::signal_handler(int signum) noexcept

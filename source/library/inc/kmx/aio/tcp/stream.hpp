@@ -35,7 +35,7 @@ namespace kmx::aio::tcp
 
         /// @brief Writes all data, handling partial writes.
         /// @throws std::bad_alloc (Corountine frame allocation).
-        task<std::expected<void, std::error_code>> write_all(std::vector<char> buffer) noexcept(false);
+        task<std::expected<void, std::error_code>> write_all(std::span<const char> buffer) noexcept(false);
     };
 
 } // namespace kmx::aio::tcp
