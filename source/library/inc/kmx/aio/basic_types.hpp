@@ -38,14 +38,14 @@ namespace kmx::aio
     inline constexpr event_mask_t default_epoll_events = EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP | EPOLLET;
 
     /// @brief Helper to check if an error code represents a non-blocking operation that would block.
-    [[nodiscard]] inline constexpr bool is_would_block(const std::error_code& ec) noexcept
+    [[nodiscard]] inline constexpr bool would_block(const std::error_code& ec) noexcept
     {
         const auto value = ec.value();
         return (value == EAGAIN) || (value == EWOULDBLOCK);
     }
 
     /// @brief Helper to check if an error code represents a non-blocking operation that would block.
-    [[nodiscard]] inline constexpr bool is_would_block(const int err) noexcept
+    [[nodiscard]] inline constexpr bool would_block(const int err) noexcept
     {
         return (err == EAGAIN) || (err == EWOULDBLOCK);
     }

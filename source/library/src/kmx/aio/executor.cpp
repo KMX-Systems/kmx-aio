@@ -22,7 +22,8 @@ namespace kmx::aio
 
     executor::executor(const executor_config& config) noexcept(false):
         config_(config),
-        scheduler_(std::make_shared<scheduler>(config.thread_count))
+        scheduler_(std::make_shared<scheduler>(config.thread_count)),
+        lifetime_token_(std::make_shared<int>(0))
     {
         auto epoll_result = descriptor::epoll::create();
         if (!epoll_result)
@@ -66,7 +67,7 @@ namespace kmx::aio
     {
         const std::lock_guard lock(subscribers_mutex_);
         // operator[] might throw std::bad_alloc
-        subscribers_[{fd, type}] = handle;
+        subscribers_[{fd, type}].push_back(handle);
     }
 
     void executor::spawn(task<void>&& t) noexcept(false)
@@ -131,10 +132,12 @@ namespace kmx::aio
         {
             const std::lock_guard lock(subscribers_mutex_);
             const auto it = subscribers_.find({fd, type});
-            if (it != subscribers_.end())
+            if (it != subscribers_.end() && !it->second.empty())
             {
-                handle = it->second;
-                subscribers_.erase(it);
+                handle = it->second.front();
+                it->second.pop_front();
+                if (it->second.empty())
+                    subscribers_.erase(it);
             }
         }
 
@@ -156,6 +159,7 @@ namespace kmx::aio
 
         for (std::vector<epoll_event> events;;)
         {
+            metrics_.total_epoll_waits.fetch_add(1u, mem_order);
             const auto events_result = epoll_fd_.wait_events(events, config_.max_events, config_.timeout_ms);
             if (!events_result)
             {
@@ -168,7 +172,6 @@ namespace kmx::aio
 
             if (!events.empty())
             {
-                metrics_.total_epoll_waits.fetch_add(1u, mem_order);
                 metrics_.total_events_received.fetch_add(events.size(), mem_order);
                 for (const auto& item: events)
                 {

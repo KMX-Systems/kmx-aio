@@ -2,6 +2,7 @@
 #ifndef PCH
     #include <atomic>
     #include <condition_variable>
+    #include <deque>
     #include <expected>
     #include <memory>
     #include <mutex>
@@ -96,6 +97,9 @@ namespace kmx::aio
         /// @brief Reset all executor statistics.
         void reset_stats() noexcept { metrics_.reset(); }
 
+        /// @brief Returns a lifetime token that expires when the executor is destroyed.
+        [[nodiscard]] std::weak_ptr<void> get_lifetime_token() const noexcept { return lifetime_token_; }
+
     private:
         struct event_key
         {
@@ -154,7 +158,7 @@ namespace kmx::aio
         std::shared_ptr<scheduler> scheduler_;
         descriptor::epoll epoll_fd_;
 
-        std::unordered_map<event_key, std::coroutine_handle<>, event_key_hash> subscribers_;
+        std::unordered_map<event_key, std::deque<std::coroutine_handle<>>, event_key_hash> subscribers_;
         std::mutex subscribers_mutex_;
 
         std::atomic_size_t active_work_ {};
@@ -162,6 +166,8 @@ namespace kmx::aio
         std::jthread io_thread_;
         std::mutex idle_mutex_;
         std::condition_variable idle_cv_;
+
+        std::shared_ptr<void> lifetime_token_;
 
         mutable statistics metrics_;
     };

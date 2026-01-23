@@ -1,6 +1,7 @@
 #pragma once
 #ifndef PCH
     #include <expected>
+    #include <memory>
     #include <system_error>
 
     #include <kmx/aio/basic_types.hpp>
@@ -16,12 +17,12 @@ namespace kmx::aio::tcp
     public:
         using result_t = std::expected<void, std::error_code>;
 
-        base(executor& exec) noexcept: exec_(exec) {}
-        base(executor& exec, descriptor::file&& fd) noexcept: exec_(exec), fd_(std::move(fd)) {}
+        base(executor& exec) noexcept: exec_(exec), exec_lifetime_(exec.get_lifetime_token()) {}
+        base(executor& exec, descriptor::file&& fd) noexcept: exec_(exec), exec_lifetime_(exec.get_lifetime_token()), fd_(std::move(fd)) {}
 
         virtual ~base() noexcept
         {
-            if (fd_.is_valid())
+            if (fd_.is_valid() && !exec_lifetime_.expired())
                 exec_.unregister_fd(fd_.get());
         }
 
@@ -32,6 +33,7 @@ namespace kmx::aio::tcp
 
     protected:
         executor& exec_;
+        std::weak_ptr<void> exec_lifetime_;
         descriptor::file fd_;
     };
 } // namespace kmx::aio::tcp

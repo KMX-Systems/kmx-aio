@@ -11,14 +11,26 @@ namespace kmx::aio::tcp
 {
     stream::result_task stream::read(const std::span<char> buffer) noexcept(false)
     {
-        while (true)
+        for (std::size_t total = 0u; ; )
         {
-            const ssize_t n = ::read(fd_.get(), buffer.data(), buffer.size());
-            if (n >= 0u)
-                co_return static_cast<std::size_t>(n);
-
-            if (is_would_block(errno))
+            const std::size_t remaining = buffer.size() - total;
+            const ssize_t n = ::read(fd_.get(), buffer.data() + total, remaining);
+            if (n > 0)
             {
+                total += static_cast<std::size_t>(n);
+                if (total == buffer.size())
+                    co_return total;
+                continue;
+            }
+
+            if (n == 0)
+                co_return total;
+
+            if (would_block(errno))
+            {
+                if (total != 0u)
+                    co_return total;
+
                 co_await exec_.wait_io(fd_.get(), event_type::read);
                 continue;
             }
@@ -41,7 +53,7 @@ namespace kmx::aio::tcp
                 co_return std::unexpected(std::make_error_code(std::errc::broken_pipe));
             }
 
-            if (is_would_block(errno))
+            if (would_block(errno))
             {
                 co_await exec_.wait_io(fd_.get(), event_type::write);
                 continue;

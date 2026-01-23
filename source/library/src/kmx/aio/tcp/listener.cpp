@@ -62,7 +62,7 @@ namespace kmx::aio::tcp
                 co_return client_fd;
             }
 
-            if (is_would_block(accept_res.error()))
+            if (would_block(accept_res.error()))
             {
                 co_await exec_.wait_io(fd_.get(), event_type::read);
                 continue;
