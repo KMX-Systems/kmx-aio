@@ -14,8 +14,8 @@
 #include <stop_token>
 #include <string>
 #include <thread>
-#include <unordered_map>
 #include <unistd.h>
+#include <unordered_map>
 
 namespace kmx::aio::sample::server
 {
@@ -67,7 +67,7 @@ namespace kmx::aio::sample::server
 
         /// @brief Handles sending random data to client asynchronously
         [[nodiscard]] task<void> client_sender(std::shared_ptr<tcp::stream> stream, const std::uint64_t client_id,
-                               std::shared_ptr<connection_stats> stats) noexcept(false);
+                                               std::shared_ptr<connection_stats> stats) noexcept(false);
 
         /// @brief Accepts incoming connections and spawns handler coroutines
         [[nodiscard]] task<void> connection_acceptor() noexcept(false);

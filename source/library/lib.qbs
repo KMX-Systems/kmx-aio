@@ -16,7 +16,10 @@ StaticLibrary {
         "inc/kmx/aio/**.hpp",
         "inc/kmx/aio/tcp/**.hpp",
         "inc/kmx/aio/descriptor/**.hpp",
+        "inc/kmx/aio/udp/**.hpp",
         "src/kmx/aio/**.cpp",
         "src/kmx/aio/tcp/**.cpp",
+        "src/kmx/aio/udp/**.cpp",
+        "src/kmx/aio/descriptor/**.cpp",
     ]
 }

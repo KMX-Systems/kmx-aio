@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <span>
-#include <string>
 #include <string_view>
 #include <sys/socket.h>
 #include <thread>
@@ -55,8 +54,8 @@ namespace kmx::aio::sample::client
 
         const auto failures = metrics_.failures.load(mem_order);
         logger::log(logger::level::info, std::source_location::current(),
-                    "Stress test completed in {} ms with {} successes and {} failures", elapsed.count(),
-                    metrics_.successes.load(mem_order), failures);
+                    "Stress test completed in {} ms with {} successes and {} failures", elapsed.count(), metrics_.successes.load(mem_order),
+                    failures);
 
         return failures == 0u;
     }
@@ -163,9 +162,12 @@ namespace kmx::aio::sample::client
 
             logger::log(logger::level::debug, std::source_location::current(), "Worker [{}]: Connected", worker_id);
 
-            try {
+            try
+            {
                 executor_->spawn(worker_sender(stream_ptr, worker_id, stats));
-            } catch (const std::exception& e) {
+            }
+            catch (const std::exception& e)
+            {
                 logger::log(logger::level::error, std::source_location::current(), "Worker [{}]: Spawn failed: {}", worker_id, e.what());
                 throw;
             }
@@ -201,15 +203,16 @@ namespace kmx::aio::sample::client
                     break;
                 }
 
-                if (worker_id % 100 == 0) {
-                     logger::log(logger::level::info, std::source_location::current(), "Worker [{}]: Received {} bytes", worker_id, *recv_result);
+                if (worker_id % 100 == 0)
+                {
+                    logger::log(logger::level::info, std::source_location::current(), "Worker [{}]: Received {} bytes", worker_id,
+                                *recv_result);
                 }
 
                 metrics_.successes.fetch_add(1u, mem_order);
             }
 
-            logger::log(logger::level::info, std::source_location::current(),
-                        "Worker [{}]: Received {} bytes", worker_id, received_bytes);
+            logger::log(logger::level::info, std::source_location::current(), "Worker [{}]: Received {} bytes", worker_id, received_bytes);
         }
         catch (const std::exception& e)
         {
@@ -281,8 +284,7 @@ namespace kmx::aio::sample::client
 
             ::shutdown(stream->get_fd(), SHUT_WR);
 
-            logger::log(logger::level::info, std::source_location::current(),
-                        "Worker [{}]: Sent {} bytes", worker_id, sent_bytes);
+            logger::log(logger::level::info, std::source_location::current(), "Worker [{}]: Sent {} bytes", worker_id, sent_bytes);
         }
         catch (...)
         {
@@ -339,7 +341,7 @@ namespace kmx::aio::sample::client
             {
                 std::lock_guard<std::mutex> lock(connections_mutex_);
                 snapshot.reserve(connections_.size());
-                for (const auto& [worker_id, stats] : connections_)
+                for (const auto& [worker_id, stats]: connections_)
                 {
                     if (!stats)
                     {
@@ -357,8 +359,7 @@ namespace kmx::aio::sample::client
                 }
             }
 
-            std::sort(snapshot.begin(), snapshot.end(),
-                      [](const auto& a, const auto& b) { return a.worker_id < b.worker_id; });
+            std::sort(snapshot.begin(), snapshot.end(), [](const auto& a, const auto& b) { return a.worker_id < b.worker_id; });
 
             const auto total = metrics_.total_connections.load(mem_order);
             const auto completed = metrics_.completed.load(mem_order);
@@ -378,7 +379,7 @@ namespace kmx::aio::sample::client
             }
             else
             {
-                for (const auto& entry : snapshot)
+                for (const auto& entry: snapshot)
                 {
                     std::string_view state = "-";
                     if (entry.closed)
@@ -398,24 +399,15 @@ namespace kmx::aio::sample::client
                         state = "RX";
                     }
 
-                    std::cout << std::format("Connection {:07}: TX {:>10} | RX {:>10} | EC {:05} | {}\n",
-                                             entry.worker_id,
-                                             common::format_bytes(entry.tx),
-                                             common::format_bytes(entry.rx),
-                                             entry.errors,
-                                             state);
+                    std::cout << std::format("Connection {:07}: TX {:>10} | RX {:>10} | EC {:05} | {}\n", entry.worker_id,
+                                             common::format_bytes(entry.tx), common::format_bytes(entry.rx), entry.errors, state);
                 }
             }
 
             std::cout << "────────────────────────────────────────────────────────────────────────\n";
             std::cout << std::format("Client Totals: TX {} | RX {} | EC {} | Completed {} | Total {} | OK {} | Fail {}\n",
-                                     common::format_bytes(bytes_sent),
-                                     common::format_bytes(bytes_recv),
-                                     errors,
-                                     completed,
-                                     total,
-                                     successes,
-                                     failures);
+                                     common::format_bytes(bytes_sent), common::format_bytes(bytes_recv), errors, completed, total,
+                                     successes, failures);
             std::cout << std::flush;
 
             std::this_thread::sleep_for(250ms);

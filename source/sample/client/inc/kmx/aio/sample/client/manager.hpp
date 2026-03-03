@@ -11,15 +11,12 @@
 #include <csignal>
 #include <expected>
 #include <fcntl.h>
-#include <format>
 #include <iostream>
 #include <mutex>
-#include <random>
 #include <stop_token>
-#include <string>
+#include <sys/socket.h>
 #include <thread>
 #include <unordered_map>
-#include <sys/socket.h>
 
 namespace kmx::aio::sample::client
 {
@@ -77,12 +74,11 @@ namespace kmx::aio::sample::client
         [[nodiscard]] task<std::expected<tcp::stream, std::error_code>> async_connect() noexcept;
 
         /// @brief Worker coroutine that performs an async stress test iteration
-        [[nodiscard]] task<void> worker(const std::uint32_t worker_id,
-                        std::shared_ptr<connection_stats> stats) noexcept(false);
+        [[nodiscard]] task<void> worker(const std::uint32_t worker_id, std::shared_ptr<connection_stats> stats) noexcept(false);
 
         /// @brief Worker sender coroutine
         [[nodiscard]] task<void> worker_sender(std::shared_ptr<tcp::stream> stream, const std::uint32_t worker_id,
-                               std::shared_ptr<connection_stats> stats) noexcept(false);
+                                               std::shared_ptr<connection_stats> stats) noexcept(false);
 
         /// @brief Periodically renders live connection stats UI
         void ui_loop(std::stop_token stop_token) const;

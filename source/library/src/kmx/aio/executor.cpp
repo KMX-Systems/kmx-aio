@@ -2,7 +2,6 @@
 
 #include "kmx/logger.hpp"
 #include <cerrno>
-#include <cstring>
 
 namespace kmx::aio
 {
@@ -53,9 +52,7 @@ namespace kmx::aio
 
         const auto result = epoll_fd_.remove_monitored_fd(fd);
         if (!result)
-        {
             metrics_.error_count.fetch_add(1u, mem_order);
-        }
 
         {
             const std::lock_guard lock(subscribers_mutex_);

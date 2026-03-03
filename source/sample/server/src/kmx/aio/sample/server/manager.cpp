@@ -149,8 +149,7 @@ namespace kmx::aio::sample::server
 
             logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Connection closed | Messages: {} recv",
                         client_id, messages_received);
-            logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Received {} bytes", client_id,
-                        received_bytes);
+            logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Received {} bytes", client_id, received_bytes);
         }
         catch (const std::exception& e)
         {
@@ -206,8 +205,7 @@ namespace kmx::aio::sample::server
 
             ::shutdown(stream->get_fd(), SHUT_WR);
 
-            logger::log(logger::level::info, std::source_location::current(),
-                        "Client [{}]: Sent {} bytes", client_id, sent_bytes);
+            logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Sent {} bytes", client_id, sent_bytes);
         }
         catch (...)
         {
@@ -360,7 +358,7 @@ namespace kmx::aio::sample::server
             {
                 std::lock_guard<std::mutex> lock(connections_mutex_);
                 snapshot.reserve(connections_.size());
-                for (const auto& [client_id, stats] : connections_)
+                for (const auto& [client_id, stats]: connections_)
                 {
                     if (!stats)
                     {
@@ -396,7 +394,7 @@ namespace kmx::aio::sample::server
             }
             else
             {
-                for (const auto& entry : snapshot)
+                for (const auto& entry: snapshot)
                 {
                     std::string_view state = "-";
                     if (entry.closed)
@@ -416,22 +414,14 @@ namespace kmx::aio::sample::server
                         state = "RX";
                     }
 
-                    std::cout << std::format("Connection {:07}: TX {:>10} | RX {:>10} | EC {:05} | {}\n",
-                                             entry.client_id,
-                                             common::format_bytes(entry.tx),
-                                             common::format_bytes(entry.rx),
-                                             entry.errors,
-                                             state);
+                    std::cout << std::format("Connection {:07}: TX {:>10} | RX {:>10} | EC {:05} | {}\n", entry.client_id,
+                                             common::format_bytes(entry.tx), common::format_bytes(entry.rx), entry.errors, state);
                 }
             }
 
             std::cout << "────────────────────────────────────────────────────────────────────────\n";
-            std::cout << std::format("Server Totals: TX {} | RX {} | EC {} | Active {} | Total {}\n",
-                                     common::format_bytes(bytes_sent),
-                                     common::format_bytes(bytes_recv),
-                                     errors,
-                                     active_conn,
-                                     total_conn);
+            std::cout << std::format("Server Totals: TX {} | RX {} | EC {} | Active {} | Total {}\n", common::format_bytes(bytes_sent),
+                                     common::format_bytes(bytes_recv), errors, active_conn, total_conn);
             std::cout << std::flush;
 
             std::this_thread::sleep_for(250ms);
@@ -457,8 +447,8 @@ namespace kmx::aio::sample::server
         std::cout << "╚════════════════════════════════════════╝\n";
 
         logger::log(logger::level::info, std::source_location::current(),
-                "Server: Final metrics - {} total connections, {} bytes received, {} bytes sent, {} errors", total_conn, bytes_recv,
-                bytes_sent, errors);
+                    "Server: Final metrics - {} total connections, {} bytes received, {} bytes sent, {} errors", total_conn, bytes_recv,
+                    bytes_sent, errors);
     }
 
     void manager::signal_handler(int signum) noexcept

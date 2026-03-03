@@ -1,4 +1,4 @@
-import qbs 1.0
+import qbs
 
 Project {
     references: [
@@ -7,7 +7,7 @@ Project {
         "server/sample-server.qbs",
         "simple-client/sample-simple-client.qbs",
         "simple-server/sample-simple-server.qbs",
+        "simple-udp-client/sample-simple-udp-client.qbs",
+        "simple-udp-server/sample-simple-udp-server.qbs",
     ]
 }
-
-

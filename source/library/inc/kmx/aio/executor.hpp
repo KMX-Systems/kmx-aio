@@ -9,7 +9,6 @@
     #include <sys/epoll.h>
     #include <thread>
     #include <unordered_map>
-    #include <vector>
 
     #include <kmx/aio/descriptor/epoll.hpp>
     #include <kmx/aio/scheduler.hpp>

@@ -10,6 +10,8 @@
 *   **Zero-Overhead Abstractions**: Lightweight wrappers around system calls.
 *   **Type-Safe Error Handling**: Extensive use of `std::expected` and `std::error_code` for robust error management.
 *   **TCP Networking**: Built-in support for TCP listeners and streams.
+*   **UDP Networking**: Dual-layer UDP API — low-level `recvmsg`/`sendmsg` via `udp::socket` and a high-level span/address API via `udp::endpoint`.
+*   **Async Timers**: `descriptor::timer` wraps Linux `timerfd` for coroutine-based deadline and interval timers.
 
 ## Requirements
 
@@ -23,8 +25,14 @@ The library is structured around a central **Executor** and **Task** system:
 
 *   **`kmx::aio::executor`**: The heart of the library. It manages the main event loop, handles `epoll_wait`, and resumes suspended coroutines when I/O events occur.
 *   **`kmx::aio::task<T>`**: A lazy-evaluation coroutine type. Tasks are the fundamental unit of asynchronous work.
+*   **`kmx::aio::io_base`**: Shared RAII base class for all network I/O objects. Owns the file descriptor and automatically unregisters it from the executor on destruction, guarded by a `weak_ptr` lifetime token.
 *   **`kmx::aio::tcp::listener`**: Provides an asynchronous interface for accepting incoming TCP connections.
-*   **`kmx::aio::tcp::stream`**: Wraps a connected socket for asynchronous read/write operations.
+*   **`kmx::aio::tcp::stream`**: Wraps a connected TCP socket for asynchronous read/write operations.
+*   **`kmx::aio::udp::socket`**: Low-level async UDP primitive based on `recvmsg`/`sendmsg`. Intended for use with protocols that manage their own packet framing (e.g. QUIC).
+*   **`kmx::aio::udp::endpoint`**: High-level UDP API built on `udp::socket`. Accepts `std::span<std::byte>` payloads and `sockaddr`/`sockaddr_storage` addresses, hiding the `msghdr`/`iovec` plumbing.
+*   **`kmx::aio::descriptor::timer`**: RAII wrapper around Linux `timerfd`. Supports one-shot and periodic timers via `set_time()` and `co_await`-able `wait()`.
+
+All TCP and UDP classes inherit `io_base` directly; `tcp::listener`, `tcp::stream`, `udp::socket`, and `udp::endpoint` are move-only (copy-deleted, move-assign-deleted due to the non-reseatable `executor&` member).
 
 ## Project Structure
 
@@ -32,20 +40,26 @@ The library is structured around a central **Executor** and **Task** system:
 kmx-aio/
 ├── source/
 │   ├── library/          # Core library source code
-│   │   ├── inc/kmx/aio/  # Public headers (Executor, Task, TCP, Descriptors)
-│   │   └── src/          # Implementation details
+│   │   ├── inc/kmx/aio/  # Public headers
+│   │   │   ├── io_base.hpp          # Shared RAII base for all I/O objects
+│   │   │   ├── executor.hpp         # Event loop & coroutine scheduler
+│   │   │   ├── task.hpp             # Lazy coroutine task<T> type
+│   │   │   ├── tcp/                 # TCP listener & stream
+│   │   │   ├── udp/                 # UDP socket (low-level) & endpoint (high-level)
+│   │   │   └── descriptor/          # File descriptor primitives + timerfd timer
+│   │   └── src/                     # Implementation (.cpp) files
 │   ├── sample/           # Example applications
 │   │   ├── client/       # Stress test client
-│   │   └── server/       # Echo server implementation
+│   │   ├── server/       # Echo server implementation
+│   │   ├── simple-client/           # Minimal TCP client example
+│   │   └── simple-server/           # Minimal TCP server example
 │   └── library-test/     # Unit tests
 └── build/                # Build artifacts
 ```
 
-## Usage Example
+## Usage Examples
 
-Here is a simplified example of how to write an echo server using `kmx-aio`.
-
-### Echo Server
+### TCP Echo Server
 
 ```cpp
 #include <kmx/aio/executor.hpp>
@@ -84,7 +98,6 @@ task<void> accept_loop(executor& exec) {
     while (true) {
         auto accept_result = co_await listener.accept();
         if (accept_result) {
-            // Convert file descriptor to stream and spawn handler
             tcp::stream client_stream(exec, std::move(*accept_result));
             exec.spawn(handle_client(std::move(client_stream)));
         }
@@ -94,13 +107,86 @@ task<void> accept_loop(executor& exec) {
 int main() {
     executor_config cfg{ .thread_count = 1 };
     executor exec(cfg);
-
-    // Spawn the main acceptor task
     exec.spawn(accept_loop(exec));
-
-    // Run the event loop
     exec.run();
+    return 0;
+}
+```
 
+### UDP Echo Server (high-level API)
+
+```cpp
+#include <kmx/aio/executor.hpp>
+#include <kmx/aio/udp/endpoint.hpp>
+#include <netinet/in.h>
+#include <cstring>
+
+using namespace kmx::aio;
+
+task<void> udp_echo(executor& exec) {
+    auto ep = udp::endpoint::create(exec, AF_INET);
+    if (!ep) co_return; // handle error
+
+    // Bind to a port
+    sockaddr_in addr{};
+    addr.sin_family      = AF_INET;
+    addr.sin_port        = htons(9000);
+    addr.sin_addr.s_addr = INADDR_ANY;
+    ::bind(ep->raw().get_fd(), reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+
+    std::array<std::byte, 2048> buf;
+    while (true) {
+        sockaddr_storage peer{};
+        socklen_t peer_len{};
+
+        auto recv_result = co_await ep->recv(buf, peer, peer_len);
+        if (!recv_result) break;
+
+        // Echo the datagram back to the sender
+        co_await ep->send(
+            std::span(buf.data(), *recv_result),
+            reinterpret_cast<sockaddr*>(&peer), peer_len
+        );
+    }
+}
+
+int main() {
+    executor_config cfg{ .thread_count = 1 };
+    executor exec(cfg);
+    exec.spawn(udp_echo(exec));
+    exec.run();
+    return 0;
+}
+```
+
+### One-Shot Timer
+
+```cpp
+#include <kmx/aio/executor.hpp>
+#include <kmx/aio/descriptor/timer.hpp>
+#include <iostream>
+
+using namespace kmx::aio;
+
+task<void> delayed_action(executor& exec) {
+    auto tmr = descriptor::timer::create(); // CLOCK_MONOTONIC, non-blocking
+    if (!tmr) co_return;
+
+    // Fire once after 500 ms
+    itimerspec ts{};
+    ts.it_value.tv_nsec = 500'000'000; // 500 ms
+    tmr->set_time(0, ts);
+
+    auto result = co_await tmr->wait(exec);
+    if (result)
+        std::cout << "Timer fired " << *result << " time(s)\n";
+}
+
+int main() {
+    executor_config cfg{ .thread_count = 1 };
+    executor exec(cfg);
+    exec.spawn(delayed_action(exec));
+    exec.run();
     return 0;
 }
 ```

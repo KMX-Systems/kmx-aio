@@ -4,14 +4,14 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
-#include <system_error>
 #include <sys/socket.h>
+#include <system_error>
 
 namespace kmx::aio::tcp
 {
     stream::result_task stream::read(const std::span<char> buffer) noexcept(false)
     {
-        for (std::size_t total = 0u; ; )
+        for (std::size_t total = 0u;;)
         {
             const std::size_t remaining = buffer.size() - total;
             const ssize_t n = ::read(fd_.get(), buffer.data() + total, remaining);

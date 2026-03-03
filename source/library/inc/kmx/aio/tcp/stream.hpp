@@ -2,28 +2,32 @@
 #ifndef PCH
     #include <expected>
     #include <span>
-    #include <string>
-    #include <string_view>
-    #include <vector>
 
     #include <kmx/aio/basic_types.hpp>
     #include <kmx/aio/executor.hpp>
+    #include <kmx/aio/io_base.hpp>
     #include <kmx/aio/task.hpp>
-    #include <kmx/aio/tcp/base.hpp>
 #endif
 
 namespace kmx::aio::tcp
 {
     /// @brief Asynchronous TCP Stream.
-    class stream: public base
+    class stream: public io_base
     {
     public:
+        /// @brief Task type used by TCP read/write operations.
         using result_task = task<std::expected<std::size_t, std::error_code>>;
 
-        stream(executor& exec, descriptor::file&& fd) noexcept: base(exec, std::move(fd)) {}
+        /// @brief Constructs stream from executor and connected socket descriptor.
+        /// @param exec Executor used for wait_io suspension.
+        /// @param fd   Connected socket descriptor owner.
+        stream(executor& exec, descriptor::file&& fd) noexcept: io_base(exec, std::move(fd)) {}
+        /// @brief Destroys the stream and unregisters descriptor if needed.
         ~stream() override = default;
-        stream(stream&&) = default;
-        stream& operator=(stream&&) = default;
+        /// @brief Move constructor.
+        stream(stream&&) noexcept = default;
+        /// @brief Move assignment is disabled because base stores executor reference.
+        stream& operator=(stream&&) noexcept = delete;
 
         /// @brief Reads data into the buffer.
         /// @throws std::bad_alloc (Corountine frame allocation).

@@ -1,9 +1,7 @@
 #pragma once
 #ifndef PCH
     #include <arpa/inet.h>
-    #include <cerrno>
     #include <concepts>
-    #include <cstdint>
     #include <expected>
     #include <fcntl.h>
     #include <sys/epoll.h>
@@ -12,7 +10,6 @@
     #include <system_error>
     #include <unistd.h>
     #include <utility>
-    #include <vector>
 
     #include <kmx/aio/basic_types.hpp>
 #endif

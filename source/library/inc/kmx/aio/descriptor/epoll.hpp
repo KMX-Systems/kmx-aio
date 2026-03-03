@@ -1,5 +1,7 @@
 #pragma once
 #ifndef PCH
+    #include <vector>
+
     #include <kmx/aio/descriptor/file.hpp>
 #endif
 

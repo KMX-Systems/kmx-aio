@@ -6,7 +6,7 @@
 
 namespace kmx::aio::tcp
 {
-    listener::listener(executor& exec, const std::string_view ip, const std::uint16_t port) noexcept(false): base(exec)
+    listener::listener(executor& exec, const std::string_view ip, const std::uint16_t port) noexcept(false): io_base(exec)
     {
         auto sock_res = descriptor::file::create_socket(AF_INET, SOCK_STREAM, 0);
         if (!sock_res)
@@ -29,7 +29,7 @@ namespace kmx::aio::tcp
             throw std::system_error(res.error(), "bind failed");
     }
 
-    std::expected<void, std::error_code> listener::listen(int backlog) noexcept
+    std::expected<void, std::error_code> listener::listen(const int backlog) noexcept
     {
         if (auto res = fd_.set_as_non_blocking(); !res)
             return res;

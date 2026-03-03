@@ -33,8 +33,8 @@ namespace kmx::aio::sample::simple_client
 
         const auto failures = metrics_.failures.load(mem_order);
         logger::log(logger::level::info, std::source_location::current(),
-                    "Stress test completed in {} ms with {} successes and {} failures", elapsed.count(),
-                    metrics_.successes.load(mem_order), failures);
+                    "Stress test completed in {} ms with {} successes and {} failures", elapsed.count(), metrics_.successes.load(mem_order),
+                    failures);
 
         return failures == 0u;
     }

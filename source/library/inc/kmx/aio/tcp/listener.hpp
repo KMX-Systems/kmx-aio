@@ -1,29 +1,32 @@
 #pragma once
 #ifndef PCH
     #include <expected>
-    #include <span>
-    #include <string>
     #include <string_view>
-    #include <vector>
 
     #include <kmx/aio/basic_types.hpp>
     #include <kmx/aio/executor.hpp>
+    #include <kmx/aio/io_base.hpp>
     #include <kmx/aio/task.hpp>
-    #include <kmx/aio/tcp/base.hpp>
 #endif
 
 namespace kmx::aio::tcp
 {
     /// @brief Asynchronous TCP listener.
-    class listener: public base
+    class listener: public io_base
     {
     public:
+        /// @brief Result type used by non-coroutine operations.
+        using result_t = std::expected<void, std::error_code>;
+
         /// @brief Creates a listener bound to the specified IP and port.
         /// @throws std::system_error If socket creation or bind fails.
         listener(executor& exec, const std::string_view ip, const std::uint16_t port) noexcept(false);
+        /// @brief Destroys the listener and unregisters descriptor if needed.
         ~listener() override = default;
-        listener(listener&&) = default;
-        listener& operator=(listener&&) = default;
+        /// @brief Move constructor.
+        listener(listener&&) noexcept = default;
+        /// @brief Move assignment is disabled because base stores executor reference.
+        listener& operator=(listener&&) noexcept = delete;
 
         /// @brief Starts listening.
         /// @return Result or error code. Does not throw.
