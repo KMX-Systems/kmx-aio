@@ -1,14 +1,15 @@
+/// @file aio/tcp/listener.cpp
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include "kmx/aio/tcp/listener.hpp"
 
 #include "kmx/logger.hpp"
-#include <arpa/inet.h>
 #include <netinet/in.h>
 
 namespace kmx::aio::tcp
 {
-    listener::listener(executor& exec, const std::string_view ip, const std::uint16_t port) noexcept(false): io_base(exec)
+    listener::listener(executor& exec, const ip_address_t& ip, const std::uint16_t port) noexcept(false): io_base(exec)
     {
-        auto sock_res = descriptor::file::create_socket(AF_INET, SOCK_STREAM, 0);
+        auto sock_res = descriptor::file::create_socket(ip_family(ip), SOCK_STREAM, 0);
         if (!sock_res)
             throw std::system_error(sock_res.error());
 
@@ -18,14 +19,11 @@ namespace kmx::aio::tcp
         if (auto res = fd_.setsockopt(SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)); !res)
             throw std::system_error(res.error());
 
-        sockaddr_in addr {};
-        addr.sin_family = AF_INET;
-        addr.sin_port = ::htons(port);
+        auto addr = make_socket_address(ip, port);
+        if (!addr)
+            throw std::system_error(addr.error());
 
-        if (auto res = aio::inet_pton(AF_INET, std::string(ip).c_str(), &addr.sin_addr); !res)
-            throw std::system_error(res.error());
-
-        if (auto res = fd_.bind(reinterpret_cast<sockaddr*>(&addr), sizeof(addr)); !res)
+        if (auto res = fd_.bind(reinterpret_cast<sockaddr*>(&addr->storage), addr->length); !res)
             throw std::system_error(res.error(), "bind failed");
     }
 

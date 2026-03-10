@@ -1,15 +1,61 @@
+/// @file aio/basic_types.hpp
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <arpa/inet.h>
+    #include <array>
     #include <cerrno>
-    #include <cstddef>
     #include <cstdint>
+    #include <cstring>
+    #include <expected>
+    #include <netinet/in.h>
+    #include <span>
+    #include <string>
+    #include <sys/socket.h>
     #include <sys/epoll.h>
     #include <system_error>
+    #include <type_traits>
+    #include <variant>
 #endif
 
 namespace kmx::aio
 {
+    using ipv4_storage_t = std::array<std::uint8_t, 4u>;
+    using ipv6_storage_t = std::array<std::uint8_t, 16u>;
+    using ipv4_address_t = std::span<const std::uint8_t, 4u>;
+    using ipv6_address_t = std::span<const std::uint8_t, 16u>;
+    using ip_address_t = std::variant<ipv4_address_t, ipv6_address_t>;
+
+    inline constexpr ipv4_storage_t localhost_ipv4 {127u, 0u, 0u, 1u};
+    inline constexpr ipv4_storage_t any_ipv4 {0u, 0u, 0u, 0u};
+
+    [[nodiscard]] constexpr ipv4_address_t make_ipv4_address(const ipv4_storage_t& ip) noexcept
+    {
+        return ipv4_address_t {ip};
+    }
+
+    [[nodiscard]] constexpr ipv6_address_t make_ipv6_address(const ipv6_storage_t& ip) noexcept
+    {
+        return ipv6_address_t {ip};
+    }
+
+    [[nodiscard]] constexpr ip_address_t make_ip_address(const ipv4_storage_t& ip) noexcept
+    {
+        return make_ipv4_address(ip);
+    }
+
+    [[nodiscard]] constexpr ip_address_t make_ip_address(const ipv6_storage_t& ip) noexcept
+    {
+        return make_ipv6_address(ip);
+    }
+
     using fd_t = int;
+
+    struct socket_address
+    {
+        sockaddr_storage storage {};
+        socklen_t length {};
+    };
 
     /// @brief Standard integer types within aio namespace.
     using event_mask_t = std::uint32_t;
@@ -60,6 +106,66 @@ namespace kmx::aio
     [[nodiscard]] inline std::error_code error_from_errno(const int err) noexcept
     {
         return std::error_code(err, std::generic_category());
+    }
+
+    [[nodiscard]] inline int ip_family(const ip_address_t& ip) noexcept
+    {
+        return std::holds_alternative<ipv4_address_t>(ip) ? AF_INET : AF_INET6;
+    }
+
+    [[nodiscard]] inline std::string ip_to_string(const ip_address_t& ip) noexcept
+    {
+        char buffer[INET6_ADDRSTRLEN] {};
+
+        const bool ok = std::visit(
+            [&buffer](const auto& bytes) noexcept
+            {
+                using ip_t = std::decay_t<decltype(bytes)>;
+                if constexpr (std::is_same_v<ip_t, ipv4_address_t>)
+                {
+                    in_addr addr {};
+                    std::memcpy(&addr, bytes.data(), bytes.size());
+                    return ::inet_ntop(AF_INET, &addr, buffer, sizeof(buffer)) != nullptr;
+                }
+
+                in6_addr addr {};
+                std::memcpy(&addr, bytes.data(), bytes.size());
+                return ::inet_ntop(AF_INET6, &addr, buffer, sizeof(buffer)) != nullptr;
+            },
+            ip);
+
+        return ok ? std::string(buffer) : std::string {};
+    }
+
+    [[nodiscard]] inline std::expected<socket_address, std::error_code> make_socket_address(const ip_address_t& ip,
+                                                                                             const std::uint16_t port) noexcept
+    {
+        socket_address result {};
+
+        std::visit(
+            [&result, port](const auto& bytes) noexcept
+            {
+                using ip_t = std::decay_t<decltype(bytes)>;
+                if constexpr (std::is_same_v<ip_t, ipv4_address_t>)
+                {
+                    auto* addr = reinterpret_cast<sockaddr_in*>(&result.storage);
+                    addr->sin_family = AF_INET;
+                    addr->sin_port = ::htons(port);
+                    std::memcpy(&addr->sin_addr, bytes.data(), bytes.size());
+                    result.length = sizeof(sockaddr_in);
+                }
+                else
+                {
+                    auto* addr = reinterpret_cast<sockaddr_in6*>(&result.storage);
+                    addr->sin6_family = AF_INET6;
+                    addr->sin6_port = ::htons(port);
+                    std::memcpy(&addr->sin6_addr, bytes.data(), bytes.size());
+                    result.length = sizeof(sockaddr_in6);
+                }
+            },
+            ip);
+
+        return result;
     }
 
     /// @brief Bitwise OR operator for epoll event masks (event_mask_t | epoll_event_mask).

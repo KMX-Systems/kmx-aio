@@ -49,10 +49,20 @@ kmx-aio/
 │   │   │   └── descriptor/          # File descriptor primitives + timerfd timer
 │   │   └── src/                     # Implementation (.cpp) files
 │   ├── sample/           # Example applications
-│   │   ├── client/       # Stress test client
-│   │   ├── server/       # Echo server implementation
-│   │   ├── simple-client/           # Minimal TCP client example
-│   │   └── simple-server/           # Minimal TCP server example
+│   │   ├── tcp/
+│   │   │   ├── minimal/
+│   │   │   │   ├── client/          # Minimal TCP client
+│   │   │   │   └── server/          # Minimal TCP server
+│   │   │   └── echo/
+│   │   │       ├── client/          # TCP echo client
+│   │   │       └── server/          # TCP echo server
+│   │   └── udp/
+│   │       ├── minimal/
+│   │       │   ├── client/          # Minimal UDP client
+│   │       │   └── server/          # Minimal UDP server
+│   │       └── echo/
+│   │           ├── client/          # UDP echo client
+│   │           └── server/          # UDP echo server
 │   └── library-test/     # Unit tests
 └── build/                # Build artifacts
 ```
@@ -207,4 +217,4 @@ qbs build project:source # Builds everything in source/
 
 ## License
 
-(Include License Information Here)
+Copyright (C) 2026 - present KMX Systems. All rights reserved.

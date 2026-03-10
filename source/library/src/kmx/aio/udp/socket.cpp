@@ -1,3 +1,5 @@
+/// @file aio/udp/socket.cpp
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include "kmx/aio/udp/socket.hpp"
 
 #include <cerrno>

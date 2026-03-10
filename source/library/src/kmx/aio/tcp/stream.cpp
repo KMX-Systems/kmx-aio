@@ -1,6 +1,7 @@
+/// @file aio/tcp/stream.cpp
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include "kmx/aio/tcp/stream.hpp"
 
-#include "kmx/logger.hpp"
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>

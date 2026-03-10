@@ -1,5 +1,9 @@
+/// @file aio/udp/endpoint.cpp
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include "kmx/aio/udp/endpoint.hpp"
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <sys/uio.h>
 
 namespace kmx::aio::udp
@@ -33,6 +37,43 @@ namespace kmx::aio::udp
         co_return result;
     }
 
+    endpoint::result_task endpoint::recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
+                                         socklen_t& out_peer_addr_len, ip_address_t& out_peer_ip,
+                                         std::uint16_t& out_peer_port) noexcept(false)
+    {
+        auto result = co_await recv(buffer, peer_addr, out_peer_addr_len);
+        if (!result)
+            co_return result;
+
+        if (out_peer_addr_len < sizeof(sockaddr))
+            co_return std::unexpected(error_from_errno(EINVAL));
+
+        const auto* addr = reinterpret_cast<const sockaddr*>(&peer_addr);
+        if (addr->sa_family == AF_INET)
+        {
+            if (out_peer_addr_len < sizeof(sockaddr_in))
+                co_return std::unexpected(error_from_errno(EINVAL));
+
+            const auto* addr4 = reinterpret_cast<const sockaddr_in*>(&peer_addr);
+            out_peer_ip = ipv4_address_t {reinterpret_cast<const std::uint8_t*>(&addr4->sin_addr), 4u};
+            out_peer_port = ::ntohs(addr4->sin_port);
+            co_return result;
+        }
+
+        if (addr->sa_family == AF_INET6)
+        {
+            if (out_peer_addr_len < sizeof(sockaddr_in6))
+                co_return std::unexpected(error_from_errno(EINVAL));
+
+            const auto* addr6 = reinterpret_cast<const sockaddr_in6*>(&peer_addr);
+            out_peer_ip = ipv6_address_t {reinterpret_cast<const std::uint8_t*>(&addr6->sin6_addr), 16u};
+            out_peer_port = ::ntohs(addr6->sin6_port);
+            co_return result;
+        }
+
+        co_return std::unexpected(error_from_errno(EAFNOSUPPORT));
+    }
+
     endpoint::result_task endpoint::send(std::span<const std::byte> buffer, const sockaddr* peer_addr,
                                          const socklen_t addr_len) noexcept(false)
     {
@@ -51,5 +92,15 @@ namespace kmx::aio::udp
         msg.msg_iovlen = 1;
 
         co_return co_await socket_.sendmsg(&msg);
+    }
+
+    endpoint::result_task endpoint::send(std::span<const std::byte> buffer, const ip_address_t& peer_ip,
+                                         const std::uint16_t peer_port) noexcept(false)
+    {
+        const auto peer_addr = make_socket_address(peer_ip, peer_port);
+        if (!peer_addr)
+            co_return std::unexpected(peer_addr.error());
+
+        co_return co_await send(buffer, reinterpret_cast<const sockaddr*>(&peer_addr->storage), peer_addr->length);
     }
 } // namespace kmx::aio::udp

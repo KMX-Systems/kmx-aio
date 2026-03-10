@@ -1,3 +1,5 @@
+/// @file aio/descriptor/epoll.hpp
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <vector>

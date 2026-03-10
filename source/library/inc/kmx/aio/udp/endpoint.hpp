@@ -1,3 +1,5 @@
+/// @file aio/udp/endpoint.hpp
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <cstddef>
@@ -52,6 +54,17 @@ namespace kmx::aio::udp
         [[nodiscard]] result_task recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
                                        socklen_t& out_peer_addr_len) noexcept(false);
 
+        /// @brief Asynchronously receives a single datagram and decodes peer IP/port.
+        /// @param buffer     Destination buffer for the datagram payload.
+        /// @param peer_addr  Raw peer address storage kept for compatibility and span lifetime.
+        /// @param out_peer_addr_len Set to the actual size of peer_addr on success.
+        /// @param out_peer_ip Filled with a view over peer_addr bytes (valid while peer_addr remains unchanged).
+        /// @param out_peer_port Filled with the sender UDP port in host byte order.
+        /// @throws std::bad_alloc (coroutine frame allocation).
+        [[nodiscard]] result_task recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
+                           socklen_t& out_peer_addr_len, ip_address_t& out_peer_ip,
+                           std::uint16_t& out_peer_port) noexcept(false);
+
         /// @brief Asynchronously sends a single datagram to the specified address.
         /// @param buffer    Payload to send.
         /// @param peer_addr Destination address.
@@ -59,6 +72,14 @@ namespace kmx::aio::udp
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] result_task send(std::span<const std::byte> buffer, const sockaddr* peer_addr,
                                        const socklen_t addr_len) noexcept(false);
+
+        /// @brief Asynchronously sends a single datagram to the specified IP and port.
+        /// @param buffer    Payload to send.
+        /// @param peer_ip   Destination IP address view.
+        /// @param peer_port Destination UDP port (host byte order).
+        /// @throws std::bad_alloc (coroutine frame allocation).
+        [[nodiscard]] result_task send(std::span<const std::byte> buffer, const ip_address_t& peer_ip,
+                           const std::uint16_t peer_port) noexcept(false);
 
     private:
         socket socket_;

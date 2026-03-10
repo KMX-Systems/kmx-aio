@@ -1,3 +1,5 @@
+/// @file aio/descriptor/timer.cpp
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include "kmx/aio/descriptor/timer.hpp"
 
 #include <cerrno>
