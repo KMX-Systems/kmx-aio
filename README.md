@@ -19,6 +19,26 @@
 *   **Compiler**: A C++ compiler supporting C++26 features (e.g., recent GCC or Clang).
 *   **Build System**: QBS (Qt Build Suite).
 
+## Dependencies
+
+### Runtime / System Dependencies
+
+*   **Linux kernel interfaces**: `epoll`, sockets, and `timerfd` (via headers such as `sys/epoll.h`, `sys/socket.h`, `sys/timerfd.h`).
+*   **POSIX networking**: `arpa/inet.h`, `netinet/in.h`, and related socket APIs.
+
+### Build Dependencies
+
+*   **QBS**: used to configure and build all products (`qbs` CLI).
+*   **C++26 toolchain**: compiler and standard library with support for coroutines and modern library features used by this project (for example `std::expected`, `std::span`, and `std::variant`).
+
+### Test-Only Dependencies
+
+*   **Catch2**: required only for `kmx-aio-test` (linked as `Catch2Main` and `Catch2` in `source/library-test/unit-test.qbs`).
+
+### Third-Party Runtime Libraries
+
+*   **None** beyond the standard C/C++ runtime and Linux system libraries.
+
 ## Architecture
 
 The library is structured around a central **Executor** and **Task** system:
@@ -213,6 +233,40 @@ Or to build specifically the library or samples:
 
 ```bash
 qbs build project:source # Builds everything in source/
+```
+
+## Static Analysis (clang-tidy)
+
+Run clang-tidy across the project via the helper script in `source/`:
+
+```bash
+cd source
+./clang-tidy.sh
+```
+
+The script:
+
+* generates `compile_commands.json` using `qbs generate -g clangdb`
+* runs `run-clang-tidy` with that compilation database
+
+Optional environment variables:
+
+* `PROFILE=<qbs-profile>` to force a specific QBS profile
+* `BUILD_DIR=<dir>` to change the output directory (default: `default`)
+* `JOBS=<n>` to control parallel clang-tidy workers
+* `GCC_BIN=<path>` to choose which `g++` installation is used to derive the GCC toolchain path
+* `GCC_TOOLCHAIN=<path>` to explicitly set the toolchain path passed to clang-tidy
+
+Notes:
+
+* The helper normalizes `-std=c++26` to `-std=c++2c` inside the generated compilation database for clang-tidy compatibility.
+* The project build itself remains unchanged and still compiles as C++26 via QBS.
+
+You can pass any extra `run-clang-tidy` arguments, for example:
+
+```bash
+cd source
+./clang-tidy.sh -checks='-*,clang-analyzer-*,bugprone-*' -header-filter='^/home/io/Development/kmx-aio/source/library/'
 ```
 
 ## License
