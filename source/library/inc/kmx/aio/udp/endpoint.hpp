@@ -63,7 +63,7 @@ namespace kmx::aio::udp
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] result_task recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
                            socklen_t& out_peer_addr_len, ip_address_t& out_peer_ip,
-                           std::uint16_t& out_peer_port) noexcept(false);
+                           port_t& out_peer_port) noexcept(false);
 
         /// @brief Asynchronously sends a single datagram to the specified address.
         /// @param buffer    Payload to send.
@@ -78,8 +78,8 @@ namespace kmx::aio::udp
         /// @param peer_ip   Destination IP address view.
         /// @param peer_port Destination UDP port (host byte order).
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] result_task send(std::span<const std::byte> buffer, const ip_address_t& peer_ip,
-                           const std::uint16_t peer_port) noexcept(false);
+        [[nodiscard]] result_task send(std::span<const std::byte> buffer, const ip_address_t peer_ip,
+                                       const port_t peer_port) noexcept(false);
 
     private:
         socket socket_;

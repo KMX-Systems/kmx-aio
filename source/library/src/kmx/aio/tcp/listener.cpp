@@ -7,7 +7,7 @@
 
 namespace kmx::aio::tcp
 {
-    listener::listener(executor& exec, const ip_address_t& ip, const std::uint16_t port) noexcept(false): io_base(exec)
+    listener::listener(executor& exec, const ip_address_t ip, const port_t port) noexcept(false): io_base(exec)
     {
         auto sock_res = descriptor::file::create_socket(ip_family(ip), SOCK_STREAM, 0);
         if (!sock_res)

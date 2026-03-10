@@ -15,9 +15,9 @@ namespace kmx::aio::sample::tcp::minimal::server
     {
         std::uint32_t scheduler_threads = 4u;
         kmx::aio::ip_address_t bind_address = kmx::aio::make_ip_address(kmx::aio::localhost_ipv4);
-        std::uint16_t bind_port = 8080u;
-        std::uint16_t epoll_max_events = 1024u;
-        std::uint16_t epoll_timeout_ms = 200u;
+        port_t bind_port = 8080u;
+        port_t epoll_max_events = 1024u;
+        port_t epoll_timeout_ms = 200u;
     };
 
     // Server statistics

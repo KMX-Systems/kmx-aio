@@ -21,7 +21,7 @@ namespace kmx::aio::tcp
 
         /// @brief Creates a listener bound to the specified IP and port.
         /// @throws std::system_error If socket creation or bind fails.
-        listener(executor& exec, const ip_address_t& ip, const std::uint16_t port) noexcept(false);
+        listener(executor& exec, const ip_address_t ip, const port_t port) noexcept(false);
         /// @brief Destroys the listener and unregisters descriptor if needed.
         ~listener() override = default;
         /// @brief Move constructor.

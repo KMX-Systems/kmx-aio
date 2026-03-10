@@ -7,7 +7,7 @@
 
 namespace kmx::aio::descriptor
 {
-    std::expected<timer, std::error_code> timer::create(int clockid, int flags) noexcept
+    std::expected<timer, std::error_code> timer::create(const int clockid, const int flags) noexcept
     {
         const fd_t fd = ::timerfd_create(clockid, flags);
         if (fd < 0)
@@ -16,7 +16,7 @@ namespace kmx::aio::descriptor
         return timer(fd);
     }
 
-    std::expected<void, std::error_code> timer::set_time(int flags, const struct itimerspec& new_value,
+    std::expected<void, std::error_code> timer::set_time(const int flags, const struct itimerspec& new_value,
                                                          struct itimerspec* old_value) noexcept
     {
         if (!is_valid())

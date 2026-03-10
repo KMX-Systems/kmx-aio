@@ -39,7 +39,7 @@ namespace kmx::aio::udp
 
     endpoint::result_task endpoint::recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
                                          socklen_t& out_peer_addr_len, ip_address_t& out_peer_ip,
-                                         std::uint16_t& out_peer_port) noexcept(false)
+                                         port_t& out_peer_port) noexcept(false)
     {
         auto result = co_await recv(buffer, peer_addr, out_peer_addr_len);
         if (!result)
@@ -94,8 +94,8 @@ namespace kmx::aio::udp
         co_return co_await socket_.sendmsg(&msg);
     }
 
-    endpoint::result_task endpoint::send(std::span<const std::byte> buffer, const ip_address_t& peer_ip,
-                                         const std::uint16_t peer_port) noexcept(false)
+    endpoint::result_task endpoint::send(std::span<const std::byte> buffer, const ip_address_t peer_ip,
+                                         const port_t peer_port) noexcept(false)
     {
         const auto peer_addr = make_socket_address(peer_ip, peer_port);
         if (!peer_addr)

@@ -50,13 +50,13 @@ namespace kmx::aio::udp
         /// @param flags Flags forwarded to ::recvmsg.
         /// @return Number of received bytes, or error code.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] result_task recvmsg(struct msghdr* msg, const int flags = 0) noexcept(false);
+        [[nodiscard]] result_task recvmsg(::msghdr* msg, const int flags = 0) noexcept(false);
 
         /// @brief Asynchronously sends a message.
         /// @param msg   Message header describing payload buffers, peer address, and ancillary data.
         /// @param flags Flags forwarded to ::sendmsg.
         /// @return Number of sent bytes, or error code.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] result_task sendmsg(const struct msghdr* msg, const int flags = 0) noexcept(false);
+        [[nodiscard]] result_task sendmsg(const ::msghdr* msg, const int flags = 0) noexcept(false);
     };
 } // namespace kmx::aio::udp

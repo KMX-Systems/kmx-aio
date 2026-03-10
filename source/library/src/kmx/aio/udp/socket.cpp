@@ -18,7 +18,7 @@ namespace kmx::aio::udp
         return socket(exec, std::move(*res));
     }
 
-    socket::result_task socket::recvmsg(struct msghdr* msg, const int flags) noexcept(false)
+    socket::result_task socket::recvmsg(::msghdr* msg, const int flags) noexcept(false)
     {
         if (msg == nullptr)
             co_return std::unexpected(error_from_errno(EINVAL));
@@ -39,7 +39,7 @@ namespace kmx::aio::udp
         }
     }
 
-    socket::result_task socket::sendmsg(const struct msghdr* msg, const int flags) noexcept(false)
+    socket::result_task socket::sendmsg(const ::msghdr* msg, const int flags) noexcept(false)
     {
         if (msg == nullptr)
             co_return std::unexpected(error_from_errno(EINVAL));

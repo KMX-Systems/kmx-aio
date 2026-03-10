@@ -23,7 +23,7 @@ namespace kmx::aio
     {
         std::uint32_t thread_count = 1u;
         std::uint32_t max_events = 1024u;
-        std::uint16_t timeout_ms = 200u;
+        port_t timeout_ms = 200u;
     };
 
     /// @brief Statistics for epoll operations and executor performance.

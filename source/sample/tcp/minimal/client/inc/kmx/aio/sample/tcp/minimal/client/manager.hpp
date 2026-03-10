@@ -19,11 +19,11 @@ namespace kmx::aio::sample::tcp::minimal::client
     {
         std::uint32_t num_workers = 1000;
         kmx::aio::ip_address_t server_addr = kmx::aio::make_ip_address(kmx::aio::localhost_ipv4);
-        std::uint16_t server_port = 8080;
+        port_t server_port = 8080;
         std::string_view message = "Is there anybody out there?";
         std::uint32_t scheduler_threads = 4u;
-        std::uint16_t max_events = 1024u;
-        std::uint16_t timeout_ms = 100u;
+        port_t max_events = 1024u;
+        port_t timeout_ms = 100u;
     };
 
     // Metrics
