@@ -100,6 +100,15 @@ namespace kmx::aio::descriptor
         return {};
     }
 
+    std::expected<void, std::error_code> file::bind(const ip_address_t& ip, const std::uint16_t port) noexcept
+    {
+        const auto addr = make_socket_address(ip, port);
+        if (!addr)
+            return std::unexpected(addr.error());
+
+        return bind(reinterpret_cast<const sockaddr*>(&addr->storage), addr->length);
+    }
+
     std::expected<void, std::error_code> file::setsockopt(const int level, const int optname, const void* const optval,
                                                           const socklen_t optlen) noexcept
     {
@@ -135,6 +144,40 @@ namespace kmx::aio::descriptor
         return file(client_fd);
     }
 
+    std::expected<file, std::error_code> file::accept(ip_address_t& out_ip, std::uint16_t& out_port) noexcept
+    {
+        sockaddr_storage storage{};
+        socklen_t length = sizeof(storage);
+
+        auto file_res = accept(reinterpret_cast<sockaddr*>(&storage), &length);
+        if (!file_res)
+            return file_res;
+
+        if (storage.ss_family == AF_INET)
+        {
+            auto* addr4 = reinterpret_cast<sockaddr_in*>(&storage);
+            ipv4_storage_t ip4{};
+            std::memcpy(ip4.data(), &addr4->sin_addr, ip4.size());
+            out_ip = make_ip_address(ip4);
+            out_port = ::ntohs(addr4->sin_port);
+        }
+        else if (storage.ss_family == AF_INET6)
+        {
+            auto* addr6 = reinterpret_cast<sockaddr_in6*>(&storage);
+            ipv6_storage_t ip6{};
+            std::memcpy(ip6.data(), &addr6->sin6_addr, ip6.size());
+            out_ip = make_ip_address(ip6);
+            out_port = ::ntohs(addr6->sin6_port);
+        }
+        else
+        {
+            // Invalid or unsupported family
+            return std::unexpected(error_from_errno(EAFNOSUPPORT));
+        }
+
+        return file_res;
+    }
+
     std::expected<void, std::error_code> file::connect(const struct sockaddr* const addr, const socklen_t addrlen) noexcept
     {
         if (!is_valid())
@@ -148,6 +191,15 @@ namespace kmx::aio::descriptor
         }
 
         return {};
+    }
+
+    std::expected<void, std::error_code> file::connect(const ip_address_t& ip, const std::uint16_t port) noexcept
+    {
+        const auto addr = make_socket_address(ip, port);
+        if (!addr)
+            return std::unexpected(addr.error());
+
+        return connect(reinterpret_cast<const sockaddr*>(&addr->storage), addr->length);
     }
 
     std::expected<void, std::error_code> file::getsockopt(const int level, const int optname, void* const optval,

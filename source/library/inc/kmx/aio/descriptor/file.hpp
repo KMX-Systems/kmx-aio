@@ -65,6 +65,9 @@ namespace kmx::aio::descriptor
         /// @brief Wrapper for ::bind
         [[nodiscard]] std::expected<void, std::error_code> bind(const struct sockaddr* const addr, const socklen_t addrlen) noexcept;
 
+        /// @brief Wrapper for ::bind, convenient overload
+        [[nodiscard]] std::expected<void, std::error_code> bind(const ip_address_t& ip, const std::uint16_t port) noexcept;
+
         /// @brief Wrapper for ::setsockopt
         [[nodiscard]] std::expected<void, std::error_code> setsockopt(const int level, const int optname, const void* optval,
                                                                       const socklen_t optlen) noexcept;
@@ -75,8 +78,14 @@ namespace kmx::aio::descriptor
         /// @brief Wrapper for ::accept
         [[nodiscard]] std::expected<file, std::error_code> accept(sockaddr* const addr, socklen_t* const addrlen) noexcept;
 
+        /// @brief Wrapper for ::accept, convenient overload
+        [[nodiscard]] std::expected<file, std::error_code> accept(ip_address_t& out_ip, std::uint16_t& out_port) noexcept;
+
         /// @brief Wrapper for ::connect
         [[nodiscard]] std::expected<void, std::error_code> connect(const struct sockaddr* const addr, const socklen_t addrlen) noexcept;
+
+        /// @brief Wrapper for ::connect, convenient overload
+        [[nodiscard]] std::expected<void, std::error_code> connect(const ip_address_t& ip, const std::uint16_t port) noexcept;
 
         /// @brief Wrapper for ::getsockopt
         [[nodiscard]] std::expected<void, std::error_code> getsockopt(const int level, const int optname, void* const optval,
