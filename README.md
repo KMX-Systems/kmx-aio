@@ -158,7 +158,7 @@ task<void> udp_echo(executor& exec) {
     if (!ep) co_return; // handle error
 
     // Bind to a port
-    sockaddr_in addr{};
+    ::sockaddr_in addr{};
     addr.sin_family      = AF_INET;
     addr.sin_port        = htons(9000);
     addr.sin_addr.s_addr = INADDR_ANY;
@@ -167,7 +167,7 @@ task<void> udp_echo(executor& exec) {
     std::array<std::byte, 2048> buf;
     while (true) {
         sockaddr_storage peer{};
-        socklen_t peer_len{};
+        ::socklen_t peer_len{};
 
         auto recv_result = co_await ep->recv(buf, peer, peer_len);
         if (!recv_result) break;

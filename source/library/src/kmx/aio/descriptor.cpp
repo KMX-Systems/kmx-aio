@@ -89,7 +89,7 @@ namespace kmx::aio::descriptor
         return static_cast<std::size_t>(ret);
     }
 
-    std::expected<void, std::error_code> file::bind(const struct sockaddr* const addr, const socklen_t addrlen) noexcept
+    std::expected<void, std::error_code> file::bind(const struct sockaddr* const addr, const ::socklen_t addrlen) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -110,7 +110,7 @@ namespace kmx::aio::descriptor
     }
 
     std::expected<void, std::error_code> file::setsockopt(const int level, const int optname, const void* const optval,
-                                                          const socklen_t optlen) noexcept
+                                                          const ::socklen_t optlen) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -132,7 +132,7 @@ namespace kmx::aio::descriptor
         return {};
     }
 
-    std::expected<file, std::error_code> file::accept(struct sockaddr* const addr, socklen_t* const addrlen) noexcept
+    std::expected<file, std::error_code> file::accept(struct sockaddr* const addr, ::socklen_t* const addrlen) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -147,7 +147,7 @@ namespace kmx::aio::descriptor
     std::expected<file, std::error_code> file::accept(ip_address_owned_t& out_ip, port_t& out_port) noexcept
     {
         sockaddr_storage storage{};
-        socklen_t length = sizeof(storage);
+        ::socklen_t length = sizeof(storage);
 
         auto file_res = accept(reinterpret_cast<sockaddr*>(&storage), &length);
         if (!file_res)
@@ -155,7 +155,7 @@ namespace kmx::aio::descriptor
 
         if (storage.ss_family == AF_INET)
         {
-            auto* addr4 = reinterpret_cast<sockaddr_in*>(&storage);
+            auto* addr4 = reinterpret_cast<::sockaddr_in*>(&storage);
             ipv4_storage_t ip4{};
             std::memcpy(ip4.data(), &addr4->sin_addr, ip4.size());
             out_ip = ip4;
@@ -178,7 +178,7 @@ namespace kmx::aio::descriptor
         return file_res;
     }
 
-    std::expected<void, std::error_code> file::connect(const struct sockaddr* const addr, const socklen_t addrlen) noexcept
+    std::expected<void, std::error_code> file::connect(const struct sockaddr* const addr, const ::socklen_t addrlen) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -203,7 +203,7 @@ namespace kmx::aio::descriptor
     }
 
     std::expected<void, std::error_code> file::getsockopt(const int level, const int optname, void* const optval,
-                                                          socklen_t* const optlen) noexcept
+                                                          ::socklen_t* const optlen) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));

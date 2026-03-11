@@ -90,7 +90,7 @@ namespace kmx::aio::sample::udp::minimal::client
             // Asynchronously receive response
             std::vector<std::byte> response_buffer(1024);
             sockaddr_storage peer_addr {};
-            socklen_t peer_addr_len = sizeof(peer_addr);
+            ::socklen_t peer_addr_len = sizeof(peer_addr);
 
             auto recv_result = co_await ep.recv(response_buffer, peer_addr, peer_addr_len);
             if (!recv_result)

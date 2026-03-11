@@ -197,11 +197,11 @@ namespace kmx::aio
                 using ip_t = std::decay_t<decltype(bytes)>;
                 if constexpr (std::is_same_v<ip_t, ipv4_address_t>)
                 {
-                    auto* addr = reinterpret_cast<sockaddr_in*>(&result.storage);
+                    auto* addr = reinterpret_cast<::sockaddr_in*>(&result.storage);
                     addr->sin_family = AF_INET;
                     addr->sin_port = ::htons(port);
                     std::memcpy(&addr->sin_addr, bytes.data(), bytes.size());
-                    result.length = sizeof(sockaddr_in);
+                    result.length = sizeof(::sockaddr_in);
                 }
                 else
                 {
@@ -233,10 +233,10 @@ namespace kmx::aio
 
         if (addr->sa_family == AF_INET)
         {
-            if (address.length < sizeof(sockaddr_in))
+            if (address.length < sizeof(::sockaddr_in))
                 return std::unexpected(error_from_errno(EINVAL));
 
-            const auto* addr4 = reinterpret_cast<const sockaddr_in*>(&address.storage);
+            const auto* addr4 = reinterpret_cast<const ::sockaddr_in*>(&address.storage);
             auto& ip4 = result.ip.emplace<ipv4_address_owned_t>();
             std::memcpy(ip4.data(), &addr4->sin_addr, ip4.size());
             result.port = ::ntohs(addr4->sin_port);

@@ -63,33 +63,33 @@ namespace kmx::aio::descriptor
         [[nodiscard]] std::expected<std::size_t, std::error_code> write(const void* const buffer, const size_t size) noexcept;
 
         /// @brief Wrapper for ::bind
-        [[nodiscard]] std::expected<void, std::error_code> bind(const ::sockaddr* const addr, const socklen_t addrlen) noexcept;
+        [[nodiscard]] std::expected<void, std::error_code> bind(const ::sockaddr* const addr, const ::socklen_t addrlen) noexcept;
 
         /// @brief Wrapper for ::bind, convenient overload
         [[nodiscard]] std::expected<void, std::error_code> bind(const ip_address_t ip, const port_t port) noexcept;
 
         /// @brief Wrapper for ::setsockopt
         [[nodiscard]] std::expected<void, std::error_code> setsockopt(const int level, const int optname, const void* optval,
-                                                                      const socklen_t optlen) noexcept;
+                                                                      const ::socklen_t optlen) noexcept;
 
         /// @brief Wrapper for ::listen
         [[nodiscard]] std::expected<void, std::error_code> listen(const int backlog) noexcept;
 
         /// @brief Wrapper for ::accept
-        [[nodiscard]] std::expected<file, std::error_code> accept(sockaddr* const addr, socklen_t* const addrlen) noexcept;
+        [[nodiscard]] std::expected<file, std::error_code> accept(sockaddr* const addr, ::socklen_t* const addrlen) noexcept;
 
         /// @brief Wrapper for ::accept, convenient overload
         [[nodiscard]] std::expected<file, std::error_code> accept(ip_address_owned_t& out_ip, port_t& out_port) noexcept;
 
         /// @brief Wrapper for ::connect
-        [[nodiscard]] std::expected<void, std::error_code> connect(const ::sockaddr* const addr, const socklen_t addrlen) noexcept;
+        [[nodiscard]] std::expected<void, std::error_code> connect(const ::sockaddr* const addr, const ::socklen_t addrlen) noexcept;
 
         /// @brief Wrapper for ::connect, convenient overload
         [[nodiscard]] std::expected<void, std::error_code> connect(const ip_address_t ip, const port_t port) noexcept;
 
         /// @brief Wrapper for ::getsockopt
         [[nodiscard]] std::expected<void, std::error_code> getsockopt(const int level, const int optname, void* const optval,
-                                                                      socklen_t* const optlen) noexcept;
+                                                                      ::socklen_t* const optlen) noexcept;
 
         /// @brief Set file descriptor to non-blocking mode
         [[nodiscard]] std::expected<void, std::error_code> set_as_non_blocking() noexcept;

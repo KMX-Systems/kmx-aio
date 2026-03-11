@@ -52,7 +52,7 @@ namespace kmx::aio::udp
         /// @param out_peer_addr_len Set to the actual size of peer_addr on success.
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] result_task recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
-                                       socklen_t& out_peer_addr_len) noexcept(false);
+                                       ::socklen_t& out_peer_addr_len) noexcept(false);
 
         /// @brief Asynchronously receives a single datagram and decodes peer IP/port.
         /// @param buffer     Destination buffer for the datagram payload.
@@ -62,7 +62,7 @@ namespace kmx::aio::udp
         /// @param out_peer_port Filled with the sender UDP port in host byte order.
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] result_task recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
-                           socklen_t& out_peer_addr_len, ip_address_t& out_peer_ip,
+                           ::socklen_t& out_peer_addr_len, ip_address_t& out_peer_ip,
                            port_t& out_peer_port) noexcept(false);
 
         /// @brief Asynchronously sends a single datagram to the specified address.
@@ -71,7 +71,7 @@ namespace kmx::aio::udp
         /// @param addr_len  Size of peer_addr.
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] result_task send(std::span<const std::byte> buffer, const sockaddr* peer_addr,
-                                       const socklen_t addr_len) noexcept(false);
+                                       const ::socklen_t addr_len) noexcept(false);
 
         /// @brief Asynchronously sends a single datagram to the specified IP and port.
         /// @param buffer    Payload to send.

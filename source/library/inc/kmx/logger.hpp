@@ -5,7 +5,6 @@
     #include <format>
     #include <print>
     #include <source_location>
-    #include <string_view>
 #endif
 
 namespace kmx::logger

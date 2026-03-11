@@ -89,7 +89,7 @@ namespace kmx::aio::sample::udp::echo::client
                 metrics_.bytes_sent.fetch_add(*send_result, mem_order);
 
                 sockaddr_storage peer {};
-                socklen_t peer_len = sizeof(peer);
+                ::socklen_t peer_len = sizeof(peer);
                 auto recv_result = co_await ep.recv(recv_buf, peer, peer_len);
                 if (!recv_result)
                 {

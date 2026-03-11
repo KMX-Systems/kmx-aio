@@ -90,7 +90,7 @@ namespace kmx::aio::sample::tcp::minimal::client
 
         // Check connection status using wrapper
         int so_error = 0;
-        socklen_t len = sizeof(so_error);
+        ::socklen_t len = sizeof(so_error);
         if (auto sockopt_result = fd_owner.getsockopt(SOL_SOCKET, SO_ERROR, &so_error, &len); !sockopt_result)
         {
             executor_->unregister_fd(fd);

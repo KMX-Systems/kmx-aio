@@ -112,7 +112,7 @@ namespace kmx::aio::sample::udp::minimal::server
                 logger::log(logger::level::debug, std::source_location::current(), "Server: Waiting for datagrams...");
 
                 sockaddr_storage peer_addr {};
-                socklen_t peer_addr_len = sizeof(peer_addr);
+                ::socklen_t peer_addr_len = sizeof(peer_addr);
 
                 auto recv_result = co_await ep.recv(buffer, peer_addr, peer_addr_len);
 

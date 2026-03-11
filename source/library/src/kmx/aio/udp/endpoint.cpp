@@ -18,7 +18,7 @@ namespace kmx::aio::udp
     }
 
     endpoint::result_task endpoint::recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
-                                         socklen_t& out_peer_addr_len) noexcept(false)
+                                         ::socklen_t& out_peer_addr_len) noexcept(false)
     {
         iovec iov {};
         iov.iov_base = buffer.data();
@@ -38,7 +38,7 @@ namespace kmx::aio::udp
     }
 
     endpoint::result_task endpoint::recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
-                                         socklen_t& out_peer_addr_len, ip_address_t& out_peer_ip,
+                                         ::socklen_t& out_peer_addr_len, ip_address_t& out_peer_ip,
                                          port_t& out_peer_port) noexcept(false)
     {
         auto result = co_await recv(buffer, peer_addr, out_peer_addr_len);
@@ -51,10 +51,10 @@ namespace kmx::aio::udp
         const auto* addr = reinterpret_cast<const sockaddr*>(&peer_addr);
         if (addr->sa_family == AF_INET)
         {
-            if (out_peer_addr_len < sizeof(sockaddr_in))
+            if (out_peer_addr_len < sizeof(::sockaddr_in))
                 co_return std::unexpected(error_from_errno(EINVAL));
 
-            const auto* addr4 = reinterpret_cast<const sockaddr_in*>(&peer_addr);
+            const auto* addr4 = reinterpret_cast<const ::sockaddr_in*>(&peer_addr);
             out_peer_ip = ipv4_address_t {reinterpret_cast<const std::uint8_t*>(&addr4->sin_addr), 4u};
             out_peer_port = ::ntohs(addr4->sin_port);
             co_return result;
@@ -75,7 +75,7 @@ namespace kmx::aio::udp
     }
 
     endpoint::result_task endpoint::send(std::span<const std::byte> buffer, const sockaddr* peer_addr,
-                                         const socklen_t addr_len) noexcept(false)
+                                         const ::socklen_t addr_len) noexcept(false)
     {
         if (peer_addr == nullptr)
             co_return std::unexpected(error_from_errno(EINVAL));

@@ -82,7 +82,7 @@ namespace kmx::aio::sample::udp::echo::server
             while (true)
             {
                 sockaddr_storage peer {};
-                socklen_t peer_len = sizeof(peer);
+                ::socklen_t peer_len = sizeof(peer);
 
                 auto recv_result = co_await ep.recv(buffer, peer, peer_len);
                 if (!recv_result)

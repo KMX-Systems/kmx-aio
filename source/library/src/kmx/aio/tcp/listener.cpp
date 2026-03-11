@@ -40,10 +40,10 @@ namespace kmx::aio::tcp
 
     task<std::expected<descriptor::file, std::error_code>> listener::accept() noexcept(false)
     {
-        for (sockaddr_in client_addr {};;)
+        for (::sockaddr_in client_addr {};;)
         {
             client_addr = {};
-            socklen_t len = sizeof(client_addr);
+            ::socklen_t len = sizeof(client_addr);
 
             auto accept_res = fd_.accept(reinterpret_cast<sockaddr*>(&client_addr), &len);
             if (accept_res)
