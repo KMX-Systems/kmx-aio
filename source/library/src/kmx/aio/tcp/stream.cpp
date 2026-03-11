@@ -49,10 +49,8 @@ namespace kmx::aio::tcp
                 co_return static_cast<std::size_t>(n);
 
             if (n == 0)
-            {
                 // Treat zero-byte write as a closed connection to prevent tight loops.
                 co_return std::unexpected(std::make_error_code(std::errc::broken_pipe));
-            }
 
             if (would_block(errno))
             {

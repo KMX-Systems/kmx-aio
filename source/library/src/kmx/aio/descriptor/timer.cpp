@@ -35,9 +35,7 @@ namespace kmx::aio::descriptor
             std::uint64_t expirations {};
             const ssize_t n = ::read(get(), &expirations, sizeof(expirations));
             if (n == static_cast<ssize_t>(sizeof(expirations)))
-            {
                 co_return expirations;
-            }
 
             if (n < 0)
             {
