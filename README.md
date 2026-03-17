@@ -10,8 +10,8 @@
 *   **Zero-Overhead Abstractions**: Lightweight wrappers around system calls.
 *   **Type-Safe Error Handling**: Extensive use of `std::expected` and `std::error_code` for robust error management.
 *   **TCP Networking**: Built-in support for TCP listeners and streams.
-*   **UDP Networking**: Dual-layer UDP API — low-level `recvmsg`/`sendmsg` via `udp::socket` and a high-level span/address API via `udp::endpoint`.
-*   **Async Timers**: `descriptor::timer` wraps Linux `timerfd` for coroutine-based deadline and interval timers.
+*   **UDP Networking**: Dual-layer UDP API in both models — low-level `readiness::udp::socket` / `completion::udp::socket` and high-level span/address APIs via their `udp::endpoint` wrappers.
+*   **Async Timers**: Readiness timer (`timerfd` + `epoll`) and completion timer (`io_uring` timeout op).
 
 ## Requirements
 
@@ -44,17 +44,17 @@
 The library is structured around root primitives and two execution models:
 
 *   **`kmx::aio::task<T>`**: A lazy-evaluation coroutine type. Tasks are the fundamental unit of asynchronous work.
+*   **`kmx::aio::executor_base`**: Shared lifecycle/synchronization base for readiness and completion executors.
 *   **`kmx::aio::readiness::*`**: Readiness-model APIs (`epoll`) for TCP/UDP/TLS operations.
 *   **`kmx::aio::completion::*`**: Completion-model APIs (`io_uring`) for TCP/UDP/TLS operations.
-*   **`kmx::aio::executor`**: Legacy/root readiness executor kept for compatibility.
-*   **`kmx::aio::io_base`**: Shared RAII base class for all network I/O objects. Owns the file descriptor and automatically unregisters it from the executor on destruction, guarded by a `weak_ptr` lifetime token.
-*   **`kmx::aio::tcp::listener`**: Provides an asynchronous interface for accepting incoming TCP connections.
-*   **`kmx::aio::tcp::stream`**: Wraps a connected TCP socket for asynchronous read/write operations.
-*   **`kmx::aio::udp::socket`**: Low-level async UDP primitive based on `recvmsg`/`sendmsg`. Intended for use with protocols that manage their own packet framing (e.g. QUIC).
-*   **`kmx::aio::udp::endpoint`**: High-level UDP API built on `udp::socket`. Accepts `std::span<std::byte>` payloads and `sockaddr`/`sockaddr_storage` addresses, hiding the `msghdr`/`iovec` plumbing.
-*   **`kmx::aio::descriptor::timer`**: RAII wrapper around Linux `timerfd`. Supports one-shot and periodic timers via `set_time()` and `co_await`-able `wait()`.
+*   **`kmx::aio::readiness::executor`**: epoll-based executor for readiness APIs.
+*   **`kmx::aio::completion::executor`**: io_uring-based executor for completion APIs.
+*   **`kmx::aio::readiness::io_base`** and **`kmx::aio::completion::io_base`**: Model-specific shared I/O bases used by TCP/UDP wrappers.
+*   **`kmx::aio::readiness::tcp::*` / `kmx::aio::completion::tcp::*`**: Asynchronous TCP listener/stream APIs for each execution model.
+*   **`kmx::aio::readiness::udp::*` / `kmx::aio::completion::udp::*`**: Low-level socket + high-level endpoint UDP APIs for each execution model.
+*   **`kmx::aio::readiness::descriptor::timer`** and **`kmx::aio::completion::timer`**: Timer APIs for the two execution models.
 
-All TCP and UDP classes inherit `io_base` directly; `tcp::listener`, `tcp::stream`, `udp::socket`, and `udp::endpoint` are move-only (copy-deleted, move-assign-deleted due to the non-reseatable `executor&` member).
+Readiness TCP/UDP classes are move-only and inherit `readiness::io_base` (copy-deleted, move-assign-deleted due to the non-reseatable `executor&` member).
 
 ## Project Structure
 
@@ -63,12 +63,11 @@ kmx-aio/
 ├── source/
 │   ├── library/          # Core library source code
 │   │   ├── inc/kmx/aio/  # Public headers
-│   │   │   ├── io_base.hpp          # Shared RAII base for all I/O objects
-│   │   │   ├── executor.hpp         # Event loop & coroutine scheduler
+│   │   │   ├── executor_base.hpp    # Shared base for executor state/lifetime controls
+│   │   │   ├── file_descriptor.hpp  # RAII file-descriptor wrapper and syscall helpers
 │   │   │   ├── task.hpp             # Lazy coroutine task<T> type
-│   │   │   ├── tcp/                 # TCP listener & stream
-│   │   │   ├── udp/                 # UDP socket (low-level) & endpoint (high-level)
-│   │   │   └── descriptor/          # File descriptor primitives + timerfd timer
+│   │   │   ├── readiness/           # epoll model APIs (tcp/udp/tls + descriptor)
+│   │   │   ├── completion/          # io_uring model APIs (tcp/udp/tls/xdp)
 │   │   └── src/                     # Implementation (.cpp) files
 │   ├── sample/           # Example applications
 │   │   ├── readiness/    # Readiness-model samples (epoll)
@@ -96,15 +95,15 @@ kmx-aio/
 ### TCP Echo Server
 
 ```cpp
-#include <kmx/aio/executor.hpp>
-#include <kmx/aio/tcp/listener.hpp>
-#include <kmx/aio/tcp/stream.hpp>
+#include <kmx/aio/readiness/executor.hpp>
+#include <kmx/aio/readiness/tcp/listener.hpp>
+#include <kmx/aio/readiness/tcp/stream.hpp>
 #include <iostream>
 
 using namespace kmx::aio;
 
 // Coroutine to handle a single client
-task<void> handle_client(tcp::stream stream) {
+task<void> handle_client(readiness::tcp::stream stream) {
     std::vector<char> buffer(1024);
 
     try {
@@ -125,22 +124,22 @@ task<void> handle_client(tcp::stream stream) {
 }
 
 // Root task to accept connections
-task<void> accept_loop(executor& exec) {
-    tcp::listener listener(exec, "127.0.0.1", 8080);
+task<void> accept_loop(readiness::executor& exec) {
+    readiness::tcp::listener listener(exec, "127.0.0.1", 8080);
     listener.listen();
 
     while (true) {
         auto accept_result = co_await listener.accept();
         if (accept_result) {
-            tcp::stream client_stream(exec, std::move(*accept_result));
+            readiness::tcp::stream client_stream(exec, std::move(*accept_result));
             exec.spawn(handle_client(std::move(client_stream)));
         }
     }
 }
 
 int main() {
-    executor_config cfg{ .thread_count = 1 };
-    executor exec(cfg);
+    readiness::executor_config cfg{ .thread_count = 1 };
+    readiness::executor exec(cfg);
     exec.spawn(accept_loop(exec));
     exec.run();
     return 0;
@@ -150,15 +149,15 @@ int main() {
 ### UDP Echo Server (high-level API)
 
 ```cpp
-#include <kmx/aio/executor.hpp>
-#include <kmx/aio/udp/endpoint.hpp>
+#include <kmx/aio/readiness/executor.hpp>
+#include <kmx/aio/readiness/udp/endpoint.hpp>
 #include <netinet/in.h>
 #include <cstring>
 
 using namespace kmx::aio;
 
-task<void> udp_echo(executor& exec) {
-    auto ep = udp::endpoint::create(exec, AF_INET);
+task<void> udp_echo(readiness::executor& exec) {
+    auto ep = readiness::udp::endpoint::create(exec, AF_INET);
     if (!ep) co_return; // handle error
 
     // Bind to a port
@@ -185,8 +184,8 @@ task<void> udp_echo(executor& exec) {
 }
 
 int main() {
-    executor_config cfg{ .thread_count = 1 };
-    executor exec(cfg);
+    readiness::executor_config cfg{ .thread_count = 1 };
+    readiness::executor exec(cfg);
     exec.spawn(udp_echo(exec));
     exec.run();
     return 0;
@@ -196,14 +195,14 @@ int main() {
 ### One-Shot Timer
 
 ```cpp
-#include <kmx/aio/executor.hpp>
-#include <kmx/aio/descriptor/timer.hpp>
+#include <kmx/aio/readiness/executor.hpp>
+#include <kmx/aio/readiness/descriptor/timer.hpp>
 #include <iostream>
 
 using namespace kmx::aio;
 
-task<void> delayed_action(executor& exec) {
-    auto tmr = descriptor::timer::create(); // CLOCK_MONOTONIC, non-blocking
+task<void> delayed_action(readiness::executor& exec) {
+    auto tmr = readiness::descriptor::timer::create(); // CLOCK_MONOTONIC, non-blocking
     if (!tmr) co_return;
 
     // Fire once after 500 ms
@@ -217,8 +216,8 @@ task<void> delayed_action(executor& exec) {
 }
 
 int main() {
-    executor_config cfg{ .thread_count = 1 };
-    executor exec(cfg);
+    readiness::executor_config cfg{ .thread_count = 1 };
+    readiness::executor exec(cfg);
     exec.spawn(delayed_action(exec));
     exec.run();
     return 0;

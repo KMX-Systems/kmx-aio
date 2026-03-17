@@ -1,4 +1,4 @@
-#include <kmx/aio/descriptor/file.hpp>
+#include <kmx/aio/file_descriptor.hpp>
 #include <kmx/aio/readiness/executor.hpp>
 #include <kmx/aio/task.hpp>
 #include <kmx/aio/readiness/tcp/listener.hpp>
@@ -68,16 +68,16 @@ namespace kmx::aio::sample::tcp::echo::client
         };
 
         /// @brief Creates a non-blocking socket
-        [[nodiscard]] std::expected<descriptor::file, std::error_code> create_nonblocking_socket() noexcept;
+        [[nodiscard]] std::expected<file_descriptor, std::error_code> create_nonblocking_socket() noexcept;
 
         /// @brief Asynchronously connects to the server and returns a TCP stream
-        [[nodiscard]] task<std::expected<kmx::aio::readiness::tcp::stream, std::error_code>> async_connect() noexcept;
+        [[nodiscard]] task<std::expected<readiness::tcp::stream, std::error_code>> async_connect() noexcept;
 
         /// @brief Worker coroutine that performs an async stress test iteration
         [[nodiscard]] task<void> worker(const std::uint32_t worker_id, std::shared_ptr<connection_stats> stats) noexcept(false);
 
         /// @brief Worker sender coroutine
-        [[nodiscard]] task<void> worker_sender(std::shared_ptr<kmx::aio::readiness::tcp::stream> stream, const std::uint32_t worker_id,
+        [[nodiscard]] task<void> worker_sender(std::shared_ptr<readiness::tcp::stream> stream, const std::uint32_t worker_id,
                                                std::shared_ptr<connection_stats> stats) noexcept(false);
 
         /// @brief Periodically renders live connection stats UI

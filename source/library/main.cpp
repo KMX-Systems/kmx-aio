@@ -10,7 +10,7 @@ using namespace co_srv;
 using namespace co_srv::logger;
 
 // A connection handler coroutine
-task<void> handle_client(executor& exec, descriptor::file fd) noexcept(false)
+task<void> handle_client(executor& exec, descriptor::file_descriptor fd) noexcept(false)
 {
     tcp::stream stream(exec, std::move(fd));
     std::vector<char> buffer(1024);

@@ -9,9 +9,9 @@
 namespace kmx::aio::completion::tcp
 {
     listener::listener(std::shared_ptr<executor> exec, const ip_address_t ip, const port_t port) noexcept(false):
-        exec_(std::move(exec))
+        io_base(std::move(exec))
     {
-        auto sock_res = descriptor::file::create_socket(ip_family(ip), SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+        auto sock_res = file_descriptor::create_socket(ip_family(ip), SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
         if (!sock_res)
             throw std::system_error(sock_res.error(), "socket creation failed");
 
@@ -37,7 +37,7 @@ namespace kmx::aio::completion::tcp
         return fd_.listen(backlog);
     }
 
-    task<std::expected<descriptor::file, std::error_code>> listener::accept() noexcept(false)
+    task<std::expected<file_descriptor, std::error_code>> listener::accept() noexcept(false)
     {
         sockaddr_storage addr {};
         socklen_t addrlen = sizeof(addr);
@@ -46,7 +46,7 @@ namespace kmx::aio::completion::tcp
         if (!result)
             co_return std::unexpected(result.error());
 
-        descriptor::file client_fd(result.value());
+        file_descriptor client_fd(result.value());
 
         // Set client socket to non-blocking for further io_uring operations
         if (const auto res = client_fd.set_as_non_blocking(); !res)

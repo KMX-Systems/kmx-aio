@@ -3,14 +3,29 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
-    #include <kmx/aio/tcp/listener.hpp>
+    #include <expected>
+
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/readiness/io_base.hpp>
+    #include <kmx/aio/readiness/executor.hpp>
+    #include <kmx/aio/task.hpp>
 #endif
 
 namespace kmx::aio::readiness::tcp
 {
-    /// @brief The readiness-model TCP listener is the existing epoll-based listener.
-    /// @details Uses epoll to detect when accept() will not block, then performs
-    ///          the actual accept() system call in the coroutine.
-    using listener = kmx::aio::tcp::listener;
+    /// @brief Asynchronous TCP listener.
+    class listener: public io_base
+    {
+    public:
+        using result_t = std::expected<void, std::error_code>;
+
+        listener(executor& exec, ip_address_t ip, port_t port) noexcept(false);
+        ~listener() override = default;
+        listener(listener&&) noexcept = default;
+        listener& operator=(listener&&) noexcept = delete;
+
+        result_t listen(int backlog = 128) noexcept;
+        task<std::expected<file_descriptor, std::error_code>> accept() noexcept(false);
+    };
 
 } // namespace kmx::aio::readiness::tcp

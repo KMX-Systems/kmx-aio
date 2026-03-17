@@ -235,7 +235,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
                 const auto client_id = ++client_counter;
                 auto stats = create_connection_stats(client_id);
 
-                kmx::aio::descriptor::file client_fd = std::move(*accept_result);
+                auto client_fd = std::move(*accept_result);
                 auto client_stream = kmx::aio::completion::tcp::stream(executor_, std::move(client_fd));
 
                 auto handler_task = handle_client(std::move(client_stream), client_id, std::move(stats));

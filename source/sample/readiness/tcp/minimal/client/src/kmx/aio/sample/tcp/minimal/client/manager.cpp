@@ -38,9 +38,9 @@ namespace kmx::aio::sample::tcp::minimal::client
         return failures == 0u;
     }
 
-    std::expected<descriptor::file, std::error_code> manager::create_nonblocking_socket() noexcept
+    std::expected<file_descriptor, std::error_code> manager::create_nonblocking_socket() noexcept
     {
-        auto fd_result = descriptor::file::create_socket(ip_family(config_.server_addr), SOCK_STREAM, 0);
+        auto fd_result = file_descriptor::create_socket(ip_family(config_.server_addr), SOCK_STREAM, 0);
         if (!fd_result)
             return std::unexpected(fd_result.error());
 

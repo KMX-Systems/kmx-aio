@@ -4,12 +4,11 @@
 #pragma once
 #ifndef PCH
     #include <expected>
-    #include <memory>
     #include <system_error>
 
     #include <kmx/aio/basic_types.hpp>
     #include <kmx/aio/completion/executor.hpp>
-    #include <kmx/aio/descriptor/file.hpp>
+    #include <kmx/aio/completion/io_base.hpp>
     #include <kmx/aio/task.hpp>
 #endif
 
@@ -21,7 +20,7 @@ namespace kmx::aio::completion::tcp
     /// @brief Asynchronous TCP listener backed by io_uring accept.
     /// @details Uses IORING_OP_ACCEPT to accept connections without polling
     ///          for readiness first, reducing the accept-to-first-byte latency.
-    class listener
+    class listener: public io_base
     {
     public:
         /// @brief Result type for non-coroutine operations.
@@ -55,14 +54,7 @@ namespace kmx::aio::completion::tcp
         /// @brief Asynchronously accepts a new connection via io_uring.
         /// @return A task yielding the accepted client file descriptor, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task<std::expected<descriptor::file, std::error_code>> accept() noexcept(false);
-
-        /// @brief Returns the listening socket file descriptor.
-        [[nodiscard]] fd_t get_fd() const noexcept { return fd_.get(); }
-
-    private:
-        std::shared_ptr<executor> exec_;
-        descriptor::file fd_;
+        [[nodiscard]] task<std::expected<file_descriptor, std::error_code>> accept() noexcept(false);
     };
 
 } // namespace kmx::aio::completion::tcp

@@ -1,6 +1,6 @@
-/// @file aio/tcp/stream.cpp
+/// @file aio/readiness/tcp/stream.cpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/tcp/stream.hpp"
+#include "kmx/aio/readiness/tcp/stream.hpp"
 
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -8,7 +8,7 @@
 #include <sys/socket.h>
 #include <system_error>
 
-namespace kmx::aio::tcp
+namespace kmx::aio::readiness::tcp
 {
     stream::result_task stream::read(const std::span<char> buffer) noexcept(false)
     {
@@ -77,4 +77,4 @@ namespace kmx::aio::tcp
         co_return std::expected<void, std::error_code> {};
     }
 
-} // namespace kmx::aio::tcp
+} // namespace kmx::aio::readiness::tcp

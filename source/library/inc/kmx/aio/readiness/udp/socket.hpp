@@ -3,16 +3,39 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
-    #include <kmx/aio/udp/socket.hpp>
-    #include <kmx/aio/udp/endpoint.hpp>
+    #include <expected>
+    #include <sys/socket.h>
+    #include <system_error>
+
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/readiness/io_base.hpp>
+    #include <kmx/aio/readiness/executor.hpp>
+    #include <kmx/aio/task.hpp>
 #endif
 
 namespace kmx::aio::readiness::udp
 {
-    /// @brief The readiness-model UDP socket is the existing epoll-based socket.
-    using socket = kmx::aio::udp::socket;
+    /// @brief Asynchronous UDP Socket.
+    class socket: public io_base
+    {
+    public:
+        using result_task = task<std::expected<std::size_t, std::error_code>>;
+        using create_result = std::expected<socket, std::error_code>;
 
-    /// @brief The readiness-model UDP endpoint is the existing epoll-based endpoint.
-    using endpoint = kmx::aio::udp::endpoint;
+        [[nodiscard]] static create_result create(executor& exec, int domain = AF_INET,
+                                                  int type = SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC,
+                                                  int protocol = 0) noexcept;
 
+        socket(executor& exec, file_descriptor&& fd) noexcept: io_base(exec, std::move(fd)) {}
+        ~socket() override = default;
+        socket(socket&&) noexcept = default;
+        socket& operator=(socket&&) noexcept = delete;
+
+        [[nodiscard]] result_task recvmsg(::msghdr* msg, int flags = 0) noexcept(false);
+        [[nodiscard]] result_task sendmsg(const ::msghdr* msg, int flags = 0) noexcept(false);
+    };
 } // namespace kmx::aio::readiness::udp
+
+#ifndef PCH
+    #include <kmx/aio/readiness/udp/endpoint.hpp>
+#endif

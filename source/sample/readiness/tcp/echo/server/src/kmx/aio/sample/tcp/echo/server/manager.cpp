@@ -282,7 +282,7 @@ namespace kmx::aio::sample::tcp::echo::server
                             metrics_.active_connections.load());
 
                 // Create stream from accepted file descriptor
-                kmx::aio::descriptor::file client_fd = std::move(*accept_result);
+                auto client_fd = std::move(*accept_result);
                 auto client_stream = kmx::aio::readiness::tcp::stream(*executor_, std::move(client_fd));
 
                 logger::log(logger::level::debug, std::source_location::current(), "Acceptor: Stream created for client [{}]", client_id);

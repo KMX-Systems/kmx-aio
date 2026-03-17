@@ -1,11 +1,11 @@
 /// @file aio/descriptor/timer.cpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/descriptor/timer.hpp"
+#include "kmx/aio/readiness/descriptor/timer.hpp"
 
 #include <cerrno>
 #include <unistd.h>
 
-namespace kmx::aio::descriptor
+namespace kmx::aio::readiness::descriptor
 {
     std::expected<timer, std::error_code> timer::create(const int clockid, const int flags) noexcept
     {
@@ -28,7 +28,7 @@ namespace kmx::aio::descriptor
         return {};
     }
 
-    task<std::expected<std::uint64_t, std::error_code>> timer::wait(executor& exec) noexcept(false)
+    task<std::expected<std::uint64_t, std::error_code>> timer::wait(readiness::executor& exec) noexcept(false)
     {
         while (true)
         {
@@ -52,4 +52,4 @@ namespace kmx::aio::descriptor
             co_return std::unexpected(error_from_errno(EIO));
         }
     }
-} // namespace kmx::aio::descriptor
+} // namespace kmx::aio::readiness::descriptor

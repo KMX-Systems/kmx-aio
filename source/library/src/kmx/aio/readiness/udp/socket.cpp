@@ -1,14 +1,14 @@
-/// @file aio/udp/socket.cpp
+/// @file aio/readiness/udp/socket.cpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/udp/socket.hpp"
+#include "kmx/aio/readiness/udp/socket.hpp"
 
 #include <cerrno>
 
-namespace kmx::aio::udp
+namespace kmx::aio::readiness::udp
 {
     socket::create_result socket::create(executor& exec, const int domain, const int type, const int protocol) noexcept
     {
-        auto res = descriptor::file::create_socket(domain, type, protocol);
+        auto res = file_descriptor::create_socket(domain, type, protocol);
         if (!res)
             return std::unexpected(res.error());
 
@@ -59,4 +59,4 @@ namespace kmx::aio::udp
             co_return std::unexpected(error_from_errno());
         }
     }
-} // namespace kmx::aio::udp
+} // namespace kmx::aio::readiness::udp

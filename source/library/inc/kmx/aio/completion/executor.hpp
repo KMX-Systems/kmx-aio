@@ -4,21 +4,16 @@
 #pragma once
 #ifndef PCH
     #include <atomic>
-    #include <condition_variable>
     #include <cstdint>
-    #include <deque>
     #include <expected>
-    #include <functional>
     #include <liburing.h>
     #include <memory>
-    #include <mutex>
     #include <span>
     #include <stop_token>
     #include <system_error>
-    #include <thread>
-    #include <vector>
 
     #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/executor_base.hpp>
     #include <kmx/aio/task.hpp>
 #endif
 
@@ -52,7 +47,7 @@ namespace kmx::aio::completion
     ///          performs the actual I/O and delivers completed buffers via the
     ///          completion queue. Coroutines are resumed when their specific
     ///          operation completes with a result code and byte count.
-    class executor: public std::enable_shared_from_this<executor>
+    class executor: public executor_base, public std::enable_shared_from_this<executor>
     {
     public:
         /// @brief Constructs the executor and initializes the io_uring instance.
@@ -176,9 +171,6 @@ namespace kmx::aio::completion
         /// @brief Resets all statistics counters.
         void reset_stats() noexcept { metrics_.reset(); }
 
-        /// @brief Returns a lifetime token that expires when the executor is destroyed.
-        [[nodiscard]] std::weak_ptr<void> get_lifetime_token() const noexcept { return lifetime_token_; }
-
         /// @brief Per-operation context passed through io_uring user_data.
         struct io_context
         {
@@ -246,13 +238,6 @@ namespace kmx::aio::completion
 
         executor_config config_;
         ::io_uring ring_ {};
-        std::shared_ptr<void> lifetime_token_;
-
-        std::atomic_size_t active_work_ {};
-        std::atomic_bool running_ {};
-        std::jthread io_thread_;
-        std::mutex idle_mutex_;
-        std::condition_variable idle_cv_;
 
         mutable statistics metrics_;
     };

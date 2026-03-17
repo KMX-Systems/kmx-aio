@@ -4,14 +4,11 @@
 #pragma once
 #ifndef PCH
     #include <expected>
-    #include <memory>
-    #include <span>
     #include <sys/socket.h>
     #include <system_error>
 
     #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/completion/executor.hpp>
-    #include <kmx/aio/descriptor/file.hpp>
+    #include <kmx/aio/completion/io_base.hpp>
     #include <kmx/aio/task.hpp>
 #endif
 
@@ -20,7 +17,7 @@ namespace kmx::aio::completion::udp
     /// @brief Asynchronous UDP socket backed by io_uring completion I/O.
     /// @details Submits recvmsg/sendmsg operations to io_uring, allowing the kernel
     ///          to complete the datagram transfer before waking the coroutine.
-    class socket
+    class socket: public io_base
     {
     public:
         /// @brief Task type for recv/send operations.
@@ -43,8 +40,8 @@ namespace kmx::aio::completion::udp
         /// @brief Constructs a socket from an executor and file descriptor.
         /// @param exec The completion executor.
         /// @param fd   UDP socket descriptor (ownership transferred).
-        socket(std::shared_ptr<executor> exec, descriptor::file&& fd) noexcept:
-            exec_(std::move(exec)), fd_(std::move(fd))
+        socket(std::shared_ptr<executor> exec, file_descriptor&& fd) noexcept:
+            io_base(std::move(exec), std::move(fd))
         {
         }
 
@@ -75,18 +72,12 @@ namespace kmx::aio::completion::udp
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] result_task sendmsg(const ::msghdr* msg, unsigned int flags = 0u) noexcept(false);
 
-        /// @brief Returns the underlying file descriptor value.
-        [[nodiscard]] fd_t get_fd() const noexcept { return fd_.get(); }
-
         /// @brief Binds the socket to an address and port.
         /// @param ip   The IP address to bind to.
         /// @param port The port to bind to.
         /// @return Success or an error code.
         [[nodiscard]] std::expected<void, std::error_code> bind(ip_address_t ip, port_t port) noexcept;
 
-    private:
-        std::shared_ptr<executor> exec_;
-        descriptor::file fd_;
     };
 
 } // namespace kmx::aio::completion::udp

@@ -1,4 +1,4 @@
-/// @file aio/descriptor/file.hpp
+/// @file aio/file_descriptor.hpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
@@ -16,28 +16,28 @@
     #include <kmx/aio/basic_types.hpp>
 #endif
 
-namespace kmx::aio::descriptor
+namespace kmx::aio
 {
     /// @brief RAII wrapper for file descriptors to ensure no leaks occur.
-    class file
+    class file_descriptor
     {
     public:
         static constexpr int invalid_fd = -1;
 
-        file() noexcept: fd_ {invalid_fd} {}
+        file_descriptor() noexcept: fd_ {invalid_fd} {}
 
-        explicit file(const fd_t fd) noexcept: fd_(fd) {}
+        explicit file_descriptor(const fd_t fd) noexcept: fd_(fd) {}
 
-        virtual ~file() noexcept;
+        virtual ~file_descriptor() noexcept;
 
         // Non-copyable
-        file(const file&) = delete;
-        file& operator=(const file&) = delete;
+        file_descriptor(const file_descriptor&) = delete;
+        file_descriptor& operator=(const file_descriptor&) = delete;
 
         // Move-only
-        file(file&& other) noexcept: fd_(std::exchange(other.fd_, invalid_fd)) {}
+        file_descriptor(file_descriptor&& other) noexcept: fd_(std::exchange(other.fd_, invalid_fd)) {}
 
-        file& operator=(file&& other) noexcept;
+        file_descriptor& operator=(file_descriptor&& other) noexcept;
 
         [[nodiscard]] fd_t get() const noexcept { return fd_; }
 
@@ -50,8 +50,8 @@ namespace kmx::aio::descriptor
         void close() noexcept;
 
         /// @brief Wrapper for ::socket.
-        [[nodiscard]] static std::expected<file, std::error_code> create_socket(const int domain, const int type,
-                                                                                const int protocol) noexcept;
+        [[nodiscard]] static std::expected<file_descriptor, std::error_code> create_socket(const int domain, const int type,
+                                                   const int protocol) noexcept;
 
         /// @brief Wrapper for ::fcntl
         [[nodiscard]] std::expected<int, std::error_code> fcntl(const int cmd, const int arg = 0) noexcept;
@@ -76,10 +76,10 @@ namespace kmx::aio::descriptor
         [[nodiscard]] std::expected<void, std::error_code> listen(const int backlog) noexcept;
 
         /// @brief Wrapper for ::accept
-        [[nodiscard]] std::expected<file, std::error_code> accept(sockaddr* const addr, ::socklen_t* const addrlen) noexcept;
+        [[nodiscard]] std::expected<file_descriptor, std::error_code> accept(sockaddr* const addr, ::socklen_t* const addrlen) noexcept;
 
         /// @brief Wrapper for ::accept, convenient overload
-        [[nodiscard]] std::expected<file, std::error_code> accept(ip_address_owned_t& out_ip, port_t& out_port) noexcept;
+        [[nodiscard]] std::expected<file_descriptor, std::error_code> accept(ip_address_owned_t& out_ip, port_t& out_port) noexcept;
 
         /// @brief Wrapper for ::connect
         [[nodiscard]] std::expected<void, std::error_code> connect(const ::sockaddr* const addr, const ::socklen_t addrlen) noexcept;
@@ -104,10 +104,7 @@ namespace kmx::aio::descriptor
         { t.await_ready() } -> std::convertible_to<bool>;
         { t.await_resume() };
     };
-} // namespace kmx::aio::descriptor
 
-namespace kmx::aio
-{
     /// @brief Wrapper for ::inet_pton
     [[nodiscard]] std::expected<void, std::error_code> inet_pton(const int af, const char* const src, void* const codst) noexcept;
-}
+} // namespace kmx

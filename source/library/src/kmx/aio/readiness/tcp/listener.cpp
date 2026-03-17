@@ -1,15 +1,15 @@
-/// @file aio/tcp/listener.cpp
+/// @file aio/readiness/tcp/listener.cpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/tcp/listener.hpp"
+#include "kmx/aio/readiness/tcp/listener.hpp"
 
 #include "kmx/logger.hpp"
 #include <netinet/in.h>
 
-namespace kmx::aio::tcp
+namespace kmx::aio::readiness::tcp
 {
     listener::listener(executor& exec, const ip_address_t ip, const port_t port) noexcept(false): io_base(exec)
     {
-        auto sock_res = descriptor::file::create_socket(ip_family(ip), SOCK_STREAM, 0);
+        auto sock_res = file_descriptor::create_socket(ip_family(ip), SOCK_STREAM, 0);
         if (!sock_res)
             throw std::system_error(sock_res.error());
 
@@ -38,7 +38,7 @@ namespace kmx::aio::tcp
         return exec_.register_fd(fd_.get());
     }
 
-    task<std::expected<descriptor::file, std::error_code>> listener::accept() noexcept(false)
+    task<std::expected<file_descriptor, std::error_code>> listener::accept() noexcept(false)
     {
         for (::sockaddr_in client_addr {};;)
         {
@@ -48,7 +48,7 @@ namespace kmx::aio::tcp
             auto accept_res = fd_.accept(reinterpret_cast<sockaddr*>(&client_addr), &len);
             if (accept_res)
             {
-                descriptor::file client_fd = std::move(accept_res.value());
+                auto client_fd = std::move(accept_res.value());
 
                 if (const auto res = client_fd.set_as_non_blocking(); !res)
                     co_return std::unexpected(res.error());
@@ -69,4 +69,4 @@ namespace kmx::aio::tcp
             co_return std::unexpected(accept_res.error());
         }
     }
-} // namespace kmx::aio::tcp
+} // namespace kmx::aio::readiness::tcp

@@ -1,4 +1,4 @@
-#include <kmx/aio/descriptor/file.hpp>
+#include <kmx/aio/file_descriptor.hpp>
 #include <kmx/aio/readiness/executor.hpp>
 #include <kmx/aio/task.hpp>
 #include <kmx/aio/readiness/tcp/listener.hpp>
@@ -49,7 +49,7 @@ namespace kmx::aio::sample::tcp::minimal::client
 
     private:
         /// @brief Creates a non-blocking socket
-        [[nodiscard]] std::expected<descriptor::file, std::error_code> create_nonblocking_socket() noexcept;
+        [[nodiscard]] std::expected<file_descriptor, std::error_code> create_nonblocking_socket() noexcept;
 
         /// @brief Asynchronously connects to the server and returns a TCP stream
         [[nodiscard]] task<std::expected<kmx::aio::readiness::tcp::stream, std::error_code>> async_connect() noexcept;

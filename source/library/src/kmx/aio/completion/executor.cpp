@@ -25,8 +25,7 @@ namespace kmx::aio::completion
     }
 
     executor::executor(const executor_config& config) noexcept(false):
-        config_(config),
-        lifetime_token_(std::make_shared<int>(0))
+        config_(config)
     {
         const int ret = ::io_uring_queue_init(config.ring_entries, &ring_, 0);
         if (ret < 0)

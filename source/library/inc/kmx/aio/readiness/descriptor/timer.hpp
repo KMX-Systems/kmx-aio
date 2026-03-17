@@ -1,4 +1,4 @@
-/// @file aio/descriptor/timer.hpp
+/// @file aio/readiness/descriptor/timer.hpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
@@ -6,15 +6,15 @@
     #include <sys/timerfd.h>
     #include <system_error>
 
-    #include <kmx/aio/descriptor/file.hpp>
-    #include <kmx/aio/executor.hpp>
+    #include <kmx/aio/file_descriptor.hpp>
+    #include <kmx/aio/readiness/executor.hpp>
     #include <kmx/aio/task.hpp>
 #endif
 
-namespace kmx::aio::descriptor
+namespace kmx::aio::readiness::descriptor
 {
     /// @brief RAII wrapper for timerfd with type-safe operations.
-    class timer: public file
+    class timer: public file_descriptor
     {
     public:
         /// @brief Creates an invalid timer object.
@@ -22,7 +22,7 @@ namespace kmx::aio::descriptor
 
         /// @brief Wraps an existing timer file descriptor.
         /// @param fd Timer file descriptor.
-        explicit timer(const fd_t fd) noexcept: file(fd) {}
+        explicit timer(const fd_t fd) noexcept: file_descriptor(fd) {}
 
         // Non-copyable
         timer(const timer&) = delete;
@@ -51,6 +51,6 @@ namespace kmx::aio::descriptor
         /// @param exec Executor used to suspend/resume on read readiness.
         /// @return The number of expirations that have occurred.
         /// @throws std::bad_alloc Coroutine frame allocation failure.
-        [[nodiscard]] task<std::expected<std::uint64_t, std::error_code>> wait(executor& exec) noexcept(false);
+        [[nodiscard]] task<std::expected<std::uint64_t, std::error_code>> wait(readiness::executor& exec) noexcept(false);
     };
 } // namespace kmx::aio::descriptor

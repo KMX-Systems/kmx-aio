@@ -7,7 +7,7 @@ namespace kmx::aio::completion::udp
     socket::create_result socket::create(std::shared_ptr<executor> exec, const int domain,
                                          const int type, const int protocol) noexcept
     {
-        auto res = descriptor::file::create_socket(domain, type, protocol);
+        auto res = file_descriptor::create_socket(domain, type, protocol);
         if (!res)
             return std::unexpected(res.error());
 

@@ -1,23 +1,23 @@
-/// @file aio/descriptor/epoll.hpp
+/// @file aio/readiness/descriptor/epoll.hpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <vector>
 
-    #include <kmx/aio/descriptor/file.hpp>
+    #include <kmx/aio/file_descriptor.hpp>
 #endif
 
-namespace kmx::aio::descriptor
+namespace kmx::aio::readiness::descriptor
 {
     /// @brief RAII wrapper for epoll file descriptors with type-safe operations.
-    class epoll: public file
+    class epoll: public file_descriptor
     {
     public:
         using result_t = std::expected<void, std::error_code>;
 
         epoll() noexcept = default;
 
-        explicit epoll(const fd_t fd) noexcept: file(fd) {}
+        explicit epoll(const fd_t fd) noexcept: file_descriptor(fd) {}
 
         // Non-copyable
         epoll(const epoll&) = delete;

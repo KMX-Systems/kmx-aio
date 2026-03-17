@@ -4,13 +4,11 @@
 #pragma once
 #ifndef PCH
     #include <expected>
-    #include <memory>
     #include <span>
     #include <system_error>
 
     #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/completion/executor.hpp>
-    #include <kmx/aio/descriptor/file.hpp>
+    #include <kmx/aio/completion/io_base.hpp>
     #include <kmx/aio/task.hpp>
 #endif
 
@@ -20,7 +18,7 @@ namespace kmx::aio::completion::tcp
     /// @details In the completion model, the kernel performs the actual read/write
     ///          and signals the coroutine when the buffer has been filled/drained.
     ///          This eliminates the readiness-then-syscall round-trip of epoll.
-    class stream
+    class stream: public io_base
     {
     public:
         /// @brief Task type returned by read/write operations.
@@ -29,8 +27,8 @@ namespace kmx::aio::completion::tcp
         /// @brief Constructs a stream from an executor and an owned socket descriptor.
         /// @param exec The completion executor providing io_uring operations.
         /// @param fd   Connected socket descriptor (ownership transferred).
-        stream(std::shared_ptr<executor> exec, descriptor::file&& fd) noexcept:
-            exec_(std::move(exec)), fd_(std::move(fd))
+        stream(std::shared_ptr<executor> exec, file_descriptor&& fd) noexcept:
+            io_base(std::move(exec), std::move(fd))
         {
         }
 
@@ -79,12 +77,6 @@ namespace kmx::aio::completion::tcp
         /// @return A task yielding success or an error.
         [[nodiscard]] task<std::expected<void, std::error_code>> write_all_fixed(std::span<const char> buffer, const int buf_index) noexcept(false);
 
-        /// @brief Returns the underlying file descriptor value.
-        [[nodiscard]] fd_t get_fd() const noexcept { return fd_.get(); }
-
-    private:
-        std::shared_ptr<executor> exec_;
-        descriptor::file fd_;
     };
 
 } // namespace kmx::aio::completion::tcp

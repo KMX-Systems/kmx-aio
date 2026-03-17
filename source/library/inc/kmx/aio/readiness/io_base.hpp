@@ -1,15 +1,15 @@
-/// @file aio/io_base.hpp
+/// @file aio/readiness/io_base.hpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <memory>
 
     #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/descriptor/file.hpp>
-    #include <kmx/aio/executor.hpp>
+    #include <kmx/aio/file_descriptor.hpp>
+    #include <kmx/aio/readiness/executor.hpp>
 #endif
 
-namespace kmx::aio
+namespace kmx::aio::readiness
 {
     /// @brief Shared I/O base for protocol-specific socket wrappers.
     /// @details Owns a file descriptor and unregisters it from the executor on destruction
@@ -27,7 +27,7 @@ namespace kmx::aio
         /// @brief Constructs the base with executor and an owned file descriptor.
         /// @param exec Executor used for event registration and unregistration.
         /// @param fd   File descriptor owner moved into this object.
-        io_base(executor& exec, descriptor::file&& fd) noexcept: exec_(exec), exec_lifetime_(exec.get_lifetime_token()), fd_(std::move(fd))
+        io_base(executor& exec, file_descriptor&& fd) noexcept: exec_(exec), exec_lifetime_(exec.get_lifetime_token()), fd_(std::move(fd))
         {
         }
 
@@ -59,6 +59,6 @@ namespace kmx::aio
         /// @brief Lifetime token to avoid touching executor after destruction.
         std::weak_ptr<void> exec_lifetime_;
         /// @brief Owned descriptor.
-        descriptor::file fd_;
+        file_descriptor fd_;
     };
-} // namespace kmx::aio
+} // namespace kmx::aio::readiness

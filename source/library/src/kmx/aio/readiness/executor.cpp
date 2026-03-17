@@ -1,11 +1,11 @@
-/// @file aio/executor.cpp
+/// @file aio/readiness/executor.cpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/executor.hpp"
+#include "kmx/aio/readiness/executor.hpp"
 
 #include "kmx/logger.hpp"
 #include <cerrno>
 
-namespace kmx::aio
+namespace kmx::aio::readiness
 {
     static constexpr auto mem_order = std::memory_order_relaxed;
 
@@ -23,8 +23,7 @@ namespace kmx::aio
 
     executor::executor(const executor_config& config) noexcept(false):
         config_(config),
-        scheduler_(std::make_shared<scheduler>(config.thread_count)),
-        lifetime_token_(std::make_shared<int>(0))
+        scheduler_(std::make_shared<scheduler>(config.thread_count))
     {
         auto epoll_result = descriptor::epoll::create();
         if (!epoll_result)
@@ -194,4 +193,4 @@ namespace kmx::aio
         }
     }
 
-} // namespace kmx::aio
+} // namespace kmx::aio::readiness

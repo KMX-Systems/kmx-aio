@@ -1,12 +1,12 @@
-/// @file aio/udp/endpoint.cpp
+/// @file aio/readiness/udp/endpoint.cpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/udp/endpoint.hpp"
+#include "kmx/aio/readiness/udp/endpoint.hpp"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/uio.h>
 
-namespace kmx::aio::udp
+namespace kmx::aio::readiness::udp
 {
     endpoint::create_result endpoint::create(executor& exec, const int domain) noexcept
     {
@@ -103,4 +103,4 @@ namespace kmx::aio::udp
 
         co_return co_await send(buffer, reinterpret_cast<const sockaddr*>(&peer_addr->storage), peer_addr->length);
     }
-} // namespace kmx::aio::udp
+} // namespace kmx::aio::readiness::udp

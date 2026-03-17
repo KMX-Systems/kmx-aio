@@ -11,14 +11,14 @@
 #include <kmx/aio/buffer.hpp>
 #include <kmx/aio/channel.hpp>
 #include <kmx/aio/error_code.hpp>
-#include <kmx/aio/executor.hpp>
-#include <kmx/aio/io_base.hpp>
+#include <kmx/aio/executor_base.hpp>
 #include <kmx/aio/scheduler.hpp>
 #include <kmx/aio/stream_concepts.hpp>
 #include <kmx/aio/task.hpp>
 
 // Readiness Model (kmx::aio::readiness)
 #include <kmx/aio/readiness/executor.hpp>
+#include <kmx/aio/readiness/io_base.hpp>
 #include <kmx/aio/readiness/tcp/listener.hpp>
 #include <kmx/aio/readiness/tcp/stream.hpp>
 #include <kmx/aio/readiness/timer.hpp>
@@ -30,6 +30,7 @@
 
 // Completion Model (kmx::aio::completion)
 #include <kmx/aio/completion/executor.hpp>
+#include <kmx/aio/completion/io_base.hpp>
 #include <kmx/aio/completion/tcp/listener.hpp>
 #include <kmx/aio/completion/tcp/stream.hpp>
 #include <kmx/aio/completion/timer.hpp>
@@ -41,9 +42,9 @@
 #include <kmx/aio/completion/xdp/socket.hpp>
 
 // Descriptors (Internal / Low-Level)
-#include <kmx/aio/descriptor/epoll.hpp>
-#include <kmx/aio/descriptor/file.hpp>
-#include <kmx/aio/descriptor/timer.hpp>
+#include <kmx/aio/readiness/descriptor/epoll.hpp>
+#include <kmx/aio/file_descriptor.hpp>
+#include <kmx/aio/readiness/descriptor/timer.hpp>
 
 // Logging
 #include <kmx/logger.hpp>

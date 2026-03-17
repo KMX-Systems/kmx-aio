@@ -1,6 +1,6 @@
-/// @file aio/descriptor.cpp
+/// @file aio/file_descriptor.cpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/descriptor/epoll.hpp"
+#include "kmx/aio/readiness/descriptor/epoll.hpp"
 
 namespace kmx::aio
 {
@@ -15,16 +15,13 @@ namespace kmx::aio
 
         return {};
     }
-}
 
-namespace kmx::aio::descriptor
-{
-    file::~file() noexcept
+    file_descriptor::~file_descriptor() noexcept
     {
         close();
     }
 
-    file& file::operator=(file&& other) noexcept
+    file_descriptor& file_descriptor::operator=(file_descriptor&& other) noexcept
     {
         if (this != &other)
         {
@@ -35,7 +32,7 @@ namespace kmx::aio::descriptor
         return *this;
     }
 
-    void file::close() noexcept
+    void file_descriptor::close() noexcept
     {
         if (fd_ >= 0)
         {
@@ -44,16 +41,16 @@ namespace kmx::aio::descriptor
         }
     }
 
-    std::expected<file, std::error_code> file::create_socket(const int domain, const int type, const int protocol) noexcept
+    std::expected<file_descriptor, std::error_code> file_descriptor::create_socket(const int domain, const int type, const int protocol) noexcept
     {
         const fd_t fd = ::socket(domain, type, protocol);
         if (fd < 0)
             return std::unexpected(error_from_errno());
 
-        return file(fd);
+        return file_descriptor(fd);
     }
 
-    std::expected<int, std::error_code> file::fcntl(const int cmd, const int arg) noexcept
+    std::expected<int, std::error_code> file_descriptor::fcntl(const int cmd, const int arg) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -65,7 +62,7 @@ namespace kmx::aio::descriptor
         return ret;
     }
 
-    std::expected<std::size_t, std::error_code> file::read(void* const buffer, const size_t size) noexcept
+    std::expected<std::size_t, std::error_code> file_descriptor::read(void* const buffer, const size_t size) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -77,7 +74,7 @@ namespace kmx::aio::descriptor
         return static_cast<std::size_t>(ret);
     }
 
-    std::expected<std::size_t, std::error_code> file::write(const void* buffer, const size_t size) noexcept
+    std::expected<std::size_t, std::error_code> file_descriptor::write(const void* buffer, const size_t size) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -89,7 +86,7 @@ namespace kmx::aio::descriptor
         return static_cast<std::size_t>(ret);
     }
 
-    std::expected<void, std::error_code> file::bind(const struct sockaddr* const addr, const ::socklen_t addrlen) noexcept
+    std::expected<void, std::error_code> file_descriptor::bind(const struct sockaddr* const addr, const ::socklen_t addrlen) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -100,7 +97,7 @@ namespace kmx::aio::descriptor
         return {};
     }
 
-    std::expected<void, std::error_code> file::bind(const ip_address_t ip, const port_t port) noexcept
+    std::expected<void, std::error_code> file_descriptor::bind(const ip_address_t ip, const port_t port) noexcept
     {
         const auto addr = make_socket_address(ip, port);
         if (!addr)
@@ -109,8 +106,8 @@ namespace kmx::aio::descriptor
         return bind(reinterpret_cast<const sockaddr*>(&addr->storage), addr->length);
     }
 
-    std::expected<void, std::error_code> file::setsockopt(const int level, const int optname, const void* const optval,
-                                                          const ::socklen_t optlen) noexcept
+    std::expected<void, std::error_code> file_descriptor::setsockopt(const int level, const int optname, const void* const optval,
+                                                                     const ::socklen_t optlen) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -121,7 +118,7 @@ namespace kmx::aio::descriptor
         return {};
     }
 
-    std::expected<void, std::error_code> file::listen(const int backlog) noexcept
+    std::expected<void, std::error_code> file_descriptor::listen(const int backlog) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -132,7 +129,7 @@ namespace kmx::aio::descriptor
         return {};
     }
 
-    std::expected<file, std::error_code> file::accept(struct sockaddr* const addr, ::socklen_t* const addrlen) noexcept
+    std::expected<file_descriptor, std::error_code> file_descriptor::accept(struct sockaddr* const addr, ::socklen_t* const addrlen) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -141,10 +138,10 @@ namespace kmx::aio::descriptor
         if (client_fd < 0)
             return std::unexpected(error_from_errno());
 
-        return file(client_fd);
+        return file_descriptor(client_fd);
     }
 
-    std::expected<file, std::error_code> file::accept(ip_address_owned_t& out_ip, port_t& out_port) noexcept
+    std::expected<file_descriptor, std::error_code> file_descriptor::accept(ip_address_owned_t& out_ip, port_t& out_port) noexcept
     {
         sockaddr_storage storage{};
         ::socklen_t length = sizeof(storage);
@@ -178,7 +175,7 @@ namespace kmx::aio::descriptor
         return file_res;
     }
 
-    std::expected<void, std::error_code> file::connect(const struct sockaddr* const addr, const ::socklen_t addrlen) noexcept
+    std::expected<void, std::error_code> file_descriptor::connect(const struct sockaddr* const addr, const ::socklen_t addrlen) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -193,7 +190,7 @@ namespace kmx::aio::descriptor
         return {};
     }
 
-    std::expected<void, std::error_code> file::connect(const ip_address_t ip, const port_t port) noexcept
+    std::expected<void, std::error_code> file_descriptor::connect(const ip_address_t ip, const port_t port) noexcept
     {
         const auto addr = make_socket_address(ip, port);
         if (!addr)
@@ -202,8 +199,8 @@ namespace kmx::aio::descriptor
         return connect(reinterpret_cast<const sockaddr*>(&addr->storage), addr->length);
     }
 
-    std::expected<void, std::error_code> file::getsockopt(const int level, const int optname, void* const optval,
-                                                          ::socklen_t* const optlen) noexcept
+    std::expected<void, std::error_code> file_descriptor::getsockopt(const int level, const int optname, void* const optval,
+                                                                     ::socklen_t* const optlen) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -214,7 +211,7 @@ namespace kmx::aio::descriptor
         return {};
     }
 
-    std::expected<void, std::error_code> file::set_as_non_blocking() noexcept
+    std::expected<void, std::error_code> file_descriptor::set_as_non_blocking() noexcept
     {
         const auto flags_res = fcntl(F_GETFL, 0);
         if (!flags_res)
@@ -225,92 +222,5 @@ namespace kmx::aio::descriptor
             return std::unexpected(set_res.error());
 
         return {};
-    }
-
-    std::expected<epoll, std::error_code> epoll::create(const int flags) noexcept
-    {
-        const fd_t fd = ::epoll_create1(flags);
-        if (fd < 0)
-            return std::unexpected(error_from_errno());
-
-        return epoll(fd);
-    }
-
-    [[nodiscard]] epoll::result_t epoll::add_monitored_fd(const fd_t fd, const event_mask_t events) noexcept
-    {
-        if (!is_valid())
-            return std::unexpected(error_from_errno(EBADF));
-
-        epoll_event ev {};
-        ev.events = events;
-        ev.data.fd = fd;
-
-        if (::epoll_ctl(get(), EPOLL_CTL_ADD, fd, &ev) < 0)
-            return std::unexpected(error_from_errno());
-
-        return {};
-    }
-
-    [[nodiscard]] epoll::result_t epoll::modify_events(const fd_t fd, const event_mask_t events) noexcept
-    {
-        if (!is_valid())
-            return std::unexpected(error_from_errno(EBADF));
-
-        epoll_event ev {};
-        ev.events = events;
-        ev.data.fd = fd;
-
-        if (::epoll_ctl(get(), EPOLL_CTL_MOD, fd, &ev) < 0)
-            return std::unexpected(error_from_errno());
-
-        return {};
-    }
-
-    [[nodiscard]] epoll::result_t epoll::remove_monitored_fd(const fd_t fd) noexcept
-    {
-        if (!is_valid())
-            return std::unexpected(error_from_errno(EBADF));
-
-        if (::epoll_ctl(get(), EPOLL_CTL_DEL, fd, nullptr) < 0)
-            return std::unexpected(error_from_errno());
-
-        return {};
-    }
-
-    [[nodiscard]] epoll::result_t epoll::wait_events(std::vector<epoll_event>& events, const int max_events, const int timeout_ms) noexcept
-    {
-        if (!is_valid())
-            return std::unexpected(error_from_errno(EBADF));
-
-        if (max_events <= 0)
-            return std::unexpected(error_from_errno(EINVAL));
-
-        events.resize(max_events);
-        const int ready = ::epoll_wait(get(), events.data(), max_events, timeout_ms);
-
-        if (ready < 0)
-            return std::unexpected(error_from_errno());
-
-        events.resize(ready);
-        return {};
-    }
-
-    [[nodiscard]] std::expected<std::vector<epoll_event>, std::error_code> epoll::wait_events(const int max_events,
-                                                                                              const int timeout_ms) noexcept
-    {
-        if (!is_valid())
-            return std::unexpected(error_from_errno(EBADF));
-
-        if (max_events <= 0)
-            return std::unexpected(error_from_errno(EINVAL));
-
-        std::vector<epoll_event> events(max_events);
-        const int ready = ::epoll_wait(get(), events.data(), max_events, timeout_ms);
-
-        if (ready < 0)
-            return std::unexpected(error_from_errno());
-
-        events.resize(ready);
-        return events;
     }
 } // namespace kmx::aio
