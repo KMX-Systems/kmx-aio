@@ -1,12 +1,12 @@
 # kmx-aio
 
-**kmx-aio** is a modern, high-performance C++26 asynchronous I/O library designed for building non-blocking network applications on Linux. It leverages C++20 coroutines to provide a clean, synchronous-looking API for asynchronous operations, backed by the efficiency of the `epoll` event notification system.
+**kmx-aio** is a modern, high-performance C++26 asynchronous I/O library designed for building non-blocking network applications on Linux. It leverages C++20 coroutines to provide a clean, synchronous-looking API for asynchronous operations across two execution models: readiness (`epoll`) and completion (`io_uring`).
 
 ## Key Features
 
 *   **Modern C++26**: Built with the latest language standards.
 *   **Coroutine-First Design**: Uses `co_await` for intuitive, sequential async code flow without callback hell.
-*   **Edge-Triggered Epoll**: Efficient event notifications for high-performance I/O scalability.
+*   **Readiness + Completion Models**: `epoll`-based readiness and `io_uring`-based completion APIs.
 *   **Zero-Overhead Abstractions**: Lightweight wrappers around system calls.
 *   **Type-Safe Error Handling**: Extensive use of `std::expected` and `std::error_code` for robust error management.
 *   **TCP Networking**: Built-in support for TCP listeners and streams.
@@ -41,10 +41,12 @@
 
 ## Architecture
 
-The library is structured around a central **Executor** and **Task** system:
+The library is structured around root primitives and two execution models:
 
-*   **`kmx::aio::executor`**: The heart of the library. It manages the main event loop, handles `epoll_wait`, and resumes suspended coroutines when I/O events occur.
 *   **`kmx::aio::task<T>`**: A lazy-evaluation coroutine type. Tasks are the fundamental unit of asynchronous work.
+*   **`kmx::aio::readiness::*`**: Readiness-model APIs (`epoll`) for TCP/UDP/TLS operations.
+*   **`kmx::aio::completion::*`**: Completion-model APIs (`io_uring`) for TCP/UDP/TLS operations.
+*   **`kmx::aio::executor`**: Legacy/root readiness executor kept for compatibility.
 *   **`kmx::aio::io_base`**: Shared RAII base class for all network I/O objects. Owns the file descriptor and automatically unregisters it from the executor on destruction, guarded by a `weak_ptr` lifetime token.
 *   **`kmx::aio::tcp::listener`**: Provides an asynchronous interface for accepting incoming TCP connections.
 *   **`kmx::aio::tcp::stream`**: Wraps a connected TCP socket for asynchronous read/write operations.
@@ -69,20 +71,22 @@ kmx-aio/
 │   │   │   └── descriptor/          # File descriptor primitives + timerfd timer
 │   │   └── src/                     # Implementation (.cpp) files
 │   ├── sample/           # Example applications
-│   │   ├── tcp/
-│   │   │   ├── minimal/
-│   │   │   │   ├── client/          # Minimal TCP client
-│   │   │   │   └── server/          # Minimal TCP server
-│   │   │   └── echo/
-│   │   │       ├── client/          # TCP echo client
-│   │   │       └── server/          # TCP echo server
-│   │   └── udp/
-│   │       ├── minimal/
-│   │       │   ├── client/          # Minimal UDP client
-│   │       │   └── server/          # Minimal UDP server
-│   │       └── echo/
-│   │           ├── client/          # UDP echo client
-│   │           └── server/          # UDP echo server
+│   │   ├── readiness/    # Readiness-model samples (epoll)
+│   │   │   ├── tcp/
+│   │   │   │   ├── minimal/
+│   │   │   │   └── echo/
+│   │   │   ├── udp/
+│   │   │   │   ├── minimal/
+│   │   │   │   └── echo/
+│   │   │   └── tls/
+│   │   │       └── echo_readiness_server/
+│   │   └── completion/   # Completion-model samples (io_uring)
+│   │       ├── tcp/
+│   │       │   └── echo_uring/
+│   │       ├── udp/
+│   │       │   └── echo_uring/
+│   │       └── tls/
+│   │           └── echo_completion_server/
 │   └── library-test/     # Unit tests
 └── build/                # Build artifacts
 ```
