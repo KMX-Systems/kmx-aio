@@ -2,8 +2,10 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <concepts>
     #include <coroutine>
     #include <exception>
+    #include <stop_token>
     #include <type_traits>
     #include <utility>
     #include <variant>
@@ -14,6 +16,9 @@
 
 namespace kmx::aio
 {
+    struct get_stop_token_t {};
+    constexpr get_stop_token_t get_stop_token{};
+
     template <typename T>
     class [[nodiscard]] task;
 
@@ -23,6 +28,10 @@ namespace kmx::aio
         {
             std::coroutine_handle<> continuation_;
             std::exception_ptr exception_;
+            std::stop_source stop_source_;
+
+            static void* operator new(std::size_t size) noexcept(false);
+            static void operator delete(void* ptr, std::size_t size) noexcept;
 
             struct final_awaiter
             {
@@ -41,6 +50,26 @@ namespace kmx::aio
 
                 void await_resume() const noexcept {}
             };
+
+            // Allow normal co_await
+            template <typename U>
+            decltype(auto) await_transform(U&& awaitable) noexcept 
+            {
+                return std::forward<U>(awaitable); 
+            }
+
+            // Custom co_await for getting the stop token
+            auto await_transform(get_stop_token_t) noexcept
+            {
+                struct awaiter
+                {
+                    std::stop_token token;
+                    bool await_ready() const noexcept { return true; }
+                    void await_suspend(std::coroutine_handle<>) const noexcept {}
+                    std::stop_token await_resume() const noexcept { return token; }
+                };
+                return awaiter{stop_source_.get_token()};
+            }
         };
 
         template <typename T>
