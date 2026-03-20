@@ -39,6 +39,227 @@
 
 *   **None** beyond the standard C/C++ runtime and Linux system libraries.
 
+### Optional Pillar 1 Prerequisites
+
+These are only required when enabling the corresponding feature gate.
+
+*   **AF_XDP** (`projects.source.enable_af_xdp:true`): `libbpf-dev`, `libxdp-dev`, `libelf-dev`, `zlib1g-dev`, `clang`, `llvm`.
+*   **SPDK** (`projects.source.enable_spdk:true`): `libaio-dev`, `libnuma-dev`, `uuid-dev`, `meson`, `ninja-build`, and SPDK runtime libraries.
+*   **OpenOnload** (`projects.source.enable_openonload:true`): OpenOnload userspace/runtime installation from vendor packages.
+
+Ubuntu/Debian example:
+
+```bash
+sudo apt update
+sudo apt install -y \
+    libbpf-dev libxdp-dev libelf-dev zlib1g-dev clang llvm \
+    libaio-dev libnuma-dev uuid-dev meson ninja-build
+```
+
+Quick verification:
+
+```bash
+pkg-config --modversion liburing
+pkg-config --modversion libbpf
+pkg-config --modversion libxdp
+pkg-config --modversion spdk_nvme
+```
+
+#### Install SPDK Libraries (Ubuntu/Debian)
+
+SPDK is typically built from source to ensure all development libraries and
+pkg-config metadata are available.
+
+1. Install build dependencies:
+
+```bash
+sudo apt update
+sudo apt install -y \
+    build-essential pkg-config meson ninja-build git \
+    python3 python3-jinja2 python3-pyelftools python3-tabulate \
+    libaio-dev libnuma-dev uuid-dev libssl-dev libelf-dev libpcap-dev
+```
+
+   > **Note:** In current SPDK, `scripts/pkgdep/requirements.txt` is **not
+   > committed** — it is generated at build time by `pip-compile`. Install
+   > Python packages via `apt` as above instead of running `pip install -r`.
+
+1. Clone and build SPDK:
+
+```bash
+cd /tmp
+git clone https://github.com/spdk/spdk.git
+cd spdk
+git submodule update --init --recursive
+./configure --with-shared
+make -j"$(nproc)"
+```
+
+If you see generated RPC build errors like undefined
+`rpc_trace_*_ctx` structures in `trace_rpc.c`, clean stale generated files and
+rebuild:
+
+```bash
+git reset --hard && git clean -xfd
+git submodule update --init --recursive
+./configure --with-shared
+make -j"$(nproc)"
+```
+
+If you see `implicit declaration of function 'OPENSSL_INIT_new'` or
+`'OPENSSL_INIT_free'` errors, a **BoringSSL** installation at
+`/usr/local/include/openssl/` is shadowing the system OpenSSL. GCC searches
+`/usr/local/include` before `/usr/include` by default, so the BoringSSL
+headers (which lack those functions) win.
+
+The root fix is to move the orphaned BoringSSL files out of the way (they are
+not tracked by any `.deb` package and nothing links against them at runtime):
+
+```bash
+sudo mv /usr/local/include/openssl /usr/local/include/openssl.boringssl.bak
+sudo mv /usr/local/lib/libssl.a    /usr/local/lib/libssl.a.boringssl.bak
+sudo mv /usr/local/lib/libcrypto.a /usr/local/lib/libcrypto.a.boringssl.bak
+```
+
+Then do a clean SPDK rebuild (no extra `--with-openssl` flag needed):
+
+```bash
+git reset --hard && git clean -xfd
+git submodule update --init --recursive
+./configure --with-shared --disable-werror
+make -j"$(nproc)"
+```
+
+> **Note:** These stale BoringSSL files are left behind when a DPDK or SPDK
+> dependency build is run with `sudo make install`. Only `sudo apt install` and
+> `sudo make install` (for the final SPDK install step) should use elevated
+> privileges. All `./configure` and `make` steps must run as a normal user.
+
+If your SPDK checkout still fails to compile, try a stable release tag and
+rebuild:
+
+```bash
+git fetch --tags
+git checkout v24.09
+git submodule update --init --recursive
+./configure --with-shared --disable-werror
+make -j"$(nproc)"
+```
+
+1. Install libraries and refresh linker cache:
+
+```bash
+sudo make install
+sudo ldconfig
+```
+
+1. Verify expected libraries are available:
+
+```bash
+pkg-config --modversion spdk_nvme
+pkg-config --modversion spdk_bdev
+ldconfig -p | grep -E 'libspdk_(nvme|bdev|env_dpdk|util|log)'
+```
+
+1. If pkg-config still cannot find SPDK:
+
+```bash
+export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH
+```
+
+1. Runtime preparation for SPDK-backed I/O (hugepages):
+
+```bash
+echo 1024 | sudo tee /proc/sys/vm/nr_hugepages
+```
+
+To make hugepages persistent across reboot:
+
+```bash
+echo 'vm.nr_hugepages=1024' | sudo tee /etc/sysctl.d/99-spdk-hugepages.conf
+sudo sysctl --system
+```
+
+1. Probe candidate SPDK bdev names with the discovery sample:
+
+```bash
+DISCOVERY_BIN=$(find ./source/default -path "*/kmx-aio-sample-spdk-discovery" -type f | head -1)
+"$DISCOVERY_BIN"
+"$DISCOVERY_BIN" Nvme0n1 Malloc0n1
+```
+
+Behavior:
+
+```text
+- no args: initialize SPDK subsystems and list currently registered bdev names
+- args: validate only requested names that are already registered
+```
+
+If SPDK fails with `Permission denied` while opening files under
+`/dev/hugepages` (for example `spdk_pid...map_0`), grant write access to your
+user for the hugetlbfs mount:
+
+```bash
+sudo mkdir -p /dev/hugepages
+sudo mount -t hugetlbfs nodev /dev/hugepages -o uid=$(id -u),gid=$(id -g),mode=1770,pagesize=2M
+```
+
+To make hugetlbfs mount permissions persistent across reboot, add to `/etc/fstab`:
+
+```bash
+nodev /dev/hugepages hugetlbfs uid=1000,gid=1000,mode=1770,pagesize=2M 0 0
+```
+
+Then mount from fstab without reboot:
+
+```bash
+sudo mount -a
+```
+
+Verify runtime state:
+
+```bash
+cat /proc/sys/vm/nr_hugepages
+grep -i HugePages /proc/meminfo
+ls -ld /dev/hugepages
+mount | grep huge
+```
+
+One-shot apply (persistent + immediate):
+
+```bash
+echo 'vm.nr_hugepages=1024' | sudo tee /etc/sysctl.d/99-spdk-hugepages.conf
+grep -q '^nodev /dev/hugepages hugetlbfs ' /etc/fstab || \
+    echo 'nodev /dev/hugepages hugetlbfs uid=1000,gid=1000,mode=1770,pagesize=2M 0 0' | sudo tee -a /etc/fstab
+sudo sysctl --system
+sudo mkdir -p /dev/hugepages
+sudo mount -a
+```
+
+## Optional Pillar 1 Feature Gates
+
+Pillar 1 technologies are wired behind explicit QBS feature switches and are
+disabled by default:
+
+*   `projects.source.enable_openonload:false`
+*   `projects.source.enable_af_xdp:false`
+*   `projects.source.enable_spdk:false`
+
+Enable them at build time as needed:
+
+```bash
+qbs build \
+    projects.source.enable_openonload:true \
+    projects.source.enable_af_xdp:true \
+    projects.source.enable_spdk:false
+```
+
+When enabled, compile-time defines are exported by `kmx-aio-lib`:
+
+*   `KMX_AIO_FEATURE_OPENONLOAD=1`
+*   `KMX_AIO_FEATURE_AF_XDP=1`
+*   `KMX_AIO_FEATURE_SPDK=1`
+
 ## Architecture
 
 The library is structured around root primitives and two execution models:

@@ -20,11 +20,25 @@
 
 namespace kmx::aio::readiness
 {
+    enum class backend_mode : std::uint8_t
+    {
+        epoll_only,            ///< Use epoll backend only.
+        openonload_preferred,  ///< Prefer OpenOnload when available, fallback to epoll.
+        openonload_required    ///< Require OpenOnload; fail construction if unavailable.
+    };
+
+    enum class active_backend : std::uint8_t
+    {
+        epoll,
+        openonload
+    };
+
     struct executor_config
     {
         std::uint32_t thread_count = 1u;
         std::uint32_t max_events = 1024u;
         port_t timeout_ms = 200u;
+        backend_mode backend = backend_mode::epoll_only;
     };
 
     /// @brief Statistics for epoll operations and executor performance.
@@ -93,6 +107,9 @@ namespace kmx::aio::readiness
         /// @brief Returns a reference to the executor's statistics.
         [[nodiscard]] const statistics& get_stats() const noexcept { return metrics_; }
 
+        /// @brief Returns the backend currently selected by the executor.
+        [[nodiscard]] active_backend get_active_backend() const noexcept { return active_backend_; }
+
         /// @brief Reset all executor statistics.
         void reset_stats() noexcept { metrics_.reset(); }
 
@@ -151,6 +168,7 @@ namespace kmx::aio::readiness
         detached_task_wrapper execute_task(task<void> t, std::shared_ptr<executor> self) noexcept;
 
         executor_config config_;
+        active_backend active_backend_ = active_backend::epoll;
         std::shared_ptr<scheduler> scheduler_;
         descriptor::epoll epoll_fd_;
 

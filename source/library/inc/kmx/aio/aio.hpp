@@ -40,6 +40,7 @@
 #include <kmx/aio/completion/tls/stream.hpp>
 #include <kmx/aio/completion/quic/engine.hpp>
 #include <kmx/aio/completion/xdp/socket.hpp>
+#include <kmx/aio/completion/spdk/device.hpp>
 
 // Descriptors (Internal / Low-Level)
 #include <kmx/aio/readiness/descriptor/epoll.hpp>

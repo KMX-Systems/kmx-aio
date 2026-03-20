@@ -21,6 +21,6 @@ CppApplication {
     ]
     files: [
         "inc/kmx/aio/**.hpp",
-        "src/kmx/aio/**.cpp",
+        "src/**/*.cpp",
     ]
 }

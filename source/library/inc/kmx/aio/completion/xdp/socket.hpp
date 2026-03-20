@@ -28,6 +28,26 @@ namespace kmx::aio::completion::xdp
         std::uint32_t comp_ring_size = 2048u;///< Completion ring entry count.
         std::uint32_t rx_ring_size = 2048u;  ///< RX ring entry count.
         std::uint32_t tx_ring_size = 2048u;  ///< TX ring entry count.
+        bool force_zero_copy = false;        ///< Force XDP_ZEROCOPY mode. Fails if driver doesn't support it.
+        bool need_wakeup = true;             ///< Enable XDP_USE_NEED_WAKEUP to optimize CPU usage.
+    };
+
+    /// @brief Statistics for AF_XDP pipeline.
+    struct statistics
+    {
+        std::uint64_t rx_frames_received {};   ///< Total frames pulled from RX ring (userspace).
+        std::uint64_t tx_frames_sent {};       ///< Total frames submitted to TX ring (userspace).
+        std::uint64_t tx_dropped_ring_full {}; ///< TX frames dropped due to full TX ring (userspace).
+        std::uint64_t wakeups_triggered {};    ///< Times we had to do a syscall to wake up the kernel.
+        std::uint64_t umem_alloc_failures {};  ///< Times UMEM frame allocation failed.
+
+        // Kernel-level hardware/driver stats.
+        std::uint64_t kernel_rx_dropped {};           ///< Dropped before reaching ring.
+        std::uint64_t kernel_rx_invalid_descs {};     ///< Invalid descriptors in RX.
+        std::uint64_t kernel_tx_invalid_descs {};     ///< Invalid descriptors in TX.
+        std::uint64_t kernel_rx_ring_full {};         ///< Hardware dropped because RX ring was full.
+        std::uint64_t kernel_rx_fill_ring_empty {};   ///< Hardware had to drop because fill ring was empty.
+        std::uint64_t kernel_tx_ring_empty {};        ///< Hardware couldn't pull because TX ring empty.
     };
 
     /// @brief A received raw ethernet frame from AF_XDP.
@@ -64,12 +84,12 @@ namespace kmx::aio::completion::xdp
         socket& operator=(const socket&) = delete;
 
         /// @brief Move constructor.
-        socket(socket&&) noexcept = default;
+        socket(socket&&) noexcept;
         /// @brief Move assignment is disabled.
         socket& operator=(socket&&) noexcept = delete;
 
         /// @brief Destructor. Releases UMEM and XDP resources.
-        ~socket() noexcept = default;
+        ~socket() noexcept;
 
         /// @brief Asynchronously receives the next raw ethernet frame.
         /// @return A task yielding a frame view into UMEM, or an error.
@@ -86,6 +106,16 @@ namespace kmx::aio::completion::xdp
         /// @brief Returns a frame's UMEM address to the fill ring for reuse.
         /// @param addr The UMEM address from a previously received frame.
         void release_frame(std::uint64_t addr) noexcept;
+
+        /// @brief Explicitly trigger an internal poll/wakeup via the ring to sink/propagate stats.
+        void trigger_wakeup() noexcept;
+
+        /// @brief Get real-time counter snapshot
+        [[nodiscard]] const statistics& get_stats() const noexcept;
+
+    private:
+        struct state;
+        std::unique_ptr<state> state_ {};
     };
 
 } // namespace kmx::aio::completion::xdp

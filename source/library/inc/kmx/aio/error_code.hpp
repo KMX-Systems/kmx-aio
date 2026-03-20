@@ -33,7 +33,17 @@ namespace kmx::aio
         tls_handshake_failed,       ///< TLS handshake could not complete.
         tls_certificate_error,      ///< TLS certificate verification failed.
         quic_protocol_error,        ///< QUIC protocol-level error.
+        openonload_not_available,   ///< OpenOnload runtime was requested but unavailable.
+        openonload_init_failed,     ///< OpenOnload stack initialization failed.
         xdp_setup_failed,           ///< AF_XDP UMEM or ring setup failed.
+        xdp_umem_registration_failed,///< AF_XDP UMEM registration failed.
+        xdp_ring_setup_failed,      ///< AF_XDP ring setup failed.
+        xdp_queue_bind_failed,      ///< AF_XDP queue bind failed.
+        spdk_env_init_failed,       ///< SPDK environment initialization failed.
+        spdk_probe_failed,          ///< SPDK transport/device probe failed.
+        spdk_queue_pair_failed,     ///< SPDK queue-pair creation failed.
+        spdk_io_submit_failed,      ///< SPDK I/O submission failed.
+        spdk_io_completion_failed,  ///< SPDK I/O completion failed.
         ring_full,                  ///< Submission or completion ring is full.
         unsupported_operation,      ///< Operation not supported on this backend.
         internal_error,             ///< Unspecified internal error.
@@ -65,7 +75,17 @@ namespace kmx::aio
             case error_code::tls_handshake_failed:   return "TLS handshake failed";
             case error_code::tls_certificate_error:  return "TLS certificate error";
             case error_code::quic_protocol_error:    return "QUIC protocol error";
+            case error_code::openonload_not_available:return "OpenOnload not available";
+            case error_code::openonload_init_failed: return "OpenOnload init failed";
             case error_code::xdp_setup_failed:       return "AF_XDP setup failed";
+            case error_code::xdp_umem_registration_failed: return "AF_XDP UMEM registration failed";
+            case error_code::xdp_ring_setup_failed:  return "AF_XDP ring setup failed";
+            case error_code::xdp_queue_bind_failed:  return "AF_XDP queue bind failed";
+            case error_code::spdk_env_init_failed:   return "SPDK environment init failed";
+            case error_code::spdk_probe_failed:      return "SPDK probe failed";
+            case error_code::spdk_queue_pair_failed: return "SPDK queue pair failed";
+            case error_code::spdk_io_submit_failed:  return "SPDK I/O submit failed";
+            case error_code::spdk_io_completion_failed:return "SPDK I/O completion failed";
             case error_code::ring_full:              return "ring full";
             case error_code::unsupported_operation:  return "unsupported operation";
             case error_code::internal_error:         return "internal error";

@@ -2,11 +2,48 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include "kmx/aio/readiness/executor.hpp"
 
+#include "kmx/aio/error_code.hpp"
+#include "kmx/aio/readiness/openonload/extensions.hpp"
 #include "kmx/logger.hpp"
 #include <cerrno>
+#include <cstdlib>
+#include <string_view>
 
 namespace kmx::aio::readiness
 {
+    namespace
+    {
+#if defined(KMX_AIO_FEATURE_OPENONLOAD)
+        [[nodiscard]] bool env_var_contains(const char* name, const std::string_view token) noexcept
+        {
+            const char* value = std::getenv(name);
+            if (!value)
+                return false;
+
+            return std::string_view(value).find(token) != std::string_view::npos;
+        }
+
+        [[nodiscard]] bool is_openonload_runtime_available() noexcept
+        {
+            // OpenOnload is transparently injected; detect common runtime hints.
+            if (env_var_contains("LD_PRELOAD", "onload"))
+                return true;
+
+            if (std::getenv("ONLOAD_STACKNAME"))
+                return true;
+
+            if (std::getenv("EF_POLL_USEC"))
+                return true;
+
+            return false;
+#else
+        [[nodiscard]] constexpr bool is_openonload_runtime_available() noexcept
+        {
+            return false;
+#endif
+        }
+    } // namespace
+
     static constexpr auto mem_order = std::memory_order_relaxed;
 
     void statistics::reset() noexcept
@@ -25,6 +62,38 @@ namespace kmx::aio::readiness
         config_(config),
         scheduler_(std::make_shared<scheduler>(config.thread_count))
     {
+        const bool openonload_available = is_openonload_runtime_available();
+
+        switch (config_.backend)
+        {
+            case backend_mode::epoll_only:
+                active_backend_ = active_backend::epoll;
+                break;
+
+            case backend_mode::openonload_preferred:
+                if (openonload_available)
+                    active_backend_ = active_backend::openonload;
+                else
+                    active_backend_ = active_backend::epoll;
+                break;
+
+            case backend_mode::openonload_required:
+                if (!openonload_available)
+                    throw std::system_error(to_std_error_code(error_code::openonload_not_available),
+                                            "OpenOnload backend required but runtime was not detected");
+
+                active_backend_ = active_backend::openonload;
+                break;
+        }
+
+        if (active_backend_ == active_backend::openonload)
+        {
+            logger::log(logger::level::info, std::source_location::current(), "Readiness executor backend: OpenOnload");
+            openonload::initialize_runtime_stack("kmxaio_fast_stack");
+        }
+        else
+            logger::log(logger::level::info, std::source_location::current(), "Readiness executor backend: epoll");
+
         auto epoll_result = descriptor::epoll::create();
         if (!epoll_result)
             throw std::system_error(epoll_result.error(), "epoll_create1 failed");
