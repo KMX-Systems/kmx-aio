@@ -2,7 +2,7 @@
 #include "kmx/aio/sample/tcp/echo/common.hpp"
 
 #include <algorithm>
-#include <iomanip>
+#include <array>
 #include <span>
 #include <string_view>
 #include <sys/socket.h>
@@ -22,19 +22,16 @@ namespace kmx::aio::sample::tls::h2_alpn_client
         ssl_ctx_ = ::SSL_CTX_new(TLS_client_method());
         ::SSL_CTX_set_verify(ssl_ctx_, SSL_VERIFY_NONE, nullptr);
 
-        const unsigned char alpn_protos[] = {2, 'h', '2'};
-        ::SSL_CTX_set_alpn_protos(ssl_ctx_, alpn_protos, sizeof(alpn_protos));
-
         const completion::executor_config exec_config {.thread_count = config_.scheduler_threads};
         executor_ = std::make_shared<completion::executor>(exec_config);
 
-        for (std::uint32_t i {}; i < config_.num_workers; ++i)
+        for (std::uint32_t i = 0u; i < config_.num_workers; ++i)
         {
             executor_->spawn(worker(i, nullptr));
         }
 
         executor_->run();
-        return metrics_.failures.load(mem_order) == 0;
+        return metrics_.failures.load(mem_order) == 0u;
     }
 
     std::expected<file_descriptor, std::error_code> manager::create_nonblocking_socket() noexcept
@@ -85,74 +82,62 @@ namespace kmx::aio::sample::tls::h2_alpn_client
 
             auto stream_ptr = std::make_shared<kmx::aio::completion::tls::stream>(std::move(*stream_result));
             stream_ptr->set_connect_state();
+
+            const std::array<std::uint8_t, 3> alpn_h2 {2u, static_cast<std::uint8_t>('h'), static_cast<std::uint8_t>('2')};
+            if (const auto alpn_res = stream_ptr->set_alpn_protocols(alpn_h2); !alpn_res)
+                co_return;
+
             if (auto hs = co_await stream_ptr->handshake(); !hs)
                 co_return;
 
-            const unsigned char* alpn_data = nullptr;
-            unsigned int alpn_len = 0;
-            ::SSL_get0_alpn_selected(stream_ptr->native_handle(), &alpn_data, &alpn_len);
-
-            if (alpn_len == 2 && alpn_data[0] == 'h' && alpn_data[1] == '2')
-            {
-                logger::log(logger::level::info, std::source_location::current(), "Client [{}]: ALPN h2 negotiated", worker_id);
-            }
-            else
-            {
+            if (stream_ptr->selected_alpn() != "h2")
                 co_return;
-            }
 
-            // Send Preface + Empty SETTINGS Frame
+            logger::log(logger::level::info, std::source_location::current(), "Client [{}]: ALPN h2 negotiated", worker_id);
+
             std::string preface_data = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
-            char settings_frame[9] = {0, 0, 0, 4, 0, 0, 0, 0, 0}; // length=0, type=4 (SETTINGS), flags=0, stream_id=0
+            const char settings_frame[9] = {0, 0, 0, 4, 0, 0, 0, 0, 0};
             preface_data.append(settings_frame, 9);
 
             if (auto res = co_await stream_ptr->write_all(std::span<const char>(preface_data.data(), preface_data.size())); !res)
-            {
                 co_return;
-            }
+
             logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Sent Preface + SETTINGS", worker_id);
 
-            // Read Server SETTINGS frame
             char recv_buf[9];
             auto r_res = co_await stream_ptr->read(std::span<char>(recv_buf, 9));
             if (!r_res || *r_res < 9)
                 co_return;
 
             if (recv_buf[3] == 4 && recv_buf[4] == 0)
-            { // type == SETTINGS, flags == 0
                 logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Received Server SETTINGS", worker_id);
-            }
 
-            // Send SETTINGS ACK
-            char ack_frame[9] = {0, 0, 0, 4, 1, 0, 0, 0, 0}; // flags=1 (ACK)
+            const char ack_frame[9] = {0, 0, 0, 4, 1, 0, 0, 0, 0};
             if (auto w_res = co_await stream_ptr->write_all(std::span<const char>(ack_frame, 9)); !w_res)
-            {
                 co_return;
-            }
+
             logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Sent SETTINGS ACK", worker_id);
 
-            // Read Server SETTINGS ACK
             r_res = co_await stream_ptr->read(std::span<char>(recv_buf, 9));
             if (r_res && *r_res >= 9 && recv_buf[3] == 4 && recv_buf[4] == 1)
-            { // type == SETTINGS, flags == 1
                 logger::log(logger::level::info, std::source_location::current(),
                             "Client [{}]: Received Server SETTINGS ACK. Handshake Complete!", worker_id);
-            }
 
-            // HTTP/2 Extension: Send a static HPACK encoded GET request
-            char req_frame[] = {0x00,        0x00,        0x0e,              // Length: 14
-                                0x01,                                        // Type: HEADERS
-                                0x05,                                        // Flags: END_HEADERS | END_STREAM
-                                0x00,        0x00,        0x00,        0x01, // Stream ID: 1
-                                (char) 0x82, (char) 0x87, (char) 0x84,       // GET, https, /
-                                0x41,        0x09,        'l',         'o',  'c', 'a', 'l', 'h', 'o', 's', 't'};
+            const char req_frame[] = {
+                0x00, 0x00, 0x0e,
+                0x01,
+                0x05,
+                0x00, 0x00, 0x00, 0x01,
+                static_cast<char>(0x82), static_cast<char>(0x87), static_cast<char>(0x84),
+                0x41, 0x09, 'l', 'o', 'c', 'a', 'l', 'h', 'o', 's', 't'
+            };
             if (auto res = co_await stream_ptr->write_all(std::span<const char>(req_frame, sizeof(req_frame))); !res)
                 co_return;
+
             logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Sent GET Request (Stream 1)", worker_id);
 
-            // Read Response HEADERS Frame
             char resp_hdr[10];
-            size_t total = 0;
+            std::size_t total = 0;
             while (total < 10)
             {
                 auto r = co_await stream_ptr->read(std::span<char>(resp_hdr + total, 10 - total));
@@ -163,10 +148,9 @@ namespace kmx::aio::sample::tls::h2_alpn_client
             if (total == 10)
             {
                 logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Received Response HEADERS. Status: {}",
-                            worker_id, (resp_hdr[9] == (char) 0x88 ? "200 OK" : "Unknown"));
+                            worker_id, (resp_hdr[9] == static_cast<char>(0x88) ? "200 OK" : "Unknown"));
             }
 
-            // Read DATA Frame
             char data_hdr[9];
             total = 0;
             while (total < 9)
@@ -176,11 +160,14 @@ namespace kmx::aio::sample::tls::h2_alpn_client
                     break;
                 total += *r;
             }
+
             if (total == 9 && data_hdr[3] == 0x00)
-            { // Type == DATA
-                uint32_t data_len = (static_cast<uint8_t>(data_hdr[0]) << 16) | (static_cast<uint8_t>(data_hdr[1]) << 8) |
-                                    static_cast<uint8_t>(data_hdr[2]);
-                std::vector<char> data_payload(data_len + 1, ' ');
+            {
+                const std::uint32_t data_len = (static_cast<std::uint8_t>(data_hdr[0]) << 16u) |
+                                               (static_cast<std::uint8_t>(data_hdr[1]) << 8u) |
+                                               static_cast<std::uint8_t>(data_hdr[2]);
+
+                std::vector<char> data_payload(data_len + 1u, '\0');
                 total = 0;
                 while (total < data_len)
                 {
@@ -189,38 +176,41 @@ namespace kmx::aio::sample::tls::h2_alpn_client
                         break;
                     total += *r;
                 }
+
                 logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Received DATA: {}", worker_id,
                             data_payload.data());
             }
 
-            ::shutdown(stream_ptr->inner().get_fd(), SHUT_WR);
+                ::shutdown(stream_ptr->inner().get_fd(), SHUT_WR);
+                metrics_.successes.fetch_add(1u, mem_order);
         }
         catch (...)
         {
+                metrics_.failures.fetch_add(1u, mem_order);
         }
         co_return;
     }
 
-    kmx::aio::task<void> manager::worker_sender(std::shared_ptr<kmx::aio::completion::tls::stream> stream, const std::uint32_t worker_id,
-                                                std::shared_ptr<connection_stats> stats) noexcept(false)
+    kmx::aio::task<void> manager::worker_sender(std::shared_ptr<kmx::aio::completion::tls::stream> /*stream*/, const std::uint32_t /*worker_id*/,
+                                                std::shared_ptr<connection_stats> /*stats*/) noexcept(false)
     {
         co_return;
     }
 
-    std::shared_ptr<manager::connection_stats> manager::create_connection_stats(const std::uint32_t worker_id)
+    std::shared_ptr<manager::connection_stats> manager::create_connection_stats(const std::uint32_t /*worker_id*/)
     {
         return {};
     }
 
-    void manager::update_closed_state(const std::shared_ptr<connection_stats>& stats)
+    void manager::update_closed_state(const std::shared_ptr<connection_stats>& /*stats*/)
     {
     }
 
-    void manager::ui_loop(std::stop_token stop_token) const
+    void manager::ui_loop(std::stop_token /*stop_token*/) const
     {
     }
 
-    void manager::print_summary(const std::chrono::milliseconds elapsed) const
+    void manager::print_summary(const std::chrono::milliseconds /*elapsed*/) const
     {
     }
 }

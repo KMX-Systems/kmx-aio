@@ -73,11 +73,7 @@ namespace kmx::aio::sample::tls::h2_alpn_server
             if (auto handshake_result = co_await stream.handshake(); !handshake_result)
                 co_return;
 
-            const unsigned char* alpn_data = nullptr;
-            unsigned int alpn_len = 0;
-            ::SSL_get0_alpn_selected(stream.native_handle(), &alpn_data, &alpn_len);
-
-            if (alpn_len == 2 && alpn_data[0] == 'h' && alpn_data[1] == '2')
+            if (stream.selected_alpn() == "h2")
             {
                 logger::log(logger::level::info, std::source_location::current(), "Server: ALPN h2 negotiated");
             }
@@ -165,7 +161,7 @@ namespace kmx::aio::sample::tls::h2_alpn_server
         co_return;
     }
 
-    void manager::ui_loop(std::stop_token stop_token) const
+    void manager::ui_loop(std::stop_token) const
     {
     }
     void manager::print_metrics() const

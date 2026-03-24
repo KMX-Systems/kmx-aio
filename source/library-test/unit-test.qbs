@@ -15,6 +15,10 @@ CppApplication {
         "inc",
         "inc_dep"
     ]
+    cpp.dynamicLibraries: [
+        "crypto",
+        "ssl",
+    ]
     cpp.staticLibraries: [
         "Catch2Main",
         "Catch2"

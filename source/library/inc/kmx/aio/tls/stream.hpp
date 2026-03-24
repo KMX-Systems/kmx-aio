@@ -3,9 +3,12 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <cstdint>
     #include <expected>
     #include <new>
+    #include <optional>
     #include <span>
+    #include <string_view>
     #include <system_error>
     #include <utility>
 
@@ -72,6 +75,28 @@ namespace kmx::aio::tls
         void set_connect_state() noexcept { ::SSL_set_connect_state(ssl_); }
 
         void set_accept_state() noexcept { ::SSL_set_accept_state(ssl_); }
+
+        /// @brief Configures ALPN protocols in wire format (len-prefixed list), e.g. {2, 'h', '2'}.
+        [[nodiscard]] std::expected<void, std::error_code> set_alpn_protocols(std::span<const std::uint8_t> protocols) noexcept
+        {
+            if (!ssl_ || protocols.empty())
+                return std::unexpected(std::make_error_code(std::errc::invalid_argument));
+
+            const int rc = ::SSL_set_alpn_protos(ssl_, protocols.data(), static_cast<unsigned int>(protocols.size()));
+            if (rc != 0)
+                return std::unexpected(std::make_error_code(std::errc::protocol_error));
+
+            return std::expected<void, std::error_code> {};
+        }
+
+        /// @brief Returns selected ALPN protocol after handshake, or empty view when none negotiated.
+        [[nodiscard]] std::string_view selected_alpn() const noexcept
+        {
+            const unsigned char* data = nullptr;
+            unsigned int len = 0;
+            ::SSL_get0_alpn_selected(ssl_, &data, &len);
+            return {reinterpret_cast<const char*>(data), len};
+        }
 
         /// @brief Returns the underlying OpenSSL/BoringSSL SSL structure.
         ::SSL* native_handle() noexcept { return ssl_; }
@@ -195,14 +220,14 @@ namespace kmx::aio::tls
             co_return std::expected<void, std::error_code> {};
         }
 
-        [[nodiscard]] InnerStream& inner() noexcept { return inner_; }
-        [[nodiscard]] const InnerStream& inner() const noexcept { return inner_; }
+        [[nodiscard]] InnerStream& inner() noexcept { return *inner_; }
+        [[nodiscard]] const InnerStream& inner() const noexcept { return *inner_; }
 
     private:
         [[nodiscard]] task<std::expected<void, std::error_code>> pump_read() noexcept(false)
         {
             char buf[8192];
-            const auto res = co_await inner_.read(std::span {buf, sizeof(buf)});
+            const auto res = co_await inner_->read(std::span {buf, sizeof(buf)});
             if (!res)
                 co_return std::unexpected(res.error());
 
@@ -226,7 +251,7 @@ namespace kmx::aio::tls
                 const int read_bytes = ::BIO_read(net_write_bio_, buf, static_cast<int>(sizeof(buf)));
                 if (read_bytes > 0)
                 {
-                    const auto res = co_await inner_.write_all(std::span {buf, static_cast<std::size_t>(read_bytes)});
+                    const auto res = co_await inner_->write_all(std::span {buf, static_cast<std::size_t>(read_bytes)});
                     if (!res)
                         co_return std::unexpected(res.error());
                 }
@@ -234,7 +259,7 @@ namespace kmx::aio::tls
             co_return std::expected<void, std::error_code> {};
         }
 
-        InnerStream inner_;
+        std::optional<InnerStream> inner_;
         ::SSL* ssl_ {};
         ::BIO* net_read_bio_ {};
         ::BIO* net_write_bio_ {};
