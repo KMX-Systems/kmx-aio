@@ -81,10 +81,7 @@ namespace kmx::aio
 
         /// @brief Checks if the channel is currently empty (consumer perspective).
         /// @return true if no elements are available to dequeue.
-        [[nodiscard]] bool empty() const noexcept
-        {
-            return tail_.load(std::memory_order_acquire) == head_.load(std::memory_order_acquire);
-        }
+        [[nodiscard]] bool empty() const noexcept { return tail_.load(std::memory_order_acquire) == head_.load(std::memory_order_acquire); }
 
         /// @brief Returns the fixed capacity of the channel (always a power of two).
         /// @return The number of usable slots.

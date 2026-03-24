@@ -51,7 +51,7 @@ namespace kmx::aio
 
         /// @brief Wrapper for ::socket.
         [[nodiscard]] static std::expected<file_descriptor, std::error_code> create_socket(const int domain, const int type,
-                                                   const int protocol) noexcept;
+                                                                                           const int protocol) noexcept;
 
         /// @brief Wrapper for ::fcntl
         [[nodiscard]] std::expected<int, std::error_code> fcntl(const int cmd, const int arg = 0) noexcept;

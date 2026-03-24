@@ -8,8 +8,8 @@
     #include <system_error>
 
     #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/readiness/io_base.hpp>
     #include <kmx/aio/readiness/executor.hpp>
+    #include <kmx/aio/readiness/io_base.hpp>
     #include <kmx/aio/task.hpp>
 #endif
 
@@ -23,8 +23,7 @@ namespace kmx::aio::readiness::udp
         using create_result = std::expected<socket, std::error_code>;
 
         [[nodiscard]] static create_result create(executor& exec, int domain = AF_INET,
-                                                  int type = SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC,
-                                                  int protocol = 0) noexcept;
+                                                  int type = SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, int protocol = 0) noexcept;
 
         socket(executor& exec, file_descriptor&& fd) noexcept: io_base(exec, std::move(fd)) {}
         ~socket() override = default;

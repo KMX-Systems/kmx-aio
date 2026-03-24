@@ -1,7 +1,7 @@
+#include "kmx/aio/sample/tcp/echo_uring/server/manager.hpp"
 #include <exception>
 #include <kmx/logger.hpp>
 #include <source_location>
-#include "kmx/aio/sample/tcp/echo_uring/server/manager.hpp"
 
 int main() noexcept
 {

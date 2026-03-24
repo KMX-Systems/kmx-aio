@@ -22,9 +22,9 @@ namespace kmx::aio::readiness
 {
     enum class backend_mode : std::uint8_t
     {
-        epoll_only,            ///< Use epoll backend only.
-        openonload_preferred,  ///< Prefer OpenOnload when available, fallback to epoll.
-        openonload_required    ///< Require OpenOnload; fail construction if unavailable.
+        epoll_only,           ///< Use epoll backend only.
+        openonload_preferred, ///< Prefer OpenOnload when available, fallback to epoll.
+        openonload_required   ///< Require OpenOnload; fail construction if unavailable.
     };
 
     enum class active_backend : std::uint8_t

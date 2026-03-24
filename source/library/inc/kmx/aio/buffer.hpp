@@ -16,8 +16,8 @@ namespace kmx::aio
     ///          models to describe I/O target regions without copying.
     struct mutable_buffer
     {
-        void* data {};               ///< Pointer to the start of the writable region.
-        std::size_t size {};          ///< Number of bytes available at `data`.
+        void* data {};       ///< Pointer to the start of the writable region.
+        std::size_t size {}; ///< Number of bytes available at `data`.
 
         /// @brief Constructs an empty buffer.
         constexpr mutable_buffer() noexcept = default;
@@ -59,8 +59,8 @@ namespace kmx::aio
     /// @details Lightweight, non-owning view for outbound I/O data.
     struct const_buffer
     {
-        const void* data {};          ///< Pointer to the start of the readable region.
-        std::size_t size {};          ///< Number of bytes available at `data`.
+        const void* data {}; ///< Pointer to the start of the readable region.
+        std::size_t size {}; ///< Number of bytes available at `data`.
 
         /// @brief Constructs an empty buffer.
         constexpr const_buffer() noexcept = default;

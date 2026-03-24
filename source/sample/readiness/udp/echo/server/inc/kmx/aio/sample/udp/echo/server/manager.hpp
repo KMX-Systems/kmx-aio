@@ -1,7 +1,7 @@
 #pragma once
 #include <kmx/aio/readiness/executor.hpp>
-#include <kmx/aio/task.hpp>
 #include <kmx/aio/readiness/udp/socket.hpp>
+#include <kmx/aio/task.hpp>
 #include <kmx/logger.hpp>
 
 #include <atomic>

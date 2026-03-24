@@ -66,8 +66,7 @@ namespace kmx::aio::sample::tcp::echo::server
                                                std::shared_ptr<connection_stats> stats) noexcept(false);
 
         /// @brief Handles sending random data to client asynchronously
-        [[nodiscard]] task<void> client_sender(std::shared_ptr<kmx::aio::readiness::tcp::stream> stream,
-                                               const std::uint64_t client_id,
+        [[nodiscard]] task<void> client_sender(std::shared_ptr<kmx::aio::readiness::tcp::stream> stream, const std::uint64_t client_id,
                                                std::shared_ptr<connection_stats> stats) noexcept(false);
 
         /// @brief Accepts incoming connections and spawns handler coroutines

@@ -6,7 +6,7 @@
 
 namespace kmx::aio::detail
 {
-    void* promise_base::operator new(std::size_t size) noexcept(false)
+    void* promise_base::operator new(const std::size_t size) noexcept(false)
     {
         if (auto* alloc = get_thread_allocator())
         {
@@ -21,7 +21,7 @@ namespace kmx::aio::detail
         return ::operator new(size);
     }
 
-    void promise_base::operator delete(void* ptr, std::size_t) noexcept
+    void promise_base::operator delete(void* ptr, std::size_t /*size*/) noexcept
     {
         if (auto* alloc = get_thread_allocator())
         {

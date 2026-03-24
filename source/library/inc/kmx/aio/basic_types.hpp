@@ -11,8 +11,8 @@
     #include <netinet/in.h>
     #include <span>
     #include <string>
-    #include <sys/socket.h>
     #include <sys/epoll.h>
+    #include <sys/socket.h>
     #include <system_error>
     #include <type_traits>
     #include <variant>
@@ -187,7 +187,7 @@ namespace kmx::aio
     }
 
     [[nodiscard]] inline std::expected<socket_address, std::error_code> make_socket_address(const ip_address_t ip,
-                                                                                             const port_t port) noexcept
+                                                                                            const port_t port) noexcept
     {
         socket_address result {};
 
@@ -218,7 +218,7 @@ namespace kmx::aio
     }
 
     [[nodiscard]] inline std::expected<socket_address, std::error_code> make_socket_address(const ip_address_owned_t& ip,
-                                                                                             const port_t port) noexcept
+                                                                                            const port_t port) noexcept
     {
         return make_socket_address(to_ip_address_view(ip), port);
     }

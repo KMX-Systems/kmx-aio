@@ -8,8 +8,8 @@
     #include <span>
     #include <sys/socket.h>
 
-    #include <kmx/aio/task.hpp>
     #include <kmx/aio/readiness/udp/socket.hpp>
+    #include <kmx/aio/task.hpp>
 #endif
 
 namespace kmx::aio::readiness::udp
@@ -34,15 +34,12 @@ namespace kmx::aio::readiness::udp
         [[nodiscard]] result_task recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
                                        ::socklen_t& out_peer_addr_len) noexcept(false);
 
-        [[nodiscard]] result_task recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
-                                       ::socklen_t& out_peer_addr_len, ip_address_t& out_peer_ip,
-                                       port_t& out_peer_port) noexcept(false);
+        [[nodiscard]] result_task recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr, ::socklen_t& out_peer_addr_len,
+                                       ip_address_t& out_peer_ip, port_t& out_peer_port) noexcept(false);
 
-        [[nodiscard]] result_task send(std::span<const std::byte> buffer, const sockaddr* peer_addr,
-                                       ::socklen_t addr_len) noexcept(false);
+        [[nodiscard]] result_task send(std::span<const std::byte> buffer, const sockaddr* peer_addr, ::socklen_t addr_len) noexcept(false);
 
-        [[nodiscard]] result_task send(std::span<const std::byte> buffer, ip_address_t peer_ip,
-                                       port_t peer_port) noexcept(false);
+        [[nodiscard]] result_task send(std::span<const std::byte> buffer, ip_address_t peer_ip, port_t peer_port) noexcept(false);
 
     private:
         socket socket_;

@@ -4,11 +4,11 @@
 #pragma once
 
 #ifndef PCH
-    #include <string_view>
-    #include <expected>
-    #include <system_error>
     #include <cstdint>
+    #include <expected>
     #include <span>
+    #include <string_view>
+    #include <system_error>
 #endif
 
 // Guard around actual Onload implementation
@@ -17,16 +17,16 @@
     #define KMX_AIO_OPENONLOAD_EXTENSIONS_AVAILABLE 1
 #else
     #define KMX_AIO_OPENONLOAD_EXTENSIONS_AVAILABLE 0
-// Definitions for compiling cleanly even without vendor headers, though missing real runtime capability.
-#ifndef ONLOAD_ALL_THREADS
-    #define ONLOAD_ALL_THREADS 1
-#endif
-#ifndef ONLOAD_SCOPE_PROCESS
-    #define ONLOAD_SCOPE_PROCESS 1
-#endif
-#ifndef ONLOAD_FD_STAT_OOF
-    #define ONLOAD_FD_STAT_OOF 3
-#endif
+    // Definitions for compiling cleanly even without vendor headers, though missing real runtime capability.
+    #ifndef ONLOAD_ALL_THREADS
+        #define ONLOAD_ALL_THREADS 1
+    #endif
+    #ifndef ONLOAD_SCOPE_PROCESS
+        #define ONLOAD_SCOPE_PROCESS 1
+    #endif
+    #ifndef ONLOAD_FD_STAT_OOF
+        #define ONLOAD_FD_STAT_OOF 3
+    #endif
 #endif
 
 namespace kmx::aio::readiness::openonload
@@ -40,7 +40,7 @@ namespace kmx::aio::readiness::openonload
         int rc = ::onload_set_stackname(ONLOAD_ALL_THREADS, ONLOAD_SCOPE_PROCESS, stack_name);
         return rc == 0;
 #else
-        (void)stack_name;
+        (void) stack_name;
         // Without extensions, fallback to relying on LD_PRELOAD behavior safely.
         return false;
 #endif
@@ -54,7 +54,7 @@ namespace kmx::aio::readiness::openonload
         // ONLOAD_FD_STAT_OOF or positive structural index means accelerated hardware path.
         return stat == ONLOAD_FD_STAT_OOF || stat > 0;
 #else
-        (void)fd;
+        (void) fd;
         return false; // Cannot reliably compute without onload_ext link
 #endif
     }
@@ -98,8 +98,8 @@ namespace kmx::aio::readiness::openonload
         // Implicit release of Onload network buffers upon returning since onload_zc_keep() is not invoked.
         return total_copied;
 #else
-        (void)fd;
-        (void)buffer;
+        (void) fd;
+        (void) buffer;
         return std::unexpected(std::make_error_code(std::errc::function_not_supported));
 #endif
     }
@@ -112,7 +112,7 @@ namespace kmx::aio::readiness::openonload
             return 0u;
 
         onload_zc_mmsg zc_msg[1] {};
-        
+
         // Ask Onload to allocate transmit hardware buffers.
         // Sync flag behaves predictably for typical event loops, ensuring buffering.
         int rc = ::onload_zc_alloc_buffers(fd, &zc_msg[0].iov, 1, ONLOAD_ZC_SEND_SYNC);
@@ -125,7 +125,7 @@ namespace kmx::aio::readiness::openonload
 
         const std::size_t available_capacity = static_cast<std::size_t>(zc_msg[0].iov[0].iov_len);
         const std::size_t to_copy = std::min(buffer.size(), available_capacity);
-        
+
         auto* payload = reinterpret_cast<char*>(zc_msg[0].iov[0].iov_base);
         std::memcpy(payload, buffer.data(), to_copy);
         zc_msg[0].iov[0].iov_len = to_copy;
@@ -141,8 +141,8 @@ namespace kmx::aio::readiness::openonload
 
         return to_copy;
 #else
-        (void)fd;
-        (void)buffer;
+        (void) fd;
+        (void) buffer;
         return std::unexpected(std::make_error_code(std::errc::function_not_supported));
 #endif
     }

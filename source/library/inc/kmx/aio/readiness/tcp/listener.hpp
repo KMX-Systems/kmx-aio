@@ -6,8 +6,8 @@
     #include <expected>
 
     #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/readiness/io_base.hpp>
     #include <kmx/aio/readiness/executor.hpp>
+    #include <kmx/aio/readiness/io_base.hpp>
     #include <kmx/aio/task.hpp>
 #endif
 
@@ -24,7 +24,7 @@ namespace kmx::aio::readiness::tcp
         listener(listener&&) noexcept = default;
         listener& operator=(listener&&) noexcept = delete;
 
-        result_t listen(int backlog = 128) noexcept;
+        result_t listen(const int backlog = 128) noexcept;
         task<std::expected<file_descriptor, std::error_code>> accept() noexcept(false);
     };
 

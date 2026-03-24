@@ -43,8 +43,7 @@ namespace kmx::aio::completion
         /// @return Success or an error if the wait was cancelled.
         /// @throws std::bad_alloc (coroutine frame allocation).
         template <typename Rep, typename Period>
-        [[nodiscard]] task<std::expected<void, std::error_code>>
-            wait(const std::chrono::duration<Rep, Period> duration) noexcept(false)
+        [[nodiscard]] task<std::expected<void, std::error_code>> wait(const std::chrono::duration<Rep, Period> duration) noexcept(false)
         {
             const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(duration);
             co_return co_await wait_ns(static_cast<std::uint64_t>(ns.count()));

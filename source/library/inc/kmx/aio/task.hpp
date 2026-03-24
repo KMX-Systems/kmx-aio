@@ -16,8 +16,10 @@
 
 namespace kmx::aio
 {
-    struct get_stop_token_t {};
-    constexpr get_stop_token_t get_stop_token{};
+    struct get_stop_token_t
+    {
+    };
+    constexpr get_stop_token_t get_stop_token {};
 
     template <typename T>
     class [[nodiscard]] task;
@@ -30,8 +32,8 @@ namespace kmx::aio
             std::exception_ptr exception_;
             std::stop_source stop_source_;
 
-            static void* operator new(std::size_t size) noexcept(false);
-            static void operator delete(void* ptr, std::size_t size) noexcept;
+            static void* operator new(const std::size_t size) noexcept(false);
+            static void operator delete(void* ptr, std::size_t /*size*/) noexcept;
 
             struct final_awaiter
             {
@@ -53,9 +55,9 @@ namespace kmx::aio
 
             // Allow normal co_await
             template <typename U>
-            decltype(auto) await_transform(U&& awaitable) noexcept 
+            decltype(auto) await_transform(U&& awaitable) noexcept
             {
-                return std::forward<U>(awaitable); 
+                return std::forward<U>(awaitable);
             }
 
             // Custom co_await for getting the stop token
@@ -68,7 +70,7 @@ namespace kmx::aio
                     void await_suspend(std::coroutine_handle<>) const noexcept {}
                     std::stop_token await_resume() const noexcept { return token; }
                 };
-                return awaiter{stop_source_.get_token()};
+                return awaiter {stop_source_.get_token()};
             }
         };
 
@@ -119,7 +121,7 @@ namespace kmx::aio
 
         task() noexcept = default;
 
-        explicit task(handle_type h) noexcept: handle_(h) {}
+        explicit task(const handle_type h) noexcept: handle_(h) {}
 
         ~task() noexcept
         {

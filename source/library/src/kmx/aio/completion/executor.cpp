@@ -24,8 +24,7 @@ namespace kmx::aio::completion
         submission_full_count.store(0u, mem_order);
     }
 
-    executor::executor(const executor_config& config) noexcept(false):
-        config_(config)
+    executor::executor(const executor_config& config) noexcept(false): config_(config)
     {
         const int ret = ::io_uring_queue_init(config.ring_entries, &ring_, 0);
         if (ret < 0)
@@ -38,8 +37,8 @@ namespace kmx::aio::completion
         ::io_uring_queue_exit(&ring_);
     }
 
-    task<std::expected<std::size_t, std::error_code>>
-        executor::async_read(const fd_t fd, std::span<char> buffer, const std::uint64_t offset) noexcept(false)
+    task<std::expected<std::size_t, std::error_code>> executor::async_read(const fd_t fd, std::span<char> buffer,
+                                                                           const std::uint64_t offset) noexcept(false)
     {
         io_context ctx {};
 
@@ -67,8 +66,8 @@ namespace kmx::aio::completion
         co_return static_cast<std::size_t>(ctx.result);
     }
 
-    task<std::expected<std::size_t, std::error_code>>
-        executor::async_write(const fd_t fd, std::span<const char> buffer, const std::uint64_t offset) noexcept(false)
+    task<std::expected<std::size_t, std::error_code>> executor::async_write(const fd_t fd, std::span<const char> buffer,
+                                                                            const std::uint64_t offset) noexcept(false)
     {
         io_context ctx {};
 
@@ -113,8 +112,9 @@ namespace kmx::aio::completion
         return std::expected<void, std::error_code> {};
     }
 
-    task<std::expected<std::size_t, std::error_code>>
-        executor::async_read_fixed(const fd_t fd, std::span<char> buffer, const std::uint64_t offset, const int buf_index) noexcept(false)
+    task<std::expected<std::size_t, std::error_code>> executor::async_read_fixed(const fd_t fd, std::span<char> buffer,
+                                                                                 const std::uint64_t offset,
+                                                                                 const int buf_index) noexcept(false)
     {
         io_context ctx {};
 
@@ -141,8 +141,9 @@ namespace kmx::aio::completion
         co_return static_cast<std::size_t>(ctx.result);
     }
 
-    task<std::expected<std::size_t, std::error_code>>
-        executor::async_write_fixed(const fd_t fd, std::span<const char> buffer, const std::uint64_t offset, const int buf_index) noexcept(false)
+    task<std::expected<std::size_t, std::error_code>> executor::async_write_fixed(const fd_t fd, std::span<const char> buffer,
+                                                                                  const std::uint64_t offset,
+                                                                                  const int buf_index) noexcept(false)
     {
         io_context ctx {};
 
@@ -169,8 +170,8 @@ namespace kmx::aio::completion
         co_return static_cast<std::size_t>(ctx.result);
     }
 
-    task<std::expected<fd_t, std::error_code>>
-        executor::async_accept(const fd_t listen_fd, sockaddr_storage& addr, socklen_t& addrlen) noexcept(false)
+    task<std::expected<fd_t, std::error_code>> executor::async_accept(const fd_t listen_fd, sockaddr_storage& addr,
+                                                                      socklen_t& addrlen) noexcept(false)
     {
         io_context ctx {};
 
@@ -198,8 +199,8 @@ namespace kmx::aio::completion
         co_return ctx.result;
     }
 
-    task<std::expected<void, std::error_code>>
-        executor::async_connect(const fd_t fd, const sockaddr* addr, const socklen_t addrlen) noexcept(false)
+    task<std::expected<void, std::error_code>> executor::async_connect(const fd_t fd, const sockaddr* addr,
+                                                                       const socklen_t addrlen) noexcept(false)
     {
         io_context ctx {};
 
@@ -226,8 +227,8 @@ namespace kmx::aio::completion
         co_return std::expected<void, std::error_code> {};
     }
 
-    task<std::expected<std::size_t, std::error_code>>
-        executor::async_recvmsg(const fd_t fd, msghdr* msg, const unsigned int flags) noexcept(false)
+    task<std::expected<std::size_t, std::error_code>> executor::async_recvmsg(const fd_t fd, msghdr* msg,
+                                                                              const unsigned int flags) noexcept(false)
     {
         io_context ctx {};
 
@@ -254,8 +255,8 @@ namespace kmx::aio::completion
         co_return static_cast<std::size_t>(ctx.result);
     }
 
-    task<std::expected<std::size_t, std::error_code>>
-        executor::async_sendmsg(const fd_t fd, const msghdr* msg, const unsigned int flags) noexcept(false)
+    task<std::expected<std::size_t, std::error_code>> executor::async_sendmsg(const fd_t fd, const msghdr* msg,
+                                                                              const unsigned int flags) noexcept(false)
     {
         io_context ctx {};
 
@@ -282,8 +283,7 @@ namespace kmx::aio::completion
         co_return static_cast<std::size_t>(ctx.result);
     }
 
-    task<std::expected<void, std::error_code>>
-        executor::async_cancel(const std::uint64_t user_data) noexcept(false)
+    task<std::expected<void, std::error_code>> executor::async_cancel(const std::uint64_t user_data) noexcept(false)
     {
         io_context ctx {};
 
@@ -400,8 +400,8 @@ namespace kmx::aio::completion
             else if ((ret != -ETIME) && (ret != -EINTR))
             {
                 metrics_.error_count.fetch_add(1u, mem_order);
-                logger::log(logger::level::error, std::source_location::current(),
-                            "io_uring_wait_cqe_timeout error: {}", std::strerror(-ret));
+                logger::log(logger::level::error, std::source_location::current(), "io_uring_wait_cqe_timeout error: {}",
+                            std::strerror(-ret));
             }
         }
 
@@ -422,11 +422,10 @@ namespace kmx::aio::completion
 
         const int ret = ::pthread_setaffinity_np(::pthread_self(), sizeof(cpu_set_t), &cpuset);
         if (ret != 0)
-            logger::log(logger::level::warn, std::source_location::current(),
-                        "Failed to pin io_uring thread to core {}: {}", config_.core_id, std::strerror(ret));
+            logger::log(logger::level::warn, std::source_location::current(), "Failed to pin io_uring thread to core {}: {}",
+                        config_.core_id, std::strerror(ret));
         else
-            logger::log(logger::level::info, std::source_location::current(),
-                        "io_uring executor pinned to CPU core {}", config_.core_id);
+            logger::log(logger::level::info, std::source_location::current(), "io_uring executor pinned to CPU core {}", config_.core_id);
     }
 
     executor::detached_task_wrapper executor::execute_task(task<void> tsk, std::shared_ptr<executor> self) noexcept
@@ -437,8 +436,8 @@ namespace kmx::aio::completion
         }
         catch (const std::exception& e)
         {
-            logger::log(logger::level::error, std::source_location::current(),
-                        "Exception propagated to top-level completion task: {}", e.what());
+            logger::log(logger::level::error, std::source_location::current(), "Exception propagated to top-level completion task: {}",
+                        e.what());
         }
 
         self->metrics_.total_tasks_completed.fetch_add(1u, mem_order);

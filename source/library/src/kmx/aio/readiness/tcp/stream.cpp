@@ -13,13 +13,12 @@ namespace kmx::aio::readiness::tcp
 {
     stream::result_task stream::read(const std::span<char> buffer) noexcept(false)
     {
-        const bool is_onload_accel = (exec_.get_active_backend() == active_backend::openonload) &&
-                                     openonload::is_accelerated_fd(fd_.get());
+        const bool is_onload_accel = (exec_.get_active_backend() == active_backend::openonload) && openonload::is_accelerated_fd(fd_.get());
 
         for (std::size_t total = 0u;;)
         {
             const std::size_t remaining = buffer.size() - total;
-            
+
             if (is_onload_accel)
             {
                 const std::span<char> remaining_span {buffer.data() + total, remaining};
@@ -86,8 +85,7 @@ namespace kmx::aio::readiness::tcp
 
     stream::result_task stream::write(const std::span<const char> buffer) noexcept(false)
     {
-        const bool is_onload_accel = (exec_.get_active_backend() == active_backend::openonload) &&
-                                     openonload::is_accelerated_fd(fd_.get());
+        const bool is_onload_accel = (exec_.get_active_backend() == active_backend::openonload) && openonload::is_accelerated_fd(fd_.get());
 
         while (true)
         {
@@ -117,7 +115,7 @@ namespace kmx::aio::readiness::tcp
                         // Any other fatal error from hardware
                         co_return std::unexpected(err);
                     }
-                    // Proceed to fallback `::send` 
+                    // Proceed to fallback `::send`
                 }
             }
 

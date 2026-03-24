@@ -7,8 +7,8 @@
     #include <span>
 
     #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/readiness/io_base.hpp>
     #include <kmx/aio/readiness/executor.hpp>
+    #include <kmx/aio/readiness/io_base.hpp>
     #include <kmx/aio/task.hpp>
 #endif
 

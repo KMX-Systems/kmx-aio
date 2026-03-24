@@ -12,8 +12,8 @@
 #include <cstring>
 #include <deque>
 #include <limits>
-#include <net/if.h>
 #include <mutex>
+#include <net/if.h>
 #include <new>
 #include <string>
 #include <unordered_map>
@@ -30,35 +30,38 @@
         #error "AF_XDP enabled but xsk header was not found"
     #endif
     #include <cstdlib>
-    #include <sys/socket.h>
     #include <linux/if_xdp.h>
+    #include <sys/socket.h>
 #endif
 
 namespace kmx::aio::completion::xdp
 {
-    
-        [[nodiscard]] constexpr bool is_valid_ring_size(const std::uint32_t size) noexcept
-        {
-            if (size == 0u)
-                return false;
 
-            return (size & (size - 1u)) == 0u;
-        }
+    [[nodiscard]] constexpr bool is_valid_ring_size(const std::uint32_t size) noexcept
+    {
+        if (size == 0u)
+            return false;
+
+        return (size & (size - 1u)) == 0u;
+    }
 
 #if defined(KMX_AIO_FEATURE_AF_XDP)
-        [[nodiscard]] constexpr error_code map_xdp_error(const int ret) noexcept
-        {
-            const int err = ret < 0 ? -ret : ret;
+    [[nodiscard]] constexpr error_code map_xdp_error(const int ret) noexcept
+    {
+        const int err = ret < 0 ? -ret : ret;
 
-            switch (err)
-            {
-                case ENOMEM: return error_code::xdp_umem_registration_failed;
-                case ENODEV:
-                case ENXIO:
-                case EINVAL: return error_code::xdp_queue_bind_failed;
-                default:     return error_code::xdp_setup_failed;
-            }
+        switch (err)
+        {
+            case ENOMEM:
+                return error_code::xdp_umem_registration_failed;
+            case ENODEV:
+            case ENXIO:
+            case EINVAL:
+                return error_code::xdp_queue_bind_failed;
+            default:
+                return error_code::xdp_setup_failed;
         }
+    }
 #endif
 
     struct socket::state
@@ -68,7 +71,7 @@ namespace kmx::aio::completion::xdp
         std::mutex mutex {};
         bool af_xdp_backend_enabled = false;
 
-    #if defined(KMX_AIO_FEATURE_AF_XDP)
+#if defined(KMX_AIO_FEATURE_AF_XDP)
         xsk_socket* xsk = nullptr;
         xsk_umem* umem = nullptr;
         xsk_ring_cons rx {};
@@ -79,7 +82,7 @@ namespace kmx::aio::completion::xdp
         std::uint64_t umem_size = 0u;
         std::deque<std::uint64_t> free_frame_addrs {};
         std::unordered_set<std::uint64_t> rx_inflight {};
-    #endif
+#endif
 
         std::uint64_t next_frame_addr = 1u;
 
@@ -93,46 +96,46 @@ namespace kmx::aio::completion::xdp
     socket::socket(socket&&) noexcept = default;
 
 #if defined(KMX_AIO_FEATURE_AF_XDP)
-    
-        template <typename state_t>
-        void recycle_completion_frames(state_t& st) noexcept
+
+    template <typename state_t>
+    void recycle_completion_frames(state_t& st) noexcept
+    {
+        std::uint32_t idx {};
+        const std::uint32_t count = xsk_ring_cons__peek(&st.comp, st.config.comp_ring_size, &idx);
+        if (count == 0u)
+            return;
+
+        for (std::uint32_t i = 0u; i < count; ++i)
         {
+            const std::uint64_t addr = *xsk_ring_cons__comp_addr(&st.comp, idx + i);
+            st.free_frame_addrs.push_back(xsk_umem__extract_addr(addr));
+        }
+
+        xsk_ring_cons__release(&st.comp, count);
+    }
+
+    template <typename state_t>
+    void refill_fill_ring(state_t& st) noexcept
+    {
+        while (!st.free_frame_addrs.empty())
+        {
+            const std::uint32_t want =
+                static_cast<std::uint32_t>(std::min<std::size_t>(st.free_frame_addrs.size(), st.config.fill_ring_size));
+
             std::uint32_t idx {};
-            const std::uint32_t count = xsk_ring_cons__peek(&st.comp, st.config.comp_ring_size, &idx);
-            if (count == 0u)
-                return;
+            const std::uint32_t reserved = xsk_ring_prod__reserve(&st.fill, want, &idx);
+            if (reserved == 0u)
+                break;
 
-            for (std::uint32_t i = 0u; i < count; ++i)
+            for (std::uint32_t i = 0u; i < reserved; ++i)
             {
-                const std::uint64_t addr = *xsk_ring_cons__comp_addr(&st.comp, idx + i);
-                st.free_frame_addrs.push_back(xsk_umem__extract_addr(addr));
+                *xsk_ring_prod__fill_addr(&st.fill, idx + i) = st.free_frame_addrs.front();
+                st.free_frame_addrs.pop_front();
             }
 
-            xsk_ring_cons__release(&st.comp, count);
+            xsk_ring_prod__submit(&st.fill, reserved);
         }
-
-        template <typename state_t>
-        void refill_fill_ring(state_t& st) noexcept
-        {
-            while (!st.free_frame_addrs.empty())
-            {
-                const std::uint32_t want = static_cast<std::uint32_t>(
-                    std::min<std::size_t>(st.free_frame_addrs.size(), st.config.fill_ring_size));
-
-                std::uint32_t idx {};
-                const std::uint32_t reserved = xsk_ring_prod__reserve(&st.fill, want, &idx);
-                if (reserved == 0u)
-                    break;
-
-                for (std::uint32_t i = 0u; i < reserved; ++i)
-                {
-                    *xsk_ring_prod__fill_addr(&st.fill, idx + i) = st.free_frame_addrs.front();
-                    st.free_frame_addrs.pop_front();
-                }
-
-                xsk_ring_prod__submit(&st.fill, reserved);
-            }
-        }
+    }
 #endif
 
     socket::~socket() noexcept
@@ -155,8 +158,7 @@ namespace kmx::aio::completion::xdp
 #endif
     }
 
-    std::expected<socket, std::error_code>
-        socket::create(std::shared_ptr<executor> exec, const socket_config& config) noexcept
+    std::expected<socket, std::error_code> socket::create(std::shared_ptr<executor> exec, const socket_config& config) noexcept
     {
         if (!exec)
             return std::unexpected(to_std_error_code(error_code::invalid_argument));
@@ -167,16 +169,12 @@ namespace kmx::aio::completion::xdp
         if (config.frame_size == 0u || config.frame_count == 0u)
             return std::unexpected(to_std_error_code(error_code::invalid_argument));
 
-        if (!is_valid_ring_size(config.fill_ring_size) ||
-            !is_valid_ring_size(config.comp_ring_size) ||
-            !is_valid_ring_size(config.rx_ring_size) ||
-            !is_valid_ring_size(config.tx_ring_size))
+        if (!is_valid_ring_size(config.fill_ring_size) || !is_valid_ring_size(config.comp_ring_size) ||
+            !is_valid_ring_size(config.rx_ring_size) || !is_valid_ring_size(config.tx_ring_size))
             return std::unexpected(to_std_error_code(error_code::invalid_argument));
 
-        if (config.fill_ring_size > config.frame_count ||
-            config.comp_ring_size > config.frame_count ||
-            config.rx_ring_size > config.frame_count ||
-            config.tx_ring_size > config.frame_count)
+        if (config.fill_ring_size > config.frame_count || config.comp_ring_size > config.frame_count ||
+            config.rx_ring_size > config.frame_count || config.tx_ring_size > config.frame_count)
             return std::unexpected(to_std_error_code(error_code::xdp_ring_setup_failed));
 
         socket out {};
@@ -211,12 +209,8 @@ namespace kmx::aio::completion::xdp
         umem_cfg.frame_headroom = 0u;
         umem_cfg.flags = 0u;
 
-        const int umem_rc = xsk_umem__create(&out.state_->umem,
-                                             out.state_->umem_area.get(),
-                                             out.state_->umem_size,
-                                             &out.state_->fill,
-                                             &out.state_->comp,
-                                             &umem_cfg);
+        const int umem_rc = xsk_umem__create(&out.state_->umem, out.state_->umem_area.get(), out.state_->umem_size, &out.state_->fill,
+                                             &out.state_->comp, &umem_cfg);
         if (umem_rc != 0)
             return std::unexpected(to_std_error_code(map_xdp_error(umem_rc)));
 
@@ -225,20 +219,15 @@ namespace kmx::aio::completion::xdp
         sock_cfg.tx_size = config.tx_ring_size;
         sock_cfg.libbpf_flags = 0u;
         sock_cfg.xdp_flags = 0u;
-        
+
         sock_cfg.bind_flags = 0;
         if (config.need_wakeup)
             sock_cfg.bind_flags |= XDP_USE_NEED_WAKEUP;
         if (config.force_zero_copy)
             sock_cfg.bind_flags |= XDP_ZEROCOPY;
 
-        const int xsk_rc = xsk_socket__create(&out.state_->xsk,
-                                              interface_name.c_str(),
-                                              config.queue_id,
-                                              out.state_->umem,
-                                              &out.state_->rx,
-                                              &out.state_->tx,
-                                              &sock_cfg);
+        const int xsk_rc = xsk_socket__create(&out.state_->xsk, interface_name.c_str(), config.queue_id, out.state_->umem, &out.state_->rx,
+                                              &out.state_->tx, &sock_cfg);
         if (xsk_rc != 0)
             return std::unexpected(to_std_error_code(map_xdp_error(xsk_rc)));
 
@@ -315,8 +304,7 @@ namespace kmx::aio::completion::xdp
         co_return out;
     }
 
-    task<std::expected<void, std::error_code>>
-        socket::send(std::span<const std::byte> data) noexcept(false)
+    task<std::expected<void, std::error_code>> socket::send(std::span<const std::byte> data) noexcept(false)
     {
         if (!state_)
             co_return std::unexpected(to_std_error_code(error_code::bad_descriptor));
@@ -370,7 +358,7 @@ namespace kmx::aio::completion::xdp
             if (xsk_ring_prod__needs_wakeup(&state_->tx))
             {
                 state_->stats.wakeups_triggered++;
-                (void)::sendto(xsk_socket__fd(state_->xsk), nullptr, 0, MSG_DONTWAIT, nullptr, 0);
+                (void) ::sendto(xsk_socket__fd(state_->xsk), nullptr, 0, MSG_DONTWAIT, nullptr, 0);
             }
             co_return std::expected<void, std::error_code> {};
         }
@@ -422,7 +410,7 @@ namespace kmx::aio::completion::xdp
             if (xsk_ring_prod__needs_wakeup(&state_->fill))
             {
                 state_->stats.wakeups_triggered++;
-                (void)::recvfrom(xsk_socket__fd(state_->xsk), nullptr, 0, MSG_DONTWAIT, nullptr, nullptr);
+                (void) ::recvfrom(xsk_socket__fd(state_->xsk), nullptr, 0, MSG_DONTWAIT, nullptr, nullptr);
             }
         }
 #endif

@@ -131,8 +131,7 @@ namespace kmx::aio
 
     private:
         /// @brief Rounds `value` up to the nearest multiple of `alignment`.
-        [[nodiscard]] static constexpr std::size_t align_up(const std::size_t value,
-                                                             const std::size_t alignment) noexcept
+        [[nodiscard]] static constexpr std::size_t align_up(const std::size_t value, const std::size_t alignment) noexcept
         {
             return (value + alignment - 1u) & ~(alignment - 1u);
         }

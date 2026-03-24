@@ -22,8 +22,7 @@ namespace kmx::aio::completion::xdp
         std::error_code recv_empty_error {};
     };
 
-    auto run_roundtrip(std::shared_ptr<executor> exec,
-                       std::shared_ptr<xdp_roundtrip_state> state) -> task<void>
+    auto run_roundtrip(std::shared_ptr<executor> exec, std::shared_ptr<xdp_roundtrip_state> state) -> task<void>
     {
         socket_config cfg {
             .interface_name = "lo",

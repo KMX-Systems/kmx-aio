@@ -30,9 +30,7 @@ namespace kmx::aio::completion
 
         // Read from timerfd via io_uring async_read
         std::uint64_t expirations {};
-        auto result = co_await exec_->async_read(
-            tfd,
-            std::span<char>(reinterpret_cast<char*>(&expirations), sizeof(expirations)));
+        auto result = co_await exec_->async_read(tfd, std::span<char>(reinterpret_cast<char*>(&expirations), sizeof(expirations)));
 
         ::close(tfd);
 

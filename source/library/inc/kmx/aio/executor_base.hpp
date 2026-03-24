@@ -16,9 +16,7 @@ namespace kmx::aio
     class executor_base
     {
     public:
-        executor_base() noexcept:
-            lifetime_token_(std::make_shared<int>(0))
-        {}
+        executor_base() noexcept: lifetime_token_(std::make_shared<int>(0)) {}
 
         executor_base(const executor_base&) = delete;
         executor_base& operator=(const executor_base&) = delete;

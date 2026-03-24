@@ -41,7 +41,8 @@ namespace kmx::aio
         }
     }
 
-    std::expected<file_descriptor, std::error_code> file_descriptor::create_socket(const int domain, const int type, const int protocol) noexcept
+    std::expected<file_descriptor, std::error_code> file_descriptor::create_socket(const int domain, const int type,
+                                                                                   const int protocol) noexcept
     {
         const fd_t fd = ::socket(domain, type, protocol);
         if (fd < 0)
@@ -129,7 +130,8 @@ namespace kmx::aio
         return {};
     }
 
-    std::expected<file_descriptor, std::error_code> file_descriptor::accept(struct sockaddr* const addr, ::socklen_t* const addrlen) noexcept
+    std::expected<file_descriptor, std::error_code> file_descriptor::accept(struct sockaddr* const addr,
+                                                                            ::socklen_t* const addrlen) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -143,7 +145,7 @@ namespace kmx::aio
 
     std::expected<file_descriptor, std::error_code> file_descriptor::accept(ip_address_owned_t& out_ip, port_t& out_port) noexcept
     {
-        sockaddr_storage storage{};
+        sockaddr_storage storage {};
         ::socklen_t length = sizeof(storage);
 
         auto file_res = accept(reinterpret_cast<sockaddr*>(&storage), &length);
@@ -153,7 +155,7 @@ namespace kmx::aio
         if (storage.ss_family == AF_INET)
         {
             auto* addr4 = reinterpret_cast<::sockaddr_in*>(&storage);
-            ipv4_storage_t ip4{};
+            ipv4_storage_t ip4 {};
             std::memcpy(ip4.data(), &addr4->sin_addr, ip4.size());
             out_ip = ip4;
             out_port = ::ntohs(addr4->sin_port);
@@ -161,7 +163,7 @@ namespace kmx::aio
         else if (storage.ss_family == AF_INET6)
         {
             auto* addr6 = reinterpret_cast<sockaddr_in6*>(&storage);
-            ipv6_storage_t ip6{};
+            ipv6_storage_t ip6 {};
             std::memcpy(ip6.data(), &addr6->sin6_addr, ip6.size());
             out_ip = ip6;
             out_port = ::ntohs(addr6->sin6_port);

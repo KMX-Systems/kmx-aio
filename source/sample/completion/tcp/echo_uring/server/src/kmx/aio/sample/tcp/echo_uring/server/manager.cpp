@@ -25,7 +25,8 @@ namespace kmx::aio::sample::tcp::echo_uring::server
 
     void manager::free_buffer(int index)
     {
-        if (index < 0) return;
+        if (index < 0)
+            return;
         std::lock_guard<std::mutex> lock(buf_mutex_);
         free_buf_indices_.push_back(index);
     }
@@ -40,12 +41,10 @@ namespace kmx::aio::sample::tcp::echo_uring::server
 
         std::signal(SIGPIPE, SIG_IGN);
 
-        const kmx::aio::completion::executor_config exec_config {
-            .ring_entries = config_.epoll_max_events,
-            .max_completions = config_.epoll_max_events,
-            .thread_count = config_.scheduler_threads,
-            .core_id = -1
-        };
+        const kmx::aio::completion::executor_config exec_config {.ring_entries = config_.epoll_max_events,
+                                                                 .max_completions = config_.epoll_max_events,
+                                                                 .thread_count = config_.scheduler_threads,
+                                                                 .core_id = -1};
 
         executor_ = std::make_shared<kmx::aio::completion::executor>(exec_config);
         g_executor_ptr.store(executor_.get(), std::memory_order_release);
@@ -62,7 +61,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
             free_buf_indices_.push_back(static_cast<int>(i)); // LIFO
         }
 
-        auto reg_res = executor_->register_buffers(std::span<const ::iovec>{registered_buffers_.data(), registered_buffers_.size()});
+        auto reg_res = executor_->register_buffers(std::span<const ::iovec> {registered_buffers_.data(), registered_buffers_.size()});
         if (!reg_res)
         {
             logger::log(logger::level::error, std::source_location::current(), "Failed to register buffers: {}", reg_res.error().message());
@@ -99,7 +98,8 @@ namespace kmx::aio::sample::tcp::echo_uring::server
         stats->rx_active.store(true, std::memory_order_relaxed);
 
         int rx_buf_idx = allocate_buffer();
-        if (rx_buf_idx < 0) {
+        if (rx_buf_idx < 0)
+        {
             metrics_.errors.fetch_add(1u, std::memory_order_relaxed);
             co_return; // out of buffers
         }
@@ -157,7 +157,8 @@ namespace kmx::aio::sample::tcp::echo_uring::server
                                                 std::shared_ptr<connection_stats> stats) noexcept(false)
     {
         int tx_buf_idx = allocate_buffer();
-        if (tx_buf_idx < 0) {
+        if (tx_buf_idx < 0)
+        {
             co_return;
         }
 
@@ -174,9 +175,10 @@ namespace kmx::aio::sample::tcp::echo_uring::server
 
                 const auto remaining = transfer_limit_bytes - sent_bytes;
                 const auto chunk_size = std::min(buffer_size, remaining);
-                
+
                 // Usually we'd fill the buffer. For simple echo imitation, we just use random bytes.
-                for (std::size_t i = 0; i < chunk_size; ++i) {
+                for (std::size_t i = 0; i < chunk_size; ++i)
+                {
                     buffer_span[i] = static_cast<char>(i % 256);
                 }
 
@@ -197,7 +199,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
         catch (...)
         {
         }
-        
+
         free_buffer(tx_buf_idx);
 
         stats->tx_active.store(false, std::memory_order_relaxed);
@@ -226,11 +228,12 @@ namespace kmx::aio::sample::tcp::echo_uring::server
                 {
                     metrics_.errors.fetch_add(1u, std::memory_order_relaxed);
                     ++accept_errors;
-                    if (accept_errors > 5) break;
+                    if (accept_errors > 5)
+                        break;
                     continue;
                 }
 
-                accept_errors = 0; 
+                accept_errors = 0;
                 metrics_.total_connections.fetch_add(1u, std::memory_order_relaxed);
                 const auto client_id = ++client_counter;
                 auto stats = create_connection_stats(client_id);
@@ -259,7 +262,8 @@ namespace kmx::aio::sample::tcp::echo_uring::server
 
     void manager::update_closed_state(const std::shared_ptr<connection_stats>& stats)
     {
-        if (!stats) return;
+        if (!stats)
+            return;
 
         const auto rx_active = stats->rx_active.load(std::memory_order_relaxed);
         const auto tx_active = stats->tx_active.load(std::memory_order_relaxed);
@@ -284,7 +288,8 @@ namespace kmx::aio::sample::tcp::echo_uring::server
             std::cout << "\x1b[2J\x1b[H";
             std::cout << "Live Uring Connection Stats\n";
             std::cout << "────────────────────────────────────────────────────────────────────────\n";
-            std::cout << std::format("Server Totals: TX {} | RX {} | EC {} | Active {} | Total {}\n", ::kmx::aio::sample::common::format_bytes(bytes_sent),
+            std::cout << std::format("Server Totals: TX {} | RX {} | EC {} | Active {} | Total {}\n",
+                                     ::kmx::aio::sample::common::format_bytes(bytes_sent),
                                      ::kmx::aio::sample::common::format_bytes(bytes_recv), errors, active_conn, total_conn);
             std::cout << std::flush;
 

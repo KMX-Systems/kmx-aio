@@ -73,8 +73,8 @@ namespace kmx::aio::sample::udp::minimal::client
             const std::span<const std::byte> message_span {reinterpret_cast<const std::byte*>(message_buffer.data()),
                                                            message_buffer.size()};
 
-            if (auto send_result = co_await ep.send(message_span, reinterpret_cast<const sockaddr*>(&server_addr->storage),
-                                                   server_addr->length);
+            if (auto send_result =
+                    co_await ep.send(message_span, reinterpret_cast<const sockaddr*>(&server_addr->storage), server_addr->length);
                 !send_result)
             {
                 logger::log(logger::level::warn, std::source_location::current(), "Worker [{}]: Send failed: {}", worker_id,
@@ -84,8 +84,8 @@ namespace kmx::aio::sample::udp::minimal::client
                 co_return;
             }
 
-            logger::log(logger::level::debug, std::source_location::current(), "Worker [{}]: Request sent to {}:{}", worker_id,
-                        server_ip, config_.server_port);
+            logger::log(logger::level::debug, std::source_location::current(), "Worker [{}]: Request sent to {}:{}", worker_id, server_ip,
+                        config_.server_port);
 
             // Asynchronously receive response
             std::vector<std::byte> response_buffer(1024);

@@ -60,8 +60,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
         [[nodiscard]] task<void> handle_client(kmx::aio::completion::tcp::stream stream, const std::uint64_t client_id,
                                                std::shared_ptr<connection_stats> stats) noexcept(false);
 
-        [[nodiscard]] task<void> client_sender(std::shared_ptr<kmx::aio::completion::tcp::stream> stream,
-                                               const std::uint64_t client_id,
+        [[nodiscard]] task<void> client_sender(std::shared_ptr<kmx::aio::completion::tcp::stream> stream, const std::uint64_t client_id,
                                                std::shared_ptr<connection_stats> stats) noexcept(false);
 
         [[nodiscard]] task<void> connection_acceptor() noexcept(false);

@@ -3,8 +3,8 @@
 #include <chrono>
 #include <format>
 #include <iostream>
-#include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <openssl/ssl.h>
 #include <span>
 
 namespace kmx::aio::sample::tls::echo_completion_server
@@ -41,12 +41,10 @@ namespace kmx::aio::sample::tls::echo_completion_server
             return false;
         }
 
-        kmx::aio::completion::executor_config exec_config {
-            .ring_entries = config_.max_events,
-            .max_completions = config_.max_events,
-            .thread_count = config_.executor_threads,
-            .core_id = -1
-        };
+        kmx::aio::completion::executor_config exec_config {.ring_entries = config_.max_events,
+                                                           .max_completions = config_.max_events,
+                                                           .thread_count = config_.executor_threads,
+                                                           .core_id = -1};
 
         executor_ = std::make_shared<kmx::aio::completion::executor>(exec_config);
         g_executor_ptr.store(executor_.get(), std::memory_order_release);
@@ -100,6 +98,7 @@ namespace kmx::aio::sample::tls::echo_completion_server
 
         try
         {
+            stream.set_accept_state();
             auto handshake_result = co_await stream.handshake();
             if (!handshake_result)
             {
@@ -121,14 +120,15 @@ namespace kmx::aio::sample::tls::echo_completion_server
                 }
 
                 const auto bytes_read = *read_result;
-                if (bytes_read == 0) break;
+                if (bytes_read == 0)
+                    break;
 
                 total_received += bytes_read;
                 metrics_.bytes_received.fetch_add(bytes_read, std::memory_order_relaxed);
 
                 std::span<const char> write_span(buffer.data(), bytes_read);
                 auto write_result = co_await stream.write(write_span);
-                
+
                 if (!write_result)
                 {
                     metrics_.errors.fetch_add(1u, std::memory_order_relaxed);
@@ -136,7 +136,8 @@ namespace kmx::aio::sample::tls::echo_completion_server
                 }
 
                 metrics_.bytes_sent.fetch_add(bytes_read, std::memory_order_relaxed);
-                if (total_received >= transfer_limit_bytes) break;
+                if (total_received >= transfer_limit_bytes)
+                    break;
             }
         }
         catch (const std::exception&)
@@ -181,7 +182,8 @@ namespace kmx::aio::sample::tls::echo_completion_server
         {
             ::write(STDERR_FILENO, "[SIGNAL] Stopping TLS executor\n", 31);
             auto* exec = g_executor_ptr.load(std::memory_order_acquire);
-            if (exec) exec->stop();
+            if (exec)
+                exec->stop();
         }
     }
 }

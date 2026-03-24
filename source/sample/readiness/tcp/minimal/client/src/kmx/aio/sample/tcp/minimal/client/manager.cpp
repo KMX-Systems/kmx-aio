@@ -73,8 +73,7 @@ namespace kmx::aio::sample::tcp::minimal::client
             co_return std::unexpected(addr_result.error());
 
         // Attempt non-blocking connect using wrapper
-        auto connect_result =
-            fd_owner.connect(reinterpret_cast<const sockaddr*>(&addr_result->storage), addr_result->length);
+        auto connect_result = fd_owner.connect(reinterpret_cast<const sockaddr*>(&addr_result->storage), addr_result->length);
         const bool in_progress = (!connect_result && connect_result.error().value() == EINPROGRESS);
 
         if (!connect_result && !in_progress)

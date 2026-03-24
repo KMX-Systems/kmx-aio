@@ -46,8 +46,7 @@ namespace kmx::aio::completion::quic
         /// @param ip   IP address to bind to.
         /// @param port Port number to bind to.
         /// @return Success or an error code.
-        [[nodiscard]] task<std::expected<void, std::error_code>>
-            start(ip_address_t ip, port_t port) noexcept(false);
+        [[nodiscard]] task<std::expected<void, std::error_code>> start(ip_address_t ip, port_t port) noexcept(false);
 
         /// @brief Processes pending QUIC events (called from the event loop).
         /// @return Success or an error code.

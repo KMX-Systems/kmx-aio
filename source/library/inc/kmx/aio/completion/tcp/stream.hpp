@@ -27,10 +27,7 @@ namespace kmx::aio::completion::tcp
         /// @brief Constructs a stream from an executor and an owned socket descriptor.
         /// @param exec The completion executor providing io_uring operations.
         /// @param fd   Connected socket descriptor (ownership transferred).
-        stream(std::shared_ptr<executor> exec, file_descriptor&& fd) noexcept:
-            io_base(std::move(exec), std::move(fd))
-        {
-        }
+        stream(std::shared_ptr<executor> exec, file_descriptor&& fd) noexcept: io_base(std::move(exec), std::move(fd)) {}
 
         /// @brief Destructor. Closes the file descriptor.
         ~stream() noexcept = default;
@@ -75,8 +72,8 @@ namespace kmx::aio::completion::tcp
         /// @param buffer Source buffer; must be part of the registered iovec.
         /// @param buf_index Index into the registered iovec array.
         /// @return A task yielding success or an error.
-        [[nodiscard]] task<std::expected<void, std::error_code>> write_all_fixed(std::span<const char> buffer, const int buf_index) noexcept(false);
-
+        [[nodiscard]] task<std::expected<void, std::error_code>> write_all_fixed(std::span<const char> buffer,
+                                                                                 const int buf_index) noexcept(false);
     };
 
 } // namespace kmx::aio::completion::tcp

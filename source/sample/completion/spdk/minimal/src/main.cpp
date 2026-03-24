@@ -10,8 +10,8 @@
 
 #include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/completion/spdk/device.hpp>
-#include <kmx/aio/task.hpp>
 #include <kmx/aio/completion/spdk/runtime.hpp>
+#include <kmx/aio/task.hpp>
 #include <kmx/logger.hpp>
 
 namespace kmx::aio::completion::spdk::minimal
@@ -32,21 +32,18 @@ namespace kmx::aio::completion::spdk::minimal
         const auto hugepages = read_nr_hugepages();
         if (hugepages == 0u)
         {
-            kmx::logger::log(kmx::logger::level::warn,
-                             std::source_location::current(),
+            kmx::logger::log(kmx::logger::level::warn, std::source_location::current(),
                              "SPDK runtime hint: no hugepages are configured (nr_hugepages=0). "
                              "Run: echo 1024 | sudo tee /proc/sys/vm/nr_hugepages");
         }
 
-        kmx::logger::log(kmx::logger::level::warn,
-                         std::source_location::current(),
+        kmx::logger::log(kmx::logger::level::warn, std::source_location::current(),
                          "SPDK runtime hint: ensure SPDK libs are discoverable at runtime. "
                          "Either run `sudo ldconfig` after install or start with "
                          "`LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH`.");
     }
 
-    auto run_spdk_probe(std::shared_ptr<kmx::aio::completion::executor> exec,
-                        std::shared_ptr<std::atomic_bool> ok,
+    auto run_spdk_probe(std::shared_ptr<kmx::aio::completion::executor> exec, std::shared_ptr<std::atomic_bool> ok,
                         std::string bdev_name) -> kmx::aio::task<void>
     {
         kmx::aio::completion::spdk::device_config config {
@@ -58,9 +55,7 @@ namespace kmx::aio::completion::spdk::minimal
         auto device_result = kmx::aio::completion::spdk::device::create(exec, config);
         if (!device_result)
         {
-            kmx::logger::log(kmx::logger::level::error,
-                             std::source_location::current(),
-                             "SPDK device create failed: {}",
+            kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK device create failed: {}",
                              device_result.error().message());
             log_spdk_runtime_hints(bdev_name);
             exec->stop();
@@ -78,9 +73,7 @@ namespace kmx::aio::completion::spdk::minimal
         const auto write_result = co_await device.write(0u, write_block);
         if (!write_result)
         {
-            kmx::logger::log(kmx::logger::level::error,
-                             std::source_location::current(),
-                             "SPDK write failed: {}",
+            kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK write failed: {}",
                              write_result.error().message());
             exec->stop();
             co_return;
@@ -89,9 +82,7 @@ namespace kmx::aio::completion::spdk::minimal
         const auto read_result = co_await device.read(0u, read_block);
         if (!read_result)
         {
-            kmx::logger::log(kmx::logger::level::error,
-                             std::source_location::current(),
-                             "SPDK read failed: {}",
+            kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK read failed: {}",
                              read_result.error().message());
             exec->stop();
             co_return;
@@ -100,9 +91,7 @@ namespace kmx::aio::completion::spdk::minimal
         const auto flush_result = co_await device.flush();
         if (!flush_result)
         {
-            kmx::logger::log(kmx::logger::level::error,
-                             std::source_location::current(),
-                             "SPDK flush failed: {}",
+            kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK flush failed: {}",
                              flush_result.error().message());
             exec->stop();
             co_return;
@@ -111,15 +100,11 @@ namespace kmx::aio::completion::spdk::minimal
         if (std::equal(write_block.begin(), write_block.end(), read_block.begin()))
         {
             ok->store(true, std::memory_order_relaxed);
-            kmx::logger::log(kmx::logger::level::info,
-                             std::source_location::current(),
-                             "SPDK minimal sample completed successfully");
+            kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "SPDK minimal sample completed successfully");
         }
         else
         {
-            kmx::logger::log(kmx::logger::level::error,
-                             std::source_location::current(),
-                             "SPDK round-trip mismatch");
+            kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK round-trip mismatch");
         }
 
         exec->stop();
@@ -143,8 +128,8 @@ int main(int argc, char** argv) noexcept
         // Release hardware resources cleanly via spdk lifecycle
         if (auto fini = kmx::aio::completion::spdk::runtime::finalize(); !fini)
         {
-            kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
-                             "SPDK finalize failed: {}", fini.error().message());
+            kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK finalize failed: {}",
+                             fini.error().message());
         }
 
         return ok->load(std::memory_order_relaxed) ? 0 : 1;

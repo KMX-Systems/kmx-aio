@@ -17,7 +17,7 @@ namespace kmx::aio::sample::udp::echo::client
         const auto server_ip = kmx::aio::ip_to_string(config_.server_address);
         logger::log(logger::level::info, std::source_location::current(),
                     "Starting UDP Echo Client: {} concurrent workers, {} messages/worker to {}:{}", config_.concurrency,
-                config_.messages_per_worker, server_ip, config_.server_port);
+                    config_.messages_per_worker, server_ip, config_.server_port);
 
         readiness::executor_config exec_cfg {
             .thread_count = config_.executor_threads, .max_events = config_.max_events, .timeout_ms = config_.timeout_ms};
@@ -75,8 +75,8 @@ namespace kmx::aio::sample::udp::echo::client
                     logger::log(logger::level::info, std::source_location::current(), "Worker [{}]: Sent {} messages so far", worker_id,
                                 msg);
                 }
-                auto send_result = co_await ep.send(send_buf, reinterpret_cast<const sockaddr*>(&server_addr->storage),
-                                                    server_addr->length);
+                auto send_result =
+                    co_await ep.send(send_buf, reinterpret_cast<const sockaddr*>(&server_addr->storage), server_addr->length);
                 if (!send_result)
                 {
                     logger::log(logger::level::warn, std::source_location::current(), "Worker [{}]: Send error: {}", worker_id,

@@ -46,9 +46,7 @@ int main(int argc, char** argv) noexcept
         const auto enumerate_result = kmx::aio::completion::spdk::runtime::enumerate_bdevs();
         if (!enumerate_result)
         {
-            kmx::logger::log(kmx::logger::level::error,
-                             std::source_location::current(),
-                             "SPDK bdev enumeration failed: {}",
+            kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK bdev enumeration failed: {}",
                              enumerate_result.error().message());
             return 1;
         }
@@ -56,23 +54,17 @@ int main(int argc, char** argv) noexcept
         const auto& available = *enumerate_result;
         if (available.empty())
         {
-            kmx::logger::log(kmx::logger::level::warn,
-                             std::source_location::current(),
+            kmx::logger::log(kmx::logger::level::warn, std::source_location::current(),
                              "SPDK initialized but no bdevs are currently registered.");
             return 1;
         }
 
-        kmx::logger::log(kmx::logger::level::info,
-                         std::source_location::current(),
-                         "Discovered {} registered SPDK bdev(s):",
-                         available.size());
+        kmx::logger::log(kmx::logger::level::info, std::source_location::current(),
+                         "Discovered {} registered SPDK bdev(s):", available.size());
 
-        for (const auto& name : available)
+        for (const auto& name: available)
         {
-            kmx::logger::log(kmx::logger::level::info,
-                             std::source_location::current(),
-                             "  - {}",
-                             name);
+            kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "  - {}", name);
         }
 
         if (requested.empty())
@@ -82,33 +74,28 @@ int main(int argc, char** argv) noexcept
         std::vector<std::string> targets {};
         targets.reserve(requested.size());
 
-        for (const auto& candidate : requested)
+        for (const auto& candidate: requested)
         {
             if (available_set.contains(candidate))
                 targets.emplace_back(candidate);
             else
-                kmx::logger::log(kmx::logger::level::warn,
-                                 std::source_location::current(),
-                                 "Requested bdev '{}' is not in registered list.",
-                                 candidate);
+                kmx::logger::log(kmx::logger::level::warn, std::source_location::current(),
+                                 "Requested bdev '{}' is not in registered list.", candidate);
         }
 
         if (targets.empty())
         {
-            kmx::logger::log(kmx::logger::level::warn,
-                             std::source_location::current(),
+            kmx::logger::log(kmx::logger::level::warn, std::source_location::current(),
                              "No requested bdevs matched currently registered names.");
             return 1;
         }
 
-        kmx::logger::log(kmx::logger::level::info,
-                         std::source_location::current(),
-                         "Validating {} requested SPDK bdev(s)...",
+        kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "Validating {} requested SPDK bdev(s)...",
                          targets.size());
 
         std::vector<std::string> found {};
 
-        for (const auto& candidate : targets)
+        for (const auto& candidate: targets)
         {
             kmx::aio::completion::spdk::device_config cfg {
                 .bdev_name = candidate,
@@ -119,56 +106,38 @@ int main(int argc, char** argv) noexcept
             auto create_result = kmx::aio::completion::spdk::device::create(exec, cfg);
             if (create_result)
             {
-                kmx::logger::log(kmx::logger::level::info,
-                                 std::source_location::current(),
-                                 "Found bdev: {}",
-                                 candidate);
+                kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "Found bdev: {}", candidate);
                 found.emplace_back(candidate);
                 continue;
             }
 
-            kmx::logger::log(kmx::logger::level::debug,
-                             std::source_location::current(),
-                             "Probe failed for {}: {}",
-                             candidate,
+            kmx::logger::log(kmx::logger::level::debug, std::source_location::current(), "Probe failed for {}: {}", candidate,
                              create_result.error().message());
         }
 
         if (found.empty())
         {
-            kmx::logger::log(kmx::logger::level::warn,
-                             std::source_location::current(),
-                             "No requested SPDK bdevs could be opened.");
-            kmx::logger::log(kmx::logger::level::info,
-                             std::source_location::current(),
+            kmx::logger::log(kmx::logger::level::warn, std::source_location::current(), "No requested SPDK bdevs could be opened.");
+            kmx::logger::log(kmx::logger::level::info, std::source_location::current(),
                              "Tip: run without args to list registered bdev names.");
-            kmx::logger::log(kmx::logger::level::info,
-                             std::source_location::current(),
-                             "Validation usage: {} <bdev1> <bdev2>",
-                             argv[0]);
+            kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "Validation usage: {} <bdev1> <bdev2>", argv[0]);
             return 1;
         }
 
-        kmx::logger::log(kmx::logger::level::info,
-                         std::source_location::current(),
-                         "Discovered {} SPDK bdev candidate(s).",
-                         found.size());
+        kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "Discovered {} SPDK bdev candidate(s).", found.size());
 
         // Release hardware resources cleanly via spdk lifecycle
         if (auto fini = kmx::aio::completion::spdk::runtime::finalize(); !fini)
         {
-            kmx::logger::log(kmx::logger::level::error, std::source_location::current(), 
-                             "SPDK finalize failed: {}", fini.error().message());
+            kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK finalize failed: {}",
+                             fini.error().message());
         }
 
         return 0;
     }
     catch (const std::exception& e)
     {
-        kmx::logger::log(kmx::logger::level::error,
-                         std::source_location::current(),
-                         "Fatal error: {}",
-                         e.what());
+        kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Fatal error: {}", e.what());
         return 1;
     }
 }

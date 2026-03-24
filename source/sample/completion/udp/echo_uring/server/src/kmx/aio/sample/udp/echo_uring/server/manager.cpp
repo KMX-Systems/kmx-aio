@@ -16,12 +16,10 @@ namespace kmx::aio::sample::udp::echo_uring::server
         logger::log(logger::level::info, std::source_location::current(), "Starting UDP Uring Echo Server on {}:{}", bind_ip,
                     config_.bind_port);
 
-        kmx::aio::completion::executor_config exec_cfg {
-            .ring_entries = config_.max_events,
-            .max_completions = config_.max_events,
-            .thread_count = config_.executor_threads,
-            .core_id = -1
-        };
+        kmx::aio::completion::executor_config exec_cfg {.ring_entries = config_.max_events,
+                                                        .max_completions = config_.max_events,
+                                                        .thread_count = config_.executor_threads,
+                                                        .core_id = -1};
 
         executor_ = std::make_shared<kmx::aio::completion::executor>(exec_cfg);
         g_executor_ptr.store(executor_.get(), std::memory_order_release);

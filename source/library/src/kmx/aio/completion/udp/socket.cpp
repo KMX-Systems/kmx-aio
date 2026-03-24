@@ -4,8 +4,7 @@
 
 namespace kmx::aio::completion::udp
 {
-    socket::create_result socket::create(std::shared_ptr<executor> exec, const int domain,
-                                         const int type, const int protocol) noexcept
+    socket::create_result socket::create(std::shared_ptr<executor> exec, const int domain, const int type, const int protocol) noexcept
     {
         auto res = file_descriptor::create_socket(domain, type, protocol);
         if (!res)

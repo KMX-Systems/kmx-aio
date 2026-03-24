@@ -44,8 +44,7 @@ namespace kmx::aio::sample::udp::minimal::server
 
         logger::log(logger::level::info, std::source_location::current(),
                     "═══════════════════════════════════════════════════════════════");
-        logger::log(logger::level::info, std::source_location::current(), "Server: Started. Bound to {}:{}", bind_ip,
-                    config_.bind_port);
+        logger::log(logger::level::info, std::source_location::current(), "Server: Started. Bound to {}:{}", bind_ip, config_.bind_port);
         logger::log(logger::level::info, std::source_location::current(), "Server: Press Ctrl+C to shutdown");
         logger::log(logger::level::info, std::source_location::current(),
                     "═══════════════════════════════════════════════════════════════");

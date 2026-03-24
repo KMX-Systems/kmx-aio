@@ -8,8 +8,7 @@
 
 namespace kmx::aio::completion::tcp
 {
-    listener::listener(std::shared_ptr<executor> exec, const ip_address_t ip, const port_t port) noexcept(false):
-        io_base(std::move(exec))
+    listener::listener(std::shared_ptr<executor> exec, const ip_address_t ip, const port_t port) noexcept(false): io_base(std::move(exec))
     {
         auto sock_res = file_descriptor::create_socket(ip_family(ip), SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
         if (!sock_res)
@@ -52,8 +51,7 @@ namespace kmx::aio::completion::tcp
         if (const auto res = client_fd.set_as_non_blocking(); !res)
             co_return std::unexpected(res.error());
 
-        logger::log(logger::level::debug, std::source_location::current(),
-                    "completion::tcp::listener accepted fd: {}", client_fd.get());
+        logger::log(logger::level::debug, std::source_location::current(), "completion::tcp::listener accepted fd: {}", client_fd.get());
 
         co_return client_fd;
     }

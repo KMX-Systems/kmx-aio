@@ -25,8 +25,8 @@
 #include <kmx/aio/readiness/udp/socket.hpp>
 
 // Readiness Model Security/Protocol Overlays
-#include <kmx/aio/readiness/tls/stream.hpp>
 #include <kmx/aio/readiness/quic/engine.hpp>
+#include <kmx/aio/readiness/tls/stream.hpp>
 
 // Completion Model (kmx::aio::completion)
 #include <kmx/aio/completion/executor.hpp>
@@ -37,14 +37,14 @@
 #include <kmx/aio/completion/udp/socket.hpp>
 
 // Completion Model Security/Protocol/HW Overlays
-#include <kmx/aio/completion/tls/stream.hpp>
 #include <kmx/aio/completion/quic/engine.hpp>
-#include <kmx/aio/completion/xdp/socket.hpp>
 #include <kmx/aio/completion/spdk/device.hpp>
+#include <kmx/aio/completion/tls/stream.hpp>
+#include <kmx/aio/completion/xdp/socket.hpp>
 
 // Descriptors (Internal / Low-Level)
-#include <kmx/aio/readiness/descriptor/epoll.hpp>
 #include <kmx/aio/file_descriptor.hpp>
+#include <kmx/aio/readiness/descriptor/epoll.hpp>
 #include <kmx/aio/readiness/descriptor/timer.hpp>
 
 // Logging

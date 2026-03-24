@@ -31,12 +31,12 @@ namespace kmx::aio::completion
     /// @brief Statistics for io_uring operations and executor performance.
     struct statistics
     {
-        std::atomic_uint64_t total_submissions {};    ///< Total SQEs submitted.
-        std::atomic_uint64_t total_completions {};    ///< Total CQEs reaped.
-        std::atomic_uint64_t total_tasks_spawned {};  ///< Total top-level tasks spawned.
-        std::atomic_uint64_t total_tasks_completed {};///< Total top-level tasks completed.
-        std::atomic_uint64_t error_count {};          ///< Total errors encountered.
-        std::atomic_uint64_t submission_full_count {};///< Times the SQ was full.
+        std::atomic_uint64_t total_submissions {};     ///< Total SQEs submitted.
+        std::atomic_uint64_t total_completions {};     ///< Total CQEs reaped.
+        std::atomic_uint64_t total_tasks_spawned {};   ///< Total top-level tasks spawned.
+        std::atomic_uint64_t total_tasks_completed {}; ///< Total top-level tasks completed.
+        std::atomic_uint64_t error_count {};           ///< Total errors encountered.
+        std::atomic_uint64_t submission_full_count {}; ///< Times the SQ was full.
 
         /// @brief Resets all counters to zero.
         void reset() noexcept;
@@ -69,8 +69,8 @@ namespace kmx::aio::completion
         /// @param offset File offset (0 for sockets).
         /// @return A task yielding the number of bytes read, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task<std::expected<std::size_t, std::error_code>>
-            async_read(const fd_t fd, std::span<char> buffer, const std::uint64_t offset = 0u) noexcept(false);
+        [[nodiscard]] task<std::expected<std::size_t, std::error_code>> async_read(const fd_t fd, std::span<char> buffer,
+                                                                                   const std::uint64_t offset = 0u) noexcept(false);
 
         /// @brief Prepares an asynchronous write from the provided buffer.
         /// @param fd     File descriptor to write to.
@@ -78,19 +78,17 @@ namespace kmx::aio::completion
         /// @param offset File offset (0 for sockets).
         /// @return A task yielding the number of bytes written, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task<std::expected<std::size_t, std::error_code>>
-            async_write(const fd_t fd, std::span<const char> buffer, const std::uint64_t offset = 0u) noexcept(false);
+        [[nodiscard]] task<std::expected<std::size_t, std::error_code>> async_write(const fd_t fd, std::span<const char> buffer,
+                                                                                    const std::uint64_t offset = 0u) noexcept(false);
 
         /// @brief Registers a set of memory buffers with the kernel for zero-copy I/O.
         /// @param iovecs Array of iovec structures describing the buffers.
         /// @return Success or error.
-        [[nodiscard]] std::expected<void, std::error_code>
-            register_buffers(std::span<const ::iovec> iovecs) noexcept;
+        [[nodiscard]] std::expected<void, std::error_code> register_buffers(std::span<const ::iovec> iovecs) noexcept;
 
         /// @brief Unregisters previously registered memory buffers.
         /// @return Success or error.
-        [[nodiscard]] std::expected<void, std::error_code>
-            unregister_buffers() noexcept;
+        [[nodiscard]] std::expected<void, std::error_code> unregister_buffers() noexcept;
 
         /// @brief Prepares an asynchronous read into a pre-registered buffer.
         /// @param fd        File descriptor to read from.
@@ -98,8 +96,9 @@ namespace kmx::aio::completion
         /// @param offset    File offset (0 for sockets).
         /// @param buf_index The index of the registered buffer.
         /// @return A task yielding the number of bytes read, or an error.
-        [[nodiscard]] task<std::expected<std::size_t, std::error_code>>
-            async_read_fixed(const fd_t fd, std::span<char> buffer, const std::uint64_t offset, const int buf_index) noexcept(false);
+        [[nodiscard]] task<std::expected<std::size_t, std::error_code>> async_read_fixed(const fd_t fd, std::span<char> buffer,
+                                                                                         const std::uint64_t offset,
+                                                                                         const int buf_index) noexcept(false);
 
         /// @brief Prepares an asynchronous write from a pre-registered buffer.
         /// @param fd        File descriptor to write to.
@@ -107,8 +106,9 @@ namespace kmx::aio::completion
         /// @param offset    File offset (0 for sockets).
         /// @param buf_index The index of the registered buffer.
         /// @return A task yielding the number of bytes written, or an error.
-        [[nodiscard]] task<std::expected<std::size_t, std::error_code>>
-            async_write_fixed(const fd_t fd, std::span<const char> buffer, const std::uint64_t offset, const int buf_index) noexcept(false);
+        [[nodiscard]] task<std::expected<std::size_t, std::error_code>> async_write_fixed(const fd_t fd, std::span<const char> buffer,
+                                                                                          const std::uint64_t offset,
+                                                                                          const int buf_index) noexcept(false);
 
         /// @brief Prepares an asynchronous accept on a listening socket.
         /// @param listen_fd The listening socket file descriptor.
@@ -116,8 +116,8 @@ namespace kmx::aio::completion
         /// @param addrlen   Pointer to the address length.
         /// @return A task yielding the accepted client fd, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task<std::expected<fd_t, std::error_code>>
-            async_accept(const fd_t listen_fd, sockaddr_storage& addr, socklen_t& addrlen) noexcept(false);
+        [[nodiscard]] task<std::expected<fd_t, std::error_code>> async_accept(const fd_t listen_fd, sockaddr_storage& addr,
+                                                                              socklen_t& addrlen) noexcept(false);
 
         /// @brief Prepares an asynchronous connect.
         /// @param fd   Socket file descriptor.
@@ -125,8 +125,8 @@ namespace kmx::aio::completion
         /// @param addrlen Address length.
         /// @return A task yielding success or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task<std::expected<void, std::error_code>>
-            async_connect(const fd_t fd, const sockaddr* addr, const socklen_t addrlen) noexcept(false);
+        [[nodiscard]] task<std::expected<void, std::error_code>> async_connect(const fd_t fd, const sockaddr* addr,
+                                                                               const socklen_t addrlen) noexcept(false);
 
         /// @brief Prepares an asynchronous recvmsg.
         /// @param fd   Socket file descriptor.
@@ -134,8 +134,8 @@ namespace kmx::aio::completion
         /// @param flags Flags forwarded to recvmsg.
         /// @return A task yielding the number of bytes received, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task<std::expected<std::size_t, std::error_code>>
-            async_recvmsg(const fd_t fd, msghdr* msg, const unsigned int flags = 0u) noexcept(false);
+        [[nodiscard]] task<std::expected<std::size_t, std::error_code>> async_recvmsg(const fd_t fd, msghdr* msg,
+                                                                                      const unsigned int flags = 0u) noexcept(false);
 
         /// @brief Prepares an asynchronous sendmsg.
         /// @param fd   Socket file descriptor.
@@ -143,15 +143,14 @@ namespace kmx::aio::completion
         /// @param flags Flags forwarded to sendmsg.
         /// @return A task yielding the number of bytes sent, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task<std::expected<std::size_t, std::error_code>>
-            async_sendmsg(const fd_t fd, const msghdr* msg, const unsigned int flags = 0u) noexcept(false);
+        [[nodiscard]] task<std::expected<std::size_t, std::error_code>> async_sendmsg(const fd_t fd, const msghdr* msg,
+                                                                                      const unsigned int flags = 0u) noexcept(false);
 
         /// @brief Prepares an asynchronous cancellation of an in-flight operation.
         /// @param user_data The user_data of the SQE to cancel.
         /// @return A task yielding success or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task<std::expected<void, std::error_code>>
-            async_cancel(const std::uint64_t user_data) noexcept(false);
+        [[nodiscard]] task<std::expected<void, std::error_code>> async_cancel(const std::uint64_t user_data) noexcept(false);
 
         /// @brief Submits a root task to the system.
         /// @param t The top-level coroutine task.
@@ -174,8 +173,8 @@ namespace kmx::aio::completion
         /// @brief Per-operation context passed through io_uring user_data.
         struct io_context
         {
-            std::coroutine_handle<> continuation {};  ///< Coroutine to resume on completion.
-            int result {};                            ///< Result from the CQE (bytes or -errno).
+            std::coroutine_handle<> continuation {}; ///< Coroutine to resume on completion.
+            int result {};                           ///< Result from the CQE (bytes or -errno).
         };
 
         /// @brief Awaiter that suspends a coroutine until an io_uring CQE arrives.
@@ -193,7 +192,6 @@ namespace kmx::aio::completion
         };
 
     private:
-
         /// @brief Submits all pending SQEs to the kernel.
         /// @return Number of submitted entries, or error.
         [[nodiscard]] std::expected<std::size_t, std::error_code> submit() noexcept;

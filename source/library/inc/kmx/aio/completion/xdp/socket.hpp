@@ -20,16 +20,16 @@ namespace kmx::aio::completion::xdp
     /// @brief Configuration for AF_XDP socket creation.
     struct socket_config
     {
-        std::string_view interface_name {};  ///< Network interface to attach to (e.g. "eth0").
-        std::uint32_t queue_id {};           ///< NIC hardware queue index.
-        std::uint32_t frame_size = 4096u;    ///< UMEM frame size in bytes.
-        std::uint32_t frame_count = 4096u;   ///< Number of UMEM frames.
-        std::uint32_t fill_ring_size = 2048u;///< Fill ring entry count.
-        std::uint32_t comp_ring_size = 2048u;///< Completion ring entry count.
-        std::uint32_t rx_ring_size = 2048u;  ///< RX ring entry count.
-        std::uint32_t tx_ring_size = 2048u;  ///< TX ring entry count.
-        bool force_zero_copy = false;        ///< Force XDP_ZEROCOPY mode. Fails if driver doesn't support it.
-        bool need_wakeup = true;             ///< Enable XDP_USE_NEED_WAKEUP to optimize CPU usage.
+        std::string_view interface_name {};   ///< Network interface to attach to (e.g. "eth0").
+        std::uint32_t queue_id {};            ///< NIC hardware queue index.
+        std::uint32_t frame_size = 4096u;     ///< UMEM frame size in bytes.
+        std::uint32_t frame_count = 4096u;    ///< Number of UMEM frames.
+        std::uint32_t fill_ring_size = 2048u; ///< Fill ring entry count.
+        std::uint32_t comp_ring_size = 2048u; ///< Completion ring entry count.
+        std::uint32_t rx_ring_size = 2048u;   ///< RX ring entry count.
+        std::uint32_t tx_ring_size = 2048u;   ///< TX ring entry count.
+        bool force_zero_copy = false;         ///< Force XDP_ZEROCOPY mode. Fails if driver doesn't support it.
+        bool need_wakeup = true;              ///< Enable XDP_USE_NEED_WAKEUP to optimize CPU usage.
     };
 
     /// @brief Statistics for AF_XDP pipeline.
@@ -42,20 +42,20 @@ namespace kmx::aio::completion::xdp
         std::uint64_t umem_alloc_failures {};  ///< Times UMEM frame allocation failed.
 
         // Kernel-level hardware/driver stats.
-        std::uint64_t kernel_rx_dropped {};           ///< Dropped before reaching ring.
-        std::uint64_t kernel_rx_invalid_descs {};     ///< Invalid descriptors in RX.
-        std::uint64_t kernel_tx_invalid_descs {};     ///< Invalid descriptors in TX.
-        std::uint64_t kernel_rx_ring_full {};         ///< Hardware dropped because RX ring was full.
-        std::uint64_t kernel_rx_fill_ring_empty {};   ///< Hardware had to drop because fill ring was empty.
-        std::uint64_t kernel_tx_ring_empty {};        ///< Hardware couldn't pull because TX ring empty.
+        std::uint64_t kernel_rx_dropped {};         ///< Dropped before reaching ring.
+        std::uint64_t kernel_rx_invalid_descs {};   ///< Invalid descriptors in RX.
+        std::uint64_t kernel_tx_invalid_descs {};   ///< Invalid descriptors in TX.
+        std::uint64_t kernel_rx_ring_full {};       ///< Hardware dropped because RX ring was full.
+        std::uint64_t kernel_rx_fill_ring_empty {}; ///< Hardware had to drop because fill ring was empty.
+        std::uint64_t kernel_tx_ring_empty {};      ///< Hardware couldn't pull because TX ring empty.
     };
 
     /// @brief A received raw ethernet frame from AF_XDP.
     struct frame
     {
-        std::span<std::byte> data {};         ///< View into the UMEM region containing the frame.
-        std::uint64_t addr {};                ///< UMEM address for returning the frame to the fill ring.
-        std::uint32_t length {};              ///< Length of the frame in bytes.
+        std::span<std::byte> data {}; ///< View into the UMEM region containing the frame.
+        std::uint64_t addr {};        ///< UMEM address for returning the frame to the fill ring.
+        std::uint32_t length {};      ///< Length of the frame in bytes.
     };
 
     /// @brief AF_XDP socket for zero-copy raw packet processing.
@@ -72,8 +72,8 @@ namespace kmx::aio::completion::xdp
         /// @param exec   The completion executor.
         /// @param config AF_XDP configuration.
         /// @return A configured socket, or an error code.
-        [[nodiscard]] static std::expected<socket, std::error_code>
-            create(std::shared_ptr<executor> exec, const socket_config& config) noexcept;
+        [[nodiscard]] static std::expected<socket, std::error_code> create(std::shared_ptr<executor> exec,
+                                                                           const socket_config& config) noexcept;
 
         /// @brief Default constructor creates an uninitialized socket.
         socket() noexcept = default;
@@ -100,8 +100,7 @@ namespace kmx::aio::completion::xdp
         /// @param data The frame data to transmit.
         /// @return A task yielding success or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task<std::expected<void, std::error_code>>
-            send(std::span<const std::byte> data) noexcept(false);
+        [[nodiscard]] task<std::expected<void, std::error_code>> send(std::span<const std::byte> data) noexcept(false);
 
         /// @brief Returns a frame's UMEM address to the fill ring for reuse.
         /// @param addr The UMEM address from a previously received frame.

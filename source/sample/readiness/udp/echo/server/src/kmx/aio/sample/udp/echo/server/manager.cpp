@@ -15,8 +15,7 @@ namespace kmx::aio::sample::udp::echo::server
     bool manager::run() noexcept(false)
     {
         const auto bind_ip = kmx::aio::ip_to_string(config_.bind_address);
-        logger::log(logger::level::info, std::source_location::current(), "Starting UDP Echo Server on {}:{}", bind_ip,
-                    config_.bind_port);
+        logger::log(logger::level::info, std::source_location::current(), "Starting UDP Echo Server on {}:{}", bind_ip, config_.bind_port);
 
         readiness::executor_config exec_cfg {
             .thread_count = config_.executor_threads, .max_events = config_.max_events, .timeout_ms = config_.timeout_ms};

@@ -19,10 +19,7 @@ namespace kmx::aio::completion
 
         explicit io_base(std::shared_ptr<executor> exec) noexcept: exec_(std::move(exec)) {}
 
-        io_base(std::shared_ptr<executor> exec, file_descriptor&& fd) noexcept:
-            exec_(std::move(exec)), fd_(std::move(fd))
-        {
-        }
+        io_base(std::shared_ptr<executor> exec, file_descriptor&& fd) noexcept: exec_(std::move(exec)), fd_(std::move(fd)) {}
 
         io_base(const io_base&) = delete;
         io_base& operator=(const io_base&) = delete;

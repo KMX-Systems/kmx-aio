@@ -1,8 +1,8 @@
 #include <kmx/aio/file_descriptor.hpp>
 #include <kmx/aio/readiness/executor.hpp>
-#include <kmx/aio/task.hpp>
 #include <kmx/aio/readiness/tcp/listener.hpp>
 #include <kmx/aio/readiness/tcp/stream.hpp>
+#include <kmx/aio/task.hpp>
 #include <kmx/logger.hpp>
 
 #include <arpa/inet.h>

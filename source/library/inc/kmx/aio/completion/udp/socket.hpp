@@ -32,18 +32,13 @@ namespace kmx::aio::completion::udp
         /// @param type     Socket type flags.
         /// @param protocol Protocol number.
         /// @return A socket on success, or an error code.
-        [[nodiscard]] static create_result create(std::shared_ptr<executor> exec,
-                                                  int domain = AF_INET,
-                                                  int type = SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC,
-                                                  int protocol = 0) noexcept;
+        [[nodiscard]] static create_result create(std::shared_ptr<executor> exec, int domain = AF_INET,
+                                                  int type = SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, int protocol = 0) noexcept;
 
         /// @brief Constructs a socket from an executor and file descriptor.
         /// @param exec The completion executor.
         /// @param fd   UDP socket descriptor (ownership transferred).
-        socket(std::shared_ptr<executor> exec, file_descriptor&& fd) noexcept:
-            io_base(std::move(exec), std::move(fd))
-        {
-        }
+        socket(std::shared_ptr<executor> exec, file_descriptor&& fd) noexcept: io_base(std::move(exec), std::move(fd)) {}
 
         /// @brief Destructor.
         ~socket() noexcept = default;
@@ -77,7 +72,6 @@ namespace kmx::aio::completion::udp
         /// @param port The port to bind to.
         /// @return Success or an error code.
         [[nodiscard]] std::expected<void, std::error_code> bind(ip_address_t ip, port_t port) noexcept;
-
     };
 
 } // namespace kmx::aio::completion::udp

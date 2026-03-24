@@ -168,8 +168,7 @@ namespace kmx::aio::sample::tcp::echo::server
         co_return;
     }
 
-    kmx::aio::task<void> manager::client_sender(std::shared_ptr<kmx::aio::readiness::tcp::stream> stream,
-                                                const std::uint64_t client_id,
+    kmx::aio::task<void> manager::client_sender(std::shared_ptr<kmx::aio::readiness::tcp::stream> stream, const std::uint64_t client_id,
                                                 std::shared_ptr<connection_stats> stats) noexcept(false)
     {
         try
@@ -233,7 +232,7 @@ namespace kmx::aio::sample::tcp::echo::server
         }
 
         logger::log(logger::level::info, std::source_location::current(), "Acceptor: Listening on {}:{} (backlog: 128)", bind_ip,
-                config_.bind_port);
+                    config_.bind_port);
 
         std::uint64_t client_counter = 0;
         std::uint64_t accept_count = 0;
