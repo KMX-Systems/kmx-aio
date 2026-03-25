@@ -36,7 +36,8 @@ StaticLibrary {
 
         if (project.enable_openonload)
         {
-            libs.push("onload_ext");
+            // OpenOnload calls are header-gated in the implementation,
+            // so do not force a hard link dependency on hosts without libonload_ext.
         }
 
         if (project.enable_spdk)
@@ -102,6 +103,7 @@ StaticLibrary {
     files: [
         // Public headers
         "inc/kmx/**.hpp",
+        "inc/kmx/aio/**.hpp",
 
         // Core/runtime sources
         "src/kmx/aio/**.cpp",

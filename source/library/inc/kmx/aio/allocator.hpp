@@ -7,7 +7,6 @@
     #include <cstddef>
     #include <cstdlib>
     #include <cstring>
-    #include <new>
     #include <vector>
 #endif
 

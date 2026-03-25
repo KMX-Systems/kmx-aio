@@ -5,8 +5,11 @@
 
 #include <kmx/aio/error_code.hpp>
 
-
 #if defined(KMX_AIO_FEATURE_SPDK)
+    #include <atomic>
+    #include <mutex>
+    #include <thread>
+
     #include <spdk/bdev.h>
     #include <spdk/env.h>
     #include <spdk/init.h>
@@ -40,7 +43,7 @@ namespace kmx::aio::completion::spdk::runtime
     void on_subsystem_done(void* ctx) noexcept
     {
         auto* sub_ctx = static_cast<subsystem_ctx*>(ctx);
-        sub_ctx->rc{};
+        sub_ctx->rc = {};
         sub_ctx->done.store(true, std::memory_order_release);
     }
 

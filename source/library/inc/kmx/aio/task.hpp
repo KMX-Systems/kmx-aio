@@ -19,6 +19,7 @@ namespace kmx::aio
     struct get_stop_token_t
     {
     };
+
     constexpr get_stop_token_t get_stop_token {};
 
     template <typename T>

@@ -5,6 +5,8 @@
 #include <kmx/aio/completion/spdk/runtime.hpp>
 
 #include <kmx/aio/error_code.hpp>
+#include <spdk/bdev.h>
+#include <xdp/xsk.h>
 
 #include <cstddef>
 #include <cstring>

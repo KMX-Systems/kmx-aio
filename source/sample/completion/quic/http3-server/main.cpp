@@ -12,7 +12,7 @@ task<void> handle_stream(std::span<char> data)
 {
     std::string_view request(data.data(), data.size());
     std::cout << "Received QUIC stream data (HTTP req):\n" << request << "\n";
-    
+
     // Simple HTTP/0.9 over QUIC response
     std::string response = "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n<html><body><h1>Hello from KMX AIO QUIC HTTP3 Server!</h1></body></html>\n";
     std::copy(response.begin(), response.end(), data.data()); // Write back (echo style but replacing with response)
@@ -37,7 +37,7 @@ task<void> async_main(std::shared_ptr<executor> exec)
     }
 
     std::cout << "QUIC (HTTP3) server listening on 127.0.0.1:12345\n";
-    
+
     auto process_res = co_await engine.process();
     if (!process_res)
     {
@@ -48,7 +48,7 @@ task<void> async_main(std::shared_ptr<executor> exec)
 
 int main()
 {
-    try 
+    try
     {
         auto exec = std::make_shared<executor>();
         exec->spawn(async_main(exec));

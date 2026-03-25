@@ -33,7 +33,7 @@ task<void> async_main(std::shared_ptr<executor> exec)
     }
 
     std::cout << "QUIC server listening on 127.0.0.1:12345\n";
-    
+
     auto process_res = co_await engine.process();
     if (!process_res)
     {
@@ -44,7 +44,7 @@ task<void> async_main(std::shared_ptr<executor> exec)
 
 int main()
 {
-    try 
+    try
     {
         auto exec = std::make_shared<executor>();
         exec->spawn(async_main(exec));

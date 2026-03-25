@@ -28,7 +28,7 @@ namespace kmx::aio::readiness::udp
         msg.msg_name = &peer_addr;
         msg.msg_namelen = sizeof(peer_addr);
         msg.msg_iov = &iov;
-        msg.msg_iovlen = 1;
+        msg.msg_iovlen = 1u;
 
         auto result = co_await socket_.recvmsg(&msg);
         if (result)
@@ -90,7 +90,7 @@ namespace kmx::aio::readiness::udp
         msg.msg_name = const_cast<sockaddr*>(peer_addr);
         msg.msg_namelen = addr_len;
         msg.msg_iov = &iov;
-        msg.msg_iovlen = 1;
+        msg.msg_iovlen = 1u;
 
         co_return co_await socket_.sendmsg(&msg);
     }

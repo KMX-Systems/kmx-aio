@@ -230,32 +230,33 @@ namespace kmx::aio
 
         const auto* addr = reinterpret_cast<const sockaddr*>(&address.storage);
         endpoint_address result {};
-
-        if (addr->sa_family == AF_INET)
+        switch(addr->sa_family)
         {
-            if (address.length < sizeof(::sockaddr_in))
-                return std::unexpected(error_from_errno(EINVAL));
+            case AF_INET:
+            {
+                if (address.length < sizeof(::sockaddr_in))
+                    return std::unexpected(error_from_errno(EINVAL));
 
-            const auto* addr4 = reinterpret_cast<const ::sockaddr_in*>(&address.storage);
-            auto& ip4 = result.ip.emplace<ipv4_address_owned_t>();
-            std::memcpy(ip4.data(), &addr4->sin_addr, ip4.size());
-            result.port = ::ntohs(addr4->sin_port);
-            return result;
+                const auto* addr4 = reinterpret_cast<const ::sockaddr_in*>(&address.storage);
+                auto& ip4 = result.ip.emplace<ipv4_address_owned_t>();
+                std::memcpy(ip4.data(), &addr4->sin_addr, ip4.size());
+                result.port = ::ntohs(addr4->sin_port);
+                return result;
+            }
+            case AF_INET6:
+            {
+                if (address.length < sizeof(sockaddr_in6))
+                    return std::unexpected(error_from_errno(EINVAL));
+
+                const auto* addr6 = reinterpret_cast<const sockaddr_in6*>(&address.storage);
+                auto& ip6 = result.ip.emplace<ipv6_address_owned_t>();
+                std::memcpy(ip6.data(), &addr6->sin6_addr, ip6.size());
+                result.port = ::ntohs(addr6->sin6_port);
+                return result;
+            }
+            default:
+                return std::unexpected(error_from_errno(EAFNOSUPPORT));
         }
-
-        if (addr->sa_family == AF_INET6)
-        {
-            if (address.length < sizeof(sockaddr_in6))
-                return std::unexpected(error_from_errno(EINVAL));
-
-            const auto* addr6 = reinterpret_cast<const sockaddr_in6*>(&address.storage);
-            auto& ip6 = result.ip.emplace<ipv6_address_owned_t>();
-            std::memcpy(ip6.data(), &addr6->sin6_addr, ip6.size());
-            result.port = ::ntohs(addr6->sin6_port);
-            return result;
-        }
-
-        return std::unexpected(error_from_errno(EAFNOSUPPORT));
     }
 
     /// @brief Bitwise OR operator for epoll event masks (event_mask_t | epoll_event_mask).

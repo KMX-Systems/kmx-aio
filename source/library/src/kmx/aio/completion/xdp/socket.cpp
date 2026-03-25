@@ -2,20 +2,16 @@
 /// @brief AF_XDP completion socket implementation scaffold.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/completion/xdp/socket.hpp>
-
 #include <kmx/aio/error_code.hpp>
 
-#include <algorithm>
-#include <cerrno>
+#include <xdp/xsk.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <deque>
-#include <limits>
 #include <mutex>
 #include <net/if.h>
-#include <new>
-#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -220,7 +216,7 @@ namespace kmx::aio::completion::xdp
         sock_cfg.libbpf_flags = 0u;
         sock_cfg.xdp_flags = 0u;
 
-        sock_cfg.bind_flags{};
+        sock_cfg.bind_flags = {};
         if (config.need_wakeup)
             sock_cfg.bind_flags |= XDP_USE_NEED_WAKEUP;
         if (config.force_zero_copy)

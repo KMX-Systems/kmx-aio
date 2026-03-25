@@ -18,10 +18,7 @@
 
 namespace kmx::aio::sample::hft::order_router
 {
-    // ──────────────────────────────────────────────────────────────────────
-    //  Domain types
-    // ──────────────────────────────────────────────────────────────────────
-
+    // Domain types
     enum class side : std::uint8_t
     {
         buy,
@@ -36,10 +33,7 @@ namespace kmx::aio::sample::hft::order_router
         std::uint32_t quantity {};
     };
 
-    // ──────────────────────────────────────────────────────────────────────
-    //  Shared state
-    // ──────────────────────────────────────────────────────────────────────
-
+    // Shared state
     constexpr std::size_t channel_capacity  = 4096u;
     constexpr std::size_t total_orders      = 100'000u;
 
@@ -53,10 +47,7 @@ namespace kmx::aio::sample::hft::order_router
     std::atomic_uint64_t filled_count {};
     std::atomic_uint64_t rejected_count {};
 
-    // ──────────────────────────────────────────────────────────────────────
-    //  Market-data producer (Core 2)
-    // ──────────────────────────────────────────────────────────────────────
-
+    // Market-data producer (Core 2)
     void market_data_thread() noexcept
     {
         using clock = std::chrono::steady_clock;
@@ -87,10 +78,7 @@ namespace kmx::aio::sample::hft::order_router
         producer_done.store(true, std::memory_order_release);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    //  Strategy consumer (Core 4)
-    // ──────────────────────────────────────────────────────────────────────
-
+    // Strategy consumer (Core 4)
     void strategy_thread() noexcept
     {
         using clock = std::chrono::steady_clock;
@@ -136,10 +124,7 @@ namespace kmx::aio::sample::hft::order_router
                   << " orders/sec)\n";
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    //  CPU pinning helper (best-effort)
-    // ──────────────────────────────────────────────────────────────────────
-
+    // CPU pinning helper (best-effort)
     void pin_thread(std::thread& t, const int core_id) noexcept
     {
         cpu_set_t cpuset;
@@ -150,10 +135,7 @@ namespace kmx::aio::sample::hft::order_router
 
 } // namespace kmx::aio::sample::hft::order_router
 
-// ──────────────────────────────────────────────────────────────────────────
-//  Entry point
-// ──────────────────────────────────────────────────────────────────────────
-
+// Entry point
 int main() noexcept
 {
     using namespace kmx::aio::sample::hft::order_router;
