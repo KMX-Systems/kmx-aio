@@ -6,7 +6,6 @@
 
 #ifndef PCH
     #include <arpa/inet.h>
-    #include <iostream>
     #include <netinet/in.h>
     #include <sys/socket.h>
 
@@ -26,7 +25,7 @@ namespace kmx::aio::completion::quic
         executor& exec_;
         stream_handler_t stream_handler_;
         std::unique_ptr<udp::socket> socket_;
-        lsquic_engine_t* lsquic_engine_ {nullptr};
+        ::lsquic_engine_t* lsquic_engine_ {nullptr};
         sockaddr_storage local_addr_ {};
         void* ssl_ctx_ {nullptr};
         bool running_ {false};
@@ -38,13 +37,12 @@ namespace kmx::aio::completion::quic
         ~impl() noexcept
         {
             if (lsquic_engine_)
-            {
                 ::lsquic_engine_destroy(lsquic_engine_);
-            }
+
             ::lsquic_global_cleanup();
         }
 
-        static int send_packets_out(void* ctx, const struct lsquic_out_spec* specs, unsigned count)
+        static int send_packets_out(void* ctx, const struct ::lsquic_out_spec* specs, unsigned count)
         {
             auto* self = static_cast<impl*>(ctx);
             unsigned sent{};
@@ -69,22 +67,22 @@ namespace kmx::aio::completion::quic
             return static_cast<int>(sent);
         }
 
-        static lsquic_conn_ctx_t* on_new_conn(void* stream_if_ctx, lsquic_conn_t* /*conn*/)
+        static ::lsquic_conn_ctx_t* on_new_conn(void* stream_if_ctx, ::lsquic_conn_t* /*conn*/)
         {
-            return reinterpret_cast<lsquic_conn_ctx_t*>(stream_if_ctx);
+            return reinterpret_cast<::lsquic_conn_ctx_t*>(stream_if_ctx);
         }
 
-        static void on_conn_closed(lsquic_conn_t* /*conn*/)
+        static void on_conn_closed(::lsquic_conn_t* /*conn*/)
         {
         }
 
-        static lsquic_stream_ctx_t* on_new_stream(void* /*stream_if_ctx*/, lsquic_stream_t* stream)
+        static ::lsquic_stream_ctx_t* on_new_stream(void* /*stream_if_ctx*/, ::lsquic_stream_t* stream)
         {
             ::lsquic_stream_wantread(stream, 1);
             return nullptr;
         }
 
-        static void on_read(lsquic_stream_t* stream, lsquic_stream_ctx_t* /*ctx*/)
+        static void on_read(::lsquic_stream_t* stream, ::lsquic_stream_ctx_t* /*ctx*/)
         {
             auto* self = reinterpret_cast<impl*>(::lsquic_conn_get_ctx(::lsquic_stream_conn(stream)));
             std::array<char, 4096> buf {};
@@ -98,7 +96,7 @@ namespace kmx::aio::completion::quic
                 ::lsquic_stream_close(stream);
         }
 
-        static void on_write(lsquic_stream_t* stream, lsquic_stream_ctx_t* /*ctx*/)
+        static void on_write(::lsquic_stream_t* stream, ::lsquic_stream_ctx_t* /*ctx*/)
         {
             ::lsquic_stream_wantwrite(stream, 0);
         }
@@ -109,7 +107,7 @@ namespace kmx::aio::completion::quic
             return reinterpret_cast<struct ssl_ctx_st*>(self->ssl_ctx_);
         }
 
-        static void on_close(lsquic_stream_t* /*stream*/, lsquic_stream_ctx_t* /*ctx*/)
+        static void on_close(::lsquic_stream_t* /*stream*/, ::lsquic_stream_ctx_t* /*ctx*/)
         {
         }
     };
@@ -147,7 +145,7 @@ namespace kmx::aio::completion::quic
         if (::bind(impl_->socket_->get_fd(), reinterpret_cast<sockaddr*>(&sock_addr_result->storage), sock_addr_result->length) < 0)
             co_return std::unexpected(error_from_errno());
 
-        static struct lsquic_stream_if stream_if {};
+        static ::lsquic_stream_if stream_if {};
         stream_if.on_new_conn = impl::on_new_conn;
         stream_if.on_conn_closed = impl::on_conn_closed;
         stream_if.on_new_stream = impl::on_new_stream;
@@ -155,14 +153,14 @@ namespace kmx::aio::completion::quic
         stream_if.on_write = impl::on_write;
         stream_if.on_close = impl::on_close;
 
-        lsquic_engine_api engine_api {};
+        ::lsquic_engine_api engine_api {};
         engine_api.ea_packets_out = impl::send_packets_out;
         engine_api.ea_packets_out_ctx = impl_.get();
         engine_api.ea_stream_if = &stream_if;
         engine_api.ea_stream_if_ctx = impl_.get();
         engine_api.ea_get_ssl_ctx = impl::get_ssl_ctx;
 
-        static lsquic_engine_settings lsquic_settings {};
+        static ::lsquic_engine_settings lsquic_settings {};
         ::lsquic_engine_init_settings(&lsquic_settings, LSENG_SERVER);
         lsquic_settings.es_max_streams_in = config.max_streams_in;
         lsquic_settings.es_idle_timeout = config.idle_conn_timeout_sec;
