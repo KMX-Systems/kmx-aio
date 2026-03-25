@@ -12,19 +12,17 @@
     #include <system_error>
 
     #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/quic/settings.hpp>
     #include <kmx/aio/readiness/executor.hpp>
     #include <kmx/aio/task.hpp>
-    #include <kmx/aio/quic/settings.hpp>
 #endif
 
 namespace kmx::aio::readiness::quic
 {
     /// @brief QUIC engine for the readiness (epoll) model.
-    /// @details Drives lsquic's user-space QUIC stack over an epoll-notified UDP
-    ///          socket. Multiplexes QUIC streams to their respective connection
-    ///          handlers via coroutine callbacks.
-    /// @note This is a forward declaration / interface specification.
-    ///       The full implementation requires linking against lsquic.
+    /// @details Drives lsquic over an epoll-notified UDP socket.
+    ///          All lsquic callbacks and lifecycle are shared with completion::quic::engine
+    ///          via a private base_engine implementation detail.
     class engine
     {
     public:
@@ -52,8 +50,10 @@ namespace kmx::aio::readiness::quic
         ~engine() noexcept;
 
         /// @brief Starts the QUIC engine, binding to the specified address.
-        /// @param ip   IP address to bind to.
-        /// @param port Port number to bind to.
+        /// @param ip      IP address to bind to.
+        /// @param port    Port number to bind to.
+        /// @param ssl_ctx BoringSSL SSL_CTX pointer.
+        /// @param config  QUIC protocol settings.
         /// @return Success or an error code.
         [[nodiscard]] task<std::expected<void, std::error_code>> start(ip_address_t ip, port_t port, void* ssl_ctx = nullptr, const kmx::aio::quic::settings& config = kmx::aio::quic::settings{}) noexcept(false);
 
@@ -69,4 +69,3 @@ namespace kmx::aio::readiness::quic
 } // namespace kmx::aio::readiness::quic
 
 #endif // KMX_AIO_FEATURE_QUIC
-
