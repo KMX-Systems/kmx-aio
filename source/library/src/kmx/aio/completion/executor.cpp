@@ -49,7 +49,7 @@ namespace kmx::aio::completion
             co_return std::unexpected(std::make_error_code(std::errc::no_buffer_space));
         }
 
-        ::io_uring_prep_read(sqe, fd, buffer.data(), static_cast<unsigned int>(buffer.size()), offset);
+        ::io_uring_prep_read(sqe, fd, buffer.data(), static_cast<unsigned>(buffer.size()), offset);
         ::io_uring_sqe_set_data(sqe, &ctx);
 
         if (const auto sub = submit(); !sub)
@@ -78,7 +78,7 @@ namespace kmx::aio::completion
             co_return std::unexpected(std::make_error_code(std::errc::no_buffer_space));
         }
 
-        ::io_uring_prep_write(sqe, fd, buffer.data(), static_cast<unsigned int>(buffer.size()), offset);
+        ::io_uring_prep_write(sqe, fd, buffer.data(), static_cast<unsigned>(buffer.size()), offset);
         ::io_uring_sqe_set_data(sqe, &ctx);
 
         if (const auto sub = submit(); !sub)
@@ -96,7 +96,7 @@ namespace kmx::aio::completion
 
     std::expected<void, std::error_code> executor::register_buffers(std::span<const ::iovec> iovecs) noexcept
     {
-        const int ret = ::io_uring_register_buffers(&ring_, iovecs.data(), static_cast<unsigned int>(iovecs.size()));
+        const int ret = ::io_uring_register_buffers(&ring_, iovecs.data(), static_cast<unsigned>(iovecs.size()));
         if (ret < 0)
             return std::unexpected(std::error_code(-ret, std::generic_category()));
 
@@ -125,7 +125,7 @@ namespace kmx::aio::completion
             co_return std::unexpected(std::make_error_code(std::errc::no_buffer_space));
         }
 
-        ::io_uring_prep_read_fixed(sqe, fd, buffer.data(), static_cast<unsigned int>(buffer.size()), offset, buf_index);
+        ::io_uring_prep_read_fixed(sqe, fd, buffer.data(), static_cast<unsigned>(buffer.size()), offset, buf_index);
         ::io_uring_sqe_set_data(sqe, &ctx);
 
         if (const auto sub = submit(); !sub)
@@ -154,7 +154,7 @@ namespace kmx::aio::completion
             co_return std::unexpected(std::make_error_code(std::errc::no_buffer_space));
         }
 
-        ::io_uring_prep_write_fixed(sqe, fd, buffer.data(), static_cast<unsigned int>(buffer.size()), offset, buf_index);
+        ::io_uring_prep_write_fixed(sqe, fd, buffer.data(), static_cast<unsigned>(buffer.size()), offset, buf_index);
         ::io_uring_sqe_set_data(sqe, &ctx);
 
         if (const auto sub = submit(); !sub)
@@ -228,7 +228,7 @@ namespace kmx::aio::completion
     }
 
     task<std::expected<std::size_t, std::error_code>> executor::async_recvmsg(const fd_t fd, msghdr* msg,
-                                                                              const unsigned int flags) noexcept(false)
+                                                                              const unsigned flags) noexcept(false)
     {
         io_context ctx {};
 
@@ -256,7 +256,7 @@ namespace kmx::aio::completion
     }
 
     task<std::expected<std::size_t, std::error_code>> executor::async_sendmsg(const fd_t fd, const msghdr* msg,
-                                                                              const unsigned int flags) noexcept(false)
+                                                                              const unsigned flags) noexcept(false)
     {
         io_context ctx {};
 

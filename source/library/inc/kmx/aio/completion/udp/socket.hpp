@@ -58,14 +58,14 @@ namespace kmx::aio::completion::udp
         /// @param flags Flags forwarded to recvmsg.
         /// @return Number of bytes received, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] result_task recvmsg(::msghdr* msg, unsigned int flags = 0u) noexcept(false);
+        [[nodiscard]] result_task recvmsg(::msghdr* msg, unsigned flags = 0u) noexcept(false);
 
         /// @brief Asynchronously sends a datagram via io_uring.
         /// @param msg   Message header describing payload buffers and peer address.
         /// @param flags Flags forwarded to sendmsg.
         /// @return Number of bytes sent, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] result_task sendmsg(const ::msghdr* msg, unsigned int flags = 0u) noexcept(false);
+        [[nodiscard]] result_task sendmsg(const ::msghdr* msg, unsigned flags = 0u) noexcept(false);
 
         /// @brief Binds the socket to an address and port.
         /// @param ip   The IP address to bind to.

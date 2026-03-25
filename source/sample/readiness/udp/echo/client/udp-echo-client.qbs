@@ -3,7 +3,7 @@ import qbs
 CppApplication {
     Depends { name: "kmx-aio-lib" }
 
-    name: "kmx-aio-sample-udp-echo-client"
+    name: "sample-udp-echo-client"
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.debugInformation: true

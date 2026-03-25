@@ -5,9 +5,6 @@
 
 #include <kmx/aio/error_code.hpp>
 
-#include <atomic>
-#include <mutex>
-#include <thread>
 
 #if defined(KMX_AIO_FEATURE_SPDK)
     #include <spdk/bdev.h>

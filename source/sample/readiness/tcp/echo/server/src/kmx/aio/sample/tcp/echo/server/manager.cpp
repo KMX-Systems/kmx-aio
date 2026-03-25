@@ -175,12 +175,8 @@ namespace kmx::aio::sample::tcp::echo::server
             buffer.reserve(512);
             std::size_t sent_bytes {};
             stats->tx_active.store(true, std::memory_order_relaxed);
-            while (true)
+            while (sent_bytes < transfer_limit_bytes)
             {
-                if (sent_bytes >= transfer_limit_bytes)
-                {
-                    break;
-                }
 
                 common::generate_random_buffer(buffer);
                 const auto size = buffer.size();

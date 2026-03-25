@@ -8,7 +8,7 @@
 
 namespace kmx::aio::sample::tls::h2_alpn_readiness_server
 {
-    static int alpn_select_cb(SSL*, const unsigned char** out, unsigned char* outlen, const unsigned char* in, unsigned int inlen, void*)
+    static int alpn_select_cb(SSL*, const unsigned char** out, unsigned char* outlen, const unsigned char* in, unsigned inlen, void*)
     {
         static const unsigned char alpn_h2[] = {2, 'h', '2'};
         if (::SSL_select_next_proto((unsigned char**) out, outlen, alpn_h2, sizeof(alpn_h2), in, inlen) != OPENSSL_NPN_NEGOTIATED)

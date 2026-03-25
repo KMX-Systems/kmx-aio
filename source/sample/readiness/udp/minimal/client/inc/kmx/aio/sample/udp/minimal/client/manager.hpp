@@ -14,9 +14,9 @@ namespace kmx::aio::sample::udp::minimal::client
     // Configuration
     struct config
     {
-        std::uint32_t num_workers = 1000;
+        std::uint32_t num_workers = 1000u;
         kmx::aio::ip_address_t server_addr = kmx::aio::make_ip_address(kmx::aio::localhost_ipv4);
-        port_t server_port = 9000;
+        port_t server_port = 9000u;
         std::string_view message = "Is there anybody out there?";
         std::uint32_t scheduler_threads = 4u;
         port_t max_events = 1024u;

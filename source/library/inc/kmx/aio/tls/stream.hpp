@@ -82,7 +82,7 @@ namespace kmx::aio::tls
             if (!ssl_ || protocols.empty())
                 return std::unexpected(std::make_error_code(std::errc::invalid_argument));
 
-            const int rc = ::SSL_set_alpn_protos(ssl_, protocols.data(), static_cast<unsigned int>(protocols.size()));
+            const int rc = ::SSL_set_alpn_protos(ssl_, protocols.data(), static_cast<unsigned>(protocols.size()));
             if (rc != 0)
                 return std::unexpected(std::make_error_code(std::errc::protocol_error));
 
@@ -93,7 +93,7 @@ namespace kmx::aio::tls
         [[nodiscard]] std::string_view selected_alpn() const noexcept
         {
             const unsigned char* data = nullptr;
-            unsigned int len{};
+            unsigned len {};
             ::SSL_get0_alpn_selected(ssl_, &data, &len);
             return {reinterpret_cast<const char*>(data), len};
         }

@@ -135,7 +135,7 @@ namespace kmx::aio::completion
         /// @return A task yielding the number of bytes received, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] task<std::expected<std::size_t, std::error_code>> async_recvmsg(const fd_t fd, msghdr* msg,
-                                                                                      const unsigned int flags = 0u) noexcept(false);
+                                                                                      const unsigned flags = 0u) noexcept(false);
 
         /// @brief Prepares an asynchronous sendmsg.
         /// @param fd   Socket file descriptor.
@@ -144,7 +144,7 @@ namespace kmx::aio::completion
         /// @return A task yielding the number of bytes sent, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] task<std::expected<std::size_t, std::error_code>> async_sendmsg(const fd_t fd, const msghdr* msg,
-                                                                                      const unsigned int flags = 0u) noexcept(false);
+                                                                                      const unsigned flags = 0u) noexcept(false);
 
         /// @brief Prepares an asynchronous cancellation of an in-flight operation.
         /// @param user_data The user_data of the SQE to cancel.

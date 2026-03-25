@@ -3,7 +3,7 @@ import qbs
 CppApplication {
     Depends { name: "kmx-aio-lib" }
 
-    name: "kmx-aio-sample-tcp-minimal-server"
+    name: "sample-tcp-minimal-server"
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.debugInformation: true

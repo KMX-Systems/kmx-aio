@@ -6,16 +6,11 @@
 
 #include <kmx/aio/error_code.hpp>
 
-#include <algorithm>
-#include <atomic>
 #include <cstddef>
 #include <cstring>
-#include <functional>
 #include <limits>
 #include <mutex>
 #include <new>
-#include <string>
-#include <thread>
 #include <vector>
 
 #if defined(KMX_AIO_FEATURE_SPDK)

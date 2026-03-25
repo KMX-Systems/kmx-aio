@@ -2,9 +2,9 @@ import qbs
 
 CppApplication {
     Depends { name: "kmx-aio-lib" }
-    Depends { name: "kmx-aio-sample-tcp-echo-common" }
+    Depends { name: "sample-tcp-echo-common" }
 
-    name: "kmx-aio-sample-tcp-echo-uring-server"
+    name: "sample-tcp-echo-uring-server"
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.debugInformation: true

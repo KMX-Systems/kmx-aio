@@ -3,7 +3,7 @@ import qbs
 CppApplication {
     Depends { name: "kmx-aio-lib" }
 
-    name: "kmx-aio-sample-spdk-minimal"
+    name: "sample-spdk-minimal"
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.debugInformation: true

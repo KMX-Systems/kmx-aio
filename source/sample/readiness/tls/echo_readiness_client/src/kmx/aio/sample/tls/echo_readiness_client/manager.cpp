@@ -352,9 +352,8 @@ namespace kmx::aio::sample::tls::echo_readiness_client
                 for (const auto& [worker_id, stats]: connections_)
                 {
                     if (!stats)
-                    {
                         continue;
-                    }
+
                     snapshot.push_back(snapshot_entry {
                         .worker_id = worker_id,
                         .tx = stats->bytes_sent.load(mem_order),
@@ -382,35 +381,23 @@ namespace kmx::aio::sample::tls::echo_readiness_client
             std::cout << "────────────────────────────────────────────────────────────────────────\n";
 
             if (snapshot.empty())
-            {
                 std::cout << "(no active connections)\n";
-            }
             else
-            {
                 for (const auto& entry: snapshot)
                 {
                     std::string_view state = "-";
                     if (entry.closed)
-                    {
                         state = "C";
-                    }
                     else if (entry.tx_active && entry.rx_active)
-                    {
                         state = "TX+RX";
-                    }
                     else if (entry.tx_active)
-                    {
                         state = "TX";
-                    }
                     else if (entry.rx_active)
-                    {
                         state = "RX";
-                    }
 
                     std::cout << std::format("Connection {:07}: TX {:>10} | RX {:>10} | EC {:05} | {}\n", entry.worker_id,
                                              common::format_bytes(entry.tx), common::format_bytes(entry.rx), entry.errors, state);
                 }
-            }
 
             std::cout << "────────────────────────────────────────────────────────────────────────\n";
             std::cout << std::format("Client Totals: TX {} | RX {} | EC {} | Completed {} | Total {} | OK {} | Fail {}\n",
