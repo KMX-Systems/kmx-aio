@@ -88,7 +88,7 @@ namespace kmx::aio::sample::tcp::minimal::client
             co_await executor_->wait_io(fd, event_type::write);
 
         // Check connection status using wrapper
-        int so_error = 0;
+        int so_error{};
         ::socklen_t len = sizeof(so_error);
         if (auto sockopt_result = fd_owner.getsockopt(SOL_SOCKET, SO_ERROR, &so_error, &len); !sockopt_result)
         {

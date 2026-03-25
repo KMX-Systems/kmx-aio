@@ -104,13 +104,16 @@ namespace kmx::aio
             return n + 1u;
         }
 
+        /// @brief Stable cache-line size constant (avoids ABI-unstable std::hardware_destructive_interference_size).
+        static constexpr std::size_t cache_line_size = 64u;
+
         std::size_t capacity_;
         std::size_t mask_;
         std::vector<T> storage_;
 
         // Separated cache lines to prevent false sharing between producer and consumer
-        alignas(std::hardware_destructive_interference_size) std::atomic<std::size_t> head_ {};
-        alignas(std::hardware_destructive_interference_size) std::atomic<std::size_t> tail_ {};
+        alignas(cache_line_size) std::atomic<std::size_t> head_ {};
+        alignas(cache_line_size) std::atomic<std::size_t> tail_ {};
     };
 
 } // namespace kmx::aio

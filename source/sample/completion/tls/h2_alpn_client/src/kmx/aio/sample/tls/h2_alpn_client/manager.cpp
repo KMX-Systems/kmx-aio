@@ -137,7 +137,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
             logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Sent GET Request (Stream 1)", worker_id);
 
             char resp_hdr[10];
-            std::size_t total = 0;
+            std::size_t total{};
             while (total < 10)
             {
                 auto r = co_await stream_ptr->read(std::span<char>(resp_hdr + total, 10 - total));
@@ -152,7 +152,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
             }
 
             char data_hdr[9];
-            total = 0;
+            total = {};
             while (total < 9)
             {
                 auto r = co_await stream_ptr->read(std::span<char>(data_hdr + total, 9 - total));
@@ -168,7 +168,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
                                                static_cast<std::uint8_t>(data_hdr[2]);
 
                 std::vector<char> data_payload(data_len + 1u, '\0');
-                total = 0;
+                total = {};
                 while (total < data_len)
                 {
                     auto r = co_await stream_ptr->read(std::span<char>(data_payload.data() + total, data_len - total));

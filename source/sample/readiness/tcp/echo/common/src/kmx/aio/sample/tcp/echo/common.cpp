@@ -35,7 +35,7 @@ namespace kmx::aio::sample::common
         std::lock_guard<std::mutex> lock(gen_mutex);
         const std::size_t size = size_dist(gen);
         buffer.resize(size);
-        for (size_t i = 0; i < size; ++i)
+        for (size_t i{}; i < size; ++i)
         {
             buffer[i] = charset[char_dist(gen)];
         }
@@ -45,7 +45,7 @@ namespace kmx::aio::sample::common
     {
         static constexpr std::array<std::string_view, 5> units {"B", "KB", "MB", "GB", "TB"};
         double value = static_cast<double>(bytes);
-        std::size_t unit_index = 0;
+        std::size_t unit_index{};
         while (value >= 1024.0 && unit_index + 1 < units.size())
         {
             value /= 1024.0;
@@ -53,9 +53,7 @@ namespace kmx::aio::sample::common
         }
 
         if (unit_index == 0)
-        {
             return std::format("{} {}", bytes, units[unit_index]);
-        }
 
         return std::format("{:.2f} {}", value, units[unit_index]);
     }

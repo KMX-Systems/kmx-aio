@@ -103,8 +103,8 @@ namespace kmx::aio::sample::tcp::echo::server
             executor_->spawn(client_sender(stream_ptr, client_id, stats));
 
             std::vector<char> buffer(4096u);
-            std::size_t messages_received = 0;
-            std::size_t received_bytes = 0;
+            std::size_t messages_received{};
+            std::size_t received_bytes{};
 
             while (true)
             {
@@ -175,7 +175,7 @@ namespace kmx::aio::sample::tcp::echo::server
         {
             std::vector<char> buffer;
             buffer.reserve(512);
-            std::size_t sent_bytes = 0;
+            std::size_t sent_bytes{};
             stats->tx_active.store(true, std::memory_order_relaxed);
             while (true)
             {
@@ -234,9 +234,9 @@ namespace kmx::aio::sample::tcp::echo::server
         logger::log(logger::level::info, std::source_location::current(), "Acceptor: Listening on {}:{} (backlog: 128)", bind_ip,
                     config_.bind_port);
 
-        std::uint64_t client_counter = 0;
-        std::uint64_t accept_count = 0;
-        std::uint64_t accept_errors = 0;
+        std::uint64_t client_counter{};
+        std::uint64_t accept_count{};
+        std::uint64_t accept_errors{};
 
         try
         {
@@ -268,7 +268,7 @@ namespace kmx::aio::sample::tcp::echo::server
                     continue;
                 }
 
-                accept_errors = 0; // Reset error counter on success
+                accept_errors = {}; // Reset error counter on success
 
                 ++accept_count;
                 metrics_.total_connections.fetch_add(1u, std::memory_order_relaxed);

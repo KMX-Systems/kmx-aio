@@ -26,7 +26,7 @@ namespace kmx::aio::sample::udp::echo::server
         std::signal(SIGINT, signal_handler);
         std::signal(SIGTERM, signal_handler);
 
-        for (std::uint32_t i = 0; i < config_.listener_workers; ++i)
+        for (std::uint32_t i{}; i < config_.listener_workers; ++i)
         {
             executor_->spawn(listener(i));
         }
@@ -76,7 +76,7 @@ namespace kmx::aio::sample::udp::echo::server
             logger::log(logger::level::debug, std::source_location::current(), "Worker [{}]: Ready to receive.", worker_id);
 
             std::vector<std::byte> buffer(65535u);
-            std::uint64_t err_burst = 0;
+            std::uint64_t err_burst{};
 
             while (true)
             {
@@ -98,17 +98,15 @@ namespace kmx::aio::sample::udp::echo::server
                     continue;
                 }
 
-                err_burst = 0;
+                err_burst = {};
                 auto bytes_recv = *recv_result;
                 metrics_.bytes_received.fetch_add(bytes_recv, mem_order);
 
                 std::span<const std::byte> send_buf {buffer.data(), (std::size_t) bytes_recv};
                 auto send_result = co_await ep.send(send_buf, reinterpret_cast<const sockaddr*>(&peer), peer_len);
 
-                if (auto total = metrics_.messages_handled.load(mem_order); total > 0 && total % 1000 == 0)
-                {
+                if (auto total = metrics_.messages_handled.load(mem_order); (total > 0) && ((total % 1000) == 0))
                     logger::log(logger::level::info, std::source_location::current(), "Server: Handled {} messages so far.", total);
-                }
 
                 if (!send_result)
                 {

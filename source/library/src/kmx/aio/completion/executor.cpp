@@ -391,7 +391,7 @@ namespace kmx::aio::completion
         {
             ::io_uring_cqe* cqe {};
             __kernel_timespec ts {};
-            ts.tv_sec = 0;
+            ts.tv_sec = {};
             ts.tv_nsec = 100'000'000; // 100ms timeout
 
             const int ret = ::io_uring_wait_cqe_timeout(&ring_, &cqe, &ts);

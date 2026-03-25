@@ -48,29 +48,31 @@ namespace kmx::aio::readiness::udp
             co_return std::unexpected(error_from_errno(EINVAL));
 
         const auto* addr = reinterpret_cast<const sockaddr*>(&peer_addr);
-        if (addr->sa_family == AF_INET)
+        switch(addr->sa_family)
         {
-            if (out_peer_addr_len < sizeof(::sockaddr_in))
-                co_return std::unexpected(error_from_errno(EINVAL));
+            case AF_INET:
+            {
+                if (out_peer_addr_len < sizeof(::sockaddr_in))
+                    co_return std::unexpected(error_from_errno(EINVAL));
 
-            const auto* addr4 = reinterpret_cast<const ::sockaddr_in*>(&peer_addr);
-            out_peer_ip = ipv4_address_t {reinterpret_cast<const std::uint8_t*>(&addr4->sin_addr), 4u};
-            out_peer_port = ::ntohs(addr4->sin_port);
-            co_return result;
+                const auto* addr4 = reinterpret_cast<const ::sockaddr_in*>(&peer_addr);
+                out_peer_ip = ipv4_address_t {reinterpret_cast<const std::uint8_t*>(&addr4->sin_addr), 4u};
+                out_peer_port = ::ntohs(addr4->sin_port);
+                co_return result;
+            }
+            case AF_INET6:
+            {
+                if (out_peer_addr_len < sizeof(sockaddr_in6))
+                    co_return std::unexpected(error_from_errno(EINVAL));
+
+                const auto* addr6 = reinterpret_cast<const sockaddr_in6*>(&peer_addr);
+                out_peer_ip = ipv6_address_t {reinterpret_cast<const std::uint8_t*>(&addr6->sin6_addr), 16u};
+                out_peer_port = ::ntohs(addr6->sin6_port);
+                co_return result;
+            }
+            default:
+                co_return std::unexpected(error_from_errno(EAFNOSUPPORT));
         }
-
-        if (addr->sa_family == AF_INET6)
-        {
-            if (out_peer_addr_len < sizeof(sockaddr_in6))
-                co_return std::unexpected(error_from_errno(EINVAL));
-
-            const auto* addr6 = reinterpret_cast<const sockaddr_in6*>(&peer_addr);
-            out_peer_ip = ipv6_address_t {reinterpret_cast<const std::uint8_t*>(&addr6->sin6_addr), 16u};
-            out_peer_port = ::ntohs(addr6->sin6_port);
-            co_return result;
-        }
-
-        co_return std::unexpected(error_from_errno(EAFNOSUPPORT));
     }
 
     endpoint::result_task endpoint::send(std::span<const std::byte> buffer, const sockaddr* peer_addr,

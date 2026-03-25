@@ -1,9 +1,7 @@
 #include "kmx/aio/sample/udp/echo_uring/server/manager.hpp"
 
-#include <chrono>
 #include <print>
 #include <source_location>
-#include <span>
 #include <sys/socket.h>
 
 namespace kmx::aio::sample::udp::echo_uring::server
@@ -27,7 +25,7 @@ namespace kmx::aio::sample::udp::echo_uring::server
         std::signal(SIGINT, signal_handler);
         std::signal(SIGTERM, signal_handler);
 
-        for (std::uint32_t i = 0; i < config_.listener_workers; ++i)
+        for (std::uint32_t i{}; i < config_.listener_workers; ++i)
         {
             executor_->spawn(listener(i));
         }
@@ -78,7 +76,7 @@ namespace kmx::aio::sample::udp::echo_uring::server
             logger::log(logger::level::debug, std::source_location::current(), "Worker [{}]: Ready to receive.", worker_id);
 
             std::vector<std::byte> buffer(65535u);
-            std::uint64_t err_burst = 0;
+            std::uint64_t err_burst{};
 
             while (true)
             {
@@ -109,7 +107,7 @@ namespace kmx::aio::sample::udp::echo_uring::server
                     continue;
                 }
 
-                err_burst = 0;
+                err_burst = {};
                 auto bytes_recv = *recv_result;
                 metrics_.bytes_received.fetch_add(bytes_recv, mem_order);
 

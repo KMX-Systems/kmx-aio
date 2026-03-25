@@ -166,15 +166,15 @@ namespace kmx::aio::completion::xdp
         if (config.interface_name.empty())
             return std::unexpected(to_std_error_code(error_code::invalid_argument));
 
-        if (config.frame_size == 0u || config.frame_count == 0u)
+        if ((config.frame_size == 0u) || (config.frame_count == 0u))
             return std::unexpected(to_std_error_code(error_code::invalid_argument));
 
         if (!is_valid_ring_size(config.fill_ring_size) || !is_valid_ring_size(config.comp_ring_size) ||
             !is_valid_ring_size(config.rx_ring_size) || !is_valid_ring_size(config.tx_ring_size))
             return std::unexpected(to_std_error_code(error_code::invalid_argument));
 
-        if (config.fill_ring_size > config.frame_count || config.comp_ring_size > config.frame_count ||
-            config.rx_ring_size > config.frame_count || config.tx_ring_size > config.frame_count)
+        if ((config.fill_ring_size > config.frame_count) || (config.comp_ring_size > config.frame_count) ||
+            (config.rx_ring_size > config.frame_count) || (config.tx_ring_size > config.frame_count))
             return std::unexpected(to_std_error_code(error_code::xdp_ring_setup_failed));
 
         socket out {};
@@ -220,7 +220,7 @@ namespace kmx::aio::completion::xdp
         sock_cfg.libbpf_flags = 0u;
         sock_cfg.xdp_flags = 0u;
 
-        sock_cfg.bind_flags = 0;
+        sock_cfg.bind_flags{};
         if (config.need_wakeup)
             sock_cfg.bind_flags |= XDP_USE_NEED_WAKEUP;
         if (config.force_zero_copy)

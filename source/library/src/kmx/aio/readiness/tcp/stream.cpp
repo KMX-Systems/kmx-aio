@@ -35,9 +35,7 @@ namespace kmx::aio::readiness::tcp
                         continue;
                     }
                     else
-                    {
                         co_return total; // EOF
-                    }
                 }
                 else
                 {
@@ -51,9 +49,7 @@ namespace kmx::aio::readiness::tcp
                         continue;
                     }
                     if (err != std::errc::function_not_supported)
-                    {
                         co_return std::unexpected(err);
-                    }
                     // Fallback to `::read` if unsupported
                 }
             }
@@ -105,16 +101,15 @@ namespace kmx::aio::readiness::tcp
                     // If `zero_copy_send` yields `EAGAIN`, it's often better to just try standard `send`
                     // which is transparently intercepted by Onload and may buffer internally in userspace.
                     const auto err = zc_res.error();
-                    if (err.category() == std::system_category() && would_block(err.value()))
+                    if ((err.category() == std::system_category()) && would_block(err.value()))
                     {
                         co_await exec_.wait_io(fd_.get(), event_type::write);
                         continue;
                     }
-                    if (err != std::errc::resource_unavailable_try_again && err != std::errc::function_not_supported)
-                    {
+
+                    if ((err != std::errc::resource_unavailable_try_again) && (err != std::errc::function_not_supported))
                         // Any other fatal error from hardware
                         co_return std::unexpected(err);
-                    }
                     // Proceed to fallback `::send`
                 }
             }

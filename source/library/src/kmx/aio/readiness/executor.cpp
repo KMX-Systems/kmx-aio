@@ -250,9 +250,7 @@ namespace kmx::aio::readiness
                 }
             }
             else
-            {
                 metrics_.timeout_count.fetch_add(1u, mem_order);
-            }
 
             if (st.stop_requested())
                 break;

@@ -111,7 +111,7 @@ namespace kmx::aio::sample::tcp::echo::client
             co_await executor_->wait_io(fd, event_type::write);
 
         // Check connection status using wrapper
-        int so_error = 0;
+        int so_error{};
         ::socklen_t len = sizeof(so_error);
         if (auto sockopt_result = fd_owner.getsockopt(SOL_SOCKET, SO_ERROR, &so_error, &len); !sockopt_result)
         {
@@ -171,7 +171,7 @@ namespace kmx::aio::sample::tcp::echo::client
             }
 
             std::vector<char> buffer(4096);
-            std::size_t received_bytes = 0;
+            std::size_t received_bytes{};
             while (true)
             {
                 auto recv_result = co_await stream_ptr->read(buffer);
@@ -241,7 +241,7 @@ namespace kmx::aio::sample::tcp::echo::client
         {
             std::vector<char> buffer;
             buffer.reserve(512);
-            std::size_t sent_bytes = 0;
+            std::size_t sent_bytes{};
             if (stats)
             {
                 stats->tx_active.store(true, mem_order);

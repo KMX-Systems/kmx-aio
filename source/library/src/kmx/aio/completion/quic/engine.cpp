@@ -47,7 +47,7 @@ namespace kmx::aio::completion::quic
         static int send_packets_out(void* ctx, const struct lsquic_out_spec* specs, unsigned count)
         {
             auto* self = static_cast<impl*>(ctx);
-            unsigned sent = 0;
+            unsigned sent{};
 
             for (; sent < count; ++sent)
             {
@@ -62,12 +62,10 @@ namespace kmx::aio::completion::quic
                 msg.msg_iovlen = 1;
 
                 const ssize_t res = ::sendmsg(self->socket_->get_fd(), &msg, 0);
-                if (res < 0)
-                {
-                    if (would_block(errno))
-                        break;
-                }
+                if ((res < 0) && would_block(errno))
+                   break;
             }
+
             return static_cast<int>(sent);
         }
 
@@ -94,14 +92,10 @@ namespace kmx::aio::completion::quic
             if (nr > 0)
             {
                 if (self->stream_handler_)
-                {
                     self->exec_.spawn(self->stream_handler_(std::span<char>(buf.data(), nr)));
-                }
             }
             else if (nr == 0)
-            {
                 ::lsquic_stream_close(stream);
-            }
         }
 
         static void on_write(lsquic_stream_t* stream, lsquic_stream_ctx_t* /*ctx*/)
@@ -134,32 +128,24 @@ namespace kmx::aio::completion::quic
     task<std::expected<void, std::error_code>> engine::start(const ip_address_t ip, const port_t port, void* ssl_ctx, const kmx::aio::quic::settings& config) noexcept(false)
     {
         impl_->ssl_ctx_ = ssl_ctx;
-        if (0 != ::lsquic_global_init(LSQUIC_GLOBAL_SERVER))
-        {
+        if (::lsquic_global_init(LSQUIC_GLOBAL_SERVER) != 0)
             co_return std::unexpected(error_from_errno(EINVAL));
-        }
 
         auto sock_addr_result = make_socket_address(ip, port);
         if (!sock_addr_result)
-        {
             co_return std::unexpected(sock_addr_result.error());
-        }
 
         // Using std::shared_ptr for executor based on typical completion APIs (requires enable_shared_from_this)
         // We retrieve the shared_ptr from exec_.
         auto sock_res = udp::socket::create(impl_->exec_.shared_from_this(), ip_family(ip));
         if (!sock_res)
-        {
             co_return std::unexpected(sock_res.error());
-        }
 
         impl_->socket_ = std::make_unique<udp::socket>(std::move(*sock_res));
 
         impl_->local_addr_ = sock_addr_result->storage;
         if (::bind(impl_->socket_->get_fd(), reinterpret_cast<sockaddr*>(&sock_addr_result->storage), sock_addr_result->length) < 0)
-        {
             co_return std::unexpected(error_from_errno());
-        }
 
         static struct lsquic_stream_if stream_if {};
         stream_if.on_new_conn = impl::on_new_conn;
@@ -185,9 +171,7 @@ namespace kmx::aio::completion::quic
 
         impl_->lsquic_engine_ = ::lsquic_engine_new(LSENG_SERVER, &engine_api);
         if (!impl_->lsquic_engine_)
-        {
             co_return std::unexpected(error_from_errno(EINVAL));
-        }
 
         co_return std::expected<void, std::error_code>{};
     }
@@ -225,10 +209,9 @@ namespace kmx::aio::completion::quic
                 (void)diff;
             }
             else if (!recv_res)
-            {
                 co_return std::unexpected(recv_res.error());
-            }
         }
+
         co_return std::expected<void, std::error_code>{};
     }
 } // namespace kmx::aio::completion::quic

@@ -79,8 +79,8 @@ namespace kmx::aio::sample::tcp::minimal::server
         try
         {
             std::vector<char> buffer(4096u);
-            std::size_t messages_received = 0;
-            std::size_t messages_sent = 0;
+            std::size_t messages_received{};
+            std::size_t messages_sent{};
 
             while (true)
             {
@@ -173,9 +173,9 @@ namespace kmx::aio::sample::tcp::minimal::server
         logger::log(logger::level::info, std::source_location::current(), "Acceptor: Listening on {}:{} (backlog: 128)", bind_ip,
                     config_.bind_port);
 
-        std::uint64_t client_counter = 0;
-        std::uint64_t accept_count = 0;
-        std::uint64_t accept_errors = 0;
+        std::uint64_t client_counter{};
+        std::uint64_t accept_count{};
+        std::uint64_t accept_errors{};
 
         try
         {
@@ -207,7 +207,7 @@ namespace kmx::aio::sample::tcp::minimal::server
                     continue;
                 }
 
-                accept_errors = 0; // Reset error counter on success
+                accept_errors = {}; // Reset error counter on success
 
                 ++accept_count;
                 metrics_.total_connections.fetch_add(1u, std::memory_order_relaxed);

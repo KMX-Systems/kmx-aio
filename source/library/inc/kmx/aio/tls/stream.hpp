@@ -93,7 +93,7 @@ namespace kmx::aio::tls
         [[nodiscard]] std::string_view selected_alpn() const noexcept
         {
             const unsigned char* data = nullptr;
-            unsigned int len = 0;
+            unsigned int len{};
             ::SSL_get0_alpn_selected(ssl_, &data, &len);
             return {reinterpret_cast<const char*>(data), len};
         }
@@ -207,7 +207,7 @@ namespace kmx::aio::tls
 
         [[nodiscard]] task<std::expected<void, std::error_code>> write_all(std::span<const char> buffer) noexcept(false)
         {
-            std::size_t written = 0;
+            std::size_t written{};
             while (written < buffer.size())
             {
                 auto res = co_await write(buffer.subspan(written));

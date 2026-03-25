@@ -54,7 +54,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
         registered_buffers_.resize(max_buffers);
         free_buf_indices_.reserve(max_buffers);
 
-        for (std::size_t i = 0; i < max_buffers; ++i)
+        for (std::size_t i{}; i < max_buffers; ++i)
         {
             registered_buffers_[i].iov_base = buffer_memory_.data() + (i * buffer_size);
             registered_buffers_[i].iov_len = buffer_size;
@@ -109,8 +109,8 @@ namespace kmx::aio::sample::tcp::echo_uring::server
         {
             executor_->spawn(client_sender(stream_ptr, client_id, stats));
 
-            std::size_t messages_received = 0;
-            std::size_t received_bytes = 0;
+            std::size_t messages_received{};
+            std::size_t received_bytes{};
 
             while (true)
             {
@@ -165,7 +165,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
         try
         {
             std::span<char> buffer_span(static_cast<char*>(registered_buffers_[tx_buf_idx].iov_base), buffer_size);
-            std::size_t sent_bytes = 0;
+            std::size_t sent_bytes{};
             stats->tx_active.store(true, std::memory_order_relaxed);
 
             while (true)
@@ -177,7 +177,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
                 const auto chunk_size = std::min(buffer_size, remaining);
 
                 // Usually we'd fill the buffer. For simple echo imitation, we just use random bytes.
-                for (std::size_t i = 0; i < chunk_size; ++i)
+                for (std::size_t i{}; i < chunk_size; ++i)
                 {
                     buffer_span[i] = static_cast<char>(i % 256);
                 }
@@ -216,8 +216,8 @@ namespace kmx::aio::sample::tcp::echo_uring::server
             co_return;
         }
 
-        std::uint64_t client_counter = 0;
-        std::uint64_t accept_errors = 0;
+        std::uint64_t client_counter{};
+        std::uint64_t accept_errors{};
 
         try
         {
@@ -233,7 +233,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
                     continue;
                 }
 
-                accept_errors = 0;
+                accept_errors = {};
                 metrics_.total_connections.fetch_add(1u, std::memory_order_relaxed);
                 const auto client_id = ++client_counter;
                 auto stats = create_connection_stats(client_id);

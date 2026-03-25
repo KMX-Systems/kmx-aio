@@ -13,5 +13,6 @@ Project {
         "xdp/packet_filter/xdp-packet-filter.qbs",
         "quic/echo-server/echo-server.qbs",
         "quic/http3-server/http3-server.qbs",
+        "hft/order_router/hft-order-router.qbs",
     ]
 }

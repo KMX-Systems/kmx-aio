@@ -88,7 +88,7 @@ namespace kmx::aio::http2
         buffer[8] = stream_id & 0xFFu;
 
         // Copy raw payload
-        for (std::size_t i = 0; i < data.size(); ++i)
+        for (std::size_t i{}; i < data.size(); ++i)
         {
             buffer[9u + i] = static_cast<std::uint8_t>(data[i]);
         }

@@ -43,7 +43,7 @@ namespace kmx::aio::completion::spdk::runtime
     void on_subsystem_done(void* ctx) noexcept
     {
         auto* sub_ctx = static_cast<subsystem_ctx*>(ctx);
-        sub_ctx->rc = 0;
+        sub_ctx->rc{};
         sub_ctx->done.store(true, std::memory_order_release);
     }
 
@@ -130,6 +130,7 @@ namespace kmx::aio::completion::spdk::runtime
             {
                 spdk_thread_poll(state.app_thread, 0u, 0u);
             }
+
             spdk_thread_destroy(state.app_thread);
             state.app_thread = nullptr;
         }

@@ -78,11 +78,11 @@ namespace kmx::aio::readiness::openonload
             return 0u; // EOF
         }
 
-        std::size_t total_copied = 0;
+        std::size_t total_copied{};
 
         // For maximum safety bridging to std::span, copy from NIC queues to span,
         // and instantly release hardware memory buffers automatically.
-        for (int i = 0; i < args.msg.iovlen; ++i)
+        for (int i{}; i < args.msg.iovlen; ++i)
         {
             const std::size_t chunk_len = static_cast<std::size_t>(args.msg.iov[i].iov_len);
             const std::size_t available_space = buffer.size() - total_copied;

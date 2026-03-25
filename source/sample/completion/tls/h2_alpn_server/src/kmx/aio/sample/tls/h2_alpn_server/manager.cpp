@@ -112,7 +112,7 @@ namespace kmx::aio::sample::tls::h2_alpn_server
 
             // HTTP/2 Extension: Listen for incoming GET packet and process HEADERS
             char req_hdr[9];
-            size_t total = 0;
+            size_t total{};
             while (total < 9)
             {
                 auto r = co_await stream.read(std::span<char>(req_hdr + total, 9 - total));
@@ -120,12 +120,13 @@ namespace kmx::aio::sample::tls::h2_alpn_server
                     break;
                 total += *r;
             }
-            if (total == 9 && req_hdr[3] == 0x01)
+
+            if ((total == 9) && (req_hdr[3] == 0x01))
             { // Type HEADERS
                 uint32_t payload_len =
                     (static_cast<uint8_t>(req_hdr[0]) << 16) | (static_cast<uint8_t>(req_hdr[1]) << 8) | static_cast<uint8_t>(req_hdr[2]);
                 std::vector<char> payload(payload_len);
-                total = 0;
+                total = {};
                 while (total < payload_len)
                 {
                     auto r = co_await stream.read(std::span<char>(payload.data() + total, payload_len - total));

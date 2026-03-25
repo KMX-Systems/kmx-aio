@@ -10,5 +10,5 @@ namespace kmx::aio::sample::common
     void generate_random_buffer(std::vector<char>& buffer);
 
     /// @brief Format byte counts with dynamic units (B, KB, MB, GB, TB).
-    std::string format_bytes(std::uint64_t bytes);
+    std::string format_bytes(const std::uint64_t bytes);
 } // namespace kmx::aio::sample::common

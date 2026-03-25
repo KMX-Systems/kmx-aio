@@ -7,7 +7,7 @@ namespace kmx::aio::http2
 
     std::size_t hpack_encoder::encoded_size(const header_list& headers) noexcept
     {
-        std::size_t total = 0;
+        std::size_t total{};
         for (const auto& kv: headers)
         {
             total += encoded_size_literal(kv.first, kv.second);
@@ -23,7 +23,7 @@ namespace kmx::aio::http2
             throw std::invalid_argument("Buffer too small for HPACK literal encoding");
         }
 
-        std::size_t offset = 0;
+        std::size_t offset{};
 
         // 0x00 = Literal Header Field without Indexing (New Name)
         buffer[offset++] = 0x00u;
@@ -47,7 +47,7 @@ namespace kmx::aio::http2
 
     std::size_t hpack_encoder::encode(std::span<std::uint8_t> buffer, const header_list& headers) noexcept(false)
     {
-        std::size_t offset = 0;
+        std::size_t offset{};
         for (const auto& kv: headers)
         {
             std::size_t chunk_size = encode_literal(buffer.subspan(offset), kv.first, kv.second);

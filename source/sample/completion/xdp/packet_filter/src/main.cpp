@@ -53,7 +53,7 @@ namespace kmx::aio::completion::xdp::packet_filter
         kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "Listening on {}, starting receive loop...",
                          interface_name);
 
-        for (int i = 0; i < 50; ++i)
+        for (int i{}; i < 50; ++i)
         {
             auto recv_result = co_await sock.recv();
             if (!recv_result)

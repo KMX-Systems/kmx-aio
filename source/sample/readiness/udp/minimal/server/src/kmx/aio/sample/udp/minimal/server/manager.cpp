@@ -101,7 +101,7 @@ namespace kmx::aio::sample::udp::minimal::server
 
         logger::log(logger::level::info, std::source_location::current(), "Server: Bound successfully");
 
-        std::uint64_t msg_errors = 0;
+        std::uint64_t msg_errors{};
 
         try
         {
@@ -132,7 +132,7 @@ namespace kmx::aio::sample::udp::minimal::server
                     continue;
                 }
 
-                msg_errors = 0;
+                msg_errors = {};
                 const auto bytes_received = *recv_result;
                 metrics_.bytes_received.fetch_add(bytes_received, std::memory_order_relaxed);
                 metrics_.messages_handled.fetch_add(1u, std::memory_order_relaxed);
