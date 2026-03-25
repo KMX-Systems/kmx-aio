@@ -13,9 +13,8 @@ namespace kmx::aio::sample::tls::h2_alpn_server
     {
         static const unsigned char alpn_h2[] = {2, 'h', '2'};
         if (::SSL_select_next_proto((unsigned char**) out, outlen, alpn_h2, sizeof(alpn_h2), in, inlen) != OPENSSL_NPN_NEGOTIATED)
-        {
             return SSL_TLSEXT_ERR_NOACK;
-        }
+
         return SSL_TLSEXT_ERR_OK;
     }
 
@@ -74,9 +73,7 @@ namespace kmx::aio::sample::tls::h2_alpn_server
                 co_return;
 
             if (stream.selected_alpn() == "h2")
-            {
                 logger::log(logger::level::info, std::source_location::current(), "Server: ALPN h2 negotiated");
-            }
             else
                 co_return;
 
@@ -89,15 +86,15 @@ namespace kmx::aio::sample::tls::h2_alpn_server
             std::string_view expected_preface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
             std::string_view received(recv_buf, 24);
             if (received == expected_preface && recv_buf[24 + 3] == 4)
-            { // type == SETTINGS
+                // type == SETTINGS
                 logger::log(logger::level::info, std::source_location::current(), "Server: Received valid Preface + Client SETTINGS frame");
-            }
 
             // Send Server SETTINGS + SETTINGS ACK to Client
-            char send_frames[18] = {
+            static const char send_frames[18] {
                 0, 0, 0, 4, 0, 0, 0, 0, 0, // Server SETTINGS
                 0, 0, 0, 4, 1, 0, 0, 0, 0  // SETTINGS ACK
             };
+
             if (auto w_res = co_await stream.write_all(std::span<const char>(send_frames, 18)); !w_res)
                 co_return;
             logger::log(logger::level::info, std::source_location::current(), "Server: Sent SETTINGS + SETTINGS ACK");
@@ -105,10 +102,9 @@ namespace kmx::aio::sample::tls::h2_alpn_server
             // Read Client SETTINGS ACK
             auto r_ack = co_await stream.read(std::span<char>(recv_buf, 9));
             if (r_ack && *r_ack >= 9 && recv_buf[3] == 4 && recv_buf[4] == 1)
-            { // type == SETTINGS, flags == 1
+                // type == SETTINGS, flags == 1
                 logger::log(logger::level::info, std::source_location::current(),
                             "Server: Received Client SETTINGS ACK. Handshake Complete!");
-            }
 
             // HTTP/2 Extension: Listen for incoming GET packet and process HEADERS
             char req_hdr[9];
@@ -134,6 +130,7 @@ namespace kmx::aio::sample::tls::h2_alpn_server
                         break;
                     total += *r;
                 }
+
                 logger::log(logger::level::info, std::source_location::current(),
                             "Server: Received HEADERS map (Length: {}) -> Formulating Response", payload_len);
 
@@ -150,9 +147,7 @@ namespace kmx::aio::sample::tls::h2_alpn_server
                                'H',         'e',  'l',  'l',  'o', ' ', 'f', 'r', 'o', 'm', ' ',
                                'K',         'M',  'X',  ' ',  'H', 'T', 'T', 'P', '/', '2'};
                 if (auto w_res = co_await stream.write_all(std::span<const char>(resp, sizeof(resp))); w_res)
-                {
                     logger::log(logger::level::info, std::source_location::current(), "Server: Sent 200 OK + DATA");
-                }
             }
         }
         catch (...)
@@ -165,12 +160,14 @@ namespace kmx::aio::sample::tls::h2_alpn_server
     void manager::ui_loop(std::stop_token) const
     {
     }
+
     void manager::print_metrics() const
     {
     }
+
     void manager::signal_handler(int signum) noexcept
     {
-        if (signum == SIGINT || signum == SIGTERM)
+        if ((signum == SIGINT) || (signum == SIGTERM))
         {
             auto* exec = g_executor_ptr.load(std::memory_order_acquire);
             if (exec)

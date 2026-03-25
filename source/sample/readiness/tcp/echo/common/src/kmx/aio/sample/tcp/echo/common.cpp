@@ -36,9 +36,7 @@ namespace kmx::aio::sample::common
         const std::size_t size = size_dist(gen);
         buffer.resize(size);
         for (size_t i{}; i < size; ++i)
-        {
             buffer[i] = charset[char_dist(gen)];
-        }
     }
 
     std::string format_bytes(const std::uint64_t bytes)

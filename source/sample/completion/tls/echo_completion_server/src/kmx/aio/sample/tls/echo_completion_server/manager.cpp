@@ -69,9 +69,7 @@ namespace kmx::aio::sample::tls::echo_completion_server
     {
         auto listener = kmx::aio::completion::tcp::listener(executor_, config_.bind_address, config_.bind_port);
         if (!listener.listen(128))
-        {
             co_return;
-        }
 
         while (true)
         {

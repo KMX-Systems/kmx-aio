@@ -103,8 +103,8 @@ namespace kmx::aio::sample::tcp::echo::server
             executor_->spawn(client_sender(stream_ptr, client_id, stats));
 
             std::vector<char> buffer(4096u);
-            std::size_t messages_received{};
-            std::size_t received_bytes{};
+            std::size_t messages_received {};
+            std::size_t received_bytes {};
 
             while (true)
             {
@@ -134,9 +134,7 @@ namespace kmx::aio::sample::tcp::echo::server
 
                 received_bytes += bytes_read;
                 if (received_bytes >= transfer_limit_bytes)
-                {
                     break;
-                }
 
                 ++messages_received;
                 metrics_.bytes_received.fetch_add(bytes_read, std::memory_order_relaxed);
@@ -175,7 +173,7 @@ namespace kmx::aio::sample::tcp::echo::server
         {
             std::vector<char> buffer;
             buffer.reserve(512);
-            std::size_t sent_bytes{};
+            std::size_t sent_bytes {};
             stats->tx_active.store(true, std::memory_order_relaxed);
             while (true)
             {
@@ -234,9 +232,9 @@ namespace kmx::aio::sample::tcp::echo::server
         logger::log(logger::level::info, std::source_location::current(), "Acceptor: Listening on {}:{} (backlog: 128)", bind_ip,
                     config_.bind_port);
 
-        std::uint64_t client_counter{};
-        std::uint64_t accept_count{};
-        std::uint64_t accept_errors{};
+        std::uint64_t client_counter {};
+        std::uint64_t accept_count {};
+        std::uint64_t accept_errors {};
 
         try
         {
@@ -326,9 +324,7 @@ namespace kmx::aio::sample::tcp::echo::server
     void manager::update_closed_state(const std::shared_ptr<connection_stats>& stats)
     {
         if (!stats)
-        {
             return;
-        }
 
         const auto rx_active = stats->rx_active.load(std::memory_order_relaxed);
         const auto tx_active = stats->tx_active.load(std::memory_order_relaxed);
@@ -390,30 +386,20 @@ namespace kmx::aio::sample::tcp::echo::server
             std::cout << "────────────────────────────────────────────────────────────────────────\n";
 
             if (snapshot.empty())
-            {
                 std::cout << "(no active connections)\n";
-            }
             else
             {
                 for (const auto& entry: snapshot)
                 {
                     std::string_view state = "-";
                     if (entry.closed)
-                    {
                         state = "C";
-                    }
                     else if (entry.tx_active && entry.rx_active)
-                    {
                         state = "TX+RX";
-                    }
                     else if (entry.tx_active)
-                    {
                         state = "TX";
-                    }
                     else if (entry.rx_active)
-                    {
                         state = "RX";
-                    }
 
                     std::cout << std::format("Connection {:07}: TX {:>10} | RX {:>10} | EC {:05} | {}\n", entry.client_id,
                                              common::format_bytes(entry.tx), common::format_bytes(entry.rx), entry.errors, state);

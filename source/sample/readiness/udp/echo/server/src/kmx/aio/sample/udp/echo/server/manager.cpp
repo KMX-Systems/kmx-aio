@@ -95,6 +95,7 @@ namespace kmx::aio::sample::udp::echo::server
                                     "Worker [{}]: Breaking loop due to too many errors.", worker_id);
                         break;
                     }
+
                     continue;
                 }
 

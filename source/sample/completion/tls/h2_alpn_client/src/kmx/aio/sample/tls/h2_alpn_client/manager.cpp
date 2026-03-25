@@ -26,9 +26,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
         executor_ = std::make_shared<completion::executor>(exec_config);
 
         for (std::uint32_t i = 0u; i < config_.num_workers; ++i)
-        {
             executor_->spawn(worker(i, nullptr));
-        }
 
         executor_->run();
         return metrics_.failures.load(mem_order) == 0u;
@@ -131,6 +129,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
                 static_cast<char>(0x82), static_cast<char>(0x87), static_cast<char>(0x84),
                 0x41, 0x09, 'l', 'o', 'c', 'a', 'l', 'h', 'o', 's', 't'
             };
+
             if (auto res = co_await stream_ptr->write_all(std::span<const char>(req_frame, sizeof(req_frame))); !res)
                 co_return;
 
@@ -141,27 +140,26 @@ namespace kmx::aio::sample::tls::h2_alpn_client
             while (total < 10)
             {
                 auto r = co_await stream_ptr->read(std::span<char>(resp_hdr + total, 10 - total));
-                if (!r || *r == 0)
+                if (!r || (*r == 0))
                     break;
                 total += *r;
             }
+
             if (total == 10)
-            {
                 logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Received Response HEADERS. Status: {}",
                             worker_id, (resp_hdr[9] == static_cast<char>(0x88) ? "200 OK" : "Unknown"));
-            }
 
             char data_hdr[9];
             total = {};
             while (total < 9)
             {
                 auto r = co_await stream_ptr->read(std::span<char>(data_hdr + total, 9 - total));
-                if (!r || *r == 0)
+                if (!r || (*r == 0))
                     break;
                 total += *r;
             }
 
-            if (total == 9 && data_hdr[3] == 0x00)
+            if ((total == 9) && (data_hdr[3] == 0x00))
             {
                 const std::uint32_t data_len = (static_cast<std::uint8_t>(data_hdr[0]) << 16u) |
                                                (static_cast<std::uint8_t>(data_hdr[1]) << 8u) |
@@ -172,7 +170,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
                 while (total < data_len)
                 {
                     auto r = co_await stream_ptr->read(std::span<char>(data_payload.data() + total, data_len - total));
-                    if (!r || *r == 0)
+                    if (!r || (*r == 0))
                         break;
                     total += *r;
                 }
@@ -181,13 +179,14 @@ namespace kmx::aio::sample::tls::h2_alpn_client
                             data_payload.data());
             }
 
-                ::shutdown(stream_ptr->inner().get_fd(), SHUT_WR);
-                metrics_.successes.fetch_add(1u, mem_order);
+            ::shutdown(stream_ptr->inner().get_fd(), SHUT_WR);
+            metrics_.successes.fetch_add(1u, mem_order);
         }
         catch (...)
         {
                 metrics_.failures.fetch_add(1u, mem_order);
         }
+
         co_return;
     }
 
@@ -209,9 +208,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
         if (stats &&
             !stats->rx_active.load(std::memory_order_acquire) &&
             !stats->tx_active.load(std::memory_order_acquire))
-        {
             stats->closed.store(true, std::memory_order_release);
-        }
     }
 
     void manager::ui_loop(std::stop_token stop_token) const

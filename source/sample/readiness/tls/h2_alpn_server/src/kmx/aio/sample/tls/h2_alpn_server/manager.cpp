@@ -12,9 +12,8 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
     {
         static const unsigned char alpn_h2[] = {2, 'h', '2'};
         if (::SSL_select_next_proto((unsigned char**) out, outlen, alpn_h2, sizeof(alpn_h2), in, inlen) != OPENSSL_NPN_NEGOTIATED)
-        {
             return SSL_TLSEXT_ERR_NOACK;
-        }
+
         return SSL_TLSEXT_ERR_OK;
     }
 
@@ -116,7 +115,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
                 co_return;
             }
 
-            const std::array<char, 18> send_frames {
+            static constexpr std::array<char, 18> send_frames {
                 0, 0, 0, 4, 0, 0, 0, 0, 0,
                 0, 0, 0, 4, 1, 0, 0, 0, 0,
             };

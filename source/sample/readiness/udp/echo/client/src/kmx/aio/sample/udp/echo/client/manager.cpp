@@ -25,9 +25,7 @@ namespace kmx::aio::sample::udp::echo::client
         executor_ = std::make_shared<readiness::executor>(exec_cfg);
 
         for (std::uint32_t i{}; i < config_.concurrency; ++i)
-        {
             executor_->spawn(worker(i));
-        }
 
         executor_->run();
 
@@ -71,10 +69,9 @@ namespace kmx::aio::sample::udp::echo::client
             for (std::uint32_t msg{}; msg < config_.messages_per_worker; ++msg)
             {
                 if (msg > 0 && msg % 100 == 0)
-                {
                     logger::log(logger::level::info, std::source_location::current(), "Worker [{}]: Sent {} messages so far", worker_id,
                                 msg);
-                }
+
                 auto send_result =
                     co_await ep.send(send_buf, reinterpret_cast<const sockaddr*>(&server_addr->storage), server_addr->length);
                 if (!send_result)
