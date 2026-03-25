@@ -15,10 +15,9 @@
 
 #include <atomic>
 #include <memory>
-#include <string>
 #include <system_error>
 
-namespace kmx::aio::integration
+namespace kmx::aio::kernel_bypass::test::integration
 {
     struct test_state
     {
@@ -29,7 +28,7 @@ namespace kmx::aio::integration
         std::error_code xdp_error {};
     };
 
-    task<void> run_spdk_cycle(std::shared_ptr<completion::executor> exec, std::shared_ptr<test_state> state)
+    [[nodiscard]] static task<void> run_spdk_cycle(std::shared_ptr<completion::executor> exec, std::shared_ptr<test_state> state)
     {
         auto init_res = completion::spdk::runtime::initialize();
         if (!init_res && init_res.error() != std::make_error_code(std::errc::function_not_supported))
@@ -62,7 +61,7 @@ namespace kmx::aio::integration
         co_return;
     }
 
-    task<void> run_xdp_cycle(std::shared_ptr<completion::executor> exec, std::shared_ptr<test_state> state)
+    [[nodiscard]] static task<void> run_xdp_cycle(std::shared_ptr<completion::executor> exec, std::shared_ptr<test_state> state)
     {
         completion::xdp::socket_config cfg {
             .interface_name = "lo", // Loopback fallback queue typically passes creation even if it won't zero-copy.
@@ -126,4 +125,4 @@ namespace kmx::aio::integration
         // XDP fallback engine ensures it returns 'ok' when software backend fires.
         REQUIRE((state->xdp_init_ok == true || state->xdp_error.value() != 0));
     }
-}
+} // namespace kmx::aio::kernel_bypass::test::integration

@@ -15,33 +15,30 @@
 #include <system_error>
 #include <vector>
 
-namespace kmx::aio::integration
+namespace kmx::aio::tls::test::integration
 {
-    namespace
+    template <typename Stream>
+    concept alpn_api_surface = requires(Stream s, std::span<const std::uint8_t> p)
     {
-        template <typename Stream>
-        concept alpn_api_surface = requires(Stream s, std::span<const std::uint8_t> p)
-        {
-            { s.set_alpn_protocols(p) } -> std::same_as<std::expected<void, std::error_code>>;
-            { s.selected_alpn() } -> std::convertible_to<std::string_view>;
-        };
+        { s.set_alpn_protocols(p) } -> std::same_as<std::expected<void, std::error_code>>;
+        { s.selected_alpn() } -> std::convertible_to<std::string_view>;
+    };
 
-        std::vector<std::uint8_t> encode_alpn_wire_format(const std::initializer_list<std::string_view> protocols)
+    [[nodiscard]] static std::vector<std::uint8_t> encode_alpn_wire_format(const std::initializer_list<std::string_view> protocols)
+    {
+        std::vector<std::uint8_t> wire;
+        for (const auto protocol : protocols)
         {
-            std::vector<std::uint8_t> wire;
-            for (const auto protocol : protocols)
-            {
-                wire.push_back(static_cast<std::uint8_t>(protocol.size()));
-                wire.insert(wire.end(), protocol.begin(), protocol.end());
-            }
-            return wire;
+            wire.push_back(static_cast<std::uint8_t>(protocol.size()));
+            wire.insert(wire.end(), protocol.begin(), protocol.end());
         }
-    } // namespace
+        return wire;
+    }
 
     TEST_CASE("Pillar 2: TLS ALPN API matrix parity", "[pillar2][integration][tls][alpn]")
     {
-        STATIC_REQUIRE(alpn_api_surface<readiness::tls::stream>);
-        STATIC_REQUIRE(alpn_api_surface<completion::tls::stream>);
+        STATIC_REQUIRE(alpn_api_surface<kmx::aio::readiness::tls::stream>);
+        STATIC_REQUIRE(alpn_api_surface<kmx::aio::completion::tls::stream>);
 
         const auto wire = encode_alpn_wire_format({"h2", "http/1.1"});
         const std::array<std::uint8_t, 12> expected {
@@ -62,7 +59,7 @@ namespace kmx::aio::integration
 
         SECTION("Readiness stream rejects ALPN set without initialized SSL handle")
         {
-            readiness::tls::stream stream {};
+            kmx::aio::readiness::tls::stream stream {};
             const auto result = stream.set_alpn_protocols(std::span<const std::uint8_t>(wire.data(), wire.size()));
 
             REQUIRE_FALSE(result.has_value());
@@ -71,11 +68,11 @@ namespace kmx::aio::integration
 
         SECTION("Completion stream rejects ALPN set without initialized SSL handle")
         {
-            completion::tls::stream stream {};
+            kmx::aio::completion::tls::stream stream {};
             const auto result = stream.set_alpn_protocols(std::span<const std::uint8_t>(wire.data(), wire.size()));
 
             REQUIRE_FALSE(result.has_value());
             REQUIRE(result.error() == std::make_error_code(std::errc::invalid_argument));
         }
     }
-} // namespace kmx::aio::integration
+} // namespace kmx::aio::tls::test::integration

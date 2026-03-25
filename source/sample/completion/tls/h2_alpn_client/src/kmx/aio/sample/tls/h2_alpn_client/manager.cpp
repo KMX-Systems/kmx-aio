@@ -197,20 +197,61 @@ namespace kmx::aio::sample::tls::h2_alpn_client
         co_return;
     }
 
-    std::shared_ptr<manager::connection_stats> manager::create_connection_stats(const std::uint32_t /*worker_id*/)
+    std::shared_ptr<manager::connection_stats> manager::create_connection_stats(const std::uint32_t worker_id)
     {
-        return {};
+        std::lock_guard lock(connections_mutex_);
+        auto [it, inserted] = connections_.try_emplace(worker_id, std::make_shared<connection_stats>());
+        return it->second;
     }
 
-    void manager::update_closed_state(const std::shared_ptr<connection_stats>& /*stats*/)
+    void manager::update_closed_state(const std::shared_ptr<connection_stats>& stats)
     {
+        if (stats &&
+            !stats->rx_active.load(std::memory_order_acquire) &&
+            !stats->tx_active.load(std::memory_order_acquire))
+        {
+            stats->closed.store(true, std::memory_order_release);
+        }
     }
 
-    void manager::ui_loop(std::stop_token /*stop_token*/) const
+    void manager::ui_loop(std::stop_token stop_token) const
     {
+        while (!stop_token.stop_requested())
+        {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            if (stop_token.stop_requested())
+                break;
+
+            const auto total     = metrics_.total_connections.load(mem_order);
+            const auto completed = metrics_.completed.load(mem_order);
+            const auto successes = metrics_.successes.load(mem_order);
+            const auto failures  = metrics_.failures.load(mem_order);
+            const auto sent      = metrics_.bytes_sent.load(mem_order);
+            const auto received  = metrics_.bytes_received.load(mem_order);
+            const auto errors    = metrics_.errors.load(mem_order);
+
+            logger::log(logger::level::info, std::source_location::current(),
+                        "[UI] total={} completed={} ok={} fail={} errors={} sent={}B recv={}B",
+                        total, completed, successes, failures, errors, sent, received);
+        }
     }
 
-    void manager::print_summary(const std::chrono::milliseconds /*elapsed*/) const
+    void manager::print_summary(const std::chrono::milliseconds elapsed) const
     {
+        const auto successes = metrics_.successes.load(mem_order);
+        const auto failures  = metrics_.failures.load(mem_order);
+        const auto total     = successes + failures;
+        const auto sent      = metrics_.bytes_sent.load(mem_order);
+        const auto received  = metrics_.bytes_received.load(mem_order);
+        const auto errors    = metrics_.errors.load(mem_order);
+
+        logger::log(logger::level::info, std::source_location::current(), "--- H2 ALPN Client Summary ---");
+        logger::log(logger::level::info, std::source_location::current(), "  Duration   : {}ms", elapsed.count());
+        logger::log(logger::level::info, std::source_location::current(), "  Total      : {}", total);
+        logger::log(logger::level::info, std::source_location::current(), "  Successes  : {}", successes);
+        logger::log(logger::level::info, std::source_location::current(), "  Failures   : {}", failures);
+        logger::log(logger::level::info, std::source_location::current(), "  Errors     : {}", errors);
+        logger::log(logger::level::info, std::source_location::current(), "  Bytes Sent : {}", sent);
+        logger::log(logger::level::info, std::source_location::current(), "  Bytes Recv : {}", received);
     }
 }

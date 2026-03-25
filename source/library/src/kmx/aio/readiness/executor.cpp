@@ -11,38 +11,35 @@
 
 namespace kmx::aio::readiness
 {
-    namespace
-    {
 #if defined(KMX_AIO_FEATURE_OPENONLOAD)
-        [[nodiscard]] bool env_var_contains(const char* name, const std::string_view token) noexcept
-        {
-            const char* value = std::getenv(name);
-            if (!value)
-                return false;
-
-            return std::string_view(value).find(token) != std::string_view::npos;
-        }
-
-        [[nodiscard]] bool is_openonload_runtime_available() noexcept
-        {
-            // OpenOnload is transparently injected; detect common runtime hints.
-            if (env_var_contains("LD_PRELOAD", "onload"))
-                return true;
-
-            if (std::getenv("ONLOAD_STACKNAME"))
-                return true;
-
-            if (std::getenv("EF_POLL_USEC"))
-                return true;
-
+    [[nodiscard]] static bool env_var_contains(const char* name, const std::string_view token) noexcept
+    {
+        const char* value = std::getenv(name);
+        if (!value)
             return false;
+
+        return std::string_view(value).find(token) != std::string_view::npos;
+    }
+
+    [[nodiscard]] static bool is_openonload_runtime_available() noexcept
+    {
+        // OpenOnload is transparently injected; detect common runtime hints.
+        if (env_var_contains("LD_PRELOAD", "onload"))
+            return true;
+
+        if (std::getenv("ONLOAD_STACKNAME"))
+            return true;
+
+        if (std::getenv("EF_POLL_USEC"))
+            return true;
+
+        return false;
 #else
-        [[nodiscard]] constexpr bool is_openonload_runtime_available() noexcept
-        {
-            return false;
+    [[nodiscard]] static constexpr bool is_openonload_runtime_available() noexcept
+    {
+        return false;
 #endif
-        }
-    } // namespace
+    }
 
     static constexpr auto mem_order = std::memory_order_relaxed;
 
