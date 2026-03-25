@@ -5,6 +5,7 @@ Project {
     property bool enable_openonload: false
     property bool enable_af_xdp: false
     property bool enable_spdk: false
+    property bool enable_quic: false
 
     references: [
         "library/lib.qbs",

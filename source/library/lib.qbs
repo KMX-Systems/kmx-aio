@@ -13,12 +13,15 @@ StaticLibrary {
             defs.push("KMX_AIO_FEATURE_AF_XDP=1");
         if (project.enable_spdk)
             defs.push("KMX_AIO_FEATURE_SPDK=1");
+        if (project.enable_quic)
+            defs.push("KMX_AIO_FEATURE_QUIC=1");
         return defs;
     }
     cpp.includePaths: [
         "inc",
         "inc_dep",
         "/usr/local/include",
+        "../../build/lsquic/include",
     ]
     cpp.libraryPaths: [
         "/usr/local/lib",
@@ -84,6 +87,14 @@ StaticLibrary {
             libs.push("isal_crypto");
         }
 
+        if (project.enable_quic)
+        {
+            libs.push("/home/io/Development/kmx-aio/build/lsquic/build/src/liblsquic/liblsquic.a");
+            libs.push("/home/io/Development/3rd/boringssl/build/libssl.a");
+            libs.push("/home/io/Development/3rd/boringssl/build/libcrypto.a");
+            libs.push("z");
+        }
+
         return libs;
     }
     install: true
@@ -108,6 +119,7 @@ StaticLibrary {
         "src/kmx/aio/completion/tls/**.cpp",
         "src/kmx/aio/completion/spdk/**.cpp",
         "src/kmx/aio/completion/xdp/**.cpp",
+        "src/kmx/aio/completion/quic/**.cpp",
 
         // Readiness model sources
         "inc/kmx/aio/readiness/**.hpp",
@@ -120,5 +132,6 @@ StaticLibrary {
         "src/kmx/aio/readiness/tcp/**.cpp",
         "src/kmx/aio/readiness/udp/**.cpp",
         "src/kmx/aio/readiness/tls/**.cpp",
+        "src/kmx/aio/readiness/quic/**.cpp",
     ]
 }
