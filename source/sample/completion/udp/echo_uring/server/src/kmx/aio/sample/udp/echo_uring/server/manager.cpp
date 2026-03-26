@@ -26,9 +26,7 @@ namespace kmx::aio::sample::udp::echo_uring::server
         std::signal(SIGTERM, signal_handler);
 
         for (std::uint32_t i{}; i < config_.listener_workers; ++i)
-        {
             executor_->spawn(listener(i));
-        }
 
         ui_thread_ = std::jthread([this](std::stop_token stop_token) { ui_loop(stop_token); });
 

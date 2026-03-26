@@ -149,7 +149,7 @@ namespace kmx::aio::sample::udp::echo::server
 
     void manager::signal_handler(int signum) noexcept
     {
-        if (signum == SIGINT || signum == SIGTERM)
+        if ((signum == SIGINT) || (signum == SIGTERM))
         {
             const char msg[] = "\n[SIGNAL] Stopping UDP Echo Server executor...\n";
             [[maybe_unused]] auto res = ::write(STDERR_FILENO, msg, sizeof(msg) - 1);

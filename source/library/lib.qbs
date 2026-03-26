@@ -143,8 +143,6 @@ StaticLibrary {
     ]
     Export {
         Depends { name: "cpp" }
-        cpp.includePaths: [
-            product.sourceDirectory + "/api",
-        ]
+        cpp.includePaths: [ product.sourceDirectory + "/api" ]
     }
 }

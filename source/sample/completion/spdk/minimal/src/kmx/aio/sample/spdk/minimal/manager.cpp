@@ -35,11 +35,9 @@ namespace kmx::aio::sample::spdk::minimal
 
         const auto hugepages = read_nr_hugepages();
         if (hugepages == 0u)
-        {
             kmx::logger::log(kmx::logger::level::warn, std::source_location::current(),
                              "SPDK runtime hint: no hugepages are configured (nr_hugepages=0). "
                              "Run: echo 1024 | sudo tee /proc/sys/vm/nr_hugepages");
-        }
 
         kmx::logger::log(kmx::logger::level::warn, std::source_location::current(),
                          "SPDK runtime hint: ensure SPDK libs are discoverable at runtime. "

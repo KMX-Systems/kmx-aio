@@ -121,6 +121,7 @@ namespace kmx::aio::sample::tcp::echo::server
                         metrics_.errors.fetch_add(1u, std::memory_order_relaxed);
                         stats->errors.fetch_add(1u, std::memory_order_relaxed);
                     }
+
                     break;
                 }
 
@@ -182,9 +183,8 @@ namespace kmx::aio::sample::tcp::echo::server
                 const auto size = buffer.size();
                 const auto remaining = transfer_limit_bytes - sent_bytes;
                 if (size > remaining)
-                {
                     buffer.resize(remaining);
-                }
+
                 const std::span<const char> buffer_span {buffer.data(), buffer.size()};
                 if (auto res = co_await stream->write_all(buffer_span); !res)
                 {
@@ -192,6 +192,7 @@ namespace kmx::aio::sample::tcp::echo::server
                     stats->errors.fetch_add(1u, std::memory_order_relaxed);
                     break;
                 }
+
                 sent_bytes += buffer.size();
                 metrics_.bytes_sent.fetch_add(buffer.size(), std::memory_order_relaxed);
                 stats->bytes_sent.fetch_add(buffer.size(), std::memory_order_relaxed);
@@ -204,6 +205,7 @@ namespace kmx::aio::sample::tcp::echo::server
         catch (...)
         {
         }
+
         stats->tx_active.store(false, std::memory_order_relaxed);
         update_closed_state(stats);
         co_return;

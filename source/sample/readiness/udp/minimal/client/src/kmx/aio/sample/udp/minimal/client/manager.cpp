@@ -88,7 +88,7 @@ namespace kmx::aio::sample::udp::minimal::client
                         config_.server_port);
 
             // Asynchronously receive response
-            std::vector<std::byte> response_buffer(1024);
+            std::vector<std::byte> response_buffer(1024u);
             sockaddr_storage peer_addr {};
             ::socklen_t peer_addr_len = sizeof(peer_addr);
 

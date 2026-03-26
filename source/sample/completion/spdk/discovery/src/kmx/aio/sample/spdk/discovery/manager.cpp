@@ -15,7 +15,7 @@
 
 namespace kmx::aio::sample::spdk::discovery
 {
-    auto collect_requested(const int argc, char** argv) -> std::vector<std::string>
+    auto collect_requested(const int argc, const char** argv) -> std::vector<std::string>
     {
         if (argc <= 1)
             return {};
@@ -36,7 +36,7 @@ namespace kmx::aio::sample::spdk::discovery
         return out;
     }
 
-    auto run_discovery(int argc, char** argv) -> int
+    auto run_discovery(int argc, const char** argv) -> int
     {
         auto exec = std::make_shared<kmx::aio::completion::executor>();
         const auto requested = collect_requested(argc, argv);

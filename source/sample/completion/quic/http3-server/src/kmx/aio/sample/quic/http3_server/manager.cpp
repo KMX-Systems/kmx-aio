@@ -35,8 +35,8 @@ namespace kmx::aio::sample::quic::http3_server
         kmx::aio::completion::quic::engine engine(*exec);
         engine.set_stream_handler(handle_stream);
 
-        static constexpr std::array<unsigned char, 4> ip = {127, 0, 0, 1};
-        auto res = co_await engine.start(ip, 12345, ssl_ctx);
+        static constexpr std::array<std::uint8_t, 4u> ip = {127u, 0u, 0u, 1u};
+        auto res = co_await engine.start(ip, 12345u, ssl_ctx);
         if (!res)
         {
             std::cerr << "Failed to start QUIC engine: " << res.error().message() << "\n";

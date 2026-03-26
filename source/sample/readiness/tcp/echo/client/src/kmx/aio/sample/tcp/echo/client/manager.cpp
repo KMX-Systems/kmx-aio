@@ -155,9 +155,7 @@ namespace kmx::aio::sample::tcp::echo::client
 
             auto stream_ptr = std::make_shared<kmx::aio::readiness::tcp::stream>(std::move(*stream_result));
             if (stats)
-            {
                 stats->rx_active.store(true, mem_order);
-            }
 
             logger::log(logger::level::debug, std::source_location::current(), "Worker [{}]: Connected", worker_id);
 
@@ -197,10 +195,8 @@ namespace kmx::aio::sample::tcp::echo::client
                     break;
 
                 if ((worker_id % 100) == 0)
-                {
                     logger::log(logger::level::info, std::source_location::current(), "Worker [{}]: Received {} bytes", worker_id,
                                 *recv_result);
-                }
 
                 metrics_.successes.fetch_add(1u, mem_order);
             }

@@ -65,6 +65,7 @@ namespace kmx::aio::sample::xdp::packet_filter
                     sock.trigger_wakeup();
                     continue;
                 }
+
                 kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Receive failed: {}",
                                  recv_result.error().message());
                 break;

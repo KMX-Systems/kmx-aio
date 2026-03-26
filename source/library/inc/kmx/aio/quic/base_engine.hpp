@@ -14,6 +14,7 @@
 #include <memory>
 #include <netinet/in.h>
 #include <span>
+#include <string>
 #include <sys/socket.h>
 #include <system_error>
 
@@ -41,6 +42,8 @@ namespace kmx::aio::quic
         sockaddr_storage local_addr_ {};
         void* ssl_ctx_ {};
         bool running_ {};
+        bool is_client_ {false};
+        std::string client_payload_ {};
 
         explicit base_impl(Executor& exec) noexcept: exec_(exec) {}
 
@@ -81,16 +84,26 @@ namespace kmx::aio::quic
             return static_cast<int>(sent);
         }
 
-        static ::lsquic_conn_ctx_t* on_new_conn(void* stream_if_ctx, ::lsquic_conn_t* /*conn*/)
+        static ::lsquic_conn_ctx_t* on_new_conn(void* stream_if_ctx, ::lsquic_conn_t* conn)
         {
+            auto* self = static_cast<base_impl*>(stream_if_ctx);
+            if (self->is_client_)
+                ::lsquic_conn_make_stream(conn);
             return reinterpret_cast<::lsquic_conn_ctx_t*>(stream_if_ctx);
         }
 
-        static void on_conn_closed(::lsquic_conn_t* /*conn*/) {}
-
-        static ::lsquic_stream_ctx_t* on_new_stream(void* /*stream_if_ctx*/, ::lsquic_stream_t* stream)
+        static void on_conn_closed(::lsquic_conn_t* conn)
         {
-            ::lsquic_stream_wantread(stream, 1);
+            ::lsquic_conn_set_ctx(conn, nullptr);
+        }
+
+        static ::lsquic_stream_ctx_t* on_new_stream(void* stream_if_ctx, ::lsquic_stream_t* stream)
+        {
+            auto* self = static_cast<base_impl*>(stream_if_ctx);
+            if (self->is_client_)
+                ::lsquic_stream_wantwrite(stream, 1);
+            else
+                ::lsquic_stream_wantread(stream, 1);
             return nullptr;
         }
 
@@ -105,10 +118,31 @@ namespace kmx::aio::quic
                     self->exec_.spawn(self->stream_handler_(std::span<char>(buf.data(), nr)));
             }
             else if (nr == 0)
+            {
                 ::lsquic_stream_close(stream);
+                if (self->is_client_) {
+                    ::lsquic_conn_close(::lsquic_stream_conn(stream));
+                    self->running_ = false;
+                }
+            }
         }
 
-        static void on_write(::lsquic_stream_t* stream, ::lsquic_stream_ctx_t* /*ctx*/) { ::lsquic_stream_wantwrite(stream, 0); }
+        static void on_write(::lsquic_stream_t* stream, ::lsquic_stream_ctx_t* /*ctx*/)
+        {
+            auto* self = reinterpret_cast<base_impl*>(::lsquic_conn_get_ctx(::lsquic_stream_conn(stream)));
+            if (self->is_client_ && !self->client_payload_.empty())
+            {
+                ::lsquic_stream_write(stream, self->client_payload_.data(), self->client_payload_.size());
+                ::lsquic_stream_flush(stream);
+                self->client_payload_.clear();
+                ::lsquic_stream_wantwrite(stream, 0);
+                ::lsquic_stream_wantread(stream, 1);
+            }
+            else
+            {
+                ::lsquic_stream_wantwrite(stream, 0);
+            }
+        }
 
         static struct ssl_ctx_st* get_ssl_ctx(void* peer_ctx, const struct sockaddr* /*local*/)
         {
@@ -122,9 +156,9 @@ namespace kmx::aio::quic
 
         /// @brief Configures lsquic callbacks, settings, and creates the lsquic_engine.
         /// @return Success or an error code.
-        [[nodiscard]] std::expected<void, std::error_code> init_lsquic(const kmx::aio::quic::settings& config)
+        [[nodiscard]] std::expected<void, std::error_code> init_lsquic(const kmx::aio::quic::settings& config, unsigned lsquic_flags)
         {
-            if (::lsquic_global_init(LSQUIC_GLOBAL_SERVER) != 0)
+            if (::lsquic_global_init(lsquic_flags & LSENG_SERVER ? LSQUIC_GLOBAL_SERVER : LSQUIC_GLOBAL_CLIENT) != 0)
                 return std::unexpected(error_from_errno(EINVAL));
 
             static ::lsquic_stream_if stream_if {};
@@ -143,13 +177,13 @@ namespace kmx::aio::quic
             engine_api.ea_get_ssl_ctx = get_ssl_ctx;
 
             static ::lsquic_engine_settings lsquic_settings {};
-            ::lsquic_engine_init_settings(&lsquic_settings, LSENG_SERVER);
+            ::lsquic_engine_init_settings(&lsquic_settings, lsquic_flags);
             lsquic_settings.es_max_streams_in = config.max_streams_in;
             lsquic_settings.es_idle_timeout = config.idle_conn_timeout_sec;
             lsquic_settings.es_max_cfcw = config.max_cfcwnd;
             engine_api.ea_settings = &lsquic_settings;
 
-            lsquic_engine_ = ::lsquic_engine_new(LSENG_SERVER, &engine_api);
+            lsquic_engine_ = ::lsquic_engine_new(lsquic_flags, &engine_api);
             if (!lsquic_engine_)
                 return std::unexpected(error_from_errno(EINVAL));
 
@@ -185,8 +219,47 @@ namespace kmx::aio::quic
             if (auto bind_res = bind_socket(ip, port); !bind_res)
                 return std::unexpected(bind_res.error());
 
-            if (auto init_res = init_lsquic(config); !init_res)
+            if (auto init_res = init_lsquic(config, LSENG_SERVER); !init_res)
                 return std::unexpected(init_res.error());
+
+            return {};
+        }
+
+        [[nodiscard]] std::expected<void, std::error_code> connect_setup(std::expected<UdpSocket, std::error_code>&& sock_res,
+                                                                         const ip_address_t peer_ip, const port_t peer_port,
+                                                                         const std::string& hostname, const std::string& client_payload,
+                                                                         void* ssl_ctx, const kmx::aio::quic::settings& config)
+        {
+            if (!sock_res)
+                return std::unexpected(sock_res.error());
+
+            ssl_ctx_ = ssl_ctx;
+            is_client_ = true;
+            client_payload_ = client_payload;
+            socket_ = std::make_unique<UdpSocket>(std::move(*sock_res));
+
+            // Bind to ephemeral port
+            static constexpr std::array<uint8_t, 4> any_ip = {0, 0, 0, 0};
+            if (auto bind_res = bind_socket(any_ip, 0); !bind_res)
+                return std::unexpected(bind_res.error());
+
+            if (auto init_res = init_lsquic(config, 0); !init_res)
+                return std::unexpected(init_res.error());
+
+            auto peer_addr_result = make_socket_address(peer_ip, peer_port);
+            if (!peer_addr_result)
+                return std::unexpected(peer_addr_result.error());
+
+            const char* host = hostname.empty() ? nullptr : hostname.c_str();
+
+            ::lsquic_conn_t* conn = ::lsquic_engine_connect(
+                lsquic_engine_, N_LSQVER,
+                reinterpret_cast<sockaddr*>(&local_addr_),
+                reinterpret_cast<sockaddr*>(&peer_addr_result->storage),
+                static_cast<void*>(this), nullptr, host, 0, nullptr, 0, nullptr, 0);
+
+            if (!conn)
+                return std::unexpected(error_from_errno());
 
             return {};
         }

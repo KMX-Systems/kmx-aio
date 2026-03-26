@@ -67,9 +67,7 @@ namespace kmx::aio::sample::tls::echo_readiness_server
     {
         auto listener = kmx::aio::readiness::tcp::listener(*executor_, config_.bind_address, config_.bind_port);
         if (!listener.listen(128))
-        {
             co_return;
-        }
 
         while (true)
         {

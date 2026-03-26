@@ -99,9 +99,9 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
                 co_return;
             }
 
-            std::array<char, 33> recv_buf {};
+            std::array<char, 33u> recv_buf {};
             auto read_res = co_await stream.read(std::span<char>(recv_buf.data(), recv_buf.size()));
-            if (!read_res || *read_res < recv_buf.size())
+            if (!read_res || (*read_res < recv_buf.size()))
             {
                 metrics_.errors.fetch_add(1u, std::memory_order_relaxed);
                 co_return;
@@ -109,7 +109,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
 
             constexpr std::string_view expected_preface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
             const std::string_view received_preface(recv_buf.data(), 24u);
-            if (received_preface != expected_preface || recv_buf[24 + 3] != 4)
+            if ((received_preface != expected_preface) || (recv_buf[24 + 3] != 4))
             {
                 metrics_.failures.fetch_add(1u, std::memory_order_relaxed);
                 co_return;
@@ -119,13 +119,14 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
                 0, 0, 0, 4, 0, 0, 0, 0, 0,
                 0, 0, 0, 4, 1, 0, 0, 0, 0,
             };
+
             if (auto w_res = co_await stream.write_all(std::span<const char>(send_frames.data(), send_frames.size())); !w_res)
             {
                 metrics_.errors.fetch_add(1u, std::memory_order_relaxed);
                 co_return;
             }
 
-            std::array<char, 9> ack_buf {};
+            std::array<char, 9u> ack_buf {};
             auto r_ack = co_await stream.read(std::span<char>(ack_buf.data(), ack_buf.size()));
             if (!r_ack || *r_ack < ack_buf.size() || ack_buf[3] != 4 || ack_buf[4] != 1)
             {
@@ -133,8 +134,8 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
                 co_return;
             }
 
-            std::array<char, 9> req_hdr {};
-            std::size_t total = 0u;
+            std::array<char, 9u> req_hdr {};
+            std::size_t total{};
             while (total < req_hdr.size())
             {
                 auto r = co_await stream.read(std::span<char>(req_hdr.data() + total, req_hdr.size() - total));
@@ -143,7 +144,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
                 total += *r;
             }
 
-            if (total == req_hdr.size() && req_hdr[3] == 0x01)
+            if ((total == req_hdr.size()) && (req_hdr[3] == 0x01))
             {
                 const auto payload_len = (static_cast<std::uint32_t>(static_cast<std::uint8_t>(req_hdr[0])) << 16u) |
                                          (static_cast<std::uint32_t>(static_cast<std::uint8_t>(req_hdr[1])) << 8u) |
@@ -194,7 +195,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
 
     void manager::signal_handler(const int signum) noexcept
     {
-        if (signum == SIGINT || signum == SIGTERM)
+        if ((signum == SIGINT) || (signum == SIGTERM))
         {
             auto* exec = g_executor_ptr.load(std::memory_order_acquire);
             if (exec)

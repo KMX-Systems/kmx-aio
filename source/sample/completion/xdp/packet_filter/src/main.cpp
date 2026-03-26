@@ -9,7 +9,7 @@
 
 #include <kmx/aio/sample/xdp/packet_filter/manager.hpp>
 
-int main(int argc, char** argv) noexcept
+int main(int argc, const char** argv) noexcept
 {
     if (argc < 2)
     {

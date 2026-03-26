@@ -34,9 +34,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
         executor_ = std::make_shared<readiness::executor>(exec_config);
 
         for (std::uint32_t i = 0u; i < config_.num_workers; ++i)
-        {
             executor_->spawn(worker(i));
-        }
 
         executor_->run();
 

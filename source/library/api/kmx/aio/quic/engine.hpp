@@ -68,11 +68,13 @@ namespace kmx::aio::quic
         /// @param peer_ip   IP address to connect to.
         /// @param peer_port Port number to connect to.
         /// @param hostname  Hostname for SNI (Server Name Indication). Optional.
+        /// @param payload   Payload to send once connected.
         /// @param ssl_ctx   BoringSSL SSL_CTX pointer.
         /// @param config    QUIC protocol settings.
         /// @return Success or an error code once connection is established.
         [[nodiscard]] task<std::expected<void, std::error_code>> connect(ip_address_t peer_ip, port_t peer_port,
-                                                                         const std::string& hostname = "", void* ssl_ctx = nullptr,
+                                                                         const std::string& hostname = "",
+                                                                         const std::string& payload = "", void* ssl_ctx = nullptr,
                                                                          const settings& config = settings{}) noexcept(false);
 
     private:

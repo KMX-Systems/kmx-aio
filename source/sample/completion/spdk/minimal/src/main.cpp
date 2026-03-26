@@ -11,7 +11,7 @@
 
 #include <kmx/aio/sample/spdk/minimal/manager.hpp>
 
-int main(int argc, char** argv) noexcept
+int main(int argc, const char** argv) noexcept
 {
     try
     {

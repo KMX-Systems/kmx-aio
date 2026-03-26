@@ -103,6 +103,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
             metrics_.errors.fetch_add(1u, std::memory_order_relaxed);
             co_return; // out of buffers
         }
+
         std::span<char> buffer_span(static_cast<char*>(registered_buffers_[rx_buf_idx].iov_base), buffer_size);
 
         try
@@ -122,6 +123,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
                         metrics_.errors.fetch_add(1u, std::memory_order_relaxed);
                         stats->errors.fetch_add(1u, std::memory_order_relaxed);
                     }
+
                     break;
                 }
 
@@ -158,9 +160,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
     {
         int tx_buf_idx = allocate_buffer();
         if (tx_buf_idx < 0)
-        {
             co_return;
-        }
 
         try
         {
@@ -178,9 +178,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
 
                 // Usually we'd fill the buffer. For simple echo imitation, we just use random bytes.
                 for (std::size_t i{}; i < chunk_size; ++i)
-                {
                     buffer_span[i] = static_cast<char>(i % 256);
-                }
 
                 const std::span<const char> write_span {buffer_span.data(), chunk_size};
                 if (auto res = co_await stream->write_all_fixed(write_span, tx_buf_idx); !res)
@@ -189,6 +187,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
                     stats->errors.fetch_add(1u, std::memory_order_relaxed);
                     break;
                 }
+
                 sent_bytes += chunk_size;
                 metrics_.bytes_sent.fetch_add(chunk_size, std::memory_order_relaxed);
                 stats->bytes_sent.fetch_add(chunk_size, std::memory_order_relaxed);
@@ -211,10 +210,8 @@ namespace kmx::aio::sample::tcp::echo_uring::server
     {
         auto listener = kmx::aio::completion::tcp::listener(executor_, config_.bind_address, config_.bind_port);
 
-        if (const auto listen_result = listener.listen(128); !listen_result)
-        {
+        if (const auto listen_result = listener.listen(128); !listen_result)        
             co_return;
-        }
 
         std::uint64_t client_counter{};
         std::uint64_t accept_errors{};
@@ -268,9 +265,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
         const auto rx_active = stats->rx_active.load(std::memory_order_relaxed);
         const auto tx_active = stats->tx_active.load(std::memory_order_relaxed);
         if (!rx_active && !tx_active)
-        {
             stats->closed.store(true, std::memory_order_relaxed);
-        }
     }
 
     void manager::ui_loop(std::stop_token stop_token) const

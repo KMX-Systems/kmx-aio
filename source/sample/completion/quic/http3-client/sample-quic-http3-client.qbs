@@ -1,7 +1,7 @@
 import qbs
 
 CppApplication {
-    name: "sample-quic-echo-server"
+    name: "sample-quic-http3-client"
     condition: project.enable_quic
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
@@ -20,8 +20,8 @@ CppApplication {
     Depends { name: "kmx-aio-lib" }
 
     files: [
-        "inc/kmx/aio/sample/quic/echo_server/**.hpp",
-        "src/kmx/aio/sample/quic/echo_server/**.cpp",
+        "inc/kmx/aio/sample/quic/http3_client/**.hpp",
+        "src/kmx/aio/sample/quic/http3_client/**.cpp",
         "src/main.cpp",
     ]
 }
