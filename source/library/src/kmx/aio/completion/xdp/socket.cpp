@@ -45,7 +45,6 @@ namespace kmx::aio::completion::xdp
     [[nodiscard]] constexpr error_code map_xdp_error(const int ret) noexcept
     {
         const int err = ret < 0 ? -ret : ret;
-
         switch (err)
         {
             case ENOMEM:

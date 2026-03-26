@@ -33,7 +33,6 @@ namespace kmx::aio::completion
         auto result = co_await exec_->async_read(tfd, std::span<char>(reinterpret_cast<char*>(&expirations), sizeof(expirations)));
 
         ::close(tfd);
-
         if (!result)
             co_return std::unexpected(result.error());
 

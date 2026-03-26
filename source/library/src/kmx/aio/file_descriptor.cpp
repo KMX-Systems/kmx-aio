@@ -152,26 +152,29 @@ namespace kmx::aio
         if (!file_res)
             return file_res;
 
-        if (storage.ss_family == AF_INET)
+        switch(storage.ss_family)
         {
-            auto* addr4 = reinterpret_cast<::sockaddr_in*>(&storage);
-            ipv4_storage_t ip4 {};
-            std::memcpy(ip4.data(), &addr4->sin_addr, ip4.size());
-            out_ip = ip4;
-            out_port = ::ntohs(addr4->sin_port);
-        }
-        else if (storage.ss_family == AF_INET6)
-        {
-            auto* addr6 = reinterpret_cast<sockaddr_in6*>(&storage);
-            ipv6_storage_t ip6 {};
-            std::memcpy(ip6.data(), &addr6->sin6_addr, ip6.size());
-            out_ip = ip6;
-            out_port = ::ntohs(addr6->sin6_port);
-        }
-        else
-        {
-            // Invalid or unsupported family
-            return std::unexpected(error_from_errno(EAFNOSUPPORT));
+            case AF_INET:
+            {
+                auto* addr4 = reinterpret_cast<::sockaddr_in*>(&storage);
+                ipv4_storage_t ip4 {};
+                std::memcpy(ip4.data(), &addr4->sin_addr, ip4.size());
+                out_ip = ip4;
+                out_port = ::ntohs(addr4->sin_port);
+                break;
+            }
+            case AF_INET6:
+            {
+                auto* addr6 = reinterpret_cast<sockaddr_in6*>(&storage);
+                ipv6_storage_t ip6 {};
+                std::memcpy(ip6.data(), &addr6->sin6_addr, ip6.size());
+                out_ip = ip6;
+                out_port = ::ntohs(addr6->sin6_port);
+                break;
+            }
+            default:
+                // Invalid or unsupported family
+                return std::unexpected(error_from_errno(EAFNOSUPPORT));
         }
 
         return file_res;

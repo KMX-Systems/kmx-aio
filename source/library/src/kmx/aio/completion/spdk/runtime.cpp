@@ -127,9 +127,7 @@ namespace kmx::aio::completion::spdk::runtime
         {
             spdk_thread_exit(state.app_thread);
             while (!spdk_thread_is_exited(state.app_thread))
-            {
                 spdk_thread_poll(state.app_thread, 0u, 0u);
-            }
 
             spdk_thread_destroy(state.app_thread);
             state.app_thread = nullptr;
