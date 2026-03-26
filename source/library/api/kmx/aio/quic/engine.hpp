@@ -8,6 +8,7 @@
         #include <expected>
         #include <functional>
         #include <memory>
+        #include <string>
         #include <span>
         #include <system_error>
 
@@ -62,6 +63,17 @@ namespace kmx::aio::quic
         /// @brief Processes pending QUIC events (called from the event loop).
         /// @return Success or an error code.
         [[nodiscard]] task<std::expected<void, std::error_code>> process() noexcept(false);
+
+        /// @brief Connects the QUIC engine to a specified remote peer.
+        /// @param peer_ip   IP address to connect to.
+        /// @param peer_port Port number to connect to.
+        /// @param hostname  Hostname for SNI (Server Name Indication). Optional.
+        /// @param ssl_ctx   BoringSSL SSL_CTX pointer.
+        /// @param config    QUIC protocol settings.
+        /// @return Success or an error code once connection is established.
+        [[nodiscard]] task<std::expected<void, std::error_code>> connect(ip_address_t peer_ip, port_t peer_port,
+                                                                         const std::string& hostname = "", void* ssl_ctx = nullptr,
+                                                                         const settings& config = settings{}) noexcept(false);
 
     private:
         struct impl;

@@ -11,8 +11,8 @@ Project {
         "spdk/minimal/spdk-minimal.qbs",
         "spdk/discovery/spdk-discovery.qbs",
         "xdp/packet_filter/xdp-packet-filter.qbs",
-        "quic/echo-server/echo-server.qbs",
-        "quic/http3-server/http3-server.qbs",
-        "hft/order_router/hft-order-router.qbs",
+        "quic/echo-server/sample-quic-echo-server.qbs",
+        "quic/http3-server/sample-quic-http3-server.qbs",
+        "hft/order_router/sample-hft-order-router.qbs",
     ]
 }
