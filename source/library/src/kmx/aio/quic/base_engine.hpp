@@ -176,6 +176,69 @@ namespace kmx::aio::quic
 
             return {};
         }
+
+        /// @brief Shared initialisation logic called after model-specific socket creation.
+        [[nodiscard]] std::expected<void, std::error_code> setup(
+            std::expected<UdpSocket, std::error_code>&& sock_res,
+            const ip_address_t ip,
+            const port_t port,
+            void* ssl_ctx,
+            const kmx::aio::quic::settings& config)
+        {
+            if (!sock_res)
+                return std::unexpected(sock_res.error());
+
+            ssl_ctx_ = ssl_ctx;
+            socket_ = std::make_unique<UdpSocket>(std::move(*sock_res));
+
+            if (auto bind_res = bind_socket(ip, port); !bind_res)
+                return std::unexpected(bind_res.error());
+
+            if (auto init_res = init_lsquic(config); !init_res)
+                return std::unexpected(init_res.error());
+
+            return {};
+        }
+
+        /// @brief Shared event processing loop.
+        task<std::expected<void, std::error_code>> process()
+        {
+            running_ = true;
+            std::array<std::byte, 4096> packet_buf {};
+
+            while (running_)
+            {
+                ::lsquic_engine_process_conns(lsquic_engine_);
+
+                struct msghdr msg {};
+                struct iovec iov[1];
+                sockaddr_storage peer_addr {};
+
+                iov[0].iov_base = packet_buf.data();
+                iov[0].iov_len = packet_buf.size();
+                msg.msg_name = &peer_addr;
+                msg.msg_namelen = sizeof(peer_addr);
+                msg.msg_iov = iov;
+                msg.msg_iovlen = 1;
+
+                auto recv_res = co_await socket_->recvmsg(&msg);
+                if (recv_res && *recv_res > 0)
+                {
+                    int diff = ::lsquic_engine_packet_in(lsquic_engine_,
+                                                     reinterpret_cast<const unsigned char*>(packet_buf.data()),
+                                                     *recv_res,
+                                                     reinterpret_cast<sockaddr*>(&local_addr_),
+                                                     reinterpret_cast<sockaddr*>(&peer_addr),
+                                                     reinterpret_cast<void*>(this),
+                                                     0);
+                    (void)diff;
+                }
+                else if (!recv_res)
+                    co_return std::unexpected(recv_res.error());
+            }
+
+            co_return std::expected<void, std::error_code>{};
+        }
     };
 
 } // namespace kmx::aio::quic
