@@ -13,7 +13,9 @@ CppApplication {
         "/usr/local/lib",
     ]
     cpp.includePaths: [
+        "inc",
         "api",
+        "inc_dep",
         "../../../../library/inc_dep",
     ]
     cpp.dynamicLibraries: [
@@ -21,6 +23,8 @@ CppApplication {
         "pthread"
     ]
     files: [
+        "inc/kmx/aio/sample/spdk/minimal/**.hpp",
+        "src/kmx/aio/sample/spdk/minimal/**.cpp",
         "src/main.cpp",
     ]
 }

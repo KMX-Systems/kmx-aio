@@ -1,13 +1,15 @@
 import qbs
 
 CppApplication {
-    name: "http3-server"
+    name: "sample-quic-http3-server"
     condition: project.enable_quic
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.enableRtti: false
     cpp.includePaths: [
+        "inc",
         "api",
+        "inc_dep",
         "../../../../library/inc_dep",
     ]
 
@@ -17,6 +19,8 @@ CppApplication {
     Depends { name: "kmx-aio-lib" }
 
     files: [
-        "main.cpp",
+        "inc/kmx/aio/sample/quic/http3_server/**.hpp",
+        "src/kmx/aio/sample/quic/http3_server/**.cpp",
+        "src/main.cpp",
     ]
 }
