@@ -6,6 +6,7 @@ Project {
     property bool enable_af_xdp: true
     property bool enable_spdk: true
     property bool enable_quic: true
+    property bool enable_avb: true
 
     references: [
         "library/lib.qbs",

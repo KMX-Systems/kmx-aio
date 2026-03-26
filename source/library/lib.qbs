@@ -15,6 +15,8 @@ StaticLibrary {
             defs.push("KMX_AIO_FEATURE_SPDK=1");
         if (project.enable_quic)
             defs.push("KMX_AIO_FEATURE_QUIC=1");
+        if (project.enable_avb)
+            defs.push("KMX_AIO_FEATURE_AVB=1");
         return defs;
     }
     cpp.includePaths: [
@@ -140,6 +142,13 @@ StaticLibrary {
         "src/kmx/aio/readiness/tls/**.cpp",
         "src/kmx/aio/readiness/quic/**.cpp",
         "src/kmx/aio/quic/**.cpp",
+
+        // AVB (Audio Video Bridging, IEEE 802.1) sources
+        "api/kmx/aio/avb/**.hpp",
+        "api/kmx/aio/completion/avb/**.hpp",
+        "api/kmx/aio/readiness/avb/**.hpp",
+        "inc/kmx/aio/avb/**.hpp",
+        "src/kmx/aio/avb/**.cpp",
     ]
     Export {
         Depends { name: "cpp" }
