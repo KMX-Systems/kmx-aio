@@ -159,7 +159,7 @@ int main() noexcept
     producer.join();
     consumer.join();
 
-    // ── Summary ──────────────────────────────────────────────────────────
+    // Summary
     const auto filled   = filled_count.load();
     const auto rejected = rejected_count.load();
 

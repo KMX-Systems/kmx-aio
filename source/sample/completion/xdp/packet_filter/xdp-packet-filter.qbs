@@ -9,7 +9,7 @@ CppApplication {
     cpp.debugInformation: true
     cpp.enableRtti: false
     cpp.includePaths: [
-        "../../../../library/inc",
+        "api",
         "../../../../library/inc_dep",
     ]
     cpp.dynamicLibraries: [

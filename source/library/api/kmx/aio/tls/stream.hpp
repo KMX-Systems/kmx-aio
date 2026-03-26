@@ -207,7 +207,7 @@ namespace kmx::aio::tls
 
         [[nodiscard]] task<std::expected<void, std::error_code>> write_all(std::span<const char> buffer) noexcept(false)
         {
-            std::size_t written{};
+            std::size_t written {};
             while (written < buffer.size())
             {
                 auto res = co_await write(buffer.subspan(written));

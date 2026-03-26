@@ -13,7 +13,7 @@ CppApplication {
     cpp.enableRtti: false
     cpp.includePaths: [
         "inc",
-        "../../../../../library/inc",
+        "api",
         "../../../../../library/inc_dep",
     ]
     cpp.dynamicLibraries: [

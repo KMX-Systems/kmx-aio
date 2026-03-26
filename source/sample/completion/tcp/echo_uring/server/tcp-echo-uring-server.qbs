@@ -13,7 +13,7 @@ CppApplication {
         "inc",
         "../../../../readiness/tcp/echo/server/inc",
         "../../../../readiness/tcp/echo/common/inc",
-        "../../../../../library/inc",
+        "api",
         "../../../../../library/inc_dep",
     ]
     cpp.dynamicLibraries: [

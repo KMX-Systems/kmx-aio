@@ -13,7 +13,7 @@ CppApplication {
         "inc",
         "../echo_readiness_server/inc",
         "../../tcp/echo/common/inc",
-        "../../../../library/inc",
+        "api",
         "../../../../library/inc_dep"
     ]
     cpp.dynamicLibraries: ["ssl", "crypto"]

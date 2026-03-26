@@ -230,7 +230,7 @@ namespace kmx::aio
 
         const auto* addr = reinterpret_cast<const sockaddr*>(&address.storage);
         endpoint_address result {};
-        switch(addr->sa_family)
+        switch (addr->sa_family)
         {
             case AF_INET:
             {

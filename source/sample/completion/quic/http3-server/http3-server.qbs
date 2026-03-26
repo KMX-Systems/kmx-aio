@@ -7,7 +7,7 @@ CppApplication {
     cpp.cxxLanguageVersion: "c++26"
     cpp.enableRtti: false
     cpp.includePaths: [
-        "../../../../library/inc",
+        "api",
         "../../../../library/inc_dep",
     ]
 

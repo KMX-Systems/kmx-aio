@@ -18,6 +18,7 @@ StaticLibrary {
         return defs;
     }
     cpp.includePaths: [
+        "api",
         "inc",
         "inc_dep",
         "/usr/local/include",
@@ -102,19 +103,22 @@ StaticLibrary {
     name: "kmx-aio-lib"
     files: [
         // Public headers
-        "inc/kmx/**.hpp",
+        "api/kmx/**.hpp",
+        "api/kmx/aio/**.hpp",
+
+        // Private headers
         "inc/kmx/aio/**.hpp",
 
         // Core/runtime sources
         "src/kmx/aio/**.cpp",
 
         // Completion model sources
-        "inc/kmx/aio/completion/**.hpp",
-        "inc/kmx/aio/completion/tcp/**.hpp",
-        "inc/kmx/aio/completion/udp/**.hpp",
-        "inc/kmx/aio/completion/tls/**.hpp",
-        "inc/kmx/aio/completion/spdk/**.hpp",
-        "inc/kmx/aio/completion/xdp/**.hpp",
+        "api/kmx/aio/completion/**.hpp",
+        "api/kmx/aio/completion/tcp/**.hpp",
+        "api/kmx/aio/completion/udp/**.hpp",
+        "api/kmx/aio/completion/tls/**.hpp",
+        "api/kmx/aio/completion/spdk/**.hpp",
+        "api/kmx/aio/completion/xdp/**.hpp",
         "src/kmx/aio/completion/**.cpp",
         "src/kmx/aio/completion/tcp/**.cpp",
         "src/kmx/aio/completion/udp/**.cpp",
@@ -124,16 +128,23 @@ StaticLibrary {
         "src/kmx/aio/completion/quic/**.cpp",
 
         // Readiness model sources
-        "inc/kmx/aio/readiness/**.hpp",
-        "inc/kmx/aio/readiness/descriptor/**.hpp",
-        "inc/kmx/aio/readiness/tcp/**.hpp",
-        "inc/kmx/aio/readiness/udp/**.hpp",
-        "inc/kmx/aio/readiness/tls/**.hpp",
+        "api/kmx/aio/readiness/**.hpp",
+        "api/kmx/aio/readiness/descriptor/**.hpp",
+        "api/kmx/aio/readiness/tcp/**.hpp",
+        "api/kmx/aio/readiness/udp/**.hpp",
+        "api/kmx/aio/readiness/tls/**.hpp",
         "src/kmx/aio/readiness/**.cpp",
         "src/kmx/aio/readiness/descriptor/**.cpp",
         "src/kmx/aio/readiness/tcp/**.cpp",
         "src/kmx/aio/readiness/udp/**.cpp",
         "src/kmx/aio/readiness/tls/**.cpp",
         "src/kmx/aio/readiness/quic/**.cpp",
+        "src/kmx/aio/quic/**.cpp",
     ]
+    Export {
+        Depends { name: "cpp" }
+        cpp.includePaths: [
+            product.sourceDirectory + "/api",
+        ]
+    }
 }

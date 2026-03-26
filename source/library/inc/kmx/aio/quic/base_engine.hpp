@@ -17,8 +17,9 @@
 #include <sys/socket.h>
 #include <system_error>
 
-extern "C" {
-    #include <lsquic.h>
+extern "C"
+{
+#include <lsquic.h>
 }
 
 #include <kmx/aio/basic_types.hpp>
@@ -41,9 +42,7 @@ namespace kmx::aio::quic
         void* ssl_ctx_ {};
         bool running_ {};
 
-        explicit base_impl(Executor& exec) noexcept : exec_(exec)
-        {
-        }
+        explicit base_impl(Executor& exec) noexcept: exec_(exec) {}
 
         ~base_impl() noexcept
         {
@@ -53,7 +52,7 @@ namespace kmx::aio::quic
             ::lsquic_global_cleanup();
         }
 
-        // ── lsquic C callbacks ─────────────────────────────────────────────
+        // lsquic C callbacks
 
         static int send_packets_out(void* ctx, const struct ::lsquic_out_spec* specs, unsigned count)
         {
@@ -62,7 +61,9 @@ namespace kmx::aio::quic
 
             for (; sent < count; ++sent)
             {
-                struct msghdr msg {};
+                struct msghdr msg
+                {
+                };
                 msg.msg_name = const_cast<void*>(reinterpret_cast<const void*>(specs[sent].dest_sa));
                 msg.msg_namelen = (specs[sent].dest_sa->sa_family == AF_INET) ? sizeof(sockaddr_in) : sizeof(sockaddr_in6);
 
@@ -85,9 +86,7 @@ namespace kmx::aio::quic
             return reinterpret_cast<::lsquic_conn_ctx_t*>(stream_if_ctx);
         }
 
-        static void on_conn_closed(::lsquic_conn_t* /*conn*/)
-        {
-        }
+        static void on_conn_closed(::lsquic_conn_t* /*conn*/) {}
 
         static ::lsquic_stream_ctx_t* on_new_stream(void* /*stream_if_ctx*/, ::lsquic_stream_t* stream)
         {
@@ -109,10 +108,7 @@ namespace kmx::aio::quic
                 ::lsquic_stream_close(stream);
         }
 
-        static void on_write(::lsquic_stream_t* stream, ::lsquic_stream_ctx_t* /*ctx*/)
-        {
-            ::lsquic_stream_wantwrite(stream, 0);
-        }
+        static void on_write(::lsquic_stream_t* stream, ::lsquic_stream_ctx_t* /*ctx*/) { ::lsquic_stream_wantwrite(stream, 0); }
 
         static struct ssl_ctx_st* get_ssl_ctx(void* peer_ctx, const struct sockaddr* /*local*/)
         {
@@ -120,11 +116,9 @@ namespace kmx::aio::quic
             return reinterpret_cast<struct ssl_ctx_st*>(self->ssl_ctx_);
         }
 
-        static void on_close(::lsquic_stream_t* /*stream*/, ::lsquic_stream_ctx_t* /*ctx*/)
-        {
-        }
+        static void on_close(::lsquic_stream_t* /*stream*/, ::lsquic_stream_ctx_t* /*ctx*/) {}
 
-        // ── Shared initialisation ──────────────────────────────────────────
+        // Shared initialisation
 
         /// @brief Configures lsquic callbacks, settings, and creates the lsquic_engine.
         /// @return Success or an error code.
@@ -178,12 +172,9 @@ namespace kmx::aio::quic
         }
 
         /// @brief Shared initialisation logic called after model-specific socket creation.
-        [[nodiscard]] std::expected<void, std::error_code> setup(
-            std::expected<UdpSocket, std::error_code>&& sock_res,
-            const ip_address_t ip,
-            const port_t port,
-            void* ssl_ctx,
-            const kmx::aio::quic::settings& config)
+        [[nodiscard]] std::expected<void, std::error_code> setup(std::expected<UdpSocket, std::error_code>&& sock_res,
+                                                                 const ip_address_t ip, const port_t port, void* ssl_ctx,
+                                                                 const kmx::aio::quic::settings& config)
         {
             if (!sock_res)
                 return std::unexpected(sock_res.error());
@@ -210,7 +201,9 @@ namespace kmx::aio::quic
             {
                 ::lsquic_engine_process_conns(lsquic_engine_);
 
-                struct msghdr msg {};
+                struct msghdr msg
+                {
+                };
                 struct iovec iov[1];
                 sockaddr_storage peer_addr {};
 
@@ -224,20 +217,16 @@ namespace kmx::aio::quic
                 auto recv_res = co_await socket_->recvmsg(&msg);
                 if (recv_res && *recv_res > 0)
                 {
-                    int diff = ::lsquic_engine_packet_in(lsquic_engine_,
-                                                     reinterpret_cast<const unsigned char*>(packet_buf.data()),
-                                                     *recv_res,
-                                                     reinterpret_cast<sockaddr*>(&local_addr_),
-                                                     reinterpret_cast<sockaddr*>(&peer_addr),
-                                                     reinterpret_cast<void*>(this),
-                                                     0);
-                    (void)diff;
+                    int diff = ::lsquic_engine_packet_in(lsquic_engine_, reinterpret_cast<const unsigned char*>(packet_buf.data()),
+                                                         *recv_res, reinterpret_cast<sockaddr*>(&local_addr_),
+                                                         reinterpret_cast<sockaddr*>(&peer_addr), reinterpret_cast<void*>(this), 0);
+                    (void) diff;
                 }
                 else if (!recv_res)
                     co_return std::unexpected(recv_res.error());
             }
 
-            co_return std::expected<void, std::error_code>{};
+            co_return std::expected<void, std::error_code> {};
         }
     };
 

@@ -12,7 +12,7 @@ CppApplication {
     cpp.includePaths: [
         "inc",
         "../../../readiness/tcp/echo/common/inc",
-        "../../../../library/inc",
+        "api",
         "../../../../library/inc_dep"
     ]
     cpp.dynamicLibraries: ["ssl", "crypto", "uring"]

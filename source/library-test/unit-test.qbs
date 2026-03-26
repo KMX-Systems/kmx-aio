@@ -13,7 +13,9 @@ CppApplication {
     cpp.enableRtti: false
     cpp.includePaths: [
         "inc",
-        "inc_dep"
+        "inc_dep",
+        "../library/api",
+        "../library/inc"
     ]
     cpp.dynamicLibraries: [
         "crypto",

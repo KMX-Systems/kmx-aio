@@ -12,7 +12,7 @@ CppApplication {
     cpp.includePaths: [
         "inc",
         "../common/inc",
-        "../../../../../library/inc",
+        "api",
         "../../../../../library/inc_dep"
     ]
     files: [

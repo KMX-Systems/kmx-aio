@@ -13,7 +13,7 @@ CppApplication {
         "/usr/local/lib",
     ]
     cpp.includePaths: [
-        "../../../../library/inc",
+        "api",
         "../../../../library/inc_dep",
     ]
     cpp.dynamicLibraries: [
