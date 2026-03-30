@@ -135,11 +135,13 @@ StaticLibrary {
         "api/kmx/aio/readiness/tcp/**.hpp",
         "api/kmx/aio/readiness/udp/**.hpp",
         "api/kmx/aio/readiness/tls/**.hpp",
+        "api/kmx/aio/readiness/v4l2/**.hpp",
         "src/kmx/aio/readiness/**.cpp",
         "src/kmx/aio/readiness/descriptor/**.cpp",
         "src/kmx/aio/readiness/tcp/**.cpp",
         "src/kmx/aio/readiness/udp/**.cpp",
         "src/kmx/aio/readiness/tls/**.cpp",
+        "src/kmx/aio/readiness/v4l2/**.cpp",
         "src/kmx/aio/readiness/quic/**.cpp",
         "src/kmx/aio/quic/**.cpp",
 

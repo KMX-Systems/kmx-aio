@@ -8,7 +8,7 @@
 
 namespace kmx::aio::avb
 {
-    // ─── impl ────────────────────────────────────────────────────────────────────
+    // impl
 
     template <typename Executor>
     struct generic_eth_socket<Executor>::impl : base_eth_socket<Executor>
@@ -16,7 +16,7 @@ namespace kmx::aio::avb
         using base_eth_socket<Executor>::base_eth_socket;
     };
 
-    // ─── Constructor / Destructor ─────────────────────────────────────────────
+    // Constructor / Destructor
 
     template <typename Executor>
     generic_eth_socket<Executor>::generic_eth_socket(Executor& exec) noexcept
@@ -26,7 +26,7 @@ namespace kmx::aio::avb
     template <typename Executor>
     generic_eth_socket<Executor>::~generic_eth_socket() = default;
 
-    // ─── open ─────────────────────────────────────────────────────────────────
+    // open
 
     template <typename Executor>
     task<std::expected<void, std::error_code>>
@@ -35,7 +35,7 @@ namespace kmx::aio::avb
         co_return impl_->open_socket(iface, ethertype);
     }
 
-    // ─── send ─────────────────────────────────────────────────────────────────
+    // send
 
     template <typename Executor>
     task<std::expected<void, std::error_code>>
@@ -76,7 +76,7 @@ namespace kmx::aio::avb
         co_return std::expected<void, std::error_code> {};
     }
 
-    // ─── recv ─────────────────────────────────────────────────────────────────
+    // recv
 
     template <typename Executor>
     task<std::expected<std::pair<std::vector<std::byte>, avb_timestamp_t>, std::error_code>>
@@ -122,7 +122,7 @@ namespace kmx::aio::avb
         co_return std::make_pair(std::move(frame_buf), hw_ts);
     }
 
-    // ─── Accessors ────────────────────────────────────────────────────────────
+    // Accessors
 
     template <typename Executor>
     mac_address_t generic_eth_socket<Executor>::local_mac() const noexcept
@@ -136,7 +136,7 @@ namespace kmx::aio::avb
         return impl_->iface_index_;
     }
 
-    // ─── Explicit instantiations ───────────────────────────────────────────────
+    // Explicit instantiations
 
     template class generic_eth_socket<kmx::aio::completion::executor>;
 

@@ -10,7 +10,7 @@
 
 namespace kmx::aio::avb::srp
 {
-    // ─── MRP protocol constants ───────────────────────────────────────────────
+    // MRP protocol constants
 
     /// @brief MSRP application address (AA) as per IEEE 802.1Qat Table 10-1.
     inline constexpr std::uint8_t mrp_protocol_version   = 0u;
@@ -33,7 +33,7 @@ namespace kmx::aio::avb::srp
         ready_failed = 0x03u,
     };
 
-    // ─── Stream descriptor (shared across SRP and AVTP) ──────────────────────
+    // Stream descriptor (shared across SRP and AVTP)
 
     /// @brief Fully describes an AVB stream for reservation and transport.
     struct stream_descriptor
@@ -48,7 +48,7 @@ namespace kmx::aio::avb::srp
         std::uint32_t  frames_per_sec { 48000u };    ///< 48kHz sample rate default
     };
 
-    // ─── MRP PDU building blocks ──────────────────────────────────────────────
+    // MRP PDU building blocks
 
 #pragma pack(push, 1)
 
@@ -127,7 +127,7 @@ namespace kmx::aio::avb::srp
 
 #pragma pack(pop)
 
-    // ─── Encoding helpers ─────────────────────────────────────────────────────
+    // Encoding helpers
 
     /// @brief Pack stream_id into wire format (big-endian MAC + unique_id).
     inline std::array<std::uint8_t, 8u>

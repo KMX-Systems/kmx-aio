@@ -16,7 +16,7 @@
 
 namespace kmx::aio::avb::gptp
 {
-    // ─── Internal state ───────────────────────────────────────────────────────
+    // Internal state
 
     template <typename Executor>
     struct generic_clock<Executor>::state
@@ -47,7 +47,7 @@ namespace kmx::aio::avb::gptp
 
         explicit state(Executor& exec) noexcept : exec_(exec), sock_(exec) {}
 
-        // ─── Read current CLOCK_TAI ───────────────────────────────────────────
+        // Read current CLOCK_TAI
 
         [[nodiscard]] static avb_timestamp_t clock_tai_now() noexcept
         {
@@ -57,7 +57,7 @@ namespace kmx::aio::avb::gptp
                  + static_cast<avb_timestamp_t>(ts.tv_nsec);
         }
 
-        // ─── Build a minimal gPTP header ──────────────────────────────────────
+        // Build a minimal gPTP header
 
         [[nodiscard]] header_t make_header(msg_type t, std::uint16_t len,
                                            std::uint16_t seq_id) const noexcept
@@ -71,7 +71,7 @@ namespace kmx::aio::avb::gptp
             return h;
         }
 
-        // ─── Send a Pdelay_Req ────────────────────────────────────────────────
+        // Send a Pdelay_Req
 
         task<std::expected<void, std::error_code>>
         send_pdelay_req() noexcept(false)
@@ -90,7 +90,7 @@ namespace kmx::aio::avb::gptp
                                           std::span<const std::byte>(buf));
         }
 
-        // ─── Handle incoming Sync ─────────────────────────────────────────────
+        // Handle incoming Sync
 
         void on_sync(const std::byte* data, std::size_t len, avb_timestamp_t rx_hw_ts) noexcept
         {
@@ -106,7 +106,7 @@ namespace kmx::aio::avb::gptp
             t2_sync_recv_  = rx_hw_ts;  // Our local HW timestamp when Sync arrived
         }
 
-        // ─── Handle incoming Follow_Up ────────────────────────────────────────
+        // Handle incoming Follow_Up
 
         void on_follow_up(const std::byte* data, std::size_t len) noexcept
         {
@@ -132,7 +132,7 @@ namespace kmx::aio::avb::gptp
             synced_.store(servo_.is_synced(), std::memory_order_release);
         }
 
-        // ─── Handle Pdelay_Resp ───────────────────────────────────────────────
+        // Handle Pdelay_Resp
 
         void on_pdelay_resp(const std::byte* data, std::size_t len,
                             avb_timestamp_t rx_hw_ts) noexcept
@@ -147,7 +147,7 @@ namespace kmx::aio::avb::gptp
             t2_remote_     = f->body.request_receipt_timestamp.to_ns();
         }
 
-        // ─── Handle Pdelay_Resp_Follow_Up ────────────────────────────────────
+        // Handle Pdelay_Resp_Follow_Up
 
         void on_pdelay_resp_follow_up(const std::byte* data, std::size_t len) noexcept
         {
@@ -176,7 +176,7 @@ namespace kmx::aio::avb::gptp
             t1_pdelay_req_ = t4_pdelay_res_ = t2_remote_ = t3_remote_ = 0;
         }
 
-        // ─── Handle Announce — track grandmaster ─────────────────────────────
+        // Handle Announce — track grandmaster
 
         void on_announce(const std::byte* data, std::size_t len) noexcept
         {
@@ -189,7 +189,7 @@ namespace kmx::aio::avb::gptp
             }
         }
 
-        // ─── Main receive loop ────────────────────────────────────────────────
+        // Main receive loop
 
         task<std::expected<void, std::error_code>>
         recv_loop() noexcept(false)
@@ -226,7 +226,7 @@ namespace kmx::aio::avb::gptp
             }
         }
 
-        // ─── Pdelay request loop (every ~1s by default) ──────────────────────
+        // Pdelay request loop (every ~1s by default)
 
         task<std::expected<void, std::error_code>>
         pdelay_loop() noexcept(false)
@@ -243,7 +243,7 @@ namespace kmx::aio::avb::gptp
         }
     };
 
-    // ─── generic_clock API ────────────────────────────────────────────────────
+    // generic_clock API
 
     template <typename Executor>
     generic_clock<Executor>::generic_clock(Executor& exec) noexcept
@@ -316,7 +316,7 @@ namespace kmx::aio::avb::gptp
         return state_->synced_.load(std::memory_order_acquire);
     }
 
-    // ─── Explicit instantiation ───────────────────────────────────────────────
+    // Explicit instantiation
 
     template class generic_clock<kmx::aio::completion::executor>;
 

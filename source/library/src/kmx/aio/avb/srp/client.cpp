@@ -18,7 +18,7 @@
 
 namespace kmx::aio::avb::srp
 {
-    // ─── Internal state ───────────────────────────────────────────────────────
+    // Internal state
 
     template <typename Executor>
     struct generic_client<Executor>::state
@@ -43,7 +43,7 @@ namespace kmx::aio::avb::srp
 
         explicit state(Executor& exec) noexcept : exec_(exec), sock_(exec) {}
 
-        // ─── Encode / send helpers ────────────────────────────────────────────
+        // Encode / send helpers
 
         task<std::expected<void, std::error_code>>
         send_talker_advertise(const stream_descriptor& desc) noexcept(false)
@@ -116,7 +116,7 @@ namespace kmx::aio::avb::srp
                                           std::span<const std::byte>(buf));
         }
 
-        // ─── Decode incoming Talker Advertise ─────────────────────────────────
+        // Decode incoming Talker Advertise
 
         void on_talker_advertise(const std::byte* data, std::size_t len) noexcept
         {
@@ -149,7 +149,7 @@ namespace kmx::aio::avb::srp
             }
         }
 
-        // ─── Receive loop ─────────────────────────────────────────────────────
+        // Receive loop
 
         task<std::expected<void, std::error_code>>
         recv_loop() noexcept(false)
@@ -172,7 +172,7 @@ namespace kmx::aio::avb::srp
             }
         }
 
-        // ─── Periodic re-declaration loop ─────────────────────────────────────
+        // Periodic re-declaration loop
 
         task<std::expected<void, std::error_code>>
         talker_loop() noexcept(false)
@@ -196,7 +196,7 @@ namespace kmx::aio::avb::srp
         }
     };
 
-    // ─── generic_client API ───────────────────────────────────────────────────
+    // generic_client API
 
     template <typename Executor>
     generic_client<Executor>::generic_client(Executor& exec) noexcept
@@ -289,7 +289,7 @@ namespace kmx::aio::avb::srp
         co_return std::expected<void, std::error_code> {};
     }
 
-    // ─── Explicit instantiation ───────────────────────────────────────────────
+    // Explicit instantiation
 
     template class generic_client<kmx::aio::completion::executor>;
 

@@ -13,7 +13,7 @@
 
 namespace kmx::aio::avb::gptp
 {
-    // ─── Message types (IEEE 802.1AS Table 10-1) ─────────────────────────────
+    // Message types (IEEE 802.1AS Table 10-1)
 
     enum class msg_type : std::uint8_t
     {
@@ -27,7 +27,7 @@ namespace kmx::aio::avb::gptp
         management            = 0x0D,
     };
 
-    // ─── Clock identity (64-bit) ──────────────────────────────────────────────
+    // Clock identity (64-bit)
 
     struct clock_identity_t
     {
@@ -36,7 +36,7 @@ namespace kmx::aio::avb::gptp
         [[nodiscard]] bool operator==(const clock_identity_t&) const noexcept = default;
     };
 
-    // ─── Port identity = clockId + portNumber ─────────────────────────────────
+    // Port identity = clockId + portNumber
 
     struct port_identity_t
     {
@@ -46,7 +46,7 @@ namespace kmx::aio::avb::gptp
         [[nodiscard]] bool operator==(const port_identity_t&) const noexcept = default;
     };
 
-    // ─── Timestamp (10 bytes: seconds 48-bit + nanoseconds 32-bit) ───────────
+    // Timestamp (10 bytes: seconds 48-bit + nanoseconds 32-bit)
 
     struct timestamp_t
     {
@@ -76,7 +76,7 @@ namespace kmx::aio::avb::gptp
         }
     };
 
-    // ─── Common gPTP header (34 bytes, packed) ────────────────────────────────
+    // Common gPTP header (34 bytes, packed)
 
 #pragma pack(push, 1)
     struct header_t
@@ -105,21 +105,21 @@ namespace kmx::aio::avb::gptp
         }
     };
 
-    // ─── Sync body (10 bytes — timestamp is zero for two-step) ───────────────
+    // Sync body (10 bytes — timestamp is zero for two-step)
 
     struct sync_body_t
     {
         timestamp_t origin_timestamp {};  ///< zero for two-step Sync
     };
 
-    // ─── Follow_Up body (10 bytes) ────────────────────────────────────────────
+    // Follow_Up body (10 bytes)
 
     struct follow_up_body_t
     {
         timestamp_t precise_origin_timestamp {};
     };
 
-    // ─── Pdelay_Req body (20 bytes) ───────────────────────────────────────────
+    // Pdelay_Req body (20 bytes)
 
     struct pdelay_req_body_t
     {
@@ -127,7 +127,7 @@ namespace kmx::aio::avb::gptp
         port_identity_t reserved_port_id {};
     };
 
-    // ─── Pdelay_Resp body (20 bytes) ──────────────────────────────────────────
+    // Pdelay_Resp body (20 bytes)
 
     struct pdelay_resp_body_t
     {
@@ -135,7 +135,7 @@ namespace kmx::aio::avb::gptp
         port_identity_t requesting_port_id {};
     };
 
-    // ─── Pdelay_Resp_Follow_Up body (20 bytes) ────────────────────────────────
+    // Pdelay_Resp_Follow_Up body (20 bytes)
 
     struct pdelay_resp_follow_up_body_t
     {
@@ -143,7 +143,7 @@ namespace kmx::aio::avb::gptp
         port_identity_t requesting_port_id {};
     };
 
-    // ─── Complete frame wrappers ──────────────────────────────────────────────
+    // Complete frame wrappers
 
     struct sync_frame_t
     {

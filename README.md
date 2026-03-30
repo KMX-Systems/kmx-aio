@@ -12,6 +12,7 @@
 *   **TCP Networking**: Built-in support for TCP listeners and streams.
 *   **UDP Networking**: Dual-layer UDP API in both models — low-level `readiness::udp::socket` / `completion::udp::socket` and high-level span/address APIs via their `udp::endpoint` wrappers.
 *   **Async Timers**: Readiness timer (`timerfd` + `epoll`) and completion timer (`io_uring` timeout op).
+*   **Async V4L2 Capture**: Zero-copy epoll-driven frame capture from any V4L2 streaming device (USB webcams, MIPI CSI-2 pipelines, GMSL camera chains). Frames land in `co_await`-returned `frame_view` objects that auto-requeue their mmap'd kernel buffers on destruction.
 
 ## Requirements
 
@@ -274,8 +275,9 @@ The library is structured around root primitives and two execution models:
 *   **`kmx::aio::readiness::tcp::*` / `kmx::aio::completion::tcp::*`**: Asynchronous TCP listener/stream APIs for each execution model.
 *   **`kmx::aio::readiness::udp::*` / `kmx::aio::completion::udp::*`**: Low-level socket + high-level endpoint UDP APIs for each execution model.
 *   **`kmx::aio::readiness::descriptor::timer`** and **`kmx::aio::completion::timer`**: Timer APIs for the two execution models.
+*   **`kmx::aio::readiness::v4l2::capture`**: Async V4L2 video capture. MMAP streaming buffers managed by the kernel; a single `co_await next_frame()` suspends via epoll until a filled buffer is ready. The returned `frame_view` is a zero-copy view into the mmap'd buffer that automatically re-enqueues the buffer (VIDIOC_QBUF) on destruction. Supports any V4L2 streaming device: USB webcams, MIPI CSI-2 ISPs, GMSL serialiser/deserialiser pipelines, DVB capture cards.
 
-Readiness TCP/UDP classes are move-only and inherit `readiness::io_base` (copy-deleted, move-assign-deleted due to the non-reseatable `executor&` member).
+Readiness TCP/UDP/V4L2 classes are move-only and inherit `readiness::io_base` (copy-deleted, move-assign-deleted due to the non-reseatable `executor&` member).
 
 ## Project Structure
 
@@ -287,7 +289,8 @@ kmx-aio/
 │   │   │   ├── executor_base.hpp    # Shared base for executor state/lifetime controls
 │   │   │   ├── file_descriptor.hpp  # RAII file-descriptor wrapper and syscall helpers
 │   │   │   ├── task.hpp             # Lazy coroutine task<T> type
-│   │   │   ├── readiness/           # epoll model APIs (tcp/udp/tls + descriptor)
+│   │   │   ├── readiness/           # epoll model APIs (tcp/udp/tls/v4l2 + descriptor)
+│   │   │   │   └── v4l2/            # V4L2 capture: v4l2_types.hpp, capture.hpp
 │   │   │   ├── completion/          # io_uring model APIs (tcp/udp/tls/xdp)
 │   │   └── src/                     # Implementation (.cpp) files
 │   ├── sample/           # Example applications
@@ -298,8 +301,10 @@ kmx-aio/
 │   │   │   ├── udp/
 │   │   │   │   ├── minimal/
 │   │   │   │   └── echo/
-│   │   │   └── tls/
-│   │   │       └── echo_readiness_server/
+│   │   │   ├── tls/
+│   │   │   │   └── echo_readiness_server/
+│   │   │   └── v4l2/
+│   │   │       └── capture/         # sample-v4l2-capture
 │   │   └── completion/   # Completion-model samples (io_uring)
 │   │       ├── tcp/
 │   │       │   └── echo_uring/
@@ -412,6 +417,60 @@ int main() {
     return 0;
 }
 ```
+
+### Async V4L2 Frame Capture
+
+```cpp
+#include <kmx/aio/readiness/executor.hpp>
+#include <kmx/aio/readiness/v4l2/capture.hpp>
+
+using namespace kmx::aio;
+
+task<void> capture_frames(readiness::executor& exec) {
+    auto cap = readiness::v4l2::capture::create(exec, {
+        .device       = "/dev/video0",
+        .format       = readiness::v4l2::fourcc::nv12,
+        .size         = {1920u, 1080u},
+        .fps          = {1u, 30u},  // 30 fps
+        .buffer_count = 4u,
+    });
+    if (!cap) co_return; // handle error
+
+    // Negotiated values may differ from requested
+    auto& cfg = cap->config();
+
+    while (true) {
+        // Suspends via epoll until the driver has a filled buffer
+        auto frame = co_await cap->next_frame();
+        if (!frame) break; // device error
+
+        // Zero-copy view into the mmap'd kernel buffer
+        std::span<const std::byte> pixels = frame->data();
+        const auto& meta = frame->metadata();
+
+        process_frame(pixels, meta.width, meta.height, meta.timestamp_ns);
+
+        // frame destructs here → VIDIOC_QBUF re-enqueues the buffer automatically
+    }
+}
+
+int main() {
+    readiness::executor_config cfg{ .thread_count = 1 };
+    readiness::executor exec(cfg);
+    exec.spawn(capture_frames(exec));
+    exec.run();
+    return 0;
+}
+```
+
+The `capture::create()` factory performs the complete V4L2 initialisation sequence
+(`QUERYCAP` → `S_FMT` → `S_PARM` → `REQBUFS` → `QUERYBUF`/`mmap` × N → `QBUF` × N →
+`register_fd` → `STREAMON`) and returns a fully streaming device ready for
+`next_frame()`. The negotiated pixel format, resolution and buffer count are
+reflected back into `capture::config()` after construction.
+
+No external library dependency is required — `linux/videodev2.h` is a standard
+Linux kernel header.
 
 ### One-Shot Timer
 

@@ -42,7 +42,7 @@ namespace kmx::aio::avb
 
         explicit base_eth_socket(Executor& exec) noexcept: exec_(exec) {}
 
-        // ─── Setup ────────────────────────────────────────────────────────────────
+        // Setup
 
         [[nodiscard]] std::expected<void, std::error_code>
         open_socket(std::string_view iface, std::uint16_t ethertype)
@@ -92,7 +92,7 @@ namespace kmx::aio::avb
             return {};
         }
 
-        // ─── Send ─────────────────────────────────────────────────────────────────
+        // Send
 
         [[nodiscard]] std::expected<void, std::error_code>
         do_send(const mac_address_t& dest_mac, std::span<const std::byte> payload,
@@ -136,7 +136,7 @@ namespace kmx::aio::avb
             return {};
         }
 
-        // ─── Receive ──────────────────────────────────────────────────────────────
+        // Receive
 
         [[nodiscard]] std::expected<std::pair<std::vector<std::byte>, avb_timestamp_t>,
                                     std::error_code>

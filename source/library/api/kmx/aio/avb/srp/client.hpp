@@ -77,7 +77,7 @@ namespace kmx::aio::avb::srp
     };
 }
 
-// ─── Pillar aliases ───────────────────────────────────────────────────────────
+// Pillar aliases
 #include <kmx/aio/completion/executor.hpp>
 
 namespace kmx::aio::completion::avb::srp

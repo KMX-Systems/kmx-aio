@@ -18,5 +18,6 @@ Project {
         "tcp/echo/common/tcp-echo-common.qbs",
         "tcp/echo/client/tcp-echo-client.qbs",
         "tcp/echo/server/tcp-echo-server.qbs",
+        "v4l2/capture/v4l2-capture.qbs",
     ]
 }
