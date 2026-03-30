@@ -12,10 +12,13 @@ namespace kmx::aio::sample::v4l2::capture
 
     bool manager::run() noexcept(false)
     {
+        const auto& requested_size = config_.size;
+        const auto& requested_fps = config_.fps;
+
         kmx::logger::log(kmx::logger::level::info, std::source_location::current(),
                          "Opening V4L2 capture device: {} ({}x{} @ {}/{} fps)",
-                         config_.device, config_.size.width, config_.size.height,
-                         config_.fps.denominator, config_.fps.numerator);
+                         config_.device, requested_size.width, requested_size.height,
+                         requested_fps.denominator, requested_fps.numerator);
 
         kmx::aio::readiness::executor_config exec_cfg {
             .thread_count = 1u,
@@ -59,11 +62,14 @@ namespace kmx::aio::sample::v4l2::capture
         }
 
         auto& cap = *cap_result;
+        const auto& active_cfg = cap.config();
+        const auto& active_size = active_cfg.size;
+        const auto& active_format = active_cfg.format;
 
         kmx::logger::log(kmx::logger::level::info, std::source_location::current(),
                          "Streaming started: {}x{} FourCC=0x{:08X}, {} buffers",
-                         cap.config().size.width, cap.config().size.height,
-                         cap.config().format.fourcc, cap.config().buffer_count);
+                 active_size.width, active_size.height,
+                 active_format.fourcc, active_cfg.buffer_count);
 
         std::uint64_t err_burst {};
 
