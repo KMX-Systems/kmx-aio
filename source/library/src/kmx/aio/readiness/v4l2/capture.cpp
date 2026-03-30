@@ -13,6 +13,7 @@
 #include <linux/videodev2.h>
 
 #include <kmx/aio/basic_types.hpp>
+#include <kmx/aio/error_code.hpp>
 #include <kmx/logger.hpp>
 
 namespace kmx::aio::readiness::v4l2
@@ -91,20 +92,22 @@ namespace kmx::aio::readiness::v4l2
         // 1. Open the device node.
         const int raw_fd = ::open(cfg.device.c_str(), O_RDWR | O_NONBLOCK | O_CLOEXEC); // NOLINT(cppcoreguidelines-pro-type-vararg)
         if (raw_fd < 0)
-            return std::unexpected(error_from_errno());
+            return std::unexpected(kmx::aio::from_errno(errno));
 
         file_descriptor fd { raw_fd };
 
         // 2. Query capabilities.
         ::v4l2_capability cap {};
         if (::ioctl(raw_fd, VIDIOC_QUERYCAP, &cap) < 0)
-            return std::unexpected(error_from_errno());
+            return std::unexpected(kmx::aio::from_errno(errno));
 
-        if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE))
-            return std::unexpected(error_from_errno(ENODEV));
+        const auto caps = ((cap.capabilities & V4L2_CAP_DEVICE_CAPS) != 0u) ? cap.device_caps : cap.capabilities;
 
-        if (!(cap.capabilities & V4L2_CAP_STREAMING))
-            return std::unexpected(error_from_errno(ENODEV));
+        if ((caps & V4L2_CAP_VIDEO_CAPTURE) == 0u)
+            return std::unexpected(kmx::aio::error_code::unsupported_operation);
+
+        if ((caps & V4L2_CAP_STREAMING) == 0u)
+            return std::unexpected(kmx::aio::error_code::unsupported_operation);
 
         // 3. Negotiate pixel format and frame size.
         ::v4l2_format fmt {};
@@ -115,7 +118,7 @@ namespace kmx::aio::readiness::v4l2
         fmt.fmt.pix.field         = V4L2_FIELD_NONE;
 
         if (::ioctl(raw_fd, VIDIOC_S_FMT, &fmt) < 0)
-            return std::unexpected(error_from_errno());
+            return std::unexpected(kmx::aio::from_errno(errno));
 
         // Reflect what the driver actually negotiated.
         cfg.size.width    = fmt.fmt.pix.width;
@@ -139,10 +142,10 @@ namespace kmx::aio::readiness::v4l2
         req.memory = V4L2_MEMORY_MMAP;
 
         if (::ioctl(raw_fd, VIDIOC_REQBUFS, &req) < 0)
-            return std::unexpected(error_from_errno());
+            return std::unexpected(kmx::aio::from_errno(errno));
 
         if (req.count == 0)
-            return std::unexpected(error_from_errno(ENOMEM));
+            return std::unexpected(kmx::aio::error_code::internal_error);
 
         cfg.buffer_count = req.count; // Driver may grant fewer buffers than requested.
 
@@ -165,7 +168,7 @@ namespace kmx::aio::readiness::v4l2
                     if (b.ptr && b.ptr != MAP_FAILED)
                         ::munmap(b.ptr, b.length);
                 }
-                return std::unexpected(error_from_errno());
+                return std::unexpected(kmx::aio::from_errno(errno));
             }
 
             void* const ptr = ::mmap(nullptr, buf.length, PROT_READ | PROT_WRITE,
@@ -178,7 +181,7 @@ namespace kmx::aio::readiness::v4l2
                     if (b.ptr && b.ptr != MAP_FAILED)
                         ::munmap(b.ptr, b.length);
                 }
-                return std::unexpected(error_from_errno());
+                return std::unexpected(kmx::aio::from_errno(errno));
             }
 
             buffers.push_back({ ptr, buf.length });
@@ -196,7 +199,7 @@ namespace kmx::aio::readiness::v4l2
             {
                 for (auto& b : buffers)
                     ::munmap(b.ptr, b.length);
-                return std::unexpected(error_from_errno());
+                return std::unexpected(kmx::aio::from_errno(errno));
             }
         }
 
@@ -205,7 +208,7 @@ namespace kmx::aio::readiness::v4l2
         {
             for (auto& b : buffers)
                 ::munmap(b.ptr, b.length);
-            return std::unexpected(reg.error());
+            return std::unexpected(kmx::aio::from_errno(reg.error().value()));
         }
 
         // 9. Start streaming.
@@ -215,7 +218,7 @@ namespace kmx::aio::readiness::v4l2
             exec.unregister_fd(raw_fd);
             for (auto& b : buffers)
                 ::munmap(b.ptr, b.length);
-            return std::unexpected(error_from_errno());
+            return std::unexpected(kmx::aio::from_errno(errno));
         }
 
         capture result { exec, std::move(fd), std::move(cfg), std::move(buffers) };
@@ -252,27 +255,27 @@ namespace kmx::aio::readiness::v4l2
 
     // capture::stream_on / stream_off
 
-    std::expected<void, std::error_code> capture::stream_on() noexcept
+    std::expected<void, kmx::aio::error_code> capture::stream_on() noexcept
     {
         if (streaming_)
             return {};
 
         const int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         if (::ioctl(fd_.get(), VIDIOC_STREAMON, &type) < 0)
-            return std::unexpected(error_from_errno());
+            return std::unexpected(kmx::aio::from_errno(errno));
 
         streaming_ = true;
         return {};
     }
 
-    std::expected<void, std::error_code> capture::stream_off() noexcept
+    std::expected<void, kmx::aio::error_code> capture::stream_off() noexcept
     {
         if (!streaming_)
             return {};
 
         const int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         if (::ioctl(fd_.get(), VIDIOC_STREAMOFF, &type) < 0)
-            return std::unexpected(error_from_errno());
+            return std::unexpected(kmx::aio::from_errno(errno));
 
         streaming_ = false;
         return {};
@@ -282,39 +285,46 @@ namespace kmx::aio::readiness::v4l2
 
     capture::frame_result capture::next_frame() noexcept(false)
     {
-        // Suspend until the driver signals the fd readable (a buffer is filled).
-        co_await exec_.wait_io(fd_.get(), event_type::read);
+        while (true)
+        {
+            // Suspend until the driver signals the fd readable (a buffer is filled).
+            co_await exec_.wait_io(fd_.get(), event_type::read);
 
-        ::v4l2_buffer buf {};
-        buf.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        buf.memory = V4L2_MEMORY_MMAP;
+            ::v4l2_buffer buf {};
+            buf.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+            buf.memory = V4L2_MEMORY_MMAP;
 
-        if (::ioctl(fd_.get(), VIDIOC_DQBUF, &buf) < 0)
-            co_return std::unexpected(error_from_errno());
+            if (::ioctl(fd_.get(), VIDIOC_DQBUF, &buf) < 0)
+            {
+                if (would_block(errno))
+                    continue;
+                co_return std::unexpected(kmx::aio::from_errno(errno));
+            }
 
-        const auto& mapped = buffers_[buf.index];
+            const auto& mapped = buffers_[buf.index];
 
-        const std::uint64_t timestamp_ns =
-            static_cast<std::uint64_t>(buf.timestamp.tv_sec) * 1'000'000'000ull +
-            static_cast<std::uint64_t>(buf.timestamp.tv_usec) * 1'000ull;
+            const std::uint64_t timestamp_ns =
+                static_cast<std::uint64_t>(buf.timestamp.tv_sec) * 1'000'000'000ull +
+                static_cast<std::uint64_t>(buf.timestamp.tv_usec) * 1'000ull;
 
-        frame_metadata meta {
-            .sequence     = buf.sequence,
-            .timestamp_ns = timestamp_ns,
-            .bytes_used   = buf.bytesused,
-            .width        = config_.size.width,
-            .height       = config_.size.height,
-            .fourcc       = config_.format.fourcc,
-        };
+            frame_metadata meta {
+                .sequence     = buf.sequence,
+                .timestamp_ns = timestamp_ns,
+                .bytes_used   = buf.bytesused,
+                .width        = config_.size.width,
+                .height       = config_.size.height,
+                .fourcc       = config_.format.fourcc,
+            };
 
-        co_return frame_view {
-            fd_.get(),
-            buf.index,
-            static_cast<const std::byte*>(mapped.ptr),
-            mapped.length,
-            meta,
-            device_lifetime_,
-        };
+            co_return frame_view {
+                fd_.get(),
+                buf.index,
+                static_cast<const std::byte*>(mapped.ptr),
+                mapped.length,
+                meta,
+                device_lifetime_,
+            };
+        }
     }
 
 } // namespace kmx::aio::readiness::v4l2

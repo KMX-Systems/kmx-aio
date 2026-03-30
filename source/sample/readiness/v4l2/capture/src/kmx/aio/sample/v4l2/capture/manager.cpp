@@ -4,6 +4,8 @@
 #include <print>
 #include <source_location>
 
+#include <kmx/aio/error_code.hpp>
+
 namespace kmx::aio::sample::v4l2::capture
 {
     static constexpr auto mem_order = std::memory_order_relaxed;
@@ -51,7 +53,7 @@ namespace kmx::aio::sample::v4l2::capture
         if (!cap_result)
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
-                             "Failed to open capture device: {}", cap_result.error().message());
+                             "Failed to open capture device: {}", kmx::aio::to_string(cap_result.error()));
             metrics_.errors.fetch_add(1u, mem_order);
             co_return;
         }
@@ -80,7 +82,7 @@ namespace kmx::aio::sample::v4l2::capture
             {
                 metrics_.errors.fetch_add(1u, mem_order);
                 kmx::logger::log(kmx::logger::level::warn, std::source_location::current(),
-                                 "next_frame error: {}", frame_result.error().message());
+                                 "next_frame error: {}", kmx::aio::to_string(frame_result.error()));
                 if (++err_burst > 10u)
                 {
                     kmx::logger::log(kmx::logger::level::error, std::source_location::current(),

@@ -23,6 +23,7 @@
 #include <kmx/aio/readiness/tcp/stream.hpp>
 #include <kmx/aio/readiness/timer.hpp>
 #include <kmx/aio/readiness/udp/socket.hpp>
+#include <kmx/aio/readiness/v4l2/capture.hpp>
 
 // Readiness Model Security/Protocol Overlays
 #include <kmx/aio/readiness/quic/engine.hpp>

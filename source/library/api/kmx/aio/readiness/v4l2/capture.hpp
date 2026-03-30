@@ -10,6 +10,7 @@
     #include <vector>
 
     #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/error_code.hpp>
     #include <kmx/aio/readiness/executor.hpp>
     #include <kmx/aio/readiness/io_base.hpp>
     #include <kmx/aio/readiness/v4l2/v4l2_types.hpp>
@@ -93,8 +94,8 @@ namespace kmx::aio::readiness::v4l2
     class capture : public io_base
     {
     public:
-        using frame_result  = task<std::expected<frame_view,  std::error_code>>;
-        using create_result = std::expected<capture, std::error_code>;
+        using frame_result  = task<std::expected<frame_view, kmx::aio::error_code>>;
+        using create_result = std::expected<capture, kmx::aio::error_code>;
 
         /// @brief Opens and configures a V4L2 capture device.
         ///
@@ -131,10 +132,10 @@ namespace kmx::aio::readiness::v4l2
         [[nodiscard]] const capture_config& config() const noexcept { return config_; }
 
         /// @brief Stops streaming (VIDIOC_STREAMOFF). Idempotent.
-        [[nodiscard]] std::expected<void, std::error_code> stream_off() noexcept;
+        [[nodiscard]] std::expected<void, kmx::aio::error_code> stream_off() noexcept;
 
         /// @brief Restarts streaming after `stream_off()`.
-        [[nodiscard]] std::expected<void, std::error_code> stream_on() noexcept;
+        [[nodiscard]] std::expected<void, kmx::aio::error_code> stream_on() noexcept;
 
     private:
         struct mmap_buffer
