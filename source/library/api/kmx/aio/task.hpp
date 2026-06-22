@@ -27,6 +27,19 @@ namespace kmx::aio
 
     namespace detail
     {
+        /// @brief Base for task promise types with std::coroutine_traits-aware allocator override.
+        /// @details
+        /// This struct implements operator new/delete to satisfy the Plan.md requirement:
+        /// "Custom Memory Allocators: Mandate std::coroutine_traits overrides to route
+        ///  coroutine frame allocations to a thread-local, lockless fixed-size Slab Allocator."
+        ///
+        /// When C++ coroutines create a frame for task<T>, the compiler calls
+        /// promise_type::operator new (inherited from promise_base), which:
+        ///   1. Attempts O(1) allocation from thread-local slab allocator.
+        ///   2. Falls back to ::operator new if slab is exhausted or frame is oversized.
+        ///
+        /// See kmx/aio/task.cpp for full implementation and kmx/aio/allocator.hpp
+        /// for slab_allocator design.
         struct promise_base
         {
             std::coroutine_handle<> continuation_;

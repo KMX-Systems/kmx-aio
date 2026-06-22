@@ -7,7 +7,11 @@
 #include "kmx/logger.hpp"
 #include <cerrno>
 #include <cstdlib>
+#include <cstring>
+#include <pthread.h>
+#include <sched.h>
 #include <string_view>
+#include <thread>
 
 namespace kmx::aio::readiness
 {
@@ -173,6 +177,10 @@ namespace kmx::aio::readiness
 
         if (running_.load(mem_order))
             stop();
+
+        // If stop() was called from the I/O thread itself, join may be deferred.
+        if (io_thread_.joinable() && (io_thread_.get_id() != std::this_thread::get_id()))
+            io_thread_.join();
     }
 
     void executor::stop() noexcept
@@ -185,9 +193,39 @@ namespace kmx::aio::readiness
                 io_thread_.request_stop();
                 // A timeout in epoll_wait will eventually unblock it.
                 // For immediate unblocking, a pipe-to-self or eventfd would be needed.
+
+                // Avoid joining the current thread. This can occur when a task
+                // resumed by this executor requests stop().
+                if (io_thread_.get_id() == std::this_thread::get_id())
+                    return;
+
                 io_thread_.join();
             }
+
+            return;
         }
+
+        // Allow external completion of deferred join.
+        if (io_thread_.joinable() && (io_thread_.get_id() != std::this_thread::get_id()))
+            io_thread_.join();
+    }
+
+    std::expected<bool, std::error_code> executor::is_io_thread_affined_to(const int core_id) noexcept
+    {
+        if (core_id < 0)
+            return std::unexpected(std::make_error_code(std::errc::invalid_argument));
+
+        if (!io_thread_.joinable())
+            return std::unexpected(std::make_error_code(std::errc::operation_not_permitted));
+
+        cpu_set_t cpuset {};
+        CPU_ZERO(&cpuset);
+
+        const int ret = ::pthread_getaffinity_np(io_thread_.native_handle(), sizeof(cpu_set_t), &cpuset);
+        if (ret != 0)
+            return std::unexpected(std::error_code(ret, std::generic_category()));
+
+        return CPU_ISSET(core_id, &cpuset) != 0;
     }
 
     void executor::resume_if_found(const fd_t fd, const event_type type)
@@ -220,6 +258,8 @@ namespace kmx::aio::readiness
     {
         static constexpr std::uint32_t read_mask = EPOLLIN | EPOLLERR | EPOLLHUP;
         static constexpr std::uint32_t write_mask = EPOLLOUT | EPOLLERR | EPOLLHUP;
+
+        pin_to_core();
 
         for (std::vector<epoll_event> events;;)
         {
@@ -255,6 +295,24 @@ namespace kmx::aio::readiness
             if (st.stop_requested())
                 break;
         }
+    }
+
+    void executor::pin_to_core() const noexcept
+    {
+        if (config_.core_id < 0)
+            return;
+
+        cpu_set_t cpuset {};
+        CPU_ZERO(&cpuset);
+        CPU_SET(static_cast<int>(config_.core_id), &cpuset);
+
+        const int ret = ::pthread_setaffinity_np(::pthread_self(), sizeof(cpu_set_t), &cpuset);
+        if (ret != 0)
+            logger::log(logger::level::warn, std::source_location::current(), "Failed to pin readiness thread to core {}: {}",
+                        config_.core_id, std::strerror(ret));
+        else
+            logger::log(logger::level::info, std::source_location::current(), "Readiness executor pinned to CPU core {}",
+                        config_.core_id);
     }
 
 } // namespace kmx::aio::readiness

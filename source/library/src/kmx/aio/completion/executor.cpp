@@ -9,6 +9,7 @@
 #include <cstring>
 #include <pthread.h>
 #include <sched.h>
+#include <thread>
 
 namespace kmx::aio::completion
 {
@@ -330,6 +331,11 @@ namespace kmx::aio::completion
 
         if (running_.load(mem_order))
             stop();
+
+        // If stop() was initiated from the I/O thread itself, join is deferred.
+        // Ensure the control thread joins here before returning.
+        if (io_thread_.joinable() && (io_thread_.get_id() != std::this_thread::get_id()))
+            io_thread_.join();
     }
 
     void executor::stop() noexcept
@@ -340,9 +346,22 @@ namespace kmx::aio::completion
             if (io_thread_.joinable())
             {
                 io_thread_.request_stop();
+
+                // Avoid joining the current thread. This can happen if a coroutine
+                // resumed on the I/O loop calls exec->stop().
+                if (io_thread_.get_id() == std::this_thread::get_id())
+                    return;
+
                 io_thread_.join();
             }
+
+            return;
         }
+
+        // If already marked as stopped but join is still pending (e.g., self-stop path),
+        // allow an external thread to finalize the join.
+        if (io_thread_.joinable() && (io_thread_.get_id() != std::this_thread::get_id()))
+            io_thread_.join();
     }
 
     std::expected<std::size_t, std::error_code> executor::submit() noexcept
@@ -418,7 +437,7 @@ namespace kmx::aio::completion
 
         cpu_set_t cpuset {};
         CPU_ZERO(&cpuset);
-        CPU_SET(config_.core_id, &cpuset);
+        CPU_SET(static_cast<int>(config_.core_id), &cpuset);
 
         const int ret = ::pthread_setaffinity_np(::pthread_self(), sizeof(cpu_set_t), &cpuset);
         if (ret != 0)

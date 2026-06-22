@@ -38,6 +38,7 @@ namespace kmx::aio::readiness
         std::uint32_t thread_count = 1u;
         std::uint32_t max_events = 1024u;
         port_t timeout_ms = 200u;
+        std::int16_t core_id = -1;  ///< CPU core affinity (-1 = no pinning). Range: -1 to 16000.
         backend_mode backend = backend_mode::epoll_only;
     };
 
@@ -110,6 +111,10 @@ namespace kmx::aio::readiness
         /// @brief Returns the backend currently selected by the executor.
         [[nodiscard]] active_backend get_active_backend() const noexcept { return active_backend_; }
 
+        /// @brief Checks whether the I/O thread is affined to the requested CPU core.
+        /// @details Returns an error if the I/O thread is not currently running.
+        [[nodiscard]] std::expected<bool, std::error_code> is_io_thread_affined_to(int core_id) noexcept;
+
         /// @brief Reset all executor statistics.
         void reset_stats() noexcept { metrics_.reset(); }
 
@@ -135,6 +140,9 @@ namespace kmx::aio::readiness
 
         // Internal loop function.
         void process_events(std::stop_token st) noexcept(false);
+
+        /// @brief Pins the calling thread to the configured CPU core.
+        void pin_to_core() const noexcept;
 
         void resume_if_found(fd_t fd, event_type type);
 

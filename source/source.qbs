@@ -7,6 +7,7 @@ Project {
     property bool enable_spdk: true
     property bool enable_quic: true
     property bool enable_avb: true
+    property bool enable_cuda: false  // GPU support (requires CUDA toolkit installed)
 
     references: [
         "library/lib.qbs",

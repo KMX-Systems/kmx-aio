@@ -25,7 +25,7 @@ namespace kmx::aio::completion
         std::uint32_t ring_entries = 256u;    ///< Number of SQ entries in the io_uring instance.
         std::uint32_t max_completions = 256u; ///< Maximum CQE batch size per reap cycle.
         std::uint32_t thread_count = 1u;      ///< Number of worker threads for coroutine resumption.
-        int core_id = -1;                     ///< CPU core affinity (-1 = no pinning).
+        std::int16_t core_id = -1;            ///< CPU core affinity (-1 = no pinning). Range: -1 to 16000.
     };
 
     /// @brief Statistics for io_uring operations and executor performance.

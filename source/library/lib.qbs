@@ -17,6 +17,8 @@ StaticLibrary {
             defs.push("KMX_AIO_FEATURE_QUIC=1");
         if (project.enable_avb)
             defs.push("KMX_AIO_FEATURE_AVB=1");
+        if (project.enable_cuda)
+            defs.push("KMX_AIO_FEATURE_CUDA=1");
         return defs;
     }
     cpp.includePaths: [
@@ -99,6 +101,11 @@ StaticLibrary {
             libs.push("z");
         }
 
+        if (project.enable_cuda)
+        {
+            libs.push("cudart");
+        }
+
         return libs;
     }
     install: true
@@ -151,6 +158,10 @@ StaticLibrary {
         "api/kmx/aio/readiness/avb/**.hpp",
         "inc/kmx/aio/avb/**.hpp",
         "src/kmx/aio/avb/**.cpp",
+
+        // GPU (CUDA) sources
+        "api/kmx/aio/gpu/**.hpp",
+        "src/kmx/aio/gpu/**.cpp",
     ]
     Export {
         Depends { name: "cpp" }
