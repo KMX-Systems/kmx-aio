@@ -10,9 +10,15 @@
 *   **Zero-Overhead Abstractions**: Lightweight wrappers around system calls.
 *   **Type-Safe Error Handling**: Extensive use of `std::expected` and `std::error_code` for robust error management.
 *   **TCP Networking**: Built-in support for TCP listeners and streams.
-*   **UDP Networking**: Dual-layer UDP API in both models — low-level `readiness::udp::socket` / `completion::udp::socket` and high-level span/address APIs via their `udp::endpoint` wrappers.
+*   **UDP Networking**: Dual-layer API in readiness model — low-level `readiness::udp::socket` and high-level `readiness::udp::endpoint` with automatic address management. Completion model provides socket-level `completion::udp::socket` only.
+*   **TLS/ALPN**: Encrypted streams (BoringSSL-backed, both models) with Application Layer Protocol Negotiation for seamless HTTP/2 handshakes.
+*   **QUIC + HTTP/3**: Full QUIC engine (both models) with lsquic backing; HTTP/3 server/client samples included.
 *   **Async Timers**: Readiness timer (`timerfd` + `epoll`) and completion timer (`io_uring` timeout op).
-*   **Async V4L2 Capture**: Zero-copy epoll-driven frame capture from any V4L2 streaming device (USB webcams, MIPI CSI-2 pipelines, GMSL camera chains). Frames land in `co_await`-returned `frame_view` objects that auto-requeue their mmap'd kernel buffers on destruction.
+*   **Async V4L2 Capture** (Readiness only): Zero-copy epoll-driven frame capture from any V4L2 streaming device (USB webcams, MIPI CSI-2 pipelines, GMSL camera chains). Frames land in `co_await`-returned `frame_view` objects that auto-requeue their mmap'd kernel buffers on destruction.
+*   **HTTP/2**: Full codec, stream, frame, and HPACK serialization stack (no model affinity).
+*   **AVB (Audio Video Bridging, IEEE 802.1)** (Completion model): Raw Ethernet socket with hardware timestamping, gPTP clock synchronization, and SRP client for stream reservation.
+*   **AF_XDP Packet Socket** (Completion model, gated): Kernel-bypass packet filtering with eBPF support and UMEM ring management.
+*   **SPDK Block I/O** (Completion model, gated): NVMe, generic bdev, and storage acceleration via DPDK.
 
 ## Requirements
 
@@ -24,8 +30,9 @@
 
 ### Runtime / System Dependencies
 
-*   **Linux kernel interfaces**: `epoll`, sockets, and `timerfd` (via headers such as `sys/epoll.h`, `sys/socket.h`, `sys/timerfd.h`).
+*   **Linux kernel interfaces**: `epoll`, sockets, `timerfd`, and `io_uring` (via `liburing`).
 *   **POSIX networking**: `arpa/inet.h`, `netinet/in.h`, and related socket APIs.
+*   **liburing** (required for completion model): `liburing-dev` package provides headers and runtime for io_uring async I/O.
 
 ### Build Dependencies
 
@@ -42,22 +49,46 @@
 
 ### Optional Pillar 1 Prerequisites
 
-These are only required when enabling the corresponding feature gate.
+These are only required when the corresponding feature gate is enabled (which is the default).
+Disable the gate if you lack a dependency.
 
-*   **AF_XDP** (`projects.source.enable_af_xdp:true`): `libbpf-dev`, `libxdp-dev`, `libelf-dev`, `zlib1g-dev`, `clang`, `llvm`.
-*   **SPDK** (`projects.source.enable_spdk:true`): `libaio-dev`, `libnuma-dev`, `uuid-dev`, `meson`, `ninja-build`, and SPDK runtime libraries.
-*   **OpenOnload** (`projects.source.enable_openonload:true`): OpenOnload userspace/runtime installation from vendor packages.
+*   **QUIC / HTTP/3** (enabled by default): BoringSSL and lsquic libraries. Build both via `build/install_lsquic.sh` (see below).
+*   **AF_XDP** (enabled by default): `libbpf-dev`, `libxdp-dev`, `libelf-dev`, `zlib1g-dev`, `clang`, `llvm`.
+*   **SPDK** (enabled by default): `libaio-dev`, `libnuma-dev`, `uuid-dev`, `meson`, `ninja-build`, and SPDK runtime libraries.
+*   **AVB / IEEE 802.1** (Completion model, enabled by default): Kernel with PTP/hardware timestamping support (most modern NIC drivers); user must have `CAP_NET_RAW` privilege.
+*   **OpenOnload** (enabled by default): OpenOnload userspace/runtime installation from vendor packages (optional; gracefully degrades if unavailable).
 
-Ubuntu/Debian example:
+#### Mandatory Dependencies (Ubuntu/Debian)
+
+```bash
+sudo apt update
+sudo apt install -y liburing-dev build-essential pkg-config git python3
+```
+
+#### Optional Accelerator Dependencies (Ubuntu/Debian)
 
 ```bash
 sudo apt update
 sudo apt install -y \
     libbpf-dev libxdp-dev libelf-dev zlib1g-dev clang llvm \
-    libaio-dev libnuma-dev uuid-dev meson ninja-build
+    libaio-dev libnuma-dev uuid-dev meson ninja-build libssl-dev
 ```
 
-Quick verification:
+#### Build BoringSSL and lsquic (Required for TLS and QUIC)
+
+Before building `kmx-aio` with TLS or QUIC support, run the helper script:
+
+```bash
+cd /path/to/kmx-aio
+bash build/install_lsquic.sh
+```
+
+This clones and builds BoringSSL (required by all TLS streams and the QUIC engine)
+and lsquic (required by the QUIC HTTP/3 features). Both are installed to `build/`
+and linked into the library. **This step is mandatory** if you intend to use TLS
+or QUIC; skip only if you disable both gates.
+
+Verify optional dependencies if you plan to build with them enabled:
 
 ```bash
 pkg-config --modversion liburing
@@ -240,44 +271,116 @@ sudo mount -a
 ## Optional Pillar 1 Feature Gates
 
 Pillar 1 technologies are wired behind explicit QBS feature switches and are
-disabled by default:
-
-*   `projects.source.enable_openonload:false`
-*   `projects.source.enable_af_xdp:false`
-*   `projects.source.enable_spdk:false`
-
-Enable them at build time as needed:
+**enabled by default**. Disable them at build time if your environment lacks the
+required dependencies (e.g., SPDK libraries, libxdp, OpenOnload headers):
 
 ```bash
+# Build without SPDK and AF_XDP, keep QUIC and AVB:
 qbs build \
-    projects.source.enable_openonload:true \
-    projects.source.enable_af_xdp:true \
-    projects.source.enable_spdk:false
+    projects.source.enable_spdk:false \
+    projects.source.enable_af_xdp:false
 ```
+
+Default state (all enabled):
+
+*   `projects.source.enable_openonload:true` — OpenOnload zero-copy accelerator (readiness only)
+*   `projects.source.enable_af_xdp:true` — AF_XDP packet socket (completion only)
+*   `projects.source.enable_spdk:true` — SPDK block device I/O (completion only)
+*   `projects.source.enable_quic:true` — QUIC engine and HTTP/3 (both models)
+*   `projects.source.enable_avb:true` — Audio Video Bridging (completion model only)
 
 When enabled, compile-time defines are exported by `kmx-aio-lib`:
 
 *   `KMX_AIO_FEATURE_OPENONLOAD=1`
 *   `KMX_AIO_FEATURE_AF_XDP=1`
 *   `KMX_AIO_FEATURE_SPDK=1`
+*   `KMX_AIO_FEATURE_QUIC=1`
+*   `KMX_AIO_FEATURE_AVB=1`
 
 ## Architecture
 
 The library is structured around root primitives and two execution models:
 
+### Core Primitives
+
 *   **`kmx::aio::task<T>`**: A lazy-evaluation coroutine type. Tasks are the fundamental unit of asynchronous work.
 *   **`kmx::aio::executor_base`**: Shared lifecycle/synchronization base for readiness and completion executors.
-*   **`kmx::aio::readiness::*`**: Readiness-model APIs (`epoll`) for TCP/UDP/TLS operations.
-*   **`kmx::aio::completion::*`**: Completion-model APIs (`io_uring`) for TCP/UDP/TLS operations.
-*   **`kmx::aio::readiness::executor`**: epoll-based executor for readiness APIs.
-*   **`kmx::aio::completion::executor`**: io_uring-based executor for completion APIs.
-*   **`kmx::aio::readiness::io_base`** and **`kmx::aio::completion::io_base`**: Model-specific shared I/O bases used by TCP/UDP wrappers.
-*   **`kmx::aio::readiness::tcp::*` / `kmx::aio::completion::tcp::*`**: Asynchronous TCP listener/stream APIs for each execution model.
-*   **`kmx::aio::readiness::udp::*` / `kmx::aio::completion::udp::*`**: Low-level socket + high-level endpoint UDP APIs for each execution model.
-*   **`kmx::aio::readiness::descriptor::timer`** and **`kmx::aio::completion::timer`**: Timer APIs for the two execution models.
-*   **`kmx::aio::readiness::v4l2::capture`**: Async V4L2 video capture. MMAP streaming buffers managed by the kernel; a single `co_await next_frame()` suspends via epoll until a filled buffer is ready. The returned `frame_view` is a zero-copy view into the mmap'd buffer that automatically re-enqueues the buffer (VIDIOC_QBUF) on destruction. Supports any V4L2 streaming device: USB webcams, MIPI CSI-2 ISPs, GMSL serialiser/deserialiser pipelines, DVB capture cards.
+*   **`kmx::aio::allocator`**: Thread-local slab allocator for coroutine frame memory management.
+*   **`kmx::aio::file_descriptor`**: RAII wrapper and syscall helpers for Linux file descriptors.
+*   **`kmx::aio::error_code`**: Type-safe error handling via `std::expected` and domain-specific error codes.
 
-Readiness TCP/UDP/V4L2 classes are move-only and inherit `readiness::io_base` (copy-deleted, move-assign-deleted due to the non-reseatable `executor&` member).
+### Readiness-Model Namespace (`kmx::aio::readiness`)
+
+Built on `epoll` for readiness-based I/O multiplexing. Call `co_await` when you need data; execution suspends until the kernel signals readiness.
+
+| Component | Purpose |
+|-----------|----------|
+| `executor` | Epoll-based executor; single-threaded or thread-pool |
+| `executor_base` | Shared state and lifecycle |
+| `tcp::listener`, `tcp::stream` | Async TCP accept/connect/read/write |
+| `udp::socket` | Low-level async datagram I/O (recvmsg/sendmsg) |
+| `udp::endpoint` | **High-level API**: span-based send/recv with automatic sockaddr management |
+| `descriptor::epoll` | Low-level epoll descriptor wrapper and control |
+| `descriptor::timer` | Timerfd wrapper; one-shot and periodic timers |
+| `tls::stream` | Generic template over inner transport; BoringSSL Memory BIO-backed encrypted streams |
+| `v4l2::capture` | **Zero-copy video capture**: mmap buffers auto-requeued on `frame_view` destruction |
+| `quic::engine` | Template instantiation: `generic_engine<executor, udp::socket>` |
+| `openonload::extensions` | Optional zero-copy acceleration via OpenOnload extensions (gracefully disabled if unavailable) |
+| `http2::codec`, `http2::stream`, `http2::frame`, `http2::hpack` | HTTP/2 full serialization stack (model-agnostic) |
+
+### Completion-Model Namespace (`kmx::aio::completion`)
+
+Built on Linux `io_uring` for asynchronous completion-based I/O. Submit operations and `co_await` their completion; the kernel batches multiple ops and fires completions in bulk.
+
+| Component | Purpose |
+|-----------|----------|
+| `executor` | Io_uring-based executor; setup/teardown, completion polling, CQE batch draining |
+| `tcp::listener`, `tcp::stream` | Async TCP via io_uring |
+| `udp::socket` | Async UDP via io_uring recvmsg/sendmsg; **no endpoint wrapper** (use socket directly) |
+| `tls::stream` | Generic template; BoringSSL Memory BIO-backed |
+| `timer` | Io_uring timeout operations |
+| `quic::engine` | Template instantiation: `generic_engine<executor, udp::socket>` |
+| `xdp::socket` | **AF_XDP kernel-bypass packet socket**: UMEM registration, RX/TX/fill/completion rings (gated: `enable_af_xdp`) |
+| `spdk::runtime`, `spdk::device` | **SPDK NVMe/bdev access**: init, bdev enumeration, async device I/O (gated: `enable_spdk`) |
+| `spdk::device` | Block device abstraction; includes malloc fallback backend |
+| `avb::eth_socket` | Raw Ethernet socket with hardware timestamping |
+
+### Cross-Model Abstractions
+
+*   **`kmx::aio::tls::stream<InnerStream>`**: Generic template; wraps TCP streams in both models; uses BoringSSL Memory BIOs for state machine decoupling from actual socket I/O.
+*   **`kmx::aio::quic::generic_engine<Executor, UdpSocket>`**: Template; lsquic backing; instantiated for both readiness and completion models.
+*   **`kmx::aio::http2::*`**: Codec, stream, frame, and HPACK serialization; no executor affinity; available to both models.
+*   **`kmx::aio::avb::*`**: IEEE 802.1 AVB/TSN stack (Completion model only); raw Ethernet socket, gPTP clock, SRP client.
+
+### Memory and Synchronization
+
+Readiness TCP/UDP/V4L2 classes are **move-only** and inherit `readiness::io_base` (copy-deleted, move-assign-deleted due to the non-reseatable `executor&` member).
+Completion I/O classes follow similar move-only patterns to prevent accidental sharing of underlying file descriptors across executor contexts.
+
+## Feature Availability Matrix
+
+Quick reference showing which APIs are available in each execution model:
+
+| Feature | Readiness (epoll) | Completion (io_uring) | Notes |
+|---------|------|------|-------|
+| **TCP** | ✅ Full | ✅ Full | Listener, stream, accept, read, write |
+| **UDP Socket** | ✅ Full | ✅ Full | Low-level recvmsg/sendmsg |
+| **UDP Endpoint** | ✅ High-level span API | ❌ Not available | Completion users manage `msghdr`/`iovec` directly |
+| **TLS Stream** | ✅ Full | ✅ Full | Generic template; BoringSSL Memory BIO |
+| **QUIC Engine** | ✅ Full (lsquic) | ✅ Full (lsquic) | HTTP/3 server/client; feature-gated |
+| **Timers** | ✅ timerfd + epoll | ✅ io_uring timeout ops | Periodic and one-shot |
+| **V4L2 Capture** | ✅ Zero-copy mmap | ❌ Not available | Readiness-only; frame auto-requeue |
+| **HTTP/2** | ✅ Codec + ALPN | ✅ Codec + ALPN | No executor affinity |
+| **AVB/IEEE 802.1** | ❌ Not yet implemented | ✅ Eth socket | Requires `CAP_NET_RAW` and hardware timestamps |
+| **AF_XDP Packets** | ❌ Not available | ✅ Kernel-bypass (gated) | Feature-gated; eBPF packet filtering |
+| **SPDK Block I/O** | ❌ Not available | ✅ NVMe/bdev (gated) | Feature-gated; DPDK-backed |
+| **OpenOnload** | ✅ Zero-copy extensions | ❌ Not available | Readiness-only; headers-only; gracefully disabled |
+
+**Legend:**
+- ✅ Available / Fully implemented
+- ❌ Not available in this model
+- Feature-gated = Enabled by default; disable with `projects.source.enable_*:false`
+- Headers-only = API declared but no implementation; graceful degradation at runtime
 
 ## Project Structure
 
@@ -285,35 +388,44 @@ Readiness TCP/UDP/V4L2 classes are move-only and inherit `readiness::io_base` (c
 kmx-aio/
 ├── source/
 │   ├── library/          # Core library source code
-│   │   ├── inc/kmx/aio/  # Public headers
-│   │   │   ├── executor_base.hpp    # Shared base for executor state/lifetime controls
-│   │   │   ├── file_descriptor.hpp  # RAII file-descriptor wrapper and syscall helpers
-│   │   │   ├── task.hpp             # Lazy coroutine task<T> type
-│   │   │   ├── readiness/           # epoll model APIs (tcp/udp/tls/v4l2 + descriptor)
-│   │   │   │   └── v4l2/            # V4L2 capture: v4l2_types.hpp, capture.hpp
-│   │   │   ├── completion/          # io_uring model APIs (tcp/udp/tls/xdp)
-│   │   └── src/                     # Implementation (.cpp) files
-│   ├── sample/           # Example applications
-│   │   ├── readiness/    # Readiness-model samples (epoll)
-│   │   │   ├── tcp/
-│   │   │   │   ├── minimal/
-│   │   │   │   └── echo/
-│   │   │   ├── udp/
-│   │   │   │   ├── minimal/
-│   │   │   │   └── echo/
-│   │   │   ├── tls/
-│   │   │   │   └── echo_readiness_server/
-│   │   │   └── v4l2/
-│   │   │       └── capture/         # sample-v4l2-capture
-│   │   └── completion/   # Completion-model samples (io_uring)
-│   │       ├── tcp/
-│   │       │   └── echo_uring/
-│   │       ├── udp/
-│   │       │   └── echo_uring/
-│   │       └── tls/
-│   │           └── echo_completion_server/
-│   └── library-test/     # Unit tests
-└── build/                # Build artifacts
+│   │   ├── api/kmx/aio/  # Public headers
+│   │   │   ├── task.hpp, executor_base.hpp, file_descriptor.hpp, allocator.hpp, error_code.hpp
+│   │   │   ├── readiness/           # epoll model APIs
+│   │   │   │   ├── executor.hpp, tcp/, udp/, descriptor/, timer.hpp
+│   │   │   │   ├── v4l2/            # V4L2 zero-copy capture
+│   │   │   │   ├── tls/, quic/, openonload/, avb/
+│   │   │   ├── completion/          # io_uring model APIs
+│   │   │   │   ├── executor.hpp, tcp/, udp/, timer.hpp
+│   │   │   │   ├── xdp/, spdk/, tls/, quic/, avb/
+│   │   │   ├── http2/               # HTTP/2 codec, frames, HPACK
+│   │   │   ├── avb/                 # Audio Video Bridging / IEEE 802.1
+│   │   │   │   ├── eth_socket.hpp, gptp/, srp/
+│   │   │   └── quic/                # QUIC generic engine
+│   │   ├── inc/kmx/aio/             # Private headers
+│   │   ├── src/                     # Implementation (.cpp) files
+│   │   └── lib.qbs                  # Library build definition
+│   ├── library-test/                # Unit tests and integration tests
+│   │   └── unit-test.qbs
+│   ├── sample/                      # Example applications
+│   │   ├── readiness/               # Readiness model samples (epoll)
+│   │   │   ├── tcp/                 # TCP echo, minimal server/client
+│   │   │   ├── udp/                 # UDP echo, minimal server/client
+│   │   │   ├── tls/                 # TLS echo, HTTP/2 ALPN examples
+│   │   │   └── v4l2/                # V4L2 frame capture
+│   │   └── completion/              # Completion model samples (io_uring)
+│   │       ├── tcp/                 # TCP echo with io_uring
+│   │       ├── udp/                 # UDP echo with io_uring
+│   │       ├── tls/                 # TLS echo, HTTP/2 ALPN examples
+│   │       ├── quic/                # QUIC echo server, HTTP/3 server/client
+│   │       ├── spdk/                # SPDK bdev discovery, minimal block I/O
+│   │       ├── xdp/                 # AF_XDP packet filter
+│   │       └── hft/                 # High-frequency trading order router
+│   └── source.qbs                   # Root build definition
+├── build/
+│   ├── install_lsquic.sh            # Build BoringSSL + lsquic
+│   ├── boringssl/                   # BoringSSL repo (cloned by install_lsquic.sh)
+│   └── lsquic/                      # lsquic repo (cloned by install_lsquic.sh)
+└── README.md, LICENSE, etc.
 ```
 
 ## Usage Examples
@@ -503,6 +615,46 @@ int main() {
     return 0;
 }
 ```
+
+## Known Limitations and Model Differences
+
+The library aims for API parity between readiness and completion models where architecturally possible, but explicit design decisions create intentional asymmetries:
+
+### Model-Specific Constraints
+
+**Completion Model (io_uring):**
+- **UDP Endpoint Wrapper**: Not available. Completion API users operate directly on `completion::udp::socket` (low-level `recvmsg`/`sendmsg`). Readiness offers a higher-level `readiness::udp::endpoint` span-based API for convenience.
+- **V4L2 Capture**: Not supported. Video capture remains readiness-only (`readiness::v4l2::capture`) due to io_uring's current feature set (frame mmap buffers and `VIDIOC_*` ioctls lack completion-friendly interfaces in most kernel versions).
+
+**Readiness Model (epoll):**
+- **AF_XDP Packet Sockets**: Not available. Kernel-bypass packet I/O via AF_XDP is completion-only (`completion::xdp::socket`) as it requires careful polling loop integration with io_uring.
+- **SPDK Block I/O**: Not available. NVMe and generic block device async I/O (`completion::spdk::*`) is completion-only to leverage io_uring's batch-completion advantages.
+
+### Optional Feature Dependencies
+
+**OpenOnload Integration (`readiness::openonload::extensions`)**:
+- API is provided but is **headers-only** without a functional implementation.
+- Symbol `KMX_AIO_OPENONLOAD_EXTENSIONS_AVAILABLE` (compile-time macro) is always `0` when the feature gate is disabled.
+- If installed, the library can detect and wrap OpenOnload sockets at runtime; graceful degradation occurs if OpenOnload is unavailable.
+
+**AVB / Audio Video Bridging (`completion::avb::*` only)**:
+- Requires `CAP_NET_RAW` capability for raw Ethernet socket creation.
+- Requires host NIC with IEEE 1588 PTP hardware timestamping support (most modern drivers support this; older NICs and virtual adapters may not).
+- IEEE 802.1 SRP stream reservation operates only on links configured with 802.1Q VLAN support.
+
+### Coroutine Frame Storage
+
+All coroutine frames (`task<T>`) allocate from a thread-local slab allocator. Large frame objects (e.g., huge local `std::vector` or array) may cause allocator exhaustion. Structure your code to limit frame footprint or adjust slab parameters at executor initialization.
+
+### Error Handling
+
+The library uses `std::expected<T, error_code>` for error propagation. Uncaught exceptions in coroutine bodies are not automatically propagated; use explicit error handling.
+
+### Platform Scope
+
+- **Linux only**. No Windows, macOS, or other OS support.
+- Requires **Linux kernel 5.10+** for stable io_uring; kernel 5.8+ may work but has known bugs.
+- Requires **GCC 12+** or **Clang 15+** for C++26 coroutine features.
 
 ## Building
 
