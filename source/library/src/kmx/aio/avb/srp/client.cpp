@@ -59,9 +59,7 @@ namespace kmx::aio::avb::srp
         explicit state(Executor& exec) noexcept: exec_(exec), sock_(exec)
         {
             if constexpr (std::same_as<Executor, kmx::aio::completion::executor>)
-            {
                 completion_exec_ = std::shared_ptr<kmx::aio::completion::executor>(&exec_, [](kmx::aio::completion::executor*) {});
-            }
         }
 
         // Encode / send helpers
@@ -116,11 +114,12 @@ namespace kmx::aio::avb::srp
             const std::uint16_t attr_list_len =
                 static_cast<std::uint16_t>(sizeof(mrp_vector_header_t) + sizeof(domain_attr_t) + 1u // three-packed events
                                            + 2u);                                                   // end mark
-            pdu.msg_header.attribute_type = static_cast<std::uint8_t>(attr_type::domain);
-            pdu.msg_header.attribute_list_length = ::htons(attr_list_len);
+            auto& msg_header = pdu.msg_header;
+            msg_header.attribute_type = static_cast<std::uint8_t>(attr_type::domain);
+            msg_header.attribute_list_length = ::htons(attr_list_len);
             pdu.vec_header.leave_all_and_num_values = ::htons(1u);
 
-            auto bytes = std::as_bytes(std::span {&pdu, 1});
+            const auto bytes = std::as_bytes(std::span {&pdu, 1});
             std::vector<std::byte> buf(bytes.begin(), bytes.end());
             co_return co_await sock_.send(multicast::srp, std::span<const std::byte>(buf));
         }
@@ -151,10 +150,8 @@ namespace kmx::aio::avb::srp
             // Notify any pending subscribe() waiters
             for (auto& w: pending_subs_)
             {
-                if (w.id == desc.stream_id && !w.resolved.has_value())
-                {
+                if ((w.id == desc.stream_id) && !w.resolved.has_value())
                     w.resolved = desc;
-                }
             }
         }
 
@@ -185,10 +182,8 @@ namespace kmx::aio::avb::srp
         {
             const auto res = co_await recv_loop();
             if (!res)
-            {
-                kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
-                                 "SRP receive loop failed: {}", res.error().message());
-            }
+                kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SRP receive loop failed: {}",
+                                 res.error().message());
         }
 
         // Periodic re-declaration loop
@@ -196,15 +191,13 @@ namespace kmx::aio::avb::srp
         task<std::expected<void, std::error_code>> talker_loop() noexcept(false)
         {
             if constexpr (!std::same_as<Executor, kmx::aio::completion::executor>)
-            {
                 co_return std::unexpected(std::make_error_code(std::errc::operation_not_supported));
-            }
 
             kmx::aio::completion::timer tmr {completion_exec_};
 
             while (true)
             {
-                auto sleep = co_await tmr.wait(std::chrono::milliseconds(500));
+                const auto sleep = co_await tmr.wait(std::chrono::milliseconds(500));
                 if (!sleep)
                     co_return std::unexpected(sleep.error());
 
@@ -214,6 +207,7 @@ namespace kmx::aio::avb::srp
                     if (!s)
                         co_return std::unexpected(s.error());
                 }
+
                 for (const auto& [id, desc]: listener_streams_)
                 {
                     auto s = co_await send_listener_ready(desc);
@@ -227,10 +221,8 @@ namespace kmx::aio::avb::srp
         {
             const auto res = co_await talker_loop();
             if (!res)
-            {
-                kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
-                                 "SRP re-declaration loop failed: {}", res.error().message());
-            }
+                kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SRP re-declaration loop failed: {}",
+                                 res.error().message());
         }
     };
 
@@ -247,17 +239,18 @@ namespace kmx::aio::avb::srp
     template <typename Executor>
     task<std::expected<void, std::error_code>> generic_client<Executor>::start(std::string_view iface) noexcept(false)
     {
-        auto open_res = co_await state_->sock_.open(iface, ethertype::msrp);
+        const auto open_res = co_await state_->sock_.open(iface, ethertype::msrp);
         if (!open_res)
             co_return std::unexpected(open_res.error());
 
         // Announce domain support first
-        auto dom = co_await state_->send_domain();
+        const auto dom = co_await state_->send_domain();
         if (!dom)
             co_return std::unexpected(dom.error());
 
-        state_->exec_.spawn(state_->recv_loop_task());
-        state_->exec_.spawn(state_->talker_loop_task());
+        auto& exec = state_->exec_;
+        exec.spawn(state_->recv_loop_task());
+        exec.spawn(state_->talker_loop_task());
 
         co_return std::expected<void, std::error_code> {};
     }
@@ -274,9 +267,7 @@ namespace kmx::aio::avb::srp
         const stream_id_t& stream_id, std::chrono::milliseconds timeout) noexcept(false)
     {
         if constexpr (!std::same_as<Executor, kmx::aio::completion::executor>)
-        {
             co_return std::unexpected(std::make_error_code(std::errc::operation_not_supported));
-        }
 
         kmx::aio::completion::timer tmr {state_->completion_exec_};
 

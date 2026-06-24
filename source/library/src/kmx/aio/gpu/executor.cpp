@@ -337,6 +337,7 @@ namespace kmx::aio::gpu
             destroy();
             handle_ = std::exchange(other.handle_, nullptr);
         }
+
         return *this;
     }
 
@@ -432,6 +433,7 @@ namespace kmx::aio::gpu
             destroy();
             handle_ = std::exchange(other.handle_, nullptr);
         }
+
         return *this;
     }
 

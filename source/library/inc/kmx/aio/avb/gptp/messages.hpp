@@ -81,7 +81,7 @@ namespace kmx::aio::avb::gptp
     struct header_t
     {
         std::uint8_t transport_msg_type {}; ///< [7:4]=transportSpecific, [3:0]=messageType
-        std::uint8_t version_ptp {2u};    ///< [7:4]=reserved, [3:0]=versionPTP=2
+        std::uint8_t version_ptp {2u};      ///< [7:4]=reserved, [3:0]=versionPTP=2
         std::uint16_t message_length {};    ///< total msg length, network byte order
         std::uint8_t domain_number {};
         std::uint8_t reserved1 {};

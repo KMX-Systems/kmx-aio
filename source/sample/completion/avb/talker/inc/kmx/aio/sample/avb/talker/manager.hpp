@@ -9,9 +9,9 @@
 #include <string>
 
 #include <kmx/aio/avb/avb_types.hpp>
-#include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/avb/gptp/clock.hpp>
 #include <kmx/aio/avb/srp/client.hpp>
+#include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/task.hpp>
 
 namespace kmx::aio::sample::avb::talker

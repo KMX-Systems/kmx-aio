@@ -184,11 +184,8 @@ namespace kmx::aio::sample::avb::talker
 
             kmx::logger::log(kmx::logger::level::info, std::source_location::current(),
                              "Talker stats | frames_sent={} | errors={} | synced={} | offset={}ns | path_delay={}ns",
-                             metrics_.frames_sent.load(mem_order),
-                             metrics_.errors.load(mem_order),
-                             clock_ && clock_->is_synced(),
-                             clock_ ? clock_->offset_ns() : 0,
-                             clock_ ? clock_->path_delay_ns() : 0);
+                             metrics_.frames_sent.load(mem_order), metrics_.errors.load(mem_order), clock_ && clock_->is_synced(),
+                             clock_ ? clock_->offset_ns() : 0, clock_ ? clock_->path_delay_ns() : 0);
         }
     }
 

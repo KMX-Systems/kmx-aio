@@ -70,7 +70,7 @@ namespace kmx::aio::sample::v4l2::completion_capture
             return out;
         }
 
-        for (const auto& frame : step.frames)
+        for (const auto& frame: step.frames)
         {
             if (!frame.recv_ok)
             {

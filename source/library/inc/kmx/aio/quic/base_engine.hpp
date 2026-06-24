@@ -61,18 +61,17 @@ namespace kmx::aio::quic
 
         static int send_packets_out(void* ctx, const struct ::lsquic_out_spec* specs, unsigned count)
         {
-            auto* self = static_cast<base_impl*>(ctx);
+            auto* const self = static_cast<base_impl*>(ctx);
             unsigned sent {};
+            ::msghdr msg {};
+            ::iovec iov[1u] {};
 
             for (; sent < count; ++sent)
             {
-                struct msghdr msg
-                {
-                };
+                msg = {};
                 msg.msg_name = const_cast<void*>(reinterpret_cast<const void*>(specs[sent].dest_sa));
                 msg.msg_namelen = (specs[sent].dest_sa->sa_family == AF_INET) ? sizeof(sockaddr_in) : sizeof(sockaddr_in6);
 
-                iovec iov[1];
                 iov[0].iov_base = const_cast<void*>(specs[sent].iov[0].iov_base);
                 iov[0].iov_len = specs[sent].iov[0].iov_len;
                 msg.msg_iov = iov;
@@ -88,7 +87,7 @@ namespace kmx::aio::quic
 
         static ::lsquic_conn_ctx_t* on_new_conn(void* stream_if_ctx, ::lsquic_conn_t* conn)
         {
-            auto* self = static_cast<base_impl*>(stream_if_ctx);
+            auto* const self = static_cast<base_impl*>(stream_if_ctx);
             if (self->is_client_)
                 ::lsquic_conn_make_stream(conn);
             return reinterpret_cast<::lsquic_conn_ctx_t*>(stream_if_ctx);
@@ -98,7 +97,7 @@ namespace kmx::aio::quic
 
         static ::lsquic_stream_ctx_t* on_new_stream(void* stream_if_ctx, ::lsquic_stream_t* stream)
         {
-            auto* self = static_cast<base_impl*>(stream_if_ctx);
+            auto* const self = static_cast<base_impl*>(stream_if_ctx);
             if (self->is_client_)
                 ::lsquic_stream_wantwrite(stream, 1);
             else
@@ -108,7 +107,7 @@ namespace kmx::aio::quic
 
         static void on_read(::lsquic_stream_t* stream, ::lsquic_stream_ctx_t* /*ctx*/)
         {
-            auto* self = reinterpret_cast<base_impl*>(::lsquic_conn_get_ctx(::lsquic_stream_conn(stream)));
+            auto* const self = reinterpret_cast<base_impl*>(::lsquic_conn_get_ctx(::lsquic_stream_conn(stream)));
             std::array<char, 4096u> buf {};
             const ssize_t nr = ::lsquic_stream_read(stream, buf.data(), buf.size());
             if (nr > 0)
@@ -129,7 +128,7 @@ namespace kmx::aio::quic
 
         static void on_write(::lsquic_stream_t* stream, ::lsquic_stream_ctx_t* /*ctx*/)
         {
-            auto* self = reinterpret_cast<base_impl*>(::lsquic_conn_get_ctx(::lsquic_stream_conn(stream)));
+            auto* const self = reinterpret_cast<base_impl*>(::lsquic_conn_get_ctx(::lsquic_stream_conn(stream)));
             if (self->is_client_ && !self->client_payload_.empty())
             {
                 ::lsquic_stream_write(stream, self->client_payload_.data(), self->client_payload_.size());
@@ -139,14 +138,12 @@ namespace kmx::aio::quic
                 ::lsquic_stream_wantread(stream, 1);
             }
             else
-            {
                 ::lsquic_stream_wantwrite(stream, 0);
-            }
         }
 
         static struct ssl_ctx_st* get_ssl_ctx(void* peer_ctx, const struct sockaddr* /*local*/)
         {
-            auto* self = static_cast<base_impl*>(peer_ctx);
+            auto* const self = static_cast<base_impl*>(peer_ctx);
             return reinterpret_cast<struct ssl_ctx_st*>(self->ssl_ctx_);
         }
 
@@ -252,9 +249,9 @@ namespace kmx::aio::quic
 
             const char* host = hostname.empty() ? nullptr : hostname.c_str();
 
-            ::lsquic_conn_t* conn = ::lsquic_engine_connect(lsquic_engine_, N_LSQVER, reinterpret_cast<sockaddr*>(&local_addr_),
-                                                            reinterpret_cast<sockaddr*>(&peer_addr_result->storage),
-                                                            static_cast<void*>(this), nullptr, host, 0, nullptr, 0, nullptr, 0);
+            ::lsquic_conn_t* const conn = ::lsquic_engine_connect(lsquic_engine_, N_LSQVER, reinterpret_cast<sockaddr*>(&local_addr_),
+                                                                  reinterpret_cast<sockaddr*>(&peer_addr_result->storage),
+                                                                  static_cast<void*>(this), nullptr, host, 0, nullptr, 0, nullptr, 0);
 
             if (!conn)
                 return std::unexpected(error_from_errno());
@@ -267,14 +264,13 @@ namespace kmx::aio::quic
         {
             running_ = true;
             std::array<std::byte, 4096u> packet_buf {};
+            ::msghdr msg {};
+            ::iovec iov[1u] {};
 
             while (running_)
             {
                 ::lsquic_engine_process_conns(lsquic_engine_);
 
-                ::msghdr msg {};
-
-                ::iovec iov[1];
                 ::sockaddr_storage peer_addr {};
 
                 iov[0].iov_base = packet_buf.data();

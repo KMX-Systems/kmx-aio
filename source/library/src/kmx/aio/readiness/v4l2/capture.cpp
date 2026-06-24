@@ -110,10 +110,14 @@ namespace kmx::aio::readiness::v4l2
         // 3. Negotiate pixel format and frame size.
         ::v4l2_format fmt {};
         fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        fmt.fmt.pix.width = cfg.size.width;
-        fmt.fmt.pix.height = cfg.size.height;
-        fmt.fmt.pix.pixelformat = cfg.format.fourcc;
-        fmt.fmt.pix.field = V4L2_FIELD_NONE;
+
+        {
+            auto& pix = fmt.fmt.pix;
+            pix.width = cfg.size.width;
+            pix.height = cfg.size.height;
+            pix.pixelformat = cfg.format.fourcc;
+            pix.field = V4L2_FIELD_NONE;
+        }
 
         if (::ioctl(raw_fd, VIDIOC_S_FMT, &fmt) < 0)
             return std::unexpected(kmx::aio::from_errno(errno));
@@ -162,10 +166,9 @@ namespace kmx::aio::readiness::v4l2
             {
                 // Unmap already mapped buffers before returning.
                 for (auto& b: buffers)
-                {
                     if (b.ptr && b.ptr != MAP_FAILED)
                         ::munmap(b.ptr, b.length);
-                }
+
                 return std::unexpected(kmx::aio::from_errno(errno));
             }
 
@@ -174,10 +177,9 @@ namespace kmx::aio::readiness::v4l2
             if (ptr == MAP_FAILED) // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
             {
                 for (auto& b: buffers)
-                {
                     if (b.ptr && b.ptr != MAP_FAILED)
                         ::munmap(b.ptr, b.length);
-                }
+
                 return std::unexpected(kmx::aio::from_errno(errno));
             }
 
@@ -205,6 +207,7 @@ namespace kmx::aio::readiness::v4l2
         {
             for (auto& b: buffers)
                 ::munmap(b.ptr, b.length);
+
             return std::unexpected(kmx::aio::from_errno(reg.error().value()));
         }
 
@@ -215,6 +218,7 @@ namespace kmx::aio::readiness::v4l2
             exec.unregister_fd(raw_fd);
             for (auto& b: buffers)
                 ::munmap(b.ptr, b.length);
+
             return std::unexpected(kmx::aio::from_errno(errno));
         }
 
@@ -228,23 +232,20 @@ namespace kmx::aio::readiness::v4l2
     void capture::unmap_buffers() noexcept
     {
         for (auto& buf: buffers_)
-        {
             if (buf.ptr && buf.ptr != MAP_FAILED)
                 ::munmap(buf.ptr, buf.length);
-        }
+
         buffers_.clear();
     }
 
     capture::~capture() noexcept
     {
-        if (fd_.is_valid())
+        if (fd_.is_valid() && streaming_)
         {
-            if (streaming_)
-            {
-                const int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-                (void) ::ioctl(fd_.get(), VIDIOC_STREAMOFF, &type);
-            }
+            const int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+            (void) ::ioctl(fd_.get(), VIDIOC_STREAMOFF, &type);
         }
+
         unmap_buffers();
         // device_lifetime_ shared_ptr destruction signals all outstanding frame_views.
         // io_base destructor handles unregister_fd + fd close.
@@ -295,6 +296,7 @@ namespace kmx::aio::readiness::v4l2
             {
                 if (would_block(errno))
                     continue;
+
                 co_return std::unexpected(kmx::aio::from_errno(errno));
             }
 

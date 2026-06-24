@@ -7,8 +7,8 @@
 #include <kmx/aio/completion/timer.hpp>
 #include <kmx/aio/task.hpp>
 
-#include <chrono>
 #include <atomic>
+#include <chrono>
 #include <expected>
 #include <memory>
 #include <pthread.h>
@@ -40,7 +40,7 @@ namespace kmx::aio::completion::test::integration
     {
         timer tmr {std::move(exec)};
         auto wait_res = co_await tmr.wait(std::chrono::milliseconds(500));
-        (void)wait_res;
+        (void) wait_res;
         co_return;
     }
 
@@ -62,10 +62,12 @@ namespace kmx::aio::completion::test::integration
         exec->spawn(hold_executor(exec));
 
         std::atomic_bool runner_done {false};
-        std::thread runner([exec, &runner_done]() {
-            exec->run();
-            runner_done.store(true, std::memory_order_release);
-        });
+        std::thread runner(
+            [exec, &runner_done]()
+            {
+                exec->run();
+                runner_done.store(true, std::memory_order_release);
+            });
 
         bool confirmed = false;
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);

@@ -169,7 +169,7 @@ namespace kmx::aio::sample::avb
 
         if (!step.diagnostics_only)
         {
-            for (const auto& frame : step.frames)
+            for (const auto& frame: step.frames)
             {
                 if (!frame.recv_ok)
                 {

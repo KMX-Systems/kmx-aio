@@ -150,18 +150,15 @@ namespace kmx::aio::sample::avb::listener
             metrics_.frames_parsed.fetch_add(1u, mem_order);
 
             const auto reference = clock_->now();
-            const auto presentation_ts =
-                kmx::aio::avb::avtp::expand_avtp_timestamp_32(parse->avtp_timestamp_32, reference);
+            const auto presentation_ts = kmx::aio::avb::avtp::expand_avtp_timestamp_32(parse->avtp_timestamp_32, reference);
 
-            const kmx::aio::avb::avb_timestamp_t abs_jitter =
-                kmx::aio::sample::avb::abs_diff_u64(rx_ts, presentation_ts);
+            const kmx::aio::avb::avb_timestamp_t abs_jitter = kmx::aio::sample::avb::abs_diff_u64(rx_ts, presentation_ts);
             metrics_.jitter_abs_sum_ns.fetch_add(abs_jitter, mem_order);
 
             auto cur_max = metrics_.jitter_abs_max_ns.load(mem_order);
             while (abs_jitter > cur_max && !metrics_.jitter_abs_max_ns.compare_exchange_weak(cur_max, abs_jitter, mem_order))
             {
             }
-
         }
 
         const auto srp_withdraw = co_await srp_->withdraw(stream_id);
@@ -184,16 +181,12 @@ namespace kmx::aio::sample::avb::listener
             const auto parsed = metrics_.frames_parsed.load(mem_order);
             const auto avg_jitter = (parsed > 1u) ? (metrics_.jitter_abs_sum_ns.load(mem_order) / (parsed - 1u)) : 0u;
 
-            kmx::logger::log(kmx::logger::level::info, std::source_location::current(),
-                             "Listener stats | rx={} parsed={} avg_jitter={}ns max_jitter={}ns errors={} | synced={} | offset={}ns | path_delay={}ns",
-                             metrics_.frames_received.load(mem_order),
-                             parsed,
-                             avg_jitter,
-                             metrics_.jitter_abs_max_ns.load(mem_order),
-                             metrics_.errors.load(mem_order),
-                             clock_ && clock_->is_synced(),
-                             clock_ ? clock_->offset_ns() : 0,
-                             clock_ ? clock_->path_delay_ns() : 0);
+            kmx::logger::log(
+                kmx::logger::level::info, std::source_location::current(),
+                "Listener stats | rx={} parsed={} avg_jitter={}ns max_jitter={}ns errors={} | synced={} | offset={}ns | path_delay={}ns",
+                metrics_.frames_received.load(mem_order), parsed, avg_jitter, metrics_.jitter_abs_max_ns.load(mem_order),
+                metrics_.errors.load(mem_order), clock_ && clock_->is_synced(), clock_ ? clock_->offset_ns() : 0,
+                clock_ ? clock_->path_delay_ns() : 0);
         }
     }
 

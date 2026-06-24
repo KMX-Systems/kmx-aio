@@ -54,10 +54,8 @@ namespace kmx::aio::completion::v4l2
         buf.index = index_;
 
         if (::ioctl(device_fd_, VIDIOC_QBUF, &buf) < 0)
-        {
             kmx::logger::log(kmx::logger::level::warn, std::source_location::current(), "VIDIOC_QBUF failed for buffer {}: {}", index_,
                              std::strerror(errno));
-        }
     }
 
     std::span<const std::byte> frame_view::data() const noexcept
@@ -113,10 +111,14 @@ namespace kmx::aio::completion::v4l2
         // 3. Negotiate pixel format and frame size.
         ::v4l2_format fmt {};
         fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        fmt.fmt.pix.width = cfg.size.width;
-        fmt.fmt.pix.height = cfg.size.height;
-        fmt.fmt.pix.pixelformat = cfg.format.fourcc;
-        fmt.fmt.pix.field = V4L2_FIELD_NONE;
+
+        {
+            auto& pix = fmt.fmt.pix;
+            pix.width = cfg.size.width;
+            pix.height = cfg.size.height;
+            pix.pixelformat = cfg.format.fourcc;
+            pix.field = V4L2_FIELD_NONE;
+        }
 
         if (::ioctl(raw_fd, VIDIOC_S_FMT, &fmt) < 0)
             return std::unexpected(kmx::aio::from_errno(errno));
@@ -130,8 +132,9 @@ namespace kmx::aio::completion::v4l2
         {
             ::v4l2_streamparm parm {};
             parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-            parm.parm.capture.timeperframe.numerator = cfg.fps.numerator;
-            parm.parm.capture.timeperframe.denominator = cfg.fps.denominator;
+            auto& timeperframe = parm.parm.capture.timeperframe;
+            timeperframe.numerator = cfg.fps.numerator;
+            timeperframe.denominator = cfg.fps.denominator;
             (void) ::ioctl(raw_fd, VIDIOC_S_PARM, &parm);
         }
 
@@ -152,10 +155,11 @@ namespace kmx::aio::completion::v4l2
         // 6. Map each buffer into userspace.
         std::vector<mmap_buffer> buffers;
         buffers.reserve(req.count);
+        ::v4l2_buffer buf {};
 
         for (std::uint32_t i = 0u; i < req.count; ++i)
         {
-            ::v4l2_buffer buf {};
+            buf = {};
             buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
             buf.memory = V4L2_MEMORY_MMAP;
             buf.index = i;
@@ -163,10 +167,9 @@ namespace kmx::aio::completion::v4l2
             if (::ioctl(raw_fd, VIDIOC_QUERYBUF, &buf) < 0)
             {
                 for (auto& b: buffers)
-                {
                     if (b.ptr && b.ptr != MAP_FAILED)
                         ::munmap(b.ptr, b.length);
-                }
+
                 return std::unexpected(kmx::aio::from_errno(errno));
             }
 
@@ -175,10 +178,9 @@ namespace kmx::aio::completion::v4l2
             if (ptr == MAP_FAILED) // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
             {
                 for (auto& b: buffers)
-                {
                     if (b.ptr && b.ptr != MAP_FAILED)
                         ::munmap(b.ptr, b.length);
-                }
+
                 return std::unexpected(kmx::aio::from_errno(errno));
             }
 
@@ -188,7 +190,7 @@ namespace kmx::aio::completion::v4l2
         // 7. Enqueue all buffers to prime the driver queue.
         for (std::uint32_t i = 0u; i < req.count; ++i)
         {
-            ::v4l2_buffer buf {};
+            buf = {};
             buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
             buf.memory = V4L2_MEMORY_MMAP;
             buf.index = i;
@@ -197,6 +199,7 @@ namespace kmx::aio::completion::v4l2
             {
                 for (auto& b: buffers)
                     ::munmap(b.ptr, b.length);
+
                 return std::unexpected(kmx::aio::from_errno(errno));
             }
         }
@@ -207,6 +210,7 @@ namespace kmx::aio::completion::v4l2
         {
             for (auto& b: buffers)
                 ::munmap(b.ptr, b.length);
+
             return std::unexpected(kmx::aio::from_errno(errno));
         }
 
@@ -220,23 +224,20 @@ namespace kmx::aio::completion::v4l2
     void capture::unmap_buffers() noexcept
     {
         for (auto& buf: buffers_)
-        {
             if (buf.ptr && buf.ptr != MAP_FAILED)
                 ::munmap(buf.ptr, buf.length);
-        }
+
         buffers_.clear();
     }
 
     capture::~capture() noexcept
     {
-        if (fd_.get() >= 0)
+        if ((fd_.get() >= 0) && streaming_)
         {
-            if (streaming_)
-            {
-                const int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-                (void) ::ioctl(fd_.get(), VIDIOC_STREAMOFF, &type);
-            }
+            const int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+            static_cast<void>(::ioctl(fd_.get(), VIDIOC_STREAMOFF, &type));
         }
+
         unmap_buffers();
         // device_lifetime_ shared_ptr destruction signals all outstanding frame_views.
         // io_base destructor handles fd close.

@@ -58,7 +58,7 @@ namespace kmx::aio::sample::v4l2::capture
 
         out.capture_started = true;
 
-        for (const auto& frame : step.frames)
+        for (const auto& frame: step.frames)
         {
             if (!frame.recv_ok)
             {

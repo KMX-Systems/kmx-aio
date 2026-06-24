@@ -19,7 +19,9 @@ namespace
 
     auto print_usage(const char* program) -> void
     {
-        std::println("Usage: {} [--iface IFACE] [--dest-mac XX:XX:XX:XX:XX:XX] [--stream-id N] [--max-frames N] [--period-us N] [--sync-timeout-s N] [--diagnostics-only]", program);
+        std::println("Usage: {} [--iface IFACE] [--dest-mac XX:XX:XX:XX:XX:XX] [--stream-id N] [--max-frames N] [--period-us N] "
+                     "[--sync-timeout-s N] [--diagnostics-only]",
+                     program);
         std::println("  --iface IFACE     Network interface (default: eth0)");
         std::println("  --dest-mac MAC    Destination AVTP MAC (default: 91:E0:F0:00:0E:80)");
         std::println("  --stream-id N     Stream unique id (0..65535, default: 1)");
@@ -71,12 +73,8 @@ namespace
             return false;
 
         out = {
-            static_cast<std::uint8_t>(b0),
-            static_cast<std::uint8_t>(b1),
-            static_cast<std::uint8_t>(b2),
-            static_cast<std::uint8_t>(b3),
-            static_cast<std::uint8_t>(b4),
-            static_cast<std::uint8_t>(b5),
+            static_cast<std::uint8_t>(b0), static_cast<std::uint8_t>(b1), static_cast<std::uint8_t>(b2),
+            static_cast<std::uint8_t>(b3), static_cast<std::uint8_t>(b4), static_cast<std::uint8_t>(b5),
         };
         return true;
     }
@@ -121,8 +119,7 @@ namespace
             {
                 if (!parse_mac(value, cfg.dest_mac))
                 {
-                    kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
-                                     "Invalid --dest-mac value '{}'", value);
+                    kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Invalid --dest-mac value '{}'", value);
                     return parse_status::error;
                 }
             }
@@ -142,8 +139,7 @@ namespace
                 std::uint64_t parsed {};
                 if (!parse_unsigned(value, parsed))
                 {
-                    kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
-                                     "Invalid --max-frames value '{}'", value);
+                    kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Invalid --max-frames value '{}'", value);
                     return parse_status::error;
                 }
                 cfg.max_frames = parsed;
@@ -153,8 +149,7 @@ namespace
                 std::uint64_t parsed {};
                 if (!parse_unsigned(value, parsed))
                 {
-                    kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
-                                     "Invalid --period-us value '{}'", value);
+                    kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Invalid --period-us value '{}'", value);
                     return parse_status::error;
                 }
                 if (parsed < min_period_us || parsed > max_period_us)
@@ -170,8 +165,8 @@ namespace
                 std::uint64_t parsed {};
                 if (!parse_unsigned(value, parsed))
                 {
-                    kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
-                                     "Invalid --sync-timeout-s value '{}'", value);
+                    kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Invalid --sync-timeout-s value '{}'",
+                                     value);
                     return parse_status::error;
                 }
                 if (parsed < min_sync_timeout_s || parsed > max_sync_timeout_s)

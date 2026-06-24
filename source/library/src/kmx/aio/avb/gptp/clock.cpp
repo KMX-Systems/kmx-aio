@@ -72,7 +72,7 @@ namespace kmx::aio::avb::gptp
         {
             header_t h {};
             h.set_type(t);
-            h.version_ptp = 0x02;
+            h.version_ptp = 0x02u;
             h.message_length = ::htons(len);
             h.source_port_id = local_port_id_;
             h.sequence_id = ::htons(seq_id);
@@ -103,11 +103,9 @@ namespace kmx::aio::avb::gptp
 
             const auto* f = reinterpret_cast<const sync_frame_t*>(data);
             // Accept sync from known GM only (or any if not yet locked)
-            if (gm_id_.has_value())
-            {
-                if (f->header.source_port_id.clock_id != *gm_id_)
-                    return;
-            }
+            if (gm_id_.has_value() && (f->header.source_port_id.clock_id != *gm_id_))
+                return;
+
             sync_seq_id_ = ::ntohs(f->header.sequence_id);
             t2_sync_recv_ = rx_hw_ts; // Our local HW timestamp when Sync arrived
         }
@@ -118,8 +116,8 @@ namespace kmx::aio::avb::gptp
         {
             if (len < sizeof(follow_up_frame_t))
                 return;
-            const auto* f = reinterpret_cast<const follow_up_frame_t*>(data);
 
+            const auto* const f = reinterpret_cast<const follow_up_frame_t*>(data);
             if (::ntohs(f->header.sequence_id) != sync_seq_id_)
                 return;
             if (t2_sync_recv_ == 0)
@@ -145,8 +143,8 @@ namespace kmx::aio::avb::gptp
         {
             if (len < sizeof(pdelay_resp_frame_t))
                 return;
-            const auto* f = reinterpret_cast<const pdelay_resp_frame_t*>(data);
 
+            const auto* const f = reinterpret_cast<const pdelay_resp_frame_t*>(data);
             // Verify this is a response to our last Pdelay_Req
             if (f->body.requesting_port_id != local_port_id_)
                 return;
@@ -161,8 +159,8 @@ namespace kmx::aio::avb::gptp
         {
             if (len < sizeof(pdelay_resp_follow_up_frame_t))
                 return;
-            const auto* f = reinterpret_cast<const pdelay_resp_follow_up_frame_t*>(data);
 
+            const auto* const f = reinterpret_cast<const pdelay_resp_follow_up_frame_t*>(data);
             if (f->body.requesting_port_id != local_port_id_)
                 return;
             if (t1_pdelay_req_ == 0 || t4_pdelay_res_ == 0)
@@ -190,12 +188,10 @@ namespace kmx::aio::avb::gptp
         {
             if (len < sizeof(header_t))
                 return;
-            const auto* h = reinterpret_cast<const header_t*>(data);
 
+            const auto* const h = reinterpret_cast<const header_t*>(data);
             if (!gm_id_.has_value())
-            {
                 gm_id_ = h->source_port_id.clock_id;
-            }
         }
 
         // Main receive loop
@@ -241,8 +237,8 @@ namespace kmx::aio::avb::gptp
             const auto res = co_await recv_loop();
             if (!res)
             {
-                kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
-                                 "gPTP receive loop failed: {}", res.error().message());
+                kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "gPTP receive loop failed: {}",
+                                 res.error().message());
             }
         }
 
@@ -251,9 +247,7 @@ namespace kmx::aio::avb::gptp
         task<std::expected<void, std::error_code>> pdelay_loop() noexcept(false)
         {
             if constexpr (!std::same_as<Executor, kmx::aio::completion::executor>)
-            {
                 co_return std::unexpected(std::make_error_code(std::errc::operation_not_supported));
-            }
 
             kmx::aio::completion::timer tmr {completion_exec_};
 
@@ -273,10 +267,8 @@ namespace kmx::aio::avb::gptp
         {
             const auto res = co_await pdelay_loop();
             if (!res)
-            {
-                kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
-                                 "gPTP pdelay loop failed: {}", res.error().message());
-            }
+                kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "gPTP pdelay loop failed: {}",
+                                 res.error().message());
         }
     };
 
@@ -299,12 +291,14 @@ namespace kmx::aio::avb::gptp
             co_return std::unexpected(open_res.error());
 
         // Derive local port identity from NIC MAC
-        state_->local_port_id_.clock_id = mac_to_clock_id(state_->sock_.local_mac());
-        state_->local_port_id_.port_number = ::htons(1u);
+        auto& local_port_id = state_->local_port_id_;
+        local_port_id.clock_id = mac_to_clock_id(state_->sock_.local_mac());
+        local_port_id.port_number = ::htons(1u);
 
         // Spawn receive loop and pdelay loop as detached tasks on the executor
-        state_->exec_.spawn(state_->recv_loop_task());
-        state_->exec_.spawn(state_->pdelay_loop_task());
+        auto& exec = state_->exec_;
+        exec.spawn(state_->recv_loop_task());
+        exec.spawn(state_->pdelay_loop_task());
 
         co_return std::expected<void, std::error_code> {};
     }
@@ -319,9 +313,7 @@ namespace kmx::aio::avb::gptp
     task<std::expected<void, std::error_code>> generic_clock<Executor>::wait_sync(std::chrono::milliseconds timeout) noexcept(false)
     {
         if constexpr (!std::same_as<Executor, kmx::aio::completion::executor>)
-        {
             co_return std::unexpected(std::make_error_code(std::errc::operation_not_supported));
-        }
 
         kmx::aio::completion::timer tmr {state_->completion_exec_};
         const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -331,7 +323,7 @@ namespace kmx::aio::avb::gptp
             if (std::chrono::steady_clock::now() >= deadline)
                 co_return std::unexpected(std::make_error_code(std::errc::timed_out));
 
-            auto sleep_res = co_await tmr.wait(std::chrono::milliseconds(50));
+            const auto sleep_res = co_await tmr.wait(std::chrono::milliseconds(50));
             if (!sleep_res)
                 co_return std::unexpected(sleep_res.error());
         }

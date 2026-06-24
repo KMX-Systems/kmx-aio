@@ -236,9 +236,8 @@ namespace kmx::aio
     {
         // Initialize free list as a chain: slots_[0] -> slots_[1] -> ... -> slots_[Capacity-1] -> nullptr
         for (std::size_t i = 0; i + 1u < Capacity; ++i)
-        {
             slots_[i].next_free_ = &slots_[i + 1];
-        }
+
         slots_[Capacity - 1].next_free_ = nullptr;
 
         // Set head to first slot
@@ -251,9 +250,7 @@ namespace kmx::aio
         std::lock_guard<std::mutex> lock(free_list_mutex_);
 
         if (free_list_head_ == nullptr)
-        {
             throw std::runtime_error("buffer_pool exhausted: all " + std::to_string(Capacity) + " buffers allocated");
-        }
 
         // Pop from free list
         slot* acquired_slot = free_list_head_;
@@ -379,6 +376,7 @@ namespace kmx::aio
             pool_ = std::exchange(other.pool_, nullptr);
             release_fn_ = std::exchange(other.release_fn_, nullptr);
         }
+
         return *this;
     }
 
@@ -425,16 +423,15 @@ namespace kmx::aio
     template <typename T>
     bool buffer_handle<T>::valid() const noexcept
     {
-        return buffer_ != nullptr && pool_ != nullptr && release_fn_ != nullptr;
+        return (buffer_ != nullptr) && (pool_ != nullptr) && (release_fn_ != nullptr);
     }
 
     template <typename T>
     void buffer_handle<T>::reset() noexcept
     {
         if (valid())
-        {
             release_fn_(pool_, buffer_);
-        }
+
         buffer_ = nullptr;
         pool_ = nullptr;
         release_fn_ = nullptr;
@@ -444,9 +441,7 @@ namespace kmx::aio
     void buffer_handle<T>::validate_or_throw() const noexcept(false)
     {
         if (!valid())
-        {
             throw std::logic_error("buffer_handle: invalid or moved-from handle");
-        }
     }
 
 } // namespace kmx::aio

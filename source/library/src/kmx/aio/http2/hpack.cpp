@@ -14,7 +14,8 @@ namespace kmx::aio::http2
         return total;
     }
 
-    std::size_t hpack_encoder::encode_literal(std::span<std::uint8_t> buffer, std::string_view name, std::string_view value) noexcept(false)
+    std::size_t hpack_encoder::encode_literal(std::span<std::uint8_t> buffer, const std::string_view name,
+                                              const std::string_view value) noexcept(false)
     {
         std::size_t required = encoded_size_literal(name, value);
         if (buffer.size() < required)

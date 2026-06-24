@@ -6,8 +6,8 @@
 #include <kmx/aio/readiness/executor.hpp>
 #include <kmx/aio/task.hpp>
 
-#include <chrono>
 #include <atomic>
+#include <chrono>
 #include <expected>
 #include <memory>
 #include <pthread.h>
@@ -37,10 +37,12 @@ namespace kmx::aio::readiness::test::integration
 
     [[nodiscard]] static std::jthread delayed_stop(std::shared_ptr<executor> exec)
     {
-        return std::jthread([exec](std::stop_token) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(150));
-            exec->stop();
-        });
+        return std::jthread(
+            [exec](std::stop_token)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(150));
+                exec->stop();
+            });
     }
 
     TEST_CASE("readiness executor pins I/O thread to configured core", "[readiness][integration][pinning]")
@@ -61,10 +63,12 @@ namespace kmx::aio::readiness::test::integration
 
         auto stopper = delayed_stop(exec);
         std::atomic_bool runner_done {false};
-        std::thread runner([exec, &runner_done]() {
-            exec->run();
-            runner_done.store(true, std::memory_order_release);
-        });
+        std::thread runner(
+            [exec, &runner_done]()
+            {
+                exec->run();
+                runner_done.store(true, std::memory_order_release);
+            });
 
         bool confirmed = false;
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);

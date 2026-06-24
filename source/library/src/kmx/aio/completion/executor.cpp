@@ -42,8 +42,7 @@ namespace kmx::aio::completion
                                                                            const std::uint64_t offset) noexcept(false)
     {
         io_context ctx {};
-
-        auto* sqe = ::io_uring_get_sqe(&ring_);
+        auto* const sqe = ::io_uring_get_sqe(&ring_);
         if (sqe == nullptr)
         {
             metrics_.submission_full_count.fetch_add(1u, mem_order);
@@ -57,10 +56,8 @@ namespace kmx::aio::completion
             co_return std::unexpected(sub.error());
 
         metrics_.total_submissions.fetch_add(1u, mem_order);
-
         // Suspend until the kernel delivers the CQE
         co_await io_awaiter {ctx};
-
         if (ctx.result < 0)
             co_return std::unexpected(std::error_code(-ctx.result, std::generic_category()));
 
@@ -71,7 +68,6 @@ namespace kmx::aio::completion
                                                                             const std::uint64_t offset) noexcept(false)
     {
         io_context ctx {};
-
         auto* sqe = ::io_uring_get_sqe(&ring_);
         if (sqe == nullptr)
         {
@@ -86,9 +82,7 @@ namespace kmx::aio::completion
             co_return std::unexpected(sub.error());
 
         metrics_.total_submissions.fetch_add(1u, mem_order);
-
         co_await io_awaiter {ctx};
-
         if (ctx.result < 0)
             co_return std::unexpected(std::error_code(-ctx.result, std::generic_category()));
 
@@ -118,8 +112,7 @@ namespace kmx::aio::completion
                                                                                  const int buf_index) noexcept(false)
     {
         io_context ctx {};
-
-        auto* sqe = ::io_uring_get_sqe(&ring_);
+        auto* const sqe = ::io_uring_get_sqe(&ring_);
         if (sqe == nullptr)
         {
             metrics_.submission_full_count.fetch_add(1u, mem_order);
@@ -128,14 +121,11 @@ namespace kmx::aio::completion
 
         ::io_uring_prep_read_fixed(sqe, fd, buffer.data(), static_cast<unsigned>(buffer.size()), offset, buf_index);
         ::io_uring_sqe_set_data(sqe, &ctx);
-
         if (const auto sub = submit(); !sub)
             co_return std::unexpected(sub.error());
 
         metrics_.total_submissions.fetch_add(1u, mem_order);
-
         co_await io_awaiter {ctx};
-
         if (ctx.result < 0)
             co_return std::unexpected(std::error_code(-ctx.result, std::generic_category()));
 
@@ -147,8 +137,7 @@ namespace kmx::aio::completion
                                                                                   const int buf_index) noexcept(false)
     {
         io_context ctx {};
-
-        auto* sqe = ::io_uring_get_sqe(&ring_);
+        auto* const sqe = ::io_uring_get_sqe(&ring_);
         if (sqe == nullptr)
         {
             metrics_.submission_full_count.fetch_add(1u, mem_order);
@@ -162,9 +151,7 @@ namespace kmx::aio::completion
             co_return std::unexpected(sub.error());
 
         metrics_.total_submissions.fetch_add(1u, mem_order);
-
         co_await io_awaiter {ctx};
-
         if (ctx.result < 0)
             co_return std::unexpected(std::error_code(-ctx.result, std::generic_category()));
 
@@ -175,8 +162,7 @@ namespace kmx::aio::completion
                                                                       socklen_t& addrlen) noexcept(false)
     {
         io_context ctx {};
-
-        auto* sqe = ::io_uring_get_sqe(&ring_);
+        auto* const sqe = ::io_uring_get_sqe(&ring_);
         if (sqe == nullptr)
         {
             metrics_.submission_full_count.fetch_add(1u, mem_order);
@@ -186,14 +172,11 @@ namespace kmx::aio::completion
         addrlen = sizeof(sockaddr_storage);
         ::io_uring_prep_accept(sqe, listen_fd, reinterpret_cast<sockaddr*>(&addr), &addrlen, 0);
         ::io_uring_sqe_set_data(sqe, &ctx);
-
         if (const auto sub = submit(); !sub)
             co_return std::unexpected(sub.error());
 
         metrics_.total_submissions.fetch_add(1u, mem_order);
-
         co_await io_awaiter {ctx};
-
         if (ctx.result < 0)
             co_return std::unexpected(std::error_code(-ctx.result, std::generic_category()));
 
@@ -204,8 +187,7 @@ namespace kmx::aio::completion
                                                                        const socklen_t addrlen) noexcept(false)
     {
         io_context ctx {};
-
-        auto* sqe = ::io_uring_get_sqe(&ring_);
+        auto* const sqe = ::io_uring_get_sqe(&ring_);
         if (sqe == nullptr)
         {
             metrics_.submission_full_count.fetch_add(1u, mem_order);
@@ -214,14 +196,11 @@ namespace kmx::aio::completion
 
         ::io_uring_prep_connect(sqe, fd, addr, addrlen);
         ::io_uring_sqe_set_data(sqe, &ctx);
-
         if (const auto sub = submit(); !sub)
             co_return std::unexpected(sub.error());
 
         metrics_.total_submissions.fetch_add(1u, mem_order);
-
         co_await io_awaiter {ctx};
-
         if (ctx.result < 0)
             co_return std::unexpected(std::error_code(-ctx.result, std::generic_category()));
 
@@ -232,8 +211,7 @@ namespace kmx::aio::completion
                                                                               const unsigned flags) noexcept(false)
     {
         io_context ctx {};
-
-        auto* sqe = ::io_uring_get_sqe(&ring_);
+        auto* const sqe = ::io_uring_get_sqe(&ring_);
         if (sqe == nullptr)
         {
             metrics_.submission_full_count.fetch_add(1u, mem_order);
@@ -247,9 +225,7 @@ namespace kmx::aio::completion
             co_return std::unexpected(sub.error());
 
         metrics_.total_submissions.fetch_add(1u, mem_order);
-
         co_await io_awaiter {ctx};
-
         if (ctx.result < 0)
             co_return std::unexpected(std::error_code(-ctx.result, std::generic_category()));
 
@@ -260,8 +236,7 @@ namespace kmx::aio::completion
                                                                               const unsigned flags) noexcept(false)
     {
         io_context ctx {};
-
-        auto* sqe = ::io_uring_get_sqe(&ring_);
+        auto* const sqe = ::io_uring_get_sqe(&ring_);
         if (sqe == nullptr)
         {
             metrics_.submission_full_count.fetch_add(1u, mem_order);
@@ -270,14 +245,11 @@ namespace kmx::aio::completion
 
         ::io_uring_prep_sendmsg(sqe, fd, msg, flags);
         ::io_uring_sqe_set_data(sqe, &ctx);
-
         if (const auto sub = submit(); !sub)
             co_return std::unexpected(sub.error());
 
         metrics_.total_submissions.fetch_add(1u, mem_order);
-
         co_await io_awaiter {ctx};
-
         if (ctx.result < 0)
             co_return std::unexpected(std::error_code(-ctx.result, std::generic_category()));
 
@@ -287,8 +259,7 @@ namespace kmx::aio::completion
     task<std::expected<void, std::error_code>> executor::async_cancel(const std::uint64_t user_data) noexcept(false)
     {
         io_context ctx {};
-
-        auto* sqe = ::io_uring_get_sqe(&ring_);
+        auto* const sqe = ::io_uring_get_sqe(&ring_);
         if (sqe == nullptr)
         {
             metrics_.submission_full_count.fetch_add(1u, mem_order);
@@ -297,14 +268,11 @@ namespace kmx::aio::completion
 
         ::io_uring_prep_cancel64(sqe, user_data, 0);
         ::io_uring_sqe_set_data(sqe, &ctx);
-
         if (const auto sub = submit(); !sub)
             co_return std::unexpected(sub.error());
 
         metrics_.total_submissions.fetch_add(1u, mem_order);
-
         co_await io_awaiter {ctx};
-
         if ((ctx.result < 0) && (ctx.result != -EALREADY) && (ctx.result != -ENOENT))
             co_return std::unexpected(std::error_code(-ctx.result, std::generic_category()));
 
@@ -317,8 +285,7 @@ namespace kmx::aio::completion
             co_return std::unexpected(std::make_error_code(std::errc::bad_file_descriptor));
 
         io_context ctx {};
-
-        auto* sqe = ::io_uring_get_sqe(&ring_);
+        auto* const sqe = ::io_uring_get_sqe(&ring_);
         if (sqe == nullptr)
         {
             metrics_.submission_full_count.fetch_add(1u, mem_order);
@@ -327,12 +294,10 @@ namespace kmx::aio::completion
 
         ::io_uring_prep_poll_add(sqe, fd, poll_mask);
         ::io_uring_sqe_set_data(sqe, &ctx);
-
         if (const auto sub = submit(); !sub)
             co_return std::unexpected(sub.error());
 
         metrics_.total_submissions.fetch_add(1u, mem_order);
-
         co_await io_awaiter {ctx};
 
         // io_uring returns poll revents in ctx.result as a positive bitmask on success.
