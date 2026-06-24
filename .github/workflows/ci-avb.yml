@@ -1,0 +1,50 @@
+name: ci-avb
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qbs liburing-dev libssl-dev catch2
+
+      - name: Configure and build debug
+        run: |
+          cd source
+          qbs build -f source.qbs config:debug -j 2
+
+      - name: Run unit tests
+        run: |
+          cd source
+          TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+          if [[ -z "$TEST_BIN" ]]; then
+            echo "kmx-aio-test binary not found"
+            exit 1
+          fi
+          "$TEST_BIN"
+
+      - name: AVB sample CLI smoke tests
+        run: |
+          cd source
+          TALKER_BIN="$(find debug -type f -name sample-avb-talker | head -n 1)"
+          LISTENER_BIN="$(find debug -type f -name sample-avb-listener | head -n 1)"
+          if [[ -z "$TALKER_BIN" || -z "$LISTENER_BIN" ]]; then
+            echo "sample-avb binaries not found"
+            exit 1
+          fi
+          "$TALKER_BIN" --help | head -n 15
+          "$LISTENER_BIN" --help | head -n 15
+          "$TALKER_BIN" --period-us 0 && exit 1 || true
+          "$LISTENER_BIN" --sync-timeout-s 0 && exit 1 || true
