@@ -133,7 +133,6 @@ namespace kmx::aio::avb
     }
 
     // Explicit instantiations
-
     template class generic_eth_socket<kmx::aio::completion::executor>;
 
 } // namespace kmx::aio::avb

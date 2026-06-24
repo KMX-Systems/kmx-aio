@@ -95,7 +95,7 @@ namespace kmx::aio::avb::gptp
 
         [[nodiscard]] msg_type type() const noexcept { return static_cast<msg_type>(transport_msg_type & 0x0F); }
 
-        void set_type(msg_type t) noexcept { transport_msg_type = (transport_msg_type & 0xF0) | (static_cast<std::uint8_t>(t) & 0x0F); }
+        void set_type(const msg_type t) noexcept { transport_msg_type = (transport_msg_type & 0xF0) | (static_cast<std::uint8_t>(t) & 0x0Fu); }
     };
 
     // Sync body (10 bytes — timestamp is zero for two-step)

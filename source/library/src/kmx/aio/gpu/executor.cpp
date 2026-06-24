@@ -16,10 +16,8 @@
 
 namespace kmx::aio::gpu
 {
-    /// ===============================================================
-    /// CUDA Error Category (Conditional)
-    /// ===============================================================
 
+/// CUDA Error Category (Conditional)
 #if defined(KMX_AIO_FEATURE_CUDA)
     class cuda_error_category: public std::error_category
     {
@@ -55,9 +53,7 @@ namespace kmx::aio::gpu
     }
 #endif
 
-    /// ===============================================================
     /// Statistics Implementation
-    /// ===============================================================
 
     void statistics::reset() noexcept
     {
@@ -69,13 +65,9 @@ namespace kmx::aio::gpu
         poll_timeout_count.store(0u, std::memory_order_relaxed);
     }
 
-    /// ===============================================================
     /// Executor Implementation
-    /// ===============================================================
 
-    /// ===============================================================
     /// Task Queue (Pending Coroutines)
-    /// ===============================================================
 
     class task_queue
     {
@@ -97,9 +89,7 @@ namespace kmx::aio::gpu
         std::vector<std::coroutine_handle<>> pending_;
     };
 
-    /// ===============================================================
     /// Executor Implementation
-    /// ===============================================================
 
     executor::executor(const executor_config& config) noexcept(false): config_(config), stats_()
     {
@@ -141,9 +131,7 @@ namespace kmx::aio::gpu
             CPU_SET(static_cast<int>(config_.core_id), &cpuset);
             const auto ret = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
             if (ret != 0)
-            {
                 throw std::system_error(ret, std::generic_category(), "Failed to pin executor to core " + std::to_string(config_.core_id));
-            }
 #endif
         }
 
@@ -259,9 +247,7 @@ namespace kmx::aio::gpu
 
             // Remove completed events from waiting map.
             for (auto event_handle: completed_events)
-            {
                 waiting_events_.erase(event_handle);
-            }
         }
 
         return work_done || !completed_events.empty();
@@ -302,9 +288,7 @@ namespace kmx::aio::gpu
 #endif
     }
 
-    /// ===============================================================
     /// Stream Implementation
-    /// ===============================================================
 
     stream::stream() noexcept(false)
     {
@@ -345,14 +329,11 @@ namespace kmx::aio::gpu
     {
 #if defined(KMX_AIO_FEATURE_CUDA)
         if (handle_ == nullptr)
-        {
             throw std::system_error(static_cast<int>(std::errc::invalid_argument), std::generic_category(), "stream handle is null");
-        }
+
         const auto ret = ::cudaStreamSynchronize(static_cast<::cudaStream_t>(handle_));
         if (ret != cudaSuccess)
-        {
             throw std::system_error(static_cast<int>(ret), cuda_category(), "cudaStreamSynchronize failed");
-        }
 #endif
     }
 
@@ -367,9 +348,7 @@ namespace kmx::aio::gpu
         ::cudaEvent_t evt = nullptr;
         const auto ret_create = ::cudaEventCreate(&evt);
         if (ret_create != cudaSuccess)
-        {
             throw std::system_error(static_cast<int>(ret_create), cuda_category(), "cudaEventCreate failed");
-        }
 
         const auto ret_record = ::cudaEventRecord(evt, static_cast<::cudaStream_t>(handle_));
         if (ret_record != cudaSuccess)
@@ -398,9 +377,7 @@ namespace kmx::aio::gpu
         handle_ = nullptr;
     }
 
-    /// ===============================================================
     /// Event Implementation
-    /// ===============================================================
 
     event::event() noexcept(false)
     {
@@ -446,9 +423,8 @@ namespace kmx::aio::gpu
     {
 #if defined(KMX_AIO_FEATURE_CUDA)
         if (handle_ == nullptr)
-        {
             throw std::system_error(static_cast<int>(std::errc::invalid_argument), std::generic_category(), "event handle is null");
-        }
+
         const auto ret = ::cudaEventQuery(static_cast<::cudaEvent_t>(handle_));
         if (ret == cudaSuccess)
             return true;
@@ -503,10 +479,7 @@ namespace kmx::aio::gpu
 
 } // namespace kmx::aio::gpu
 
-/// ===================================================================
 /// Explicit template instantiation for spawn()
-/// ===================================================================
-
 namespace kmx::aio::gpu
 {
     template void executor::spawn(task<void> coro) noexcept(false);
