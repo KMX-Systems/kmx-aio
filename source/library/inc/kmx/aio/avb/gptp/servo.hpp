@@ -33,8 +33,9 @@ namespace kmx::aio::avb::gptp
             // On the first call, step the clock if offset is large (> 1 ms)
             if (!initialized_)
             {
-                if (corrected > 1'000'000LL || corrected < -1'000'000LL)
+                if ((corrected > 1'000'000LL) || (corrected < -1'000'000LL))
                     step_clock(-corrected);
+
                 initialized_ = true;
                 integral_ = 0.0;
                 last_offset_ = corrected;

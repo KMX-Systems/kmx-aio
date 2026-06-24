@@ -58,7 +58,7 @@ namespace kmx::aio::avb::gptp
         {
             std::uint64_t sec = 0;
             for (int i = 0; i < 6; ++i)
-                sec = (sec << 8) | seconds_msb[static_cast<std::size_t>(i)];
+                sec = (sec << 8u) | seconds_msb[static_cast<std::size_t>(i)];
             return sec * 1'000'000'000ULL + ::ntohl(nanoseconds);
         }
 
@@ -68,9 +68,8 @@ namespace kmx::aio::avb::gptp
             const std::uint32_t nsec = static_cast<std::uint32_t>(ns % 1'000'000'000ULL);
             timestamp_t ts {};
             for (int i = 5; i >= 0; --i)
-            {
                 ts.seconds_msb[static_cast<std::size_t>(i)] = static_cast<std::uint8_t>(sec >> (8 * (5 - i)));
-            }
+
             ts.nanoseconds = ::htonl(nsec);
             return ts;
         }
@@ -82,7 +81,7 @@ namespace kmx::aio::avb::gptp
     struct header_t
     {
         std::uint8_t transport_msg_type {}; ///< [7:4]=transportSpecific, [3:0]=messageType
-        std::uint8_t version_ptp {0x02};    ///< [7:4]=reserved, [3:0]=versionPTP=2
+        std::uint8_t version_ptp {2u};    ///< [7:4]=reserved, [3:0]=versionPTP=2
         std::uint16_t message_length {};    ///< total msg length, network byte order
         std::uint8_t domain_number {};
         std::uint8_t reserved1 {};
