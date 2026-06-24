@@ -75,3 +75,7 @@ namespace kmx::aio::completion::udp
     };
 
 } // namespace kmx::aio::completion::udp
+
+#ifndef PCH
+    #include <kmx/aio/completion/udp/endpoint.hpp>
+#endif
