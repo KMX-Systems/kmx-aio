@@ -152,6 +152,18 @@ namespace kmx::aio::completion
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] task<std::expected<void, std::error_code>> async_cancel(const std::uint64_t user_data) noexcept(false);
 
+        /// @brief Submits a one-shot poll for events on a file descriptor via io_uring.
+        /// @details Issues `IORING_OP_POLL_ADD` to the ring, suspends the coroutine, and resumes
+        ///          it when the kernel signals the requested events. Returns the triggered
+        ///          `revents` mask as a positive integer. Useful for driving non-network file
+        ///          descriptors (V4L2, eventfd, timerfd, signalfd) from the completion executor
+        ///          without a separate epoll instance.
+        /// @param fd        File descriptor to poll.
+        /// @param poll_mask POSIX poll events mask (POLLIN, POLLOUT, POLLERR, POLLHUP, etc.).
+        /// @return A task yielding the triggered revents mask, or an error.
+        /// @throws std::bad_alloc (coroutine frame allocation).
+        [[nodiscard]] task<std::expected<int, std::error_code>> async_poll(fd_t fd, unsigned poll_mask) noexcept(false);
+
         /// @brief Submits a root task to the system.
         /// @param t The top-level coroutine task.
         /// @throws std::bad_alloc if scheduling fails.

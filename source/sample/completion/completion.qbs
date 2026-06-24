@@ -15,5 +15,6 @@ Project {
         "quic/http3-server/sample-quic-http3-server.qbs",
         "quic/http3-client/sample-quic-http3-client.qbs",
         "hft/order_router/sample-hft-order-router.qbs",
+        "v4l2/capture/v4l2-completion-capture.qbs",
     ]
 }

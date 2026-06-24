@@ -41,6 +41,7 @@
 #include <kmx/aio/completion/quic/engine.hpp>
 #include <kmx/aio/completion/spdk/device.hpp>
 #include <kmx/aio/completion/tls/stream.hpp>
+#include <kmx/aio/completion/v4l2/capture.hpp>
 #include <kmx/aio/completion/xdp/socket.hpp>
 
 // Descriptors (Internal / Low-Level)

@@ -311,6 +311,37 @@ namespace kmx::aio::completion
         co_return std::expected<void, std::error_code> {};
     }
 
+    task<std::expected<int, std::error_code>> executor::async_poll(const fd_t fd, const unsigned poll_mask) noexcept(false)
+    {
+        if (fd < 0)
+            co_return std::unexpected(std::make_error_code(std::errc::bad_file_descriptor));
+
+        io_context ctx {};
+
+        auto* sqe = ::io_uring_get_sqe(&ring_);
+        if (sqe == nullptr)
+        {
+            metrics_.submission_full_count.fetch_add(1u, mem_order);
+            co_return std::unexpected(std::make_error_code(std::errc::no_buffer_space));
+        }
+
+        ::io_uring_prep_poll_add(sqe, fd, poll_mask);
+        ::io_uring_sqe_set_data(sqe, &ctx);
+
+        if (const auto sub = submit(); !sub)
+            co_return std::unexpected(sub.error());
+
+        metrics_.total_submissions.fetch_add(1u, mem_order);
+
+        co_await io_awaiter {ctx};
+
+        // io_uring returns poll revents in ctx.result as a positive bitmask on success.
+        if (ctx.result < 0)
+            co_return std::unexpected(std::error_code(-ctx.result, std::generic_category()));
+
+        co_return ctx.result;
+    }
+
     void executor::spawn(task<void>&& t) noexcept(false)
     {
         active_work_.fetch_add(1u, mem_order);
