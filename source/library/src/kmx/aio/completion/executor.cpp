@@ -395,6 +395,24 @@ namespace kmx::aio::completion
             io_thread_.join();
     }
 
+    std::expected<bool, std::error_code> executor::is_io_thread_affined_to(const int core_id) noexcept
+    {
+        if (core_id < 0)
+            return std::unexpected(std::make_error_code(std::errc::invalid_argument));
+
+        if (!io_thread_.joinable())
+            return std::unexpected(std::make_error_code(std::errc::operation_not_permitted));
+
+        cpu_set_t cpuset {};
+        CPU_ZERO(&cpuset);
+
+        const int ret = ::pthread_getaffinity_np(io_thread_.native_handle(), sizeof(cpu_set_t), &cpuset);
+        if (ret != 0)
+            return std::unexpected(std::error_code(ret, std::generic_category()));
+
+        return CPU_ISSET(core_id, &cpuset) != 0;
+    }
+
     std::expected<std::size_t, std::error_code> executor::submit() noexcept
     {
         const int ret = ::io_uring_submit(&ring_);

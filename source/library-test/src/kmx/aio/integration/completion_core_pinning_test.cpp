@@ -1,9 +1,10 @@
-/// @file aio/integration/readiness_core_pinning_test.cpp
-/// @brief Integration test for readiness executor core pinning parity.
+/// @file aio/integration/completion_core_pinning_test.cpp
+/// @brief Integration test for completion executor core pinning parity.
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <kmx/aio/readiness/executor.hpp>
+#include <kmx/aio/completion/executor.hpp>
+#include <kmx/aio/completion/timer.hpp>
 #include <kmx/aio/task.hpp>
 
 #include <chrono>
@@ -15,7 +16,7 @@
 #include <system_error>
 #include <thread>
 
-namespace kmx::aio::readiness::test::integration
+namespace kmx::aio::completion::test::integration
 {
     [[nodiscard]] static std::expected<int, std::error_code> first_allowed_cpu_for_current_thread() noexcept
     {
@@ -35,31 +36,31 @@ namespace kmx::aio::readiness::test::integration
         return std::unexpected(std::make_error_code(std::errc::no_such_device));
     }
 
-    [[nodiscard]] static std::jthread delayed_stop(std::shared_ptr<executor> exec)
+    [[nodiscard]] static task<void> hold_executor(std::shared_ptr<executor> exec)
     {
-        return std::jthread([exec](std::stop_token) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(150));
-            exec->stop();
-        });
+        timer tmr {std::move(exec)};
+        auto wait_res = co_await tmr.wait(std::chrono::milliseconds(500));
+        (void)wait_res;
+        co_return;
     }
 
-    TEST_CASE("readiness executor pins I/O thread to configured core", "[readiness][integration][pinning]")
+    TEST_CASE("completion executor pins I/O thread to configured core", "[completion][integration][pinning]")
     {
         const auto core_res = first_allowed_cpu_for_current_thread();
         REQUIRE(core_res.has_value());
 
         executor_config cfg {
+            .ring_entries = 64u,
+            .max_completions = 64u,
             .thread_count = 1u,
-            .max_events = 64u,
-            .timeout_ms = 10u,
             .core_id = static_cast<decltype(executor_config::core_id)>(*core_res),
-            .backend = backend_mode::epoll_only,
         };
 
         auto exec = std::make_shared<executor>(cfg);
         REQUIRE(exec != nullptr);
 
-        auto stopper = delayed_stop(exec);
+        exec->spawn(hold_executor(exec));
+
         std::atomic_bool runner_done {false};
         std::thread runner([exec, &runner_done]() {
             exec->run();
@@ -72,7 +73,7 @@ namespace kmx::aio::readiness::test::integration
         {
             if (std::chrono::steady_clock::now() > deadline)
             {
-                SKIP("readiness pinning test timeout: executor I/O thread did not confirm affinity");
+                SKIP("completion pinning test timeout: executor I/O thread did not confirm affinity");
                 if (runner.joinable())
                     runner.detach();
                 return;
@@ -100,13 +101,10 @@ namespace kmx::aio::readiness::test::integration
             exec->stop();
             if (runner.joinable())
                 runner.detach();
-            FAIL("readiness pinning test timeout: executor did not stop after affinity confirmation");
+            FAIL("completion pinning test timeout: executor did not stop after affinity confirmation");
         }
 
         if (runner.joinable())
             runner.join();
-
-        if (stopper.joinable())
-            stopper.join();
     }
-} // namespace kmx::aio::readiness::test::integration
+} // namespace kmx::aio::completion::test::integration

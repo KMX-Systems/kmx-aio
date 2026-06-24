@@ -182,6 +182,10 @@ namespace kmx::aio::completion
         /// @brief Resets all statistics counters.
         void reset_stats() noexcept { metrics_.reset(); }
 
+        /// @brief Checks whether the I/O thread is affined to the requested CPU core.
+        /// @details Returns an error if the I/O thread is not currently running.
+        [[nodiscard]] std::expected<bool, std::error_code> is_io_thread_affined_to(int core_id) noexcept;
+
         /// @brief Per-operation context passed through io_uring user_data.
         struct io_context
         {

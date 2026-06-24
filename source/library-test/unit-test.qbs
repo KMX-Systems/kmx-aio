@@ -17,7 +17,8 @@ CppApplication {
         "../library/api",
         "../library/inc",
         "../sample/completion/avb/common/inc",
-        "../sample/completion/v4l2/capture/inc"
+        "../sample/completion/v4l2/capture/inc",
+        "../sample/readiness/v4l2/capture/inc"
     ]
     cpp.dynamicLibraries: [
         "crypto",

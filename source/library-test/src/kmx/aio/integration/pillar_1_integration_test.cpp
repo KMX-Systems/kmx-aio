@@ -14,11 +14,31 @@
 #include <kmx/aio/readiness/openonload/extensions.hpp>
 
 #include <atomic>
+#include <fstream>
 #include <memory>
+#include <string>
 #include <system_error>
 
 namespace kmx::aio::kernel_bypass::test::integration
 {
+    [[nodiscard]] static bool hugepages_available() noexcept
+    {
+        std::ifstream meminfo {"/proc/meminfo"};
+        if (!meminfo)
+            return false;
+
+        std::string label;
+        std::uint64_t value {};
+        std::string unit;
+        while (meminfo >> label >> value >> unit)
+        {
+            if (label == "HugePages_Total:")
+                return value > 0u;
+        }
+
+        return false;
+    }
+
     struct test_state
     {
         std::atomic_bool spdk_init_ok {false};
@@ -112,9 +132,16 @@ namespace kmx::aio::kernel_bypass::test::integration
         comp_exec->spawn(run_xdp_cycle(comp_exec, state));
         comp_exec->run();
 
-        // Test SPDK Storage Context Lifecycle Next
-        comp_exec->spawn(run_spdk_cycle(comp_exec, state));
-        comp_exec->run();
+        // Test SPDK Storage Context Lifecycle Next (when host has hugepages)
+        if (!hugepages_available())
+        {
+            SKIP("pillar1 SPDK integration skipped: no hugepages available on this host");
+        }
+        else
+        {
+            comp_exec->spawn(run_spdk_cycle(comp_exec, state));
+            comp_exec->run();
+        }
 
         // Ensure SPDK did not fail fatally (graceful unsupported is OK, initialization is OK)
         // std::errc::function_not_supported means CI doesn't have QBS feature SPDK enabled - valid path.

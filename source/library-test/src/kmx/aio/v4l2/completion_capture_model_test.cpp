@@ -35,6 +35,9 @@ TEST_CASE("completion v4l2 model reports shared executor when capture and timer 
     };
 
     capture_step_results step {};
+    step.device_open_ok = true;
+    step.capture_create_ok = true;
+    step.timer_create_ok = true;
     step.frames = frames;
 
     const auto out = simulate_manager(step);
@@ -51,6 +54,8 @@ TEST_CASE("completion v4l2 model reports shared executor when capture and timer 
 TEST_CASE("completion v4l2 model stops when timer creation fails", "[v4l2][completion][model]")
 {
     capture_step_results step {};
+    step.device_open_ok = true;
+    step.capture_create_ok = true;
     step.timer_create_ok = false;
 
     const auto out = simulate_manager(step);
