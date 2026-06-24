@@ -28,18 +28,18 @@ namespace kmx::aio::sample::avb
         bool srp_start_ok {true};
         bool srp_advertise_ok {true};
         bool srp_withdraw_ok {true};
-        bool diagnostics_only {false};
-        std::uint64_t send_attempts {0u};
-        std::uint64_t send_failures {0u};
+        bool diagnostics_only {};
+        std::uint64_t send_attempts {};
+        std::uint64_t send_failures {};
     };
 
     struct talker_simulation
     {
         startup_error error {startup_error::none};
-        std::uint64_t frames_sent {0u};
-        std::uint64_t errors {0u};
-        bool streamed_payload {false};
-        bool withdrew_stream {false};
+        std::uint64_t frames_sent {};
+        std::uint64_t errors {};
+        bool streamed_payload {};
+        bool withdrew_stream {};
     };
 
     [[nodiscard]] constexpr auto simulate_talker_manager(const talker_step_results& step) noexcept -> talker_simulation
