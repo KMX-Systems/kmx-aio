@@ -14,6 +14,13 @@
 
 namespace kmx::aio
 {
+    /// @brief Backpressure thresholds for producer-side throttling.
+    struct channel_backpressure_config
+    {
+        std::size_t low_watermark = 256u;
+        std::size_t high_watermark = 512u;
+    };
+
     /// @brief A bounded, lock-free, cache-friendly SPSC ring buffer.
     /// @details Designed for zero-contention inter-thread communication between
     ///          executor threads (e.g. an io_uring market-data thread dispatching
@@ -33,6 +40,7 @@ namespace kmx::aio
             mask_(capacity_ - 1u),
             storage_(capacity_)
         {
+            set_backpressure(channel_backpressure_config {});
         }
 
         /// @brief Non-copyable.
@@ -53,14 +61,32 @@ namespace kmx::aio
         [[nodiscard]] bool try_push(T&& value) noexcept
         {
             const auto head = head_.load(std::memory_order_relaxed);
+            const auto tail = tail_.load(std::memory_order_acquire);
             const auto next_head = (head + 1u) & mask_;
 
             // Full when the next write position equals the current read position
-            if (next_head == tail_.load(std::memory_order_acquire))
+            if (next_head == tail)
+                return false;
+
+            const auto occ = (head - tail) & mask_;
+            const auto low = low_watermark_.load(std::memory_order_acquire);
+            const auto high = high_watermark_.load(std::memory_order_acquire);
+            const bool current_throttled = throttled_.load(std::memory_order_acquire);
+
+            const bool throttled_before_push = compute_throttled(occ, low, high, current_throttled);
+            if (throttled_before_push != current_throttled)
+                throttled_.store(throttled_before_push, std::memory_order_release);
+
+            if (throttled_before_push)
                 return false;
 
             storage_[head] = std::move(value);
             head_.store(next_head, std::memory_order_release);
+
+            const bool throttled_after_push = compute_throttled(occ + 1u, low, high, throttled_before_push);
+            if (throttled_after_push != throttled_before_push)
+                throttled_.store(throttled_after_push, std::memory_order_release);
+
             return true;
         }
 
@@ -69,13 +95,21 @@ namespace kmx::aio
         [[nodiscard]] std::optional<T> try_pop() noexcept
         {
             const auto tail = tail_.load(std::memory_order_relaxed);
+            const auto head = head_.load(std::memory_order_acquire);
 
             // Empty when read position equals the write position
-            if (tail == head_.load(std::memory_order_acquire))
+            if (tail == head)
                 return {};
 
             T value = std::move(storage_[tail]);
-            tail_.store((tail + 1u) & mask_, std::memory_order_release);
+            const auto next_tail = (tail + 1u) & mask_;
+            tail_.store(next_tail, std::memory_order_release);
+
+            const auto occ_after_pop = (head - next_tail) & mask_;
+            const auto low = low_watermark_.load(std::memory_order_acquire);
+            if (occ_after_pop <= low)
+                throttled_.store(false, std::memory_order_release);
+
             return value;
         }
 
@@ -83,8 +117,63 @@ namespace kmx::aio
         /// @return true if no elements are available to dequeue.
         [[nodiscard]] bool empty() const noexcept { return tail_.load(std::memory_order_acquire) == head_.load(std::memory_order_acquire); }
 
-        /// @brief Returns the fixed capacity of the channel (always a power of two).
-        /// @return The number of usable slots.
+        /// @brief Sets producer throttling thresholds.
+        /// @param cfg Backpressure low/high watermark configuration.
+        void set_backpressure(const channel_backpressure_config& cfg) noexcept
+        {
+            const auto usable_slots = usable_capacity();
+
+            std::size_t high = cfg.high_watermark;
+            if (high == 0u)
+                high = 1u;
+            if (high > usable_slots)
+                high = usable_slots;
+
+            std::size_t low = cfg.low_watermark;
+            if (low > high)
+                low = high;
+
+            low_watermark_.store(low, std::memory_order_release);
+            high_watermark_.store(high, std::memory_order_release);
+
+            const auto occ = occupancy();
+            const bool current_throttled = throttled_.load(std::memory_order_acquire);
+            throttled_.store(compute_throttled(occ, low, high, current_throttled), std::memory_order_release);
+        }
+
+        /// @brief Returns current producer credits before high watermark is reached.
+        /// @details Credits are consumed by pushes and replenished by pops.
+        [[nodiscard]] std::size_t producer_credits() const noexcept
+        {
+            const auto occ = occupancy();
+            const auto high = high_watermark_.load(std::memory_order_acquire);
+            return (occ >= high) ? 0u : (high - occ);
+        }
+
+        /// @brief Checks if producer can enqueue according to configured backpressure.
+        [[nodiscard]] bool can_send() const noexcept
+        {
+            const auto occ = occupancy();
+            const auto low = low_watermark_.load(std::memory_order_acquire);
+            const auto high = high_watermark_.load(std::memory_order_acquire);
+            const bool throttled = compute_throttled(occ, low, high, throttled_.load(std::memory_order_acquire));
+
+            if (throttled)
+                return false;
+
+            return occ < usable_capacity();
+        }
+
+        /// @brief Returns current number of queued elements.
+        [[nodiscard]] std::size_t occupancy() const noexcept
+        {
+            const auto head = head_.load(std::memory_order_acquire);
+            const auto tail = tail_.load(std::memory_order_acquire);
+            return (head - tail) & mask_;
+        }
+
+        /// @brief Returns the internal ring size (always a power of two).
+        /// @return Total ring slots, including one sentinel slot used to distinguish full/empty.
         [[nodiscard]] std::size_t capacity() const noexcept { return capacity_; }
 
     private:
@@ -107,9 +196,24 @@ namespace kmx::aio
         /// @brief Stable cache-line size constant (avoids ABI-unstable std::hardware_destructive_interference_size).
         static constexpr std::size_t cache_line_size = 64u;
 
+        [[nodiscard]] static bool compute_throttled(const std::size_t occupancy, const std::size_t low, const std::size_t high, const bool current) noexcept
+        {
+            if (occupancy <= low)
+                return false;
+            if (occupancy >= high)
+                return true;
+            return current;
+        }
+
+        [[nodiscard]] std::size_t usable_capacity() const noexcept { return capacity_ - 1u; }
+
         std::size_t capacity_;
         std::size_t mask_;
         std::vector<T> storage_;
+
+        std::atomic<std::size_t> low_watermark_ { 0u };
+        std::atomic<std::size_t> high_watermark_ { 0u };
+        std::atomic<bool> throttled_ { false };
 
         // Separated cache lines to prevent false sharing between producer and consumer
         alignas(cache_line_size) std::atomic<std::size_t> head_ {};
