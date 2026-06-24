@@ -10,11 +10,11 @@ namespace kmx::aio::quic
     struct settings
     {
         /// @brief Maximum concurrent streams permitted in a single connection.
-        unsigned max_streams_in {100};
+        unsigned max_streams_in {100u};
         /// @brief Connection idle timeout in seconds.
-        unsigned idle_conn_timeout_sec {30};
+        unsigned idle_conn_timeout_sec {30u};
         /// @brief Max connection flow control window in bytes.
-        unsigned max_cfcwnd {32 * 1024 * 1024};
+        unsigned max_cfcwnd {32u * 1024u * 1024u}; // 32 MiB
     };
 } // namespace kmx::aio::quic
 

@@ -23,9 +23,9 @@ namespace kmx::aio::http2
         /// @param name The HTTP/2 header name
         /// @param value The HTTP/2 header value
         /// @return The size in bytes
-        static constexpr std::size_t encoded_size_literal(std::string_view name, std::string_view value) noexcept
+        static constexpr std::size_t encoded_size_literal(const std::string_view name, const std::string_view value) noexcept
         {
-            return 1 + 1 + name.size() + 1 + value.size();
+            return 1u + 1u + name.size() + 1u + value.size();
         }
 
         /// @brief Computes the exact encoded size for multiple literal headers.

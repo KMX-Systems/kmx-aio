@@ -30,7 +30,7 @@ namespace kmx::aio::http2
     public:
         /// @brief Initializes a new HTTP/2 state machine structure
         /// @param id The remote or local stream identifier
-        explicit stream(std::uint32_t id) noexcept: id_ {id}, state_ {stream_state::idle} {}
+        explicit stream(const std::uint32_t id) noexcept: id_ {id}, state_ {stream_state::idle} {}
 
         /// @brief Gets the exact stream identifier
         [[nodiscard]] std::uint32_t id() const noexcept { return id_; }
