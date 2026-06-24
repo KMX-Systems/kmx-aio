@@ -7,6 +7,8 @@
 #include <cstring>
 #include <map>
 #include <optional>
+#include <source_location>
+#include <type_traits>
 #include <vector>
 
 #include <arpa/inet.h>
@@ -15,6 +17,8 @@
 #include <kmx/aio/avb/srp/client.hpp>
 #include <kmx/aio/avb/srp/messages.hpp>
 #include <kmx/aio/completion/executor.hpp>
+#include <kmx/aio/completion/timer.hpp>
+#include <kmx/logger.hpp>
 
 namespace kmx::aio::avb::srp
 {
@@ -23,14 +27,25 @@ namespace kmx::aio::avb::srp
     template <typename Executor>
     struct generic_client<Executor>::state
     {
+        struct stream_id_less
+        {
+            [[nodiscard]] bool operator()(const stream_id_t& lhs, const stream_id_t& rhs) const noexcept
+            {
+                if (lhs.source_mac != rhs.source_mac)
+                    return lhs.source_mac < rhs.source_mac;
+                return lhs.unique_id < rhs.unique_id;
+            }
+        };
+
         Executor& exec_;
         kmx::aio::avb::generic_eth_socket<Executor> sock_;
+        std::shared_ptr<kmx::aio::completion::executor> completion_exec_ {};
 
         // Talker: streams we are advertising (stream_id → descriptor)
-        std::map<stream_id_t, stream_descriptor> talker_streams_ {};
+        std::map<stream_id_t, stream_descriptor, stream_id_less> talker_streams_ {};
 
         // Listener: streams we have subscribed to
-        std::map<stream_id_t, stream_descriptor> listener_streams_ {};
+        std::map<stream_id_t, stream_descriptor, stream_id_less> listener_streams_ {};
 
         // Pending subscribe waiters: stream_id → resolved descriptor
         // Using a simple flag-based approach; one waiter per stream id.
@@ -41,7 +56,13 @@ namespace kmx::aio::avb::srp
         };
         std::vector<sub_waiter> pending_subs_ {};
 
-        explicit state(Executor& exec) noexcept: exec_(exec), sock_(exec) {}
+        explicit state(Executor& exec) noexcept: exec_(exec), sock_(exec)
+        {
+            if constexpr (std::same_as<Executor, kmx::aio::completion::executor>)
+            {
+                completion_exec_ = std::shared_ptr<kmx::aio::completion::executor>(&exec_, [](kmx::aio::completion::executor*) {});
+            }
+        }
 
         // Encode / send helpers
 
@@ -160,13 +181,30 @@ namespace kmx::aio::avb::srp
             }
         }
 
+        task<void> recv_loop_task() noexcept(false)
+        {
+            const auto res = co_await recv_loop();
+            if (!res)
+            {
+                kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
+                                 "SRP receive loop failed: {}", res.error().message());
+            }
+        }
+
         // Periodic re-declaration loop
 
         task<std::expected<void, std::error_code>> talker_loop() noexcept(false)
         {
+            if constexpr (!std::same_as<Executor, kmx::aio::completion::executor>)
+            {
+                co_return std::unexpected(std::make_error_code(std::errc::operation_not_supported));
+            }
+
+            kmx::aio::completion::timer tmr {completion_exec_};
+
             while (true)
             {
-                auto sleep = co_await exec_.async_sleep(std::chrono::milliseconds(500));
+                auto sleep = co_await tmr.wait(std::chrono::milliseconds(500));
                 if (!sleep)
                     co_return std::unexpected(sleep.error());
 
@@ -182,6 +220,16 @@ namespace kmx::aio::avb::srp
                     if (!s)
                         co_return std::unexpected(s.error());
                 }
+            }
+        }
+
+        task<void> talker_loop_task() noexcept(false)
+        {
+            const auto res = co_await talker_loop();
+            if (!res)
+            {
+                kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
+                                 "SRP re-declaration loop failed: {}", res.error().message());
             }
         }
     };
@@ -208,8 +256,8 @@ namespace kmx::aio::avb::srp
         if (!dom)
             co_return std::unexpected(dom.error());
 
-        state_->exec_.spawn(state_->recv_loop());
-        state_->exec_.spawn(state_->talker_loop());
+        state_->exec_.spawn(state_->recv_loop_task());
+        state_->exec_.spawn(state_->talker_loop_task());
 
         co_return std::expected<void, std::error_code> {};
     }
@@ -225,6 +273,13 @@ namespace kmx::aio::avb::srp
     task<std::expected<stream_descriptor, std::error_code>> generic_client<Executor>::subscribe(
         const stream_id_t& stream_id, std::chrono::milliseconds timeout) noexcept(false)
     {
+        if constexpr (!std::same_as<Executor, kmx::aio::completion::executor>)
+        {
+            co_return std::unexpected(std::make_error_code(std::errc::operation_not_supported));
+        }
+
+        kmx::aio::completion::timer tmr {state_->completion_exec_};
+
         // Register a waiter entry
         state_->pending_subs_.push_back({stream_id, {}});
         auto& waiter = state_->pending_subs_.back();
@@ -242,7 +297,7 @@ namespace kmx::aio::avb::srp
                 co_return std::unexpected(std::make_error_code(std::errc::timed_out));
             }
 
-            auto sleep = co_await state_->exec_.async_sleep(std::chrono::milliseconds(50));
+            auto sleep = co_await tmr.wait(std::chrono::milliseconds(50));
             if (!sleep)
                 co_return std::unexpected(sleep.error());
         }

@@ -695,6 +695,111 @@ The library aims for API parity between readiness and completion models where ar
 * Requires host NIC with IEEE 1588 PTP hardware timestamping support (most modern drivers support this; older NICs and virtual adapters may not).
 * IEEE 802.1 SRP stream reservation operates only on links configured with 802.1Q VLAN support.
 
+### AVB Two-Host Quick Start (gPTP + SRP + AVTP)
+
+Use this flow to run the completion AVB talker/listener samples with matching stream identity and SRP reservation.
+
+1. Build the project:
+
+```bash
+cd /home/io/Development/kmx-aio
+qbs build -f source/source.qbs config:debug -j 4
+```
+
+2. Locate the sample binaries (hashed build directories):
+
+```bash
+cd /home/io/Development/kmx-aio
+find debug -type f -name sample-avb-talker
+find debug -type f -name sample-avb-listener
+```
+
+3. Ensure runtime capabilities (raw Ethernet + clock discipline):
+
+```bash
+sudo setcap cap_net_raw,cap_sys_time+ep /path/to/sample-avb-talker
+sudo setcap cap_net_raw,cap_sys_time+ep /path/to/sample-avb-listener
+```
+
+4. Start talker on Host A:
+
+```bash
+/path/to/sample-avb-talker \
+    --iface eth0 \
+    --dest-mac 91:E0:F0:00:0E:80 \
+    --stream-id 1 \
+    --sync-timeout-s 5 \
+    --period-us 125
+```
+
+5. Start listener on Host B (must subscribe to the exact talker stream id + source MAC):
+
+```bash
+/path/to/sample-avb-listener \
+    --iface eth0 \
+    --talker-mac 02:11:22:33:44:55 \
+    --stream-id 1 \
+    --sync-timeout-s 5 \
+    --period-us 125
+```
+
+6. Verify expected behavior in logs:
+
+* Talker prints `synced=true` and ongoing `offset/path_delay` diagnostics.
+* Listener prints `synced=true`, increasing `parsed`, and jitter statistics.
+* SRP failures appear early as explicit `SRP start/advertise/subscribe failed` errors.
+
+Optional diagnostics-only bring-up (no AVTP payload send/receive loop):
+
+```bash
+/path/to/sample-avb-talker --iface eth0 --dest-mac 91:E0:F0:00:0E:80 --stream-id 1 --diagnostics-only
+/path/to/sample-avb-listener --iface eth0 --talker-mac 02:11:22:33:44:55 --stream-id 1 --diagnostics-only
+```
+
+Notes:
+
+* `--talker-mac` is the talker source NIC MAC address, not the AVTP multicast destination.
+* The gPTP clock is now a startup gate; if there is no reachable gPTP grandmaster on the segment, both samples will timeout before AVTP streaming.
+
+### Single-Host Lab Mode (Limited Validation)
+
+When you do not have a second host, gPTP grandmaster, or AVB-capable switch, you can still validate build/CLI behavior and failure paths.
+
+1. Basic CLI/argument validation:
+
+```bash
+debug/sample-avb-talker.*/sample-avb-talker --help | head -n 20
+debug/sample-avb-listener.*/sample-avb-listener --help | head -n 20
+```
+
+2. MAC parser validation (expected: non-zero exit + explicit invalid MAC error):
+
+```bash
+debug/sample-avb-listener.*/sample-avb-listener --iface eth0 --talker-mac not-a-mac --stream-id 1
+```
+
+3. gPTP/SRP timeout-path validation (expected: startup timeout error without AVB fabric):
+
+```bash
+debug/sample-avb-talker.*/sample-avb-talker \
+    --iface eth0 \
+    --dest-mac 91:E0:F0:00:0E:80 \
+    --stream-id 1 \
+    --sync-timeout-s 2 \
+    --max-frames 1
+```
+
+This mode is useful for regression checks in development, but it does not validate end-to-end synchronized AVTP delivery. Use the two-host flow above for functional AVB verification.
+
+### AVB Troubleshooting
+
+| Symptom | Likely Cause | Action |
+| --- | --- | --- |
+| `gPTP sync failed` / startup timeout | No reachable grandmaster or PTP disabled on NIC/switch | Verify PTP domain and gm presence; increase `--sync-timeout-s` for slow convergence |
+| `SRP advertise failed` or `SRP subscribe failed` | VLAN/SRP path not configured or blocked | Confirm 802.1Q VLAN and SRP support end-to-end on the segment |
+| Listener `parsed=0` while `rx` increases | `--talker-mac` / `--stream-id` mismatch | Match listener arguments to the active talker source MAC and stream id |
+| Persistent high jitter | Clock not stably synchronized or network contention | Check `synced`, `offset`, `path_delay`; validate traffic class/QoS and link health |
+
 ### Coroutine Frame Storage
 
 All coroutine frames (`task<T>`) allocate from a thread-local slab allocator. Large frame objects (e.g., huge local `std::vector` or array) may cause allocator exhaustion. Structure your code to limit frame footprint or adjust slab parameters at executor initialization.

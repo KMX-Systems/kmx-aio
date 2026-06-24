@@ -11,6 +11,7 @@ CppApplication {
     cpp.enableRtti: false
     cpp.includePaths: [
         "inc",
+        "../common/inc",
         "api",
         "../../../../library/api",
         "../../../../library/inc",

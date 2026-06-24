@@ -15,7 +15,8 @@ CppApplication {
         "inc",
         "inc_dep",
         "../library/api",
-        "../library/inc"
+        "../library/inc",
+        "../sample/completion/avb/common/inc"
     ]
     cpp.dynamicLibraries: [
         "crypto",

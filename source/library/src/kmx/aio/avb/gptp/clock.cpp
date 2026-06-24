@@ -7,12 +7,15 @@
 #include <cstring>
 #include <ctime>
 #include <optional>
+#include <type_traits>
 
 #include <kmx/aio/avb/eth_socket.hpp>
 #include <kmx/aio/avb/gptp/clock.hpp>
 #include <kmx/aio/avb/gptp/messages.hpp>
 #include <kmx/aio/avb/gptp/servo.hpp>
 #include <kmx/aio/completion/executor.hpp>
+#include <kmx/aio/completion/timer.hpp>
+#include <kmx/logger.hpp>
 
 namespace kmx::aio::avb::gptp
 {
@@ -23,6 +26,7 @@ namespace kmx::aio::avb::gptp
     {
         Executor& exec_;
         kmx::aio::avb::generic_eth_socket<Executor> sock_;
+        std::shared_ptr<kmx::aio::completion::executor> completion_exec_ {};
 
         pi_servo servo_ {};
         port_identity_t local_port_id_ {};
@@ -45,7 +49,13 @@ namespace kmx::aio::avb::gptp
         // Synchronisation gate — set once servo reaches lock
         std::atomic<bool> synced_ {};
 
-        explicit state(Executor& exec) noexcept: exec_(exec), sock_(exec) {}
+        explicit state(Executor& exec) noexcept: exec_(exec), sock_(exec)
+        {
+            if constexpr (std::same_as<Executor, kmx::aio::completion::executor>)
+            {
+                completion_exec_ = std::shared_ptr<kmx::aio::completion::executor>(&exec_, [](kmx::aio::completion::executor*) {});
+            }
+        }
 
         // Read current CLOCK_TAI
 
@@ -226,20 +236,46 @@ namespace kmx::aio::avb::gptp
             }
         }
 
+        task<void> recv_loop_task() noexcept(false)
+        {
+            const auto res = co_await recv_loop();
+            if (!res)
+            {
+                kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
+                                 "gPTP receive loop failed: {}", res.error().message());
+            }
+        }
+
         // Pdelay request loop (every ~1s by default)
 
         task<std::expected<void, std::error_code>> pdelay_loop() noexcept(false)
         {
+            if constexpr (!std::same_as<Executor, kmx::aio::completion::executor>)
+            {
+                co_return std::unexpected(std::make_error_code(std::errc::operation_not_supported));
+            }
+
+            kmx::aio::completion::timer tmr {completion_exec_};
+
             while (true)
             {
-                // Use the executor's async_sleep for the interval (~1s = log interval 0)
-                auto sleep_res = co_await exec_.async_sleep(std::chrono::seconds(1));
+                auto sleep_res = co_await tmr.wait(std::chrono::seconds(1));
                 if (!sleep_res)
                     co_return std::unexpected(sleep_res.error());
 
                 auto send_res = co_await send_pdelay_req();
                 if (!send_res)
                     co_return std::unexpected(send_res.error());
+            }
+        }
+
+        task<void> pdelay_loop_task() noexcept(false)
+        {
+            const auto res = co_await pdelay_loop();
+            if (!res)
+            {
+                kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
+                                 "gPTP pdelay loop failed: {}", res.error().message());
             }
         }
     };
@@ -267,8 +303,8 @@ namespace kmx::aio::avb::gptp
         state_->local_port_id_.port_number = ::htons(1u);
 
         // Spawn receive loop and pdelay loop as detached tasks on the executor
-        state_->exec_.spawn(state_->recv_loop());
-        state_->exec_.spawn(state_->pdelay_loop());
+        state_->exec_.spawn(state_->recv_loop_task());
+        state_->exec_.spawn(state_->pdelay_loop_task());
 
         co_return std::expected<void, std::error_code> {};
     }
@@ -282,6 +318,12 @@ namespace kmx::aio::avb::gptp
     template <typename Executor>
     task<std::expected<void, std::error_code>> generic_clock<Executor>::wait_sync(std::chrono::milliseconds timeout) noexcept(false)
     {
+        if constexpr (!std::same_as<Executor, kmx::aio::completion::executor>)
+        {
+            co_return std::unexpected(std::make_error_code(std::errc::operation_not_supported));
+        }
+
+        kmx::aio::completion::timer tmr {state_->completion_exec_};
         const auto deadline = std::chrono::steady_clock::now() + timeout;
 
         while (!state_->synced_.load(std::memory_order_acquire))
@@ -289,7 +331,7 @@ namespace kmx::aio::avb::gptp
             if (std::chrono::steady_clock::now() >= deadline)
                 co_return std::unexpected(std::make_error_code(std::errc::timed_out));
 
-            auto sleep_res = co_await state_->exec_.async_sleep(std::chrono::milliseconds(50));
+            auto sleep_res = co_await tmr.wait(std::chrono::milliseconds(50));
             if (!sleep_res)
                 co_return std::unexpected(sleep_res.error());
         }

@@ -10,6 +10,8 @@
 
 #include <kmx/aio/avb/avb_types.hpp>
 #include <kmx/aio/completion/executor.hpp>
+#include <kmx/aio/avb/gptp/clock.hpp>
+#include <kmx/aio/avb/srp/client.hpp>
 #include <kmx/aio/task.hpp>
 
 namespace kmx::aio::sample::avb::listener
@@ -17,9 +19,13 @@ namespace kmx::aio::sample::avb::listener
     struct config
     {
         std::string iface {"eth0"};
+        kmx::aio::avb::mac_address_t talker_mac {0x02u, 0x00u, 0x00u, 0x00u, 0x00u, 0x01u};
         std::uint16_t stream_unique_id {1u};
         std::uint64_t max_frames {4000u};
         std::chrono::microseconds expected_period {125u};
+        std::chrono::seconds sync_timeout {5u};
+        std::chrono::seconds srp_subscribe_timeout {5u};
+        bool diagnostics_only {false};
     };
 
     struct metrics
@@ -47,6 +53,8 @@ namespace kmx::aio::sample::avb::listener
         metrics metrics_ {};
 
         std::shared_ptr<kmx::aio::completion::executor> executor_ {};
+        std::unique_ptr<kmx::aio::completion::avb::gptp::clock> clock_ {};
+        std::unique_ptr<kmx::aio::completion::avb::srp::client> srp_ {};
         static inline std::atomic<kmx::aio::completion::executor*> g_executor_ptr {};
     };
 } // namespace kmx::aio::sample::avb::listener

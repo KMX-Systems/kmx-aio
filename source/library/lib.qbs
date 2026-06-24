@@ -160,6 +160,8 @@ StaticLibrary {
         "api/kmx/aio/readiness/avb/**.hpp",
         "inc/kmx/aio/avb/**.hpp",
         "src/kmx/aio/avb/**.cpp",
+        "src/kmx/aio/avb/gptp/**.cpp",
+        "src/kmx/aio/avb/srp/**.cpp",
 
         // GPU (CUDA) sources
         "api/kmx/aio/gpu/**.hpp",

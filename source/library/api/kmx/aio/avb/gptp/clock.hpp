@@ -10,6 +10,7 @@
 #include <system_error>
 
 #include <kmx/aio/avb/avb_types.hpp>
+#include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/task.hpp>
 
 namespace kmx::aio::avb::gptp
