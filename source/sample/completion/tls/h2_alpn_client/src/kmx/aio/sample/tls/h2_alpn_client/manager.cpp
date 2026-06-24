@@ -121,14 +121,29 @@ namespace kmx::aio::sample::tls::h2_alpn_client
                 logger::log(logger::level::info, std::source_location::current(),
                             "Client [{}]: Received Server SETTINGS ACK. Handshake Complete!", worker_id);
 
-            const char req_frame[] = {
-                0x00, 0x00, 0x0e,
-                0x01,
-                0x05,
-                0x00, 0x00, 0x00, 0x01,
-                static_cast<char>(0x82), static_cast<char>(0x87), static_cast<char>(0x84),
-                0x41, 0x09, 'l', 'o', 'c', 'a', 'l', 'h', 'o', 's', 't'
-            };
+            const char req_frame[] = {0x00,
+                                      0x00,
+                                      0x0e,
+                                      0x01,
+                                      0x05,
+                                      0x00,
+                                      0x00,
+                                      0x00,
+                                      0x01,
+                                      static_cast<char>(0x82),
+                                      static_cast<char>(0x87),
+                                      static_cast<char>(0x84),
+                                      0x41,
+                                      0x09,
+                                      'l',
+                                      'o',
+                                      'c',
+                                      'a',
+                                      'l',
+                                      'h',
+                                      'o',
+                                      's',
+                                      't'};
 
             if (auto res = co_await stream_ptr->write_all(std::span<const char>(req_frame, sizeof(req_frame))); !res)
                 co_return;
@@ -136,7 +151,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
             logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Sent GET Request (Stream 1)", worker_id);
 
             char resp_hdr[10];
-            std::size_t total{};
+            std::size_t total {};
             while (total < 10)
             {
                 auto r = co_await stream_ptr->read(std::span<char>(resp_hdr + total, 10 - total));
@@ -162,8 +177,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
             if ((total == 9) && (data_hdr[3] == 0x00))
             {
                 const std::uint32_t data_len = (static_cast<std::uint8_t>(data_hdr[0]) << 16u) |
-                                               (static_cast<std::uint8_t>(data_hdr[1]) << 8u) |
-                                               static_cast<std::uint8_t>(data_hdr[2]);
+                                               (static_cast<std::uint8_t>(data_hdr[1]) << 8u) | static_cast<std::uint8_t>(data_hdr[2]);
 
                 std::vector<char> data_payload(data_len + 1u, '\0');
                 total = {};
@@ -184,13 +198,14 @@ namespace kmx::aio::sample::tls::h2_alpn_client
         }
         catch (...)
         {
-                metrics_.failures.fetch_add(1u, mem_order);
+            metrics_.failures.fetch_add(1u, mem_order);
         }
 
         co_return;
     }
 
-    kmx::aio::task<void> manager::worker_sender(std::shared_ptr<kmx::aio::completion::tls::stream> /*stream*/, const std::uint32_t /*worker_id*/,
+    kmx::aio::task<void> manager::worker_sender(std::shared_ptr<kmx::aio::completion::tls::stream> /*stream*/,
+                                                const std::uint32_t /*worker_id*/,
                                                 std::shared_ptr<connection_stats> /*stats*/) noexcept(false)
     {
         co_return;
@@ -205,9 +220,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
 
     void manager::update_closed_state(const std::shared_ptr<connection_stats>& stats)
     {
-        if (stats &&
-            !stats->rx_active.load(std::memory_order_acquire) &&
-            !stats->tx_active.load(std::memory_order_acquire))
+        if (stats && !stats->rx_active.load(std::memory_order_acquire) && !stats->tx_active.load(std::memory_order_acquire))
             stats->closed.store(true, std::memory_order_release);
     }
 
@@ -219,28 +232,28 @@ namespace kmx::aio::sample::tls::h2_alpn_client
             if (stop_token.stop_requested())
                 break;
 
-            const auto total     = metrics_.total_connections.load(mem_order);
+            const auto total = metrics_.total_connections.load(mem_order);
             const auto completed = metrics_.completed.load(mem_order);
             const auto successes = metrics_.successes.load(mem_order);
-            const auto failures  = metrics_.failures.load(mem_order);
-            const auto sent      = metrics_.bytes_sent.load(mem_order);
-            const auto received  = metrics_.bytes_received.load(mem_order);
-            const auto errors    = metrics_.errors.load(mem_order);
+            const auto failures = metrics_.failures.load(mem_order);
+            const auto sent = metrics_.bytes_sent.load(mem_order);
+            const auto received = metrics_.bytes_received.load(mem_order);
+            const auto errors = metrics_.errors.load(mem_order);
 
             logger::log(logger::level::info, std::source_location::current(),
-                        "[UI] total={} completed={} ok={} fail={} errors={} sent={}B recv={}B",
-                        total, completed, successes, failures, errors, sent, received);
+                        "[UI] total={} completed={} ok={} fail={} errors={} sent={}B recv={}B", total, completed, successes, failures,
+                        errors, sent, received);
         }
     }
 
     void manager::print_summary(const std::chrono::milliseconds elapsed) const
     {
         const auto successes = metrics_.successes.load(mem_order);
-        const auto failures  = metrics_.failures.load(mem_order);
-        const auto total     = successes + failures;
-        const auto sent      = metrics_.bytes_sent.load(mem_order);
-        const auto received  = metrics_.bytes_received.load(mem_order);
-        const auto errors    = metrics_.errors.load(mem_order);
+        const auto failures = metrics_.failures.load(mem_order);
+        const auto total = successes + failures;
+        const auto sent = metrics_.bytes_sent.load(mem_order);
+        const auto received = metrics_.bytes_received.load(mem_order);
+        const auto errors = metrics_.errors.load(mem_order);
 
         logger::log(logger::level::info, std::source_location::current(), "--- H2 ALPN Client Summary ---");
         logger::log(logger::level::info, std::source_location::current(), "  Duration   : {}ms", elapsed.count());

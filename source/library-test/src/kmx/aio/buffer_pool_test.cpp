@@ -120,7 +120,7 @@ TEST_CASE("buffer_pool supports complex types", "[buffer_pool][types]")
         std::vector<int> data;
         int count = 0;
 
-        complex_buffer() noexcept: count(0) { }
+        complex_buffer() noexcept: count(0) {}
     };
 
     kmx::aio::buffer_pool<complex_buffer, 5> pool;
@@ -238,7 +238,7 @@ TEST_CASE("buffer_pool zero-copy reuse", "[buffer_pool][zero-copy]")
         REQUIRE(pool.is_full());
 
         // All buffers in use
-        for (const auto& h : handles)
+        for (const auto& h: handles)
         {
             REQUIRE(h->size() == 1024u);
         }
@@ -333,7 +333,7 @@ TEST_CASE("buffer_pool thread-safe concurrent acquire/release", "[buffer_pool][t
         threads.emplace_back(worker, i);
     }
 
-    for (auto& t : threads)
+    for (auto& t: threads)
     {
         t.join();
     }

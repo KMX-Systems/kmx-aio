@@ -25,7 +25,7 @@ namespace kmx::aio::sample::udp::echo_uring::server
         std::signal(SIGINT, signal_handler);
         std::signal(SIGTERM, signal_handler);
 
-        for (std::uint32_t i{}; i < config_.listener_workers; ++i)
+        for (std::uint32_t i {}; i < config_.listener_workers; ++i)
             executor_->spawn(listener(i));
 
         ui_thread_ = std::jthread([this](std::stop_token stop_token) { ui_loop(stop_token); });
@@ -74,7 +74,7 @@ namespace kmx::aio::sample::udp::echo_uring::server
             logger::log(logger::level::debug, std::source_location::current(), "Worker [{}]: Ready to receive.", worker_id);
 
             std::vector<std::byte> buffer(65535u);
-            std::uint64_t err_burst{};
+            std::uint64_t err_burst {};
 
             while (true)
             {

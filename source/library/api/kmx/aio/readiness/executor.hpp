@@ -38,7 +38,7 @@ namespace kmx::aio::readiness
         std::uint32_t thread_count = 1u;
         std::uint32_t max_events = 1024u;
         port_t timeout_ms = 200u;
-        std::int16_t core_id = -1;  ///< CPU core affinity (-1 = no pinning). Range: -1 to 16000.
+        std::int16_t core_id = -1; ///< CPU core affinity (-1 = no pinning). Range: -1 to 16000.
         backend_mode backend = backend_mode::epoll_only;
     };
 

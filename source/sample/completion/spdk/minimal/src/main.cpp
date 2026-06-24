@@ -2,8 +2,8 @@
 #include <exception>
 #include <memory>
 #include <source_location>
-#include <string_view>
 #include <string>
+#include <string_view>
 
 #include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/completion/spdk/runtime.hpp>

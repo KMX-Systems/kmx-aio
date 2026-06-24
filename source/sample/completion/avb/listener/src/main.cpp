@@ -2,10 +2,10 @@
 
 #include <charconv>
 #include <exception>
-#include <print>
-#include <string_view>
 #include <kmx/logger.hpp>
+#include <print>
 #include <source_location>
+#include <string_view>
 
 namespace
 {
@@ -26,7 +26,7 @@ namespace
         std::println("  --help            Show this help");
     }
 
-    template<typename T>
+    template <typename T>
     auto parse_unsigned(std::string_view text, T& out) -> bool
     {
         const char* begin = text.data();
@@ -47,7 +47,7 @@ namespace
             if (!argv[i])
                 return parse_status::error;
 
-            const std::string_view arg { argv[i] };
+            const std::string_view arg {argv[i]};
             if (arg == "--help")
             {
                 print_usage(argv[0] ? argv[0] : "sample-avb-listener");
@@ -56,15 +56,14 @@ namespace
 
             if (i + 1 >= argc || !argv[i + 1])
             {
-                kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
-                                 "Missing value for argument '{}'", arg);
+                kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Missing value for argument '{}'", arg);
                 return parse_status::error;
             }
 
-            const std::string_view value { argv[++i] };
+            const std::string_view value {argv[++i]};
             if (arg == "--iface")
             {
-                cfg.iface = std::string { value };
+                cfg.iface = std::string {value};
             }
             else if (arg == "--stream-id")
             {
@@ -85,12 +84,11 @@ namespace
                 std::uint64_t parsed {};
                 if (!parse_unsigned(value, parsed))
                     return parse_status::error;
-                cfg.expected_period = std::chrono::microseconds { parsed };
+                cfg.expected_period = std::chrono::microseconds {parsed};
             }
             else
             {
-                kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
-                                 "Unknown argument '{}'", arg);
+                kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Unknown argument '{}'", arg);
                 return parse_status::error;
             }
         }
@@ -110,7 +108,7 @@ int main(int argc, const char** argv) noexcept
         if (parsed == parse_status::error)
             return 1;
 
-        kmx::aio::sample::avb::listener::manager mgr { std::move(cfg) };
+        kmx::aio::sample::avb::listener::manager mgr {std::move(cfg)};
         return mgr.run() ? 0 : 1;
     }
     catch (const std::exception& e)

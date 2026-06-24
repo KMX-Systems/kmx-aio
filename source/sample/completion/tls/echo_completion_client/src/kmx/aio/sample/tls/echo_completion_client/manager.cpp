@@ -156,7 +156,7 @@ namespace kmx::aio::sample::tls::echo_completion_client
             }
 
             std::vector<char> buffer(4096);
-            std::size_t received_bytes{};
+            std::size_t received_bytes {};
             while (true)
             {
                 auto recv_result = co_await stream_ptr->read(buffer);
@@ -216,7 +216,7 @@ namespace kmx::aio::sample::tls::echo_completion_client
         {
             std::vector<char> buffer;
             buffer.reserve(512);
-            std::size_t sent_bytes{};
+            std::size_t sent_bytes {};
             if (stats)
                 stats->tx_active.store(true, mem_order);
 

@@ -6,7 +6,7 @@
 TEST_CASE("spdk runtime unsupported when feature disabled", "[completion][spdk]")
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    
+
     const auto init = kmx::aio::completion::spdk::runtime::initialize();
     if (std::chrono::steady_clock::now() > deadline)
         SKIP("spdk runtime test timeout");

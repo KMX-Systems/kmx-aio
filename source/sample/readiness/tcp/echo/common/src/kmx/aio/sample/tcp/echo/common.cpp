@@ -35,15 +35,15 @@ namespace kmx::aio::sample::common
         std::lock_guard<std::mutex> lock(gen_mutex);
         const std::size_t size = size_dist(gen);
         buffer.resize(size);
-        for (size_t i{}; i < size; ++i)
+        for (size_t i {}; i < size; ++i)
             buffer[i] = charset[char_dist(gen)];
     }
 
     std::string format_bytes(const std::uint64_t bytes)
     {
-        static constexpr std::array<std::string_view, 5> units {"B", "KB", "MB", "GB", "TB"};
+        static constexpr std::array<std::string_view, 5u> units {"B", "KB", "MB", "GB", "TB"};
         double value = static_cast<double>(bytes);
-        std::size_t unit_index{};
+        std::size_t unit_index {};
         while (value >= 1024.0 && unit_index + 1 < units.size())
         {
             value /= 1024.0;

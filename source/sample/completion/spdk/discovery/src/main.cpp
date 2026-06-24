@@ -1,8 +1,8 @@
 #include <exception>
 #include <source_location>
 
-#include <kmx/logger.hpp>
 #include <kmx/aio/sample/spdk/discovery/manager.hpp>
+#include <kmx/logger.hpp>
 
 int main(int argc, const char** argv) noexcept
 {

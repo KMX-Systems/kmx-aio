@@ -21,12 +21,12 @@ namespace kmx::aio::completion::udp
 {
     struct endpoint_roundtrip_state
     {
-        bool ok { false };
+        bool ok {};
         std::error_code error {};
-        std::size_t bytes_sent { 0u };
-        std::size_t bytes_recv { 0u };
+        std::size_t bytes_sent {};
+        std::size_t bytes_recv {};
         std::string peer_ip {};
-        port_t peer_port { 0u };
+        port_t peer_port {};
     };
 
     static auto run_endpoint_roundtrip(std::shared_ptr<executor> exec, std::shared_ptr<endpoint_roundtrip_state> state) -> task<void>
@@ -70,7 +70,8 @@ namespace kmx::aio::completion::udp
             std::byte {0x05}, std::byte {0x06}, std::byte {0x07}, std::byte {0x08},
         };
 
-        const auto send_res = co_await send_endpoint->send(std::span<const std::byte>(payload), make_ipv4_address(localhost_ipv4), recv_port);
+        const auto send_res =
+            co_await send_endpoint->send(std::span<const std::byte>(payload), make_ipv4_address(localhost_ipv4), recv_port);
         if (!send_res)
         {
             state->error = send_res.error();

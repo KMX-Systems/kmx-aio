@@ -107,7 +107,7 @@ namespace kmx::aio
         slot* free_list_head_ = nullptr;
 
         /// @brief Count of currently allocated buffers.
-        std::atomic<std::size_t> allocated_count_{};
+        std::atomic<std::size_t> allocated_count_ {};
 
         /// @brief Mutex protecting free_list_head_ and allocated_count_.
         mutable std::mutex free_list_mutex_;
@@ -138,7 +138,7 @@ namespace kmx::aio
     ///
     /// USAGE:
     /// ```cpp
-    /// kmx::aio::buffer_pool<std::vector<std::byte>, 256> pool;
+    /// kmx::aio::buffer_pool<std::vector<std::byte>, 256u> pool;
     /// auto handle = pool.acquire();  // Lease a buffer
     /// handle->resize(1024);          // Modify the buffer
     /// // handle destroyed here → buffer returned to pool

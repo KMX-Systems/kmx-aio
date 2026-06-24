@@ -50,7 +50,7 @@ namespace kmx::aio::readiness::test::integration
             .thread_count = 1u,
             .max_events = 64u,
             .timeout_ms = 10u,
-            .core_id = *core_res,
+            .core_id = static_cast<decltype(executor_config::core_id)>(*core_res),
             .backend = backend_mode::epoll_only,
         };
 

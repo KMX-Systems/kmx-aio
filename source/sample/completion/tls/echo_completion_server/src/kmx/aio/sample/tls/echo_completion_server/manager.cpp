@@ -105,7 +105,7 @@ namespace kmx::aio::sample::tls::echo_completion_server
                 co_return;
             }
 
-            std::size_t total_received{};
+            std::size_t total_received {};
 
             while (true)
             {

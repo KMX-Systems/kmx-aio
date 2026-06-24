@@ -45,31 +45,27 @@ namespace kmx::aio::avb::srp
         explicit generic_client(Executor& exec) noexcept;
         ~generic_client();
 
-        generic_client(const generic_client&)            = delete;
+        generic_client(const generic_client&) = delete;
         generic_client& operator=(const generic_client&) = delete;
-        generic_client(generic_client&&)                 = default;
-        generic_client& operator=(generic_client&&)      = default;
+        generic_client(generic_client&&) = default;
+        generic_client& operator=(generic_client&&) = default;
 
         /// @brief Bind to a NIC and start receiving MSRP frames.
         ///        Spawns the receive loop and domain advertisement.
-        [[nodiscard]] task<std::expected<void, std::error_code>>
-        start(std::string_view iface) noexcept(false);
+        [[nodiscard]] task<std::expected<void, std::error_code>> start(std::string_view iface) noexcept(false);
 
         /// @brief **Talker**: advertise a stream and periodically re-declare it.
         ///        Returns once the first declaration is sent.
-        [[nodiscard]] task<std::expected<void, std::error_code>>
-        advertise(const stream_descriptor& desc) noexcept(false);
+        [[nodiscard]] task<std::expected<void, std::error_code>> advertise(const stream_descriptor& desc) noexcept(false);
 
         /// @brief **Listener**: wait until a Talker Advertise for the given stream_id
         ///        is received, then send a Listener Ready declaration.
         ///        Suspends until the talker is found or timeout expires.
-        [[nodiscard]] task<std::expected<stream_descriptor, std::error_code>>
-        subscribe(const stream_id_t& stream_id,
-                  std::chrono::milliseconds timeout = std::chrono::seconds(5)) noexcept(false);
+        [[nodiscard]] task<std::expected<stream_descriptor, std::error_code>> subscribe(
+            const stream_id_t& stream_id, std::chrono::milliseconds timeout = std::chrono::seconds(5)) noexcept(false);
 
         /// @brief **Talker / Listener**: withdraw a previously advertised or subscribed stream.
-        [[nodiscard]] task<std::expected<void, std::error_code>>
-        withdraw(const stream_id_t& stream_id) noexcept(false);
+        [[nodiscard]] task<std::expected<void, std::error_code>> withdraw(const stream_id_t& stream_id) noexcept(false);
 
     private:
         struct state;

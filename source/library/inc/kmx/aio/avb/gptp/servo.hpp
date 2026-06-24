@@ -36,7 +36,7 @@ namespace kmx::aio::avb::gptp
                 if (corrected > 1'000'000LL || corrected < -1'000'000LL)
                     step_clock(-corrected);
                 initialized_ = true;
-                integral_    = 0.0;
+                integral_ = 0.0;
                 last_offset_ = corrected;
                 return;
             }
@@ -52,7 +52,7 @@ namespace kmx::aio::avb::gptp
 
             ::timex tx {};
             tx.modes = ADJ_FREQUENCY;
-            tx.freq  = freq_adj;
+            tx.freq = freq_adj;
             ::clock_adjtime(CLOCK_TAI, &tx);
 
             last_offset_ = corrected;
@@ -70,30 +70,30 @@ namespace kmx::aio::avb::gptp
         /// @brief Reset servo state (e.g., after master change).
         void reset() noexcept
         {
-            initialized_ = false;
-            synced_      = false;
-            integral_    = 0.0;
-            last_offset_ = 0;
+            initialized_ = {};
+            synced_ = {};
+            integral_ = {};
+            last_offset_ = {};
         }
 
     private:
         void step_clock(std::int64_t delta_ns) noexcept
         {
             ::timex tx {};
-            tx.modes  = ADJ_SETOFFSET | ADJ_NANO;
-            tx.time.tv_sec  = delta_ns / 1'000'000'000LL;
-            tx.time.tv_usec = delta_ns % 1'000'000'000LL;  // tv_usec holds ns with ADJ_NANO
+            tx.modes = ADJ_SETOFFSET | ADJ_NANO;
+            tx.time.tv_sec = delta_ns / 1'000'000'000LL;
+            tx.time.tv_usec = delta_ns % 1'000'000'000LL; // tv_usec holds ns with ADJ_NANO
             ::clock_adjtime(CLOCK_TAI, &tx);
         }
 
         // PI gains — tuned for ~125 Hz Sync rate (8 ms period)
-        static constexpr double kp_ { 0.7 };   ///< Proportional gain
-        static constexpr double ki_ { 0.3 };   ///< Integral gain
+        static constexpr double kp_ {0.7}; ///< Proportional gain
+        static constexpr double ki_ {0.3}; ///< Integral gain
 
-        bool        initialized_ { false };
-        bool        synced_      { false };
-        double      integral_    { 0.0 };
-        std::int64_t last_offset_ { 0 };
+        bool initialized_ {};
+        bool synced_ {};
+        double integral_ {};
+        std::int64_t last_offset_ {};
     };
 
 } // namespace kmx::aio::avb::gptp

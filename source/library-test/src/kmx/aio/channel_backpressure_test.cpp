@@ -25,7 +25,7 @@ TEST_CASE("channel occupancy tracks push/pop", "[channel][backpressure]")
 TEST_CASE("channel can_send throttles at high watermark", "[channel][backpressure]")
 {
     kmx::aio::channel<int> ch(16u);
-    ch.set_backpressure({ .low_watermark = 2u, .high_watermark = 4u });
+    ch.set_backpressure({.low_watermark = 2u, .high_watermark = 4u});
 
     REQUIRE(ch.can_send());
     REQUIRE(ch.try_push(1));
@@ -41,7 +41,7 @@ TEST_CASE("channel can_send throttles at high watermark", "[channel][backpressur
 TEST_CASE("channel hysteresis releases throttle at low watermark", "[channel][backpressure]")
 {
     kmx::aio::channel<int> ch(16u);
-    ch.set_backpressure({ .low_watermark = 2u, .high_watermark = 4u });
+    ch.set_backpressure({.low_watermark = 2u, .high_watermark = 4u});
 
     REQUIRE(ch.try_push(10));
     REQUIRE(ch.try_push(11));
@@ -63,7 +63,7 @@ TEST_CASE("channel hysteresis releases throttle at low watermark", "[channel][ba
 TEST_CASE("channel producer credits follow occupancy", "[channel][backpressure]")
 {
     kmx::aio::channel<int> ch(16u);
-    ch.set_backpressure({ .low_watermark = 1u, .high_watermark = 5u });
+    ch.set_backpressure({.low_watermark = 1u, .high_watermark = 5u});
 
     REQUIRE(ch.producer_credits() == 5u);
 
@@ -81,7 +81,7 @@ TEST_CASE("channel producer credits follow occupancy", "[channel][backpressure]"
 TEST_CASE("channel backpressure config clamps to usable capacity", "[channel][backpressure]")
 {
     kmx::aio::channel<int> ch(4u);
-    ch.set_backpressure({ .low_watermark = 100u, .high_watermark = 100u });
+    ch.set_backpressure({.low_watermark = 100u, .high_watermark = 100u});
 
     REQUIRE(ch.capacity() == 4u);
 

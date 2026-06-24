@@ -101,9 +101,7 @@ namespace kmx::aio::gpu
     /// Executor Implementation
     /// ===============================================================
 
-    executor::executor(const executor_config& config) noexcept(false):
-        config_(config),
-        stats_()
+    executor::executor(const executor_config& config) noexcept(false): config_(config), stats_()
     {
 #if defined(KMX_AIO_FEATURE_CUDA)
         set_gpu_device();
@@ -111,7 +109,10 @@ namespace kmx::aio::gpu
         // GPU executor initialized successfully.
     }
 
-    executor::~executor() noexcept { finalize(); }
+    executor::~executor() noexcept
+    {
+        finalize();
+    }
 
     template <typename T>
     void executor::spawn(task<T> coro) noexcept(false)
@@ -125,6 +126,7 @@ namespace kmx::aio::gpu
         //
         // For now, this is a placeholder that tracks task spawning statistics.
         // Full implementation pending: GPU task scheduler integration.
+        (void) coro;
         stats_.total_tasks_spawned.fetch_add(1u, std::memory_order_release);
     }
 
@@ -140,8 +142,7 @@ namespace kmx::aio::gpu
             const auto ret = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
             if (ret != 0)
             {
-                throw std::system_error(ret, std::generic_category(),
-                                        "Failed to pin executor to core " + std::to_string(config_.core_id));
+                throw std::system_error(ret, std::generic_category(), "Failed to pin executor to core " + std::to_string(config_.core_id));
             }
 #endif
         }
@@ -164,9 +165,15 @@ namespace kmx::aio::gpu
         stop_requested_.store(true, std::memory_order_release);
     }
 
-    const statistics& executor::get_statistics() const noexcept { return stats_; }
+    const statistics& executor::get_statistics() const noexcept
+    {
+        return stats_;
+    }
 
-    void executor::reset_statistics() noexcept { stats_.reset(); }
+    void executor::reset_statistics() noexcept
+    {
+        stats_.reset();
+    }
 
 #if defined(KMX_AIO_FEATURE_CUDA)
     void executor::set_gpu_device() noexcept(false)
@@ -206,7 +213,7 @@ namespace kmx::aio::gpu
             pending = std::exchange(pending_tasks_, {});
         }
 
-        for (auto handle : pending)
+        for (auto handle: pending)
         {
             if (handle)
             {
@@ -251,7 +258,7 @@ namespace kmx::aio::gpu
             }
 
             // Remove completed events from waiting map.
-            for (auto event_handle : completed_events)
+            for (auto event_handle: completed_events)
             {
                 waiting_events_.erase(event_handle);
             }
@@ -263,7 +270,8 @@ namespace kmx::aio::gpu
     void executor::process_events() noexcept
     {
         // Process pending GPU events (called from finalize to drain remaining work).
-        poll_events();
+        const bool had_work = poll_events();
+        (void) had_work;
     }
 
     void executor::finalize() noexcept
@@ -313,9 +321,14 @@ namespace kmx::aio::gpu
 #endif
     }
 
-    stream::~stream() noexcept { destroy(); }
+    stream::~stream() noexcept
+    {
+        destroy();
+    }
 
-    stream::stream(stream&& other) noexcept: handle_(std::exchange(other.handle_, nullptr)) {}
+    stream::stream(stream&& other) noexcept: handle_(std::exchange(other.handle_, nullptr))
+    {
+    }
 
     stream& stream::operator=(stream&& other) noexcept
     {
@@ -332,8 +345,7 @@ namespace kmx::aio::gpu
 #if defined(KMX_AIO_FEATURE_CUDA)
         if (handle_ == nullptr)
         {
-            throw std::system_error(static_cast<int>(std::errc::invalid_argument),
-                                    std::generic_category(), "stream handle is null");
+            throw std::system_error(static_cast<int>(std::errc::invalid_argument), std::generic_category(), "stream handle is null");
         }
         const auto ret = ::cudaStreamSynchronize(static_cast<::cudaStream_t>(handle_));
         if (ret != cudaSuccess)
@@ -349,8 +361,7 @@ namespace kmx::aio::gpu
 #if defined(KMX_AIO_FEATURE_CUDA)
         if (handle_ == nullptr)
         {
-            throw std::system_error(static_cast<int>(std::errc::invalid_argument),
-                                    std::generic_category(), "stream handle is null");
+            throw std::system_error(static_cast<int>(std::errc::invalid_argument), std::generic_category(), "stream handle is null");
         }
         ::cudaEvent_t evt = nullptr;
         const auto ret_create = ::cudaEventCreate(&evt);
@@ -405,9 +416,14 @@ namespace kmx::aio::gpu
 #endif
     }
 
-    event::~event() noexcept { destroy(); }
+    event::~event() noexcept
+    {
+        destroy();
+    }
 
-    event::event(event&& other) noexcept: handle_(std::exchange(other.handle_, nullptr)) {}
+    event::event(event&& other) noexcept: handle_(std::exchange(other.handle_, nullptr))
+    {
+    }
 
     event& event::operator=(event&& other) noexcept
     {
@@ -429,8 +445,7 @@ namespace kmx::aio::gpu
 #if defined(KMX_AIO_FEATURE_CUDA)
         if (handle_ == nullptr)
         {
-            throw std::system_error(static_cast<int>(std::errc::invalid_argument),
-                                    std::generic_category(), "event handle is null");
+            throw std::system_error(static_cast<int>(std::errc::invalid_argument), std::generic_category(), "event handle is null");
         }
         const auto ret = ::cudaEventQuery(static_cast<::cudaEvent_t>(handle_));
         if (ret == cudaSuccess)
@@ -469,7 +484,7 @@ namespace kmx::aio::gpu
         //
         // For now, this is a placeholder. The polling loop will eventually
         // resume this coroutine when the event fires.
-        (void)h; // Suppress unused parameter warning.
+        (void) h; // Suppress unused parameter warning.
     }
 
     void event::destroy() noexcept

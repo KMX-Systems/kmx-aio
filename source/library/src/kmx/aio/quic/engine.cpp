@@ -50,14 +50,18 @@ namespace kmx::aio::quic
     }
 
     template <typename Executor, typename UdpSocket>
-    task<std::expected<void, std::error_code>> generic_engine<Executor, UdpSocket>::connect(const ip_address_t peer_ip, const port_t peer_port,
-                                                                                            const std::string& hostname, const std::string& payload,
-                                                                                            void* ssl_ctx, const settings& config) noexcept(false)
+    task<std::expected<void, std::error_code>> generic_engine<Executor, UdpSocket>::connect(const ip_address_t peer_ip,
+                                                                                            const port_t peer_port,
+                                                                                            const std::string& hostname,
+                                                                                            const std::string& payload, void* ssl_ctx,
+                                                                                            const settings& config) noexcept(false)
     {
         if constexpr (requires { UdpSocket::create(impl_->exec_, ip_family(peer_ip)); })
-            co_return impl_->connect_setup(UdpSocket::create(impl_->exec_, ip_family(peer_ip)), peer_ip, peer_port, hostname, payload, ssl_ctx, config);
+            co_return impl_->connect_setup(UdpSocket::create(impl_->exec_, ip_family(peer_ip)), peer_ip, peer_port, hostname, payload,
+                                           ssl_ctx, config);
         else
-            co_return impl_->connect_setup(UdpSocket::create(impl_->exec_.shared_from_this(), ip_family(peer_ip)), peer_ip, peer_port, hostname, payload, ssl_ctx, config);
+            co_return impl_->connect_setup(UdpSocket::create(impl_->exec_.shared_from_this(), ip_family(peer_ip)), peer_ip, peer_port,
+                                           hostname, payload, ssl_ctx, config);
     }
 
     template <typename Executor, typename UdpSocket>

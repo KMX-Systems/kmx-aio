@@ -48,7 +48,7 @@ namespace kmx::aio::readiness::udp
             co_return std::unexpected(error_from_errno(EINVAL));
 
         const auto* addr = reinterpret_cast<const sockaddr*>(&peer_addr);
-        switch(addr->sa_family)
+        switch (addr->sa_family)
         {
             case AF_INET:
             {

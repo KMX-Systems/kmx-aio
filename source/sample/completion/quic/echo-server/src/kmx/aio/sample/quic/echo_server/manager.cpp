@@ -1,13 +1,13 @@
 #include <kmx/aio/sample/quic/echo_server/manager.hpp>
 
+#include <array>
+#include <cstdint>
 #include <iostream>
 #include <kmx/aio/completion/quic/engine.hpp>
-#include <openssl/ssl.h>
 #include <openssl/err.h>
-#include <vector>
+#include <openssl/ssl.h>
 #include <string_view>
-#include <cstdint>
-#include <array>
+#include <vector>
 
 namespace kmx::aio::sample::quic::echo_server
 {
@@ -30,7 +30,7 @@ namespace kmx::aio::sample::quic::echo_server
         kmx::aio::completion::quic::engine engine(*exec);
         engine.set_stream_handler(handle_stream);
 
-        static constexpr std::array<std::uint8_t, 4u> ip{127u, 0u, 0u, 1u};
+        static constexpr std::array<std::uint8_t, 4u> ip {127u, 0u, 0u, 1u};
         auto res = co_await engine.start(ip, 12345u, ssl_ctx);
         if (!res)
         {

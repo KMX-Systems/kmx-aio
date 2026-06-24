@@ -196,7 +196,8 @@ namespace kmx::aio
         /// @brief Stable cache-line size constant (avoids ABI-unstable std::hardware_destructive_interference_size).
         static constexpr std::size_t cache_line_size = 64u;
 
-        [[nodiscard]] static bool compute_throttled(const std::size_t occupancy, const std::size_t low, const std::size_t high, const bool current) noexcept
+        [[nodiscard]] static bool compute_throttled(const std::size_t occupancy, const std::size_t low, const std::size_t high,
+                                                    const bool current) noexcept
         {
             if (occupancy <= low)
                 return false;
@@ -211,9 +212,9 @@ namespace kmx::aio
         std::size_t mask_;
         std::vector<T> storage_;
 
-        std::atomic<std::size_t> low_watermark_ { 0u };
-        std::atomic<std::size_t> high_watermark_ { 0u };
-        std::atomic<bool> throttled_ { false };
+        std::atomic<std::size_t> low_watermark_ {};
+        std::atomic<std::size_t> high_watermark_ {};
+        std::atomic<bool> throttled_ {};
 
         // Separated cache lines to prevent false sharing between producer and consumer
         alignas(cache_line_size) std::atomic<std::size_t> head_ {};

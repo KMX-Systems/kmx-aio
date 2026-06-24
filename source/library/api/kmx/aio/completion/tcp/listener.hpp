@@ -31,7 +31,7 @@ namespace kmx::aio::completion::tcp
         /// @param ip   IP address to bind to.
         /// @param port Port number to bind to.
         /// @throws std::system_error if socket creation, bind, or option setting fails.
-        listener(std::shared_ptr<executor> exec, ip_address_t ip, port_t port) noexcept(false);
+        listener(std::shared_ptr<executor> exec, const ip_address_t ip, const port_t port) noexcept(false);
 
         /// @brief Destructor.
         ~listener() noexcept = default;

@@ -101,7 +101,7 @@ namespace kmx::aio::sample::udp::minimal::server
 
         logger::log(logger::level::info, std::source_location::current(), "Server: Bound successfully");
 
-        std::uint64_t msg_errors{};
+        std::uint64_t msg_errors {};
 
         try
         {

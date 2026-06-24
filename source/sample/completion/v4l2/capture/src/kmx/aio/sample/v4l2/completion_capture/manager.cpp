@@ -14,23 +14,22 @@ namespace kmx::aio::sample::v4l2::completion_capture
     bool manager::run() noexcept(false)
     {
         const auto& requested_size = config_.size;
-        const auto& requested_fps  = config_.fps;
+        const auto& requested_fps = config_.fps;
 
         kmx::logger::log(kmx::logger::level::info, std::source_location::current(),
-                         "Opening V4L2 capture device (completion model): {} ({}x{} @ {}/{} fps)",
-                         config_.device, requested_size.width, requested_size.height,
-                         requested_fps.denominator, requested_fps.numerator);
+                         "Opening V4L2 capture device (completion model): {} ({}x{} @ {}/{} fps)", config_.device, requested_size.width,
+                         requested_size.height, requested_fps.denominator, requested_fps.numerator);
 
         kmx::aio::completion::executor_config exec_cfg {
-            .ring_entries    = 256u,
+            .ring_entries = 256u,
             .max_completions = 256u,
-            .thread_count    = 1u,
+            .thread_count = 1u,
         };
 
         executor_ = std::make_shared<kmx::aio::completion::executor>(exec_cfg);
         g_executor_ptr.store(executor_.get(), std::memory_order_release);
 
-        std::signal(SIGINT,  signal_handler);
+        std::signal(SIGINT, signal_handler);
         std::signal(SIGTERM, signal_handler);
 
         // Spawn both coroutines into the same completion executor so one io_uring ring
@@ -60,42 +59,40 @@ namespace kmx::aio::sample::v4l2::completion_capture
     kmx::aio::task<void> manager::capture_loop() noexcept(false)
     {
         kmx::aio::completion::v4l2::capture_config cfg {
-            .device       = config_.device,
-            .format       = config_.format,
-            .size         = config_.size,
-            .fps          = config_.fps,
+            .device = config_.device,
+            .format = config_.format,
+            .size = config_.size,
+            .fps = config_.fps,
             .buffer_count = config_.buffer_count,
         };
 
         auto cap_result = kmx::aio::completion::v4l2::capture::create(executor_, std::move(cfg));
         if (!cap_result)
         {
-            kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
-                             "Failed to open capture device: {}", kmx::aio::to_string(cap_result.error()));
+            kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Failed to open capture device: {}",
+                             kmx::aio::to_string(cap_result.error()));
             metrics_.errors.fetch_add(1u, mem_order);
             executor_->stop();
             co_return;
         }
 
         auto& cap = *cap_result;
-        const auto& active_cfg    = cap.config();
-        const auto& active_size   = active_cfg.size;
+        const auto& active_cfg = cap.config();
+        const auto& active_size = active_cfg.size;
         const auto& active_format = active_cfg.format;
 
         kmx::logger::log(kmx::logger::level::info, std::source_location::current(),
-                         "Streaming started (completion/io_uring): {}x{} FourCC=0x{:08X}, {} buffers",
-                 active_size.width, active_size.height,
-                 active_format.fourcc, active_cfg.buffer_count);
+                         "Streaming started (completion/io_uring): {}x{} FourCC=0x{:08X}, {} buffers", active_size.width,
+                         active_size.height, active_format.fourcc, active_cfg.buffer_count);
 
         std::uint64_t err_burst {};
 
         while (true)
         {
-            if (config_.max_frames > 0u &&
-                metrics_.frames_captured.load(mem_order) >= config_.max_frames)
+            if (config_.max_frames > 0u && metrics_.frames_captured.load(mem_order) >= config_.max_frames)
             {
-                kmx::logger::log(kmx::logger::level::info, std::source_location::current(),
-                                 "Reached max_frames limit ({}). Stopping.", config_.max_frames);
+                kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "Reached max_frames limit ({}). Stopping.",
+                                 config_.max_frames);
                 break;
             }
 
@@ -104,8 +101,8 @@ namespace kmx::aio::sample::v4l2::completion_capture
             if (!frame_result)
             {
                 metrics_.errors.fetch_add(1u, mem_order);
-                kmx::logger::log(kmx::logger::level::warn, std::source_location::current(),
-                                 "next_frame error: {}", kmx::aio::to_string(frame_result.error()));
+                kmx::logger::log(kmx::logger::level::warn, std::source_location::current(), "next_frame error: {}",
+                                 kmx::aio::to_string(frame_result.error()));
                 if (++err_burst > 10u)
                 {
                     kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
@@ -117,7 +114,7 @@ namespace kmx::aio::sample::v4l2::completion_capture
 
             err_burst = {};
             const auto& frame = *frame_result;
-            const auto& meta  = frame.metadata();
+            const auto& meta = frame.metadata();
 
             metrics_.frames_captured.fetch_add(1u, mem_order);
             metrics_.bytes_captured.fetch_add(meta.bytes_used, mem_order);
@@ -132,7 +129,7 @@ namespace kmx::aio::sample::v4l2::completion_capture
     {
         // Demonstrates that completion::timer coexists in the same executor as V4L2 capture.
         // Both use the io_uring ring: capture uses IORING_OP_POLL_ADD, timer uses IORING_OP_TIMEOUT.
-        kmx::aio::completion::timer tmr { executor_ };
+        kmx::aio::completion::timer tmr {executor_};
 
         while (true)
         {
@@ -141,12 +138,12 @@ namespace kmx::aio::sample::v4l2::completion_capture
                 co_return; // Executor stopped; exit cleanly.
 
             const auto frames = metrics_.frames_captured.load(mem_order);
-            const auto bytes  = metrics_.bytes_captured.load(mem_order);
+            const auto bytes = metrics_.bytes_captured.load(mem_order);
             const auto errors = metrics_.errors.load(mem_order);
 
             kmx::logger::log(kmx::logger::level::info, std::source_location::current(),
-                             "Stats [io_uring] | frames={} | {:.1f} MiB captured | errors={}",
-                             frames, static_cast<double>(bytes) / (1024.0 * 1024.0), errors);
+                             "Stats [io_uring] | frames={} | {:.1f} MiB captured | errors={}", frames,
+                             static_cast<double>(bytes) / (1024.0 * 1024.0), errors);
         }
     }
 
@@ -155,8 +152,7 @@ namespace kmx::aio::sample::v4l2::completion_capture
         std::println("─── V4L2 Completion Capture Statistics");
         std::println("  Execution model : completion (io_uring / IORING_OP_POLL_ADD)");
         std::println("  Frames captured : {}", metrics_.frames_captured.load(mem_order));
-        std::println("  Bytes captured  : {} MiB",
-                     metrics_.bytes_captured.load(mem_order) / (1024u * 1024u));
+        std::println("  Bytes captured  : {} MiB", metrics_.bytes_captured.load(mem_order) / (1024u * 1024u));
         std::println("  Errors          : {}", metrics_.errors.load(mem_order));
         std::println("───────────────────────────────────────────────────────");
     }
@@ -166,8 +162,7 @@ namespace kmx::aio::sample::v4l2::completion_capture
         if (auto* exec = g_executor_ptr.load(std::memory_order_acquire); exec != nullptr)
             exec->stop();
 
-        kmx::logger::log(kmx::logger::level::info, std::source_location::current(),
-                         "Signal {} received, stopping capture.", signum);
+        kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "Signal {} received, stopping capture.", signum);
     }
 
 } // namespace kmx::aio::sample::v4l2::completion_capture

@@ -17,21 +17,21 @@ namespace kmx::aio::avb::gptp
 
     enum class msg_type : std::uint8_t
     {
-        sync                  = 0x00,
-        pdelay_req            = 0x02,
-        pdelay_resp           = 0x03,
-        follow_up             = 0x08,
-        pdelay_resp_follow_up = 0x0A,
-        announce              = 0x0B,
-        signaling             = 0x0C,
-        management            = 0x0D,
+        sync = 0x00u,
+        pdelay_req = 0x02u,
+        pdelay_resp = 0x03u,
+        follow_up = 0x08u,
+        pdelay_resp_follow_up = 0x0Au,
+        announce = 0x0Bu,
+        signaling = 0x0Cu,
+        management = 0x0Du,
     };
 
     // Clock identity (64-bit)
 
     struct clock_identity_t
     {
-        std::array<std::uint8_t, 8> id {};
+        std::array<std::uint8_t, 8u> id {};
 
         [[nodiscard]] bool operator==(const clock_identity_t&) const noexcept = default;
     };
@@ -41,7 +41,7 @@ namespace kmx::aio::avb::gptp
     struct port_identity_t
     {
         clock_identity_t clock_id {};
-        std::uint16_t    port_number {};
+        std::uint16_t port_number {};
 
         [[nodiscard]] bool operator==(const port_identity_t&) const noexcept = default;
     };
@@ -50,8 +50,8 @@ namespace kmx::aio::avb::gptp
 
     struct timestamp_t
     {
-        std::array<std::uint8_t, 6> seconds_msb {};  ///< seconds[47:16]
-        std::uint32_t               nanoseconds {};   ///< in network byte order
+        std::array<std::uint8_t, 6u> seconds_msb {}; ///< seconds[47:16]
+        std::uint32_t nanoseconds {};                ///< in network byte order
 
         /// @brief Convert to nanoseconds since epoch (host byte order).
         [[nodiscard]] avb_timestamp_t to_ns() const noexcept
@@ -64,7 +64,7 @@ namespace kmx::aio::avb::gptp
 
         static timestamp_t from_ns(avb_timestamp_t ns) noexcept
         {
-            const std::uint64_t sec  = ns / 1'000'000'000ULL;
+            const std::uint64_t sec = ns / 1'000'000'000ULL;
             const std::uint32_t nsec = static_cast<std::uint32_t>(ns % 1'000'000'000ULL);
             timestamp_t ts {};
             for (int i = 5; i >= 0; --i)
@@ -81,35 +81,29 @@ namespace kmx::aio::avb::gptp
 #pragma pack(push, 1)
     struct header_t
     {
-        std::uint8_t  transport_msg_type {};  ///< [7:4]=transportSpecific, [3:0]=messageType
-        std::uint8_t  version_ptp { 0x02 };  ///< [7:4]=reserved, [3:0]=versionPTP=2
-        std::uint16_t message_length {};      ///< total msg length, network byte order
-        std::uint8_t  domain_number {};
-        std::uint8_t  reserved1 {};
+        std::uint8_t transport_msg_type {}; ///< [7:4]=transportSpecific, [3:0]=messageType
+        std::uint8_t version_ptp {0x02};    ///< [7:4]=reserved, [3:0]=versionPTP=2
+        std::uint16_t message_length {};    ///< total msg length, network byte order
+        std::uint8_t domain_number {};
+        std::uint8_t reserved1 {};
         std::uint16_t flags {};
-        std::int64_t  correction_field {};    ///< ns * 2^16, network byte order
+        std::int64_t correction_field {}; ///< ns * 2^16, network byte order
         std::uint32_t reserved2 {};
         port_identity_t source_port_id {};
         std::uint16_t sequence_id {};
-        std::uint8_t  control {};
-        std::int8_t   log_message_interval {};
+        std::uint8_t control {};
+        std::int8_t log_message_interval {};
 
-        [[nodiscard]] msg_type type() const noexcept
-        {
-            return static_cast<msg_type>(transport_msg_type & 0x0F);
-        }
+        [[nodiscard]] msg_type type() const noexcept { return static_cast<msg_type>(transport_msg_type & 0x0F); }
 
-        void set_type(msg_type t) noexcept
-        {
-            transport_msg_type = (transport_msg_type & 0xF0) | (static_cast<std::uint8_t>(t) & 0x0F);
-        }
+        void set_type(msg_type t) noexcept { transport_msg_type = (transport_msg_type & 0xF0) | (static_cast<std::uint8_t>(t) & 0x0F); }
     };
 
     // Sync body (10 bytes — timestamp is zero for two-step)
 
     struct sync_body_t
     {
-        timestamp_t origin_timestamp {};  ///< zero for two-step Sync
+        timestamp_t origin_timestamp {}; ///< zero for two-step Sync
     };
 
     // Follow_Up body (10 bytes)
@@ -123,7 +117,7 @@ namespace kmx::aio::avb::gptp
 
     struct pdelay_req_body_t
     {
-        timestamp_t    origin_timestamp {};
+        timestamp_t origin_timestamp {};
         port_identity_t reserved_port_id {};
     };
 
@@ -131,7 +125,7 @@ namespace kmx::aio::avb::gptp
 
     struct pdelay_resp_body_t
     {
-        timestamp_t     request_receipt_timestamp {};
+        timestamp_t request_receipt_timestamp {};
         port_identity_t requesting_port_id {};
     };
 
@@ -139,7 +133,7 @@ namespace kmx::aio::avb::gptp
 
     struct pdelay_resp_follow_up_body_t
     {
-        timestamp_t     response_origin_timestamp {};
+        timestamp_t response_origin_timestamp {};
         port_identity_t requesting_port_id {};
     };
 
@@ -147,31 +141,31 @@ namespace kmx::aio::avb::gptp
 
     struct sync_frame_t
     {
-        header_t    header {};
+        header_t header {};
         sync_body_t body {};
     };
 
     struct follow_up_frame_t
     {
-        header_t        header {};
+        header_t header {};
         follow_up_body_t body {};
     };
 
     struct pdelay_req_frame_t
     {
-        header_t          header {};
+        header_t header {};
         pdelay_req_body_t body {};
     };
 
     struct pdelay_resp_frame_t
     {
-        header_t           header {};
+        header_t header {};
         pdelay_resp_body_t body {};
     };
 
     struct pdelay_resp_follow_up_frame_t
     {
-        header_t                    header {};
+        header_t header {};
         pdelay_resp_follow_up_body_t body {};
     };
 
@@ -182,14 +176,14 @@ namespace kmx::aio::avb::gptp
     {
         clock_identity_t id {};
         // Insert 0xFF 0xFE in the middle per IEEE EUI-64
-        id.id[0] = mac[0] ^ 0x02u;  // flip U/L bit
-        id.id[1] = mac[1];
-        id.id[2] = mac[2];
-        id.id[3] = 0xFF;
-        id.id[4] = 0xFE;
-        id.id[5] = mac[3];
-        id.id[6] = mac[4];
-        id.id[7] = mac[5];
+        id.id[0u] = mac[0u] ^ 0x02u; // flip U/L bit
+        id.id[1u] = mac[1u];
+        id.id[2u] = mac[2u];
+        id.id[3u] = 0xFFu;
+        id.id[4u] = 0xFEu;
+        id.id[5u] = mac[3u];
+        id.id[6u] = mac[4u];
+        id.id[7u] = mac[5u];
         return id;
     }
 

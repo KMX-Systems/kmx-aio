@@ -311,8 +311,7 @@ namespace kmx::aio::readiness
             logger::log(logger::level::warn, std::source_location::current(), "Failed to pin readiness thread to core {}: {}",
                         config_.core_id, std::strerror(ret));
         else
-            logger::log(logger::level::info, std::source_location::current(), "Readiness executor pinned to CPU core {}",
-                        config_.core_id);
+            logger::log(logger::level::info, std::source_location::current(), "Readiness executor pinned to CPU core {}", config_.core_id);
     }
 
 } // namespace kmx::aio::readiness

@@ -18,8 +18,7 @@
 namespace kmx::aio::tls::test::integration
 {
     template <typename Stream>
-    concept alpn_api_surface = requires(Stream s, std::span<const std::uint8_t> p)
-    {
+    concept alpn_api_surface = requires(Stream s, std::span<const std::uint8_t> p) {
         { s.set_alpn_protocols(p) } -> std::same_as<std::expected<void, std::error_code>>;
         { s.selected_alpn() } -> std::convertible_to<std::string_view>;
     };
@@ -27,7 +26,7 @@ namespace kmx::aio::tls::test::integration
     [[nodiscard]] static std::vector<std::uint8_t> encode_alpn_wire_format(const std::initializer_list<std::string_view> protocols)
     {
         std::vector<std::uint8_t> wire;
-        for (const auto protocol : protocols)
+        for (const auto protocol: protocols)
         {
             wire.push_back(static_cast<std::uint8_t>(protocol.size()));
             wire.insert(wire.end(), protocol.begin(), protocol.end());
@@ -42,7 +41,9 @@ namespace kmx::aio::tls::test::integration
 
         const auto wire = encode_alpn_wire_format({"h2", "http/1.1"});
         const std::array<std::uint8_t, 12> expected {
-            2u, static_cast<std::uint8_t>('h'), static_cast<std::uint8_t>('2'),
+            2u,
+            static_cast<std::uint8_t>('h'),
+            static_cast<std::uint8_t>('2'),
             8u,
             static_cast<std::uint8_t>('h'),
             static_cast<std::uint8_t>('t'),

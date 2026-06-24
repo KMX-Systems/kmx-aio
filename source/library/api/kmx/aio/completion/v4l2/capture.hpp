@@ -62,16 +62,16 @@ namespace kmx::aio::completion::v4l2
     private:
         friend class capture;
 
-        frame_view(fd_t device_fd, std::uint32_t index, const std::byte* ptr, std::size_t length,
-                   frame_metadata metadata, std::weak_ptr<void> device_lifetime) noexcept;
+        frame_view(fd_t device_fd, std::uint32_t index, const std::byte* ptr, std::size_t length, frame_metadata metadata,
+                   std::weak_ptr<void> device_lifetime) noexcept;
 
-        fd_t                  device_fd_ {};
-        std::uint32_t         index_ {};
-        const std::byte*      ptr_ { nullptr };
-        std::size_t           length_ {};
-        frame_metadata        metadata_ {};
-        std::weak_ptr<void>   device_lifetime_;
-        bool                  active_ { true };
+        fd_t device_fd_ {};
+        std::uint32_t index_ {};
+        const std::byte* ptr_ {};
+        std::size_t length_ {};
+        frame_metadata metadata_ {};
+        std::weak_ptr<void> device_lifetime_;
+        bool active_ {true};
     };
 
     /// @brief Async V4L2 video capture device — completion (io_uring) model.
@@ -114,10 +114,10 @@ namespace kmx::aio::completion::v4l2
     /// @endcode
     ///
     /// @note Requires a V4L2 device capable of MMAP streaming (V4L2_CAP_STREAMING).
-    class capture : public io_base
+    class capture: public io_base
     {
     public:
-        using frame_result  = task<std::expected<frame_view, kmx::aio::error_code>>;
+        using frame_result = task<std::expected<frame_view, kmx::aio::error_code>>;
         using create_result = std::expected<capture, kmx::aio::error_code>;
 
         /// @brief Opens and configures a V4L2 capture device.
@@ -160,20 +160,19 @@ namespace kmx::aio::completion::v4l2
     private:
         struct mmap_buffer
         {
-            void*       ptr    { nullptr };
+            void* ptr {};
             std::size_t length {};
         };
 
-        capture(std::shared_ptr<executor> exec, file_descriptor&& fd, capture_config cfg,
-                std::vector<mmap_buffer> buffers) noexcept;
+        capture(std::shared_ptr<executor> exec, file_descriptor&& fd, capture_config cfg, std::vector<mmap_buffer> buffers) noexcept;
 
         /// @brief Unmaps all mmap'd buffers. Called from destructor and failed create().
         void unmap_buffers() noexcept;
 
-        capture_config             config_;
-        std::vector<mmap_buffer>   buffers_;
-        std::shared_ptr<void>      device_lifetime_ { std::make_shared<int>(0) };
-        bool                       streaming_ { false };
+        capture_config config_;
+        std::vector<mmap_buffer> buffers_;
+        std::shared_ptr<void> device_lifetime_ {std::make_shared<int>(0)};
+        bool streaming_ {};
     };
 
 } // namespace kmx::aio::completion::v4l2

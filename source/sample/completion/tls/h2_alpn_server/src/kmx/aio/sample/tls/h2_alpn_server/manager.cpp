@@ -108,7 +108,7 @@ namespace kmx::aio::sample::tls::h2_alpn_server
 
             // HTTP/2 Extension: Listen for incoming GET packet and process HEADERS
             char req_hdr[9];
-            size_t total{};
+            size_t total {};
             while (total < 9)
             {
                 auto r = co_await stream.read(std::span<char>(req_hdr + total, 9 - total));

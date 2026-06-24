@@ -10,6 +10,8 @@ namespace
     /// @brief Simple GPU task that co_awaits an event.
     kmx::aio::task<int> gpu_work(std::shared_ptr<kmx::aio::gpu::executor> exec)
     {
+        (void) exec;
+
         // Create a stream for GPU work.
         auto stream = std::make_unique<kmx::aio::gpu::stream>();
 

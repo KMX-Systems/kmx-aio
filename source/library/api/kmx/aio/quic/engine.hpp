@@ -8,8 +8,8 @@
         #include <expected>
         #include <functional>
         #include <memory>
-        #include <string>
         #include <span>
+        #include <string>
         #include <system_error>
 
         #include <kmx/aio/basic_types.hpp>
@@ -73,9 +73,9 @@ namespace kmx::aio::quic
         /// @param config    QUIC protocol settings.
         /// @return Success or an error code once connection is established.
         [[nodiscard]] task<std::expected<void, std::error_code>> connect(ip_address_t peer_ip, port_t peer_port,
-                                                                         const std::string& hostname = "",
-                                                                         const std::string& payload = "", void* ssl_ctx = nullptr,
-                                                                         const settings& config = settings{}) noexcept(false);
+                                                                         const std::string& hostname = "", const std::string& payload = "",
+                                                                         void* ssl_ctx = nullptr,
+                                                                         const settings& config = settings {}) noexcept(false);
 
     private:
         struct impl;

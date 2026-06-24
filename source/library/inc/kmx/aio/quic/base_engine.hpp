@@ -13,6 +13,7 @@
 #include <functional>
 #include <memory>
 #include <netinet/in.h>
+#include <source_location>
 #include <span>
 #include <string>
 #include <sys/socket.h>
@@ -26,6 +27,7 @@ extern "C"
 #include <kmx/aio/basic_types.hpp>
 #include <kmx/aio/quic/settings.hpp>
 #include <kmx/aio/task.hpp>
+#include <kmx/logger.hpp>
 
 namespace kmx::aio::quic
 {
@@ -92,10 +94,7 @@ namespace kmx::aio::quic
             return reinterpret_cast<::lsquic_conn_ctx_t*>(stream_if_ctx);
         }
 
-        static void on_conn_closed(::lsquic_conn_t* conn)
-        {
-            ::lsquic_conn_set_ctx(conn, nullptr);
-        }
+        static void on_conn_closed(::lsquic_conn_t* conn) { ::lsquic_conn_set_ctx(conn, nullptr); }
 
         static ::lsquic_stream_ctx_t* on_new_stream(void* stream_if_ctx, ::lsquic_stream_t* stream)
         {
@@ -110,7 +109,7 @@ namespace kmx::aio::quic
         static void on_read(::lsquic_stream_t* stream, ::lsquic_stream_ctx_t* /*ctx*/)
         {
             auto* self = reinterpret_cast<base_impl*>(::lsquic_conn_get_ctx(::lsquic_stream_conn(stream)));
-            std::array<char, 4096> buf {};
+            std::array<char, 4096u> buf {};
             const ssize_t nr = ::lsquic_stream_read(stream, buf.data(), buf.size());
             if (nr > 0)
             {
@@ -120,7 +119,8 @@ namespace kmx::aio::quic
             else if (nr == 0)
             {
                 ::lsquic_stream_close(stream);
-                if (self->is_client_) {
+                if (self->is_client_)
+                {
                     ::lsquic_conn_close(::lsquic_stream_conn(stream));
                     self->running_ = false;
                 }
@@ -239,7 +239,7 @@ namespace kmx::aio::quic
             socket_ = std::make_unique<UdpSocket>(std::move(*sock_res));
 
             // Bind to ephemeral port
-            static constexpr std::array<uint8_t, 4> any_ip = {0, 0, 0, 0};
+            static constexpr std::array<uint8_t, 4u> any_ip = {0, 0, 0, 0};
             if (auto bind_res = bind_socket(any_ip, 0); !bind_res)
                 return std::unexpected(bind_res.error());
 
@@ -252,11 +252,9 @@ namespace kmx::aio::quic
 
             const char* host = hostname.empty() ? nullptr : hostname.c_str();
 
-            ::lsquic_conn_t* conn = ::lsquic_engine_connect(
-                lsquic_engine_, N_LSQVER,
-                reinterpret_cast<sockaddr*>(&local_addr_),
-                reinterpret_cast<sockaddr*>(&peer_addr_result->storage),
-                static_cast<void*>(this), nullptr, host, 0, nullptr, 0, nullptr, 0);
+            ::lsquic_conn_t* conn = ::lsquic_engine_connect(lsquic_engine_, N_LSQVER, reinterpret_cast<sockaddr*>(&local_addr_),
+                                                            reinterpret_cast<sockaddr*>(&peer_addr_result->storage),
+                                                            static_cast<void*>(this), nullptr, host, 0, nullptr, 0, nullptr, 0);
 
             if (!conn)
                 return std::unexpected(error_from_errno());
@@ -268,17 +266,16 @@ namespace kmx::aio::quic
         task<std::expected<void, std::error_code>> process()
         {
             running_ = true;
-            std::array<std::byte, 4096> packet_buf {};
+            std::array<std::byte, 4096u> packet_buf {};
 
             while (running_)
             {
                 ::lsquic_engine_process_conns(lsquic_engine_);
 
-                struct msghdr msg
-                {
-                };
-                struct iovec iov[1];
-                sockaddr_storage peer_addr {};
+                ::msghdr msg {};
+
+                ::iovec iov[1];
+                ::sockaddr_storage peer_addr {};
 
                 iov[0].iov_base = packet_buf.data();
                 iov[0].iov_len = packet_buf.size();
@@ -288,12 +285,18 @@ namespace kmx::aio::quic
                 msg.msg_iovlen = 1;
 
                 auto recv_res = co_await socket_->recvmsg(&msg);
-                if (recv_res && *recv_res > 0)
+                if (recv_res && (*recv_res > 0))
                 {
-                    int diff = ::lsquic_engine_packet_in(lsquic_engine_, reinterpret_cast<const unsigned char*>(packet_buf.data()),
-                                                         *recv_res, reinterpret_cast<sockaddr*>(&local_addr_),
-                                                         reinterpret_cast<sockaddr*>(&peer_addr), reinterpret_cast<void*>(this), 0);
-                    (void) diff;
+                    const int packet_in_res =
+                        ::lsquic_engine_packet_in(lsquic_engine_, reinterpret_cast<const unsigned char*>(packet_buf.data()), *recv_res,
+                                                  reinterpret_cast<::sockaddr*>(&local_addr_), reinterpret_cast<::sockaddr*>(&peer_addr),
+                                                  reinterpret_cast<void*>(this), 0);
+                    if (packet_in_res < 0)
+                    {
+                        logger::log(logger::level::error, std::source_location::current(), "lsquic_engine_packet_in failed: {}",
+                                    packet_in_res);
+                        co_return std::unexpected(error_from_errno(EPROTO));
+                    }
                 }
                 else if (!recv_res)
                     co_return std::unexpected(recv_res.error());

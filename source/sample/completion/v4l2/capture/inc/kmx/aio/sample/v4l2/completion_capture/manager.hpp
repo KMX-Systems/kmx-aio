@@ -16,19 +16,19 @@ namespace kmx::aio::sample::v4l2::completion_capture
 {
     struct config
     {
-        std::string                                 device        { "/dev/video0" };
-        kmx::aio::completion::v4l2::pixel_format    format        { kmx::aio::completion::v4l2::fourcc::yuyv };
-        kmx::aio::completion::v4l2::frame_size      size          { 640u, 480u };
-        kmx::aio::completion::v4l2::frame_rate      fps           {};
-        std::uint32_t                               buffer_count  { 4u };
-        std::uint64_t                               max_frames    { 300u }; ///< 0 = unlimited
+        std::string device {"/dev/video0"};
+        kmx::aio::completion::v4l2::pixel_format format {kmx::aio::completion::v4l2::fourcc::yuyv};
+        kmx::aio::completion::v4l2::frame_size size {640u, 480u};
+        kmx::aio::completion::v4l2::frame_rate fps {};
+        std::uint32_t buffer_count {4u};
+        std::uint64_t max_frames {300u}; ///< 0 = unlimited
     };
 
     struct metrics
     {
         std::atomic_uint64_t frames_captured {};
-        std::atomic_uint64_t bytes_captured  {};
-        std::atomic_uint64_t errors          {};
+        std::atomic_uint64_t bytes_captured {};
+        std::atomic_uint64_t errors {};
     };
 
     /// @brief Drives V4L2 capture and a periodic stats timer under one completion executor.
@@ -49,7 +49,7 @@ namespace kmx::aio::sample::v4l2::completion_capture
         void print_statistics() const;
         static void signal_handler(int signum) noexcept;
 
-        config  config_;
+        config config_;
         metrics metrics_;
 
         std::shared_ptr<kmx::aio::completion::executor> executor_;

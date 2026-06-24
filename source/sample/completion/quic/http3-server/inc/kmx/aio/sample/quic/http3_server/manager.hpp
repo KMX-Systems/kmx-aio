@@ -1,8 +1,8 @@
 #pragma once
 
-#include <memory>
-#include <kmx/aio/task.hpp>
 #include <kmx/aio/completion/executor.hpp>
+#include <kmx/aio/task.hpp>
+#include <memory>
 
 namespace kmx::aio::sample::quic::http3_server
 {

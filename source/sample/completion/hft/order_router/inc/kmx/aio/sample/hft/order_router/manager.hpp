@@ -17,14 +17,14 @@ namespace kmx::aio::sample::hft::order_router
     struct order
     {
         std::uint64_t id {};
-        side          direction {side::buy};
-        double        price {};
+        side direction {side::buy};
+        double price {};
         std::uint32_t quantity {};
     };
 
     // Shared state
-    constexpr std::size_t channel_capacity  = 4096u;
-    constexpr std::size_t total_orders      = 100'000u;
+    constexpr std::size_t channel_capacity = 4096u;
+    constexpr std::size_t total_orders = 100'000u;
 
     auto execute_order_router() -> int;
 }

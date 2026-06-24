@@ -40,6 +40,7 @@ namespace kmx::aio::http2
     /// @param error_code The reason for closing the connection
     /// @return Number of bytes written
     /// @throws std::invalid_argument if buffer is too small
-    std::size_t make_goaway(std::span<std::uint8_t> buffer, std::uint32_t last_stream_id, std::uint32_t error_code) noexcept(false);
+    std::size_t make_goaway(std::span<std::uint8_t> buffer, const std::uint32_t last_stream_id,
+                            const std::uint32_t error_code) noexcept(false);
 
 } // namespace kmx::aio::http2

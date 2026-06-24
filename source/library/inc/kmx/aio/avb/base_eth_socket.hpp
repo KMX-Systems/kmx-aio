@@ -21,6 +21,7 @@
 #include <netpacket/packet.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <time.h>
 
 #include <kmx/aio/avb/avb_types.hpp>
 #include <kmx/aio/basic_types.hpp>
@@ -35,21 +36,20 @@ namespace kmx::aio::avb
         Executor& exec_;
         file_descriptor fd_ {};
         mac_address_t local_mac_ {};
-        int iface_index_ { -1 };
+        int iface_index_ {-1};
         std::uint16_t ethertype_ {};
 
         explicit base_eth_socket(Executor& exec) noexcept: exec_(exec) {}
 
         // Setup
 
-        [[nodiscard]] std::expected<void, std::error_code>
-        open_socket(std::string_view iface, std::uint16_t ethertype)
+        [[nodiscard]] std::expected<void, std::error_code> open_socket(std::string_view iface, std::uint16_t ethertype)
         {
             ethertype_ = ethertype;
 
             // AF_PACKET / ETH_P_ALL (or specific EtherType) / SOCK_DGRAM (cooked)
-            const int raw_fd = ::socket(AF_PACKET, SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC,
-                                        ::htons(ethertype == 0 ? ETH_P_ALL : ethertype));
+            const int raw_fd =
+                ::socket(AF_PACKET, SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, ::htons(ethertype == 0 ? ETH_P_ALL : ethertype));
             if (raw_fd < 0)
                 return std::unexpected(error_from_errno());
 
@@ -61,30 +61,27 @@ namespace kmx::aio::avb
 
             // Bind to interface
             ::sockaddr_ll addr {};
-            addr.sll_family   = AF_PACKET;
+            addr.sll_family = AF_PACKET;
             addr.sll_protocol = ::htons(ethertype == 0 ? ETH_P_ALL : ethertype);
-            addr.sll_ifindex  = iface_index_;
+            addr.sll_ifindex = iface_index_;
             if (::bind(raw_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0)
                 return std::unexpected(error_from_errno());
 
             // Enable SO_TIMESTAMPING: hardware RX + TX timestamps via CLOCK_TAI
-            const int ts_flags = SOF_TIMESTAMPING_RX_HARDWARE
-                               | SOF_TIMESTAMPING_TX_HARDWARE
-                               | SOF_TIMESTAMPING_RAW_HARDWARE
-                               | SOF_TIMESTAMPING_OPT_CMSG
-                               | SOF_TIMESTAMPING_OPT_TSONLY;
+            constexpr int ts_flags = SOF_TIMESTAMPING_RX_HARDWARE | SOF_TIMESTAMPING_TX_HARDWARE | SOF_TIMESTAMPING_RAW_HARDWARE |
+                                     SOF_TIMESTAMPING_OPT_CMSG | SOF_TIMESTAMPING_OPT_TSONLY;
             if (::setsockopt(raw_fd, SOL_SOCKET, SO_TIMESTAMPING, &ts_flags, sizeof(ts_flags)) < 0)
             {
                 // Fall back gracefully — HW timestamping may not be available on all NICs.
                 // Software timestamping is used instead.
-                const int sw_flags = SOF_TIMESTAMPING_RX_SOFTWARE | SOF_TIMESTAMPING_SOFTWARE;
+                constexpr int sw_flags = SOF_TIMESTAMPING_RX_SOFTWARE | SOF_TIMESTAMPING_SOFTWARE;
                 ::setsockopt(raw_fd, SOL_SOCKET, SO_TIMESTAMPING, &sw_flags, sizeof(sw_flags));
             }
 
             // Enable SO_TXTIME (for CBS-scheduled transmission)
             ::sock_txtime txtime_cfg {};
-            txtime_cfg.clockid  = CLOCK_TAI;
-            txtime_cfg.flags    = 0;
+            txtime_cfg.clockid = CLOCK_TAI;
+            txtime_cfg.flags = 0;
             ::setsockopt(raw_fd, SOL_SOCKET, SO_TXTIME, &txtime_cfg, sizeof(txtime_cfg));
 
             return {};
@@ -92,35 +89,34 @@ namespace kmx::aio::avb
 
         // Send
 
-        [[nodiscard]] std::expected<void, std::error_code>
-        do_send(const mac_address_t& dest_mac, std::span<const std::byte> payload,
-                std::optional<avb_timestamp_t> tx_time)
+        [[nodiscard]] std::expected<void, std::error_code> do_send(const mac_address_t& dest_mac, std::span<const std::byte> payload,
+                                                                   std::optional<avb_timestamp_t> tx_time)
         {
             // Build sockaddr_ll destination
             ::sockaddr_ll dest {};
-            dest.sll_family   = AF_PACKET;
-            dest.sll_ifindex  = iface_index_;
+            dest.sll_family = AF_PACKET;
+            dest.sll_ifindex = iface_index_;
             dest.sll_protocol = ::htons(ethertype_);
-            dest.sll_halen    = ETH_ALEN;
+            dest.sll_halen = ETH_ALEN;
             std::memcpy(dest.sll_addr, dest_mac.data(), ETH_ALEN);
 
             ::msghdr msg {};
-            ::iovec  iov { const_cast<std::byte*>(payload.data()), payload.size() };
-            msg.msg_name    = &dest;
+            ::iovec iov {const_cast<std::byte*>(payload.data()), payload.size()};
+            msg.msg_name = &dest;
             msg.msg_namelen = sizeof(dest);
-            msg.msg_iov     = &iov;
-            msg.msg_iovlen  = 1;
+            msg.msg_iov = &iov;
+            msg.msg_iovlen = 1;
 
             // Attach SO_TXTIME control message if scheduled TX was requested
             alignas(::cmsghdr) std::array<std::byte, CMSG_SPACE(sizeof(std::uint64_t))> ctrl_buf {};
             if (tx_time.has_value())
             {
-                msg.msg_control    = ctrl_buf.data();
+                msg.msg_control = ctrl_buf.data();
                 msg.msg_controllen = ctrl_buf.size();
-                auto* cmsg         = CMSG_FIRSTHDR(&msg);
-                cmsg->cmsg_level   = SOL_SOCKET;
-                cmsg->cmsg_type    = SCM_TXTIME;
-                cmsg->cmsg_len     = CMSG_LEN(sizeof(std::uint64_t));
+                auto* cmsg = CMSG_FIRSTHDR(&msg);
+                cmsg->cmsg_level = SOL_SOCKET;
+                cmsg->cmsg_type = SCM_TXTIME;
+                cmsg->cmsg_len = CMSG_LEN(sizeof(std::uint64_t));
                 std::memcpy(CMSG_DATA(cmsg), &tx_time.value(), sizeof(std::uint64_t));
             }
 
@@ -128,36 +124,38 @@ namespace kmx::aio::avb
             if (sent < 0)
             {
                 if (errno == EAGAIN || errno == EWOULDBLOCK)
-                    return {};  // Non-blocking; caller should retry after EPOLLOUT
+                    return {}; // Non-blocking; caller should retry after EPOLLOUT
                 return std::unexpected(error_from_errno());
             }
+
+            if (static_cast<std::size_t>(sent) != payload.size())
+                return std::unexpected(error_from_errno(EIO));
+
             return {};
         }
 
         // Receive
 
-        [[nodiscard]] std::expected<std::pair<std::vector<std::byte>, avb_timestamp_t>,
-                                    std::error_code>
-        do_recv()
+        [[nodiscard]] std::expected<std::pair<std::vector<std::byte>, avb_timestamp_t>, std::error_code> do_recv()
         {
             // Large enough for max Ethernet frame (1518 bytes)
             std::vector<std::byte> frame_buf(1518);
 
-            alignas(::cmsghdr) std::array<std::byte, 1024> ctrl_buf {};
+            alignas(::cmsghdr) std::array<std::byte, 1024u> ctrl_buf {};
             ::sockaddr_ll src {};
-            ::iovec iov { frame_buf.data(), frame_buf.size() };
+            ::iovec iov {frame_buf.data(), frame_buf.size()};
             ::msghdr msg {};
-            msg.msg_name       = &src;
-            msg.msg_namelen    = sizeof(src);
-            msg.msg_iov        = &iov;
-            msg.msg_iovlen     = 1;
-            msg.msg_control    = ctrl_buf.data();
+            msg.msg_name = &src;
+            msg.msg_namelen = sizeof(src);
+            msg.msg_iov = &iov;
+            msg.msg_iovlen = 1;
+            msg.msg_control = ctrl_buf.data();
             msg.msg_controllen = ctrl_buf.size();
 
             const ssize_t nr = ::recvmsg(fd_.get(), &msg, 0);
             if (nr < 0)
             {
-                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                if ((errno == EAGAIN) || (errno == EWOULDBLOCK))
                     return std::unexpected(error_from_errno(EAGAIN));
                 return std::unexpected(error_from_errno());
             }
@@ -166,21 +164,17 @@ namespace kmx::aio::avb
 
             // Extract hardware/software timestamp from ancillary data
             avb_timestamp_t hw_ts = 0;
-            for (const ::cmsghdr* cmsg = CMSG_FIRSTHDR(&msg); cmsg != nullptr;
-                 cmsg = CMSG_NXTHDR(&msg, cmsg))
+            for (const ::cmsghdr* cmsg = CMSG_FIRSTHDR(&msg); cmsg != nullptr; cmsg = CMSG_NXTHDR(&msg, cmsg))
             {
-                if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SO_TIMESTAMPING)
+                if ((cmsg->cmsg_level == SOL_SOCKET) && (cmsg->cmsg_type == SO_TIMESTAMPING))
                 {
                     // kernel returns three timespec64 values: software, _, hardware
-                    std::array<::timespec, 3> ts {};
+                    std::array<::timespec, 3u> ts {};
                     std::memcpy(ts.data(), CMSG_DATA(cmsg), sizeof(ts));
                     // Prefer hardware [2] then software [0]
-                    if (ts[2].tv_sec > 0)
-                        hw_ts = static_cast<avb_timestamp_t>(ts[2].tv_sec) * 1'000'000'000ULL
-                              + static_cast<avb_timestamp_t>(ts[2].tv_nsec);
-                    else if (ts[0].tv_sec > 0)
-                        hw_ts = static_cast<avb_timestamp_t>(ts[0].tv_sec) * 1'000'000'000ULL
-                              + static_cast<avb_timestamp_t>(ts[0].tv_nsec);
+                    hw_ts = timestamp_from_index(ts, 2u);
+                    if (hw_ts == 0)
+                        hw_ts = timestamp_from_index(ts, 0u);
                 }
             }
 
@@ -188,8 +182,15 @@ namespace kmx::aio::avb
         }
 
     private:
-        [[nodiscard]] std::expected<void, std::error_code>
-        resolve_iface(std::string_view iface)
+        [[nodiscard]] static avb_timestamp_t timestamp_from_index(const std::array<::timespec, 3u>& ts, const std::size_t index) noexcept
+        {
+            if (index >= ts.size() || ts[index].tv_sec <= 0)
+                return 0;
+
+            return static_cast<avb_timestamp_t>(ts[index].tv_sec) * 1'000'000'000ULL + static_cast<avb_timestamp_t>(ts[index].tv_nsec);
+        }
+
+        [[nodiscard]] std::expected<void, std::error_code> resolve_iface(std::string_view iface)
         {
             // Get interface index
             ::ifreq ifr {};

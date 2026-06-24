@@ -16,19 +16,18 @@ int main(const int argc, const char* const argv[]) noexcept
             cfg.device = argv[1];
         if (argc > 3)
         {
-            cfg.size.width  = static_cast<std::uint32_t>(std::stoul(argv[2]));
+            cfg.size.width = static_cast<std::uint32_t>(std::stoul(argv[2]));
             cfg.size.height = static_cast<std::uint32_t>(std::stoul(argv[3]));
         }
         if (argc > 4)
             cfg.max_frames = std::stoull(argv[4]);
 
-        kmx::aio::sample::v4l2::capture::manager mgr { std::move(cfg) };
+        kmx::aio::sample::v4l2::capture::manager mgr {std::move(cfg)};
         return mgr.run() ? 0 : 1;
     }
     catch (const std::exception& e)
     {
-        kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
-                         "Fatal: {}", e.what());
+        kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Fatal: {}", e.what());
         return 1;
     }
 }

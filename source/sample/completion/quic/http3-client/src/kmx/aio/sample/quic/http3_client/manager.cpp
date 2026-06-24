@@ -1,13 +1,13 @@
 #include <kmx/aio/sample/quic/http3_client/manager.hpp>
 
+#include <array>
 #include <iostream>
 #include <kmx/aio/completion/quic/engine.hpp>
-#include <openssl/ssl.h>
+#include <memory>
 #include <openssl/err.h>
+#include <openssl/ssl.h>
 #include <string>
 #include <string_view>
-#include <array>
-#include <memory>
 
 namespace kmx::aio::sample::quic::http3_client
 {
@@ -17,8 +17,8 @@ namespace kmx::aio::sample::quic::http3_client
     task<void> handle_stream(std::span<char> data)
     {
         std::string_view response(data.data(), data.size());
-        std::cout << "\n[HTTP/3 Client] Received Server Response:\n" 
-                  << "--------------------------------------------------------\n" 
+        std::cout << "\n[HTTP/3 Client] Received Server Response:\n"
+                  << "--------------------------------------------------------\n"
                   << response << "\n"
                   << "--------------------------------------------------------\n";
         co_return; // No further action needed.

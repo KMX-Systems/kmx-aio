@@ -10,6 +10,20 @@
 namespace kmx::aio::sample::tls::h2_alpn_readiness_client
 {
     static constexpr auto mem_order = std::memory_order_relaxed;
+    static constexpr std::array<std::uint8_t, 3u> alpn_h2 {
+        2u,
+        static_cast<std::uint8_t>('h'),
+        static_cast<std::uint8_t>('2'),
+    };
+    static constexpr std::array<char, 9u> settings_frame {0, 0, 0, 4, 0, 0, 0, 0, 0};
+    static constexpr std::array<char, 9u> ack_frame {0, 0, 0, 4, 1, 0, 0, 0, 0};
+    static constexpr std::array<char, 23u> req_frame {
+        static_cast<char>(0x00), static_cast<char>(0x00), static_cast<char>(0x0e), static_cast<char>(0x01), static_cast<char>(0x05),
+        static_cast<char>(0x00), static_cast<char>(0x00), static_cast<char>(0x00), static_cast<char>(0x01), static_cast<char>(0x82),
+        static_cast<char>(0x87), static_cast<char>(0x84), static_cast<char>(0x41), static_cast<char>(0x09), static_cast<char>('l'),
+        static_cast<char>('o'),  static_cast<char>('c'),  static_cast<char>('a'),  static_cast<char>('l'),  static_cast<char>('h'),
+        static_cast<char>('o'),  static_cast<char>('s'),  static_cast<char>('t'),
+    };
 
     bool manager::run() noexcept(false)
     {
@@ -88,7 +102,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
         if (in_progress)
             co_await executor_->wait_io(fd, event_type::write);
 
-        int so_error{};
+        int so_error {};
         ::socklen_t len = sizeof(so_error);
         if (auto sockopt_result = fd_owner.getsockopt(SOL_SOCKET, SO_ERROR, &so_error, &len); !sockopt_result)
         {
@@ -123,7 +137,6 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
             auto stream_ptr = std::make_shared<readiness::tls::stream>(std::move(*stream_result));
             stream_ptr->set_connect_state();
 
-            const std::array<std::uint8_t, 3> alpn_h2 {2u, static_cast<std::uint8_t>('h'), static_cast<std::uint8_t>('2')};
             if (const auto alpn_res = stream_ptr->set_alpn_protocols(alpn_h2); !alpn_res)
             {
                 metrics_.failures.fetch_add(1u, mem_order);
@@ -148,7 +161,6 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
             }
 
             std::string preface_data = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
-            const std::array<char, 9> settings_frame {0, 0, 0, 4, 0, 0, 0, 0, 0};
             preface_data.append(settings_frame.data(), settings_frame.size());
 
             if (auto res = co_await stream_ptr->write_all(std::span<const char>(preface_data.data(), preface_data.size())); !res)
@@ -159,7 +171,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
                 co_return;
             }
 
-            std::array<char, 9> recv_buf {};
+            std::array<char, 9u> recv_buf {};
             auto r_res = co_await stream_ptr->read(std::span<char>(recv_buf.data(), recv_buf.size()));
             if (!r_res || *r_res < recv_buf.size() || recv_buf[3] != 4 || recv_buf[4] != 0)
             {
@@ -169,7 +181,6 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
                 co_return;
             }
 
-            const std::array<char, 9> ack_frame {0, 0, 0, 4, 1, 0, 0, 0, 0};
             if (auto w_res = co_await stream_ptr->write_all(std::span<const char>(ack_frame.data(), ack_frame.size())); !w_res)
             {
                 metrics_.failures.fetch_add(1u, mem_order);
@@ -187,15 +198,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
                 co_return;
             }
 
-            const char req_frame[] = {
-                0x00, 0x00, 0x0e,
-                0x01,
-                0x05,
-                0x00, 0x00, 0x00, 0x01,
-                static_cast<char>(0x82), static_cast<char>(0x87), static_cast<char>(0x84),
-                0x41, 0x09, 'l', 'o', 'c', 'a', 'l', 'h', 'o', 's', 't',
-            };
-            if (auto res = co_await stream_ptr->write_all(std::span<const char>(req_frame, sizeof(req_frame))); !res)
+            if (auto res = co_await stream_ptr->write_all(std::span<const char>(req_frame.data(), req_frame.size())); !res)
             {
                 metrics_.failures.fetch_add(1u, mem_order);
                 metrics_.errors.fetch_add(1u, mem_order);
@@ -203,7 +206,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
                 co_return;
             }
 
-            std::array<char, 10> resp_hdr {};
+            std::array<char, 10u> resp_hdr {};
             std::size_t total = 0u;
             while (total < resp_hdr.size())
             {
@@ -213,7 +216,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
                 total += *r;
             }
 
-            std::array<char, 9> data_hdr {};
+            std::array<char, 9u> data_hdr {};
             total = 0u;
             while (total < data_hdr.size())
             {

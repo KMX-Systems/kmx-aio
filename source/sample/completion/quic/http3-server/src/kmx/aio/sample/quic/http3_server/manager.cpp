@@ -1,14 +1,14 @@
 #include <kmx/aio/sample/quic/http3_server/manager.hpp>
 
+#include <algorithm>
+#include <array>
 #include <iostream>
 #include <kmx/aio/completion/quic/engine.hpp>
-#include <openssl/ssl.h>
+#include <memory>
 #include <openssl/err.h>
+#include <openssl/ssl.h>
 #include <string>
 #include <string_view>
-#include <array>
-#include <algorithm>
-#include <memory>
 
 namespace kmx::aio::sample::quic::http3_server
 {
@@ -21,7 +21,8 @@ namespace kmx::aio::sample::quic::http3_server
         std::cout << "Received QUIC stream data (HTTP req):\n" << request << "\n";
 
         // Simple HTTP/0.9 over QUIC response
-        std::string response = "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n<html><body><h1>Hello from KMX AIO QUIC HTTP3 Server!</h1></body></html>\n";
+        std::string response = "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n<html><body><h1>Hello from KMX AIO "
+                               "QUIC HTTP3 Server!</h1></body></html>\n";
         std::copy(response.begin(), response.end(), data.data()); // Write back (echo style but replacing with response)
         co_return;
     }

@@ -16,5 +16,7 @@ Project {
         "quic/http3-client/sample-quic-http3-client.qbs",
         "hft/order_router/sample-hft-order-router.qbs",
         "v4l2/capture/v4l2-completion-capture.qbs",
+        "avb/talker/sample-avb-talker.qbs",
+        "avb/listener/sample-avb-listener.qbs",
     ]
 }

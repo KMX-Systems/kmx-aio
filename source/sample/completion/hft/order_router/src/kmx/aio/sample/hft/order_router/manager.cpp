@@ -29,10 +29,10 @@ namespace kmx::aio::sample::hft::order_router
         for (std::uint64_t i {}; i < total_orders; ++i)
         {
             order o {
-                .id        = i,
+                .id = i,
                 .direction = (i % 2u == 0u) ? side::buy : side::sell,
-                .price     = 100.0 + static_cast<double>(i % 50u) * 0.25,
-                .quantity  = static_cast<std::uint32_t>((i % 10u) + 1u) * 100u,
+                .price = 100.0 + static_cast<double>(i % 50u) * 0.25,
+                .quantity = static_cast<std::uint32_t>((i % 10u) + 1u) * 100u,
             };
 
             // Spin until there is room in the channel (back-pressure).
@@ -42,10 +42,8 @@ namespace kmx::aio::sample::hft::order_router
 
         const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - start);
 
-        std::cout << "[market-data] produced " << total_orders << " orders in "
-                  << elapsed.count() << " µs ("
-                  << (total_orders * 1'000'000ULL / static_cast<std::uint64_t>(elapsed.count()))
-                  << " orders/sec)\n";
+        std::cout << "[market-data] produced " << total_orders << " orders in " << elapsed.count() << " µs ("
+                  << (total_orders * 1'000'000ULL / static_cast<std::uint64_t>(elapsed.count())) << " orders/sec)\n";
 
         producer_done.store(true, std::memory_order_release);
     }
@@ -90,10 +88,8 @@ namespace kmx::aio::sample::hft::order_router
 
         const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - start);
 
-        std::cout << "[strategy]    consumed " << consumed << " orders in "
-                  << elapsed.count() << " µs ("
-                  << (consumed * 1'000'000ULL / static_cast<std::uint64_t>(elapsed.count()))
-                  << " orders/sec)\n";
+        std::cout << "[strategy]    consumed " << consumed << " orders in " << elapsed.count() << " µs ("
+                  << (consumed * 1'000'000ULL / static_cast<std::uint64_t>(elapsed.count())) << " orders/sec)\n";
     }
 
     // CPU pinning helper (best-effort)
@@ -127,13 +123,13 @@ namespace kmx::aio::sample::hft::order_router
         consumer.join();
 
         // Summary
-        const auto filled   = filled_count.load();
+        const auto filled = filled_count.load();
         const auto rejected = rejected_count.load();
 
         std::cout << "\n┌────────────────────────────────────────┐\n"
                   << "│ Results                                │\n"
                   << "├────────────────────────────────────────┤\n"
-                  << "│ Filled    : " << filled   << std::string(25 - std::to_string(filled).size(), ' ') << "│\n"
+                  << "│ Filled    : " << filled << std::string(25 - std::to_string(filled).size(), ' ') << "│\n"
                   << "│ Rejected  : " << rejected << std::string(25 - std::to_string(rejected).size(), ' ') << "│\n"
                   << "│ Total     : " << (filled + rejected) << std::string(25 - std::to_string(filled + rejected).size(), ' ') << "│\n"
                   << "└────────────────────────────────────────┘\n";

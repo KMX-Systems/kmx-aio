@@ -103,7 +103,7 @@ TEST_CASE("slab allocator slot fragmentation after heavy churn", "[allocation][s
         REQUIRE(ptrs.size() == 50u);
         REQUIRE(alloc->allocated() == 50u);
 
-        for (void* p : ptrs)
+        for (void* p: ptrs)
             alloc->deallocate(p);
 
         REQUIRE(alloc->allocated() == 0u);
@@ -125,7 +125,7 @@ TEST_CASE("slab allocator slot fragmentation after heavy churn", "[allocation][s
     }
 
     // Release remaining.
-    for (void* p : held)
+    for (void* p: held)
         alloc->deallocate(p);
 
     REQUIRE(alloc->allocated() == 0u);

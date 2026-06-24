@@ -37,23 +37,21 @@ namespace kmx::aio::avb::gptp
         explicit generic_clock(Executor& exec) noexcept;
         ~generic_clock();
 
-        generic_clock(const generic_clock&)            = delete;
+        generic_clock(const generic_clock&) = delete;
         generic_clock& operator=(const generic_clock&) = delete;
-        generic_clock(generic_clock&&)                 = default;
-        generic_clock& operator=(generic_clock&&)      = default;
+        generic_clock(generic_clock&&) = default;
+        generic_clock& operator=(generic_clock&&) = default;
 
         /// @brief Bind to a NIC and begin receiving gPTP frames.
         ///        Spawns internal coroutines for Sync, Pdelay, and Announce handling.
-        [[nodiscard]] task<std::expected<void, std::error_code>>
-        start(std::string_view iface) noexcept(false);
+        [[nodiscard]] task<std::expected<void, std::error_code>> start(std::string_view iface) noexcept(false);
 
         /// @brief Return the current TAI time in nanoseconds.
         ///        Reads CLOCK_TAI directly — always available, even before sync.
         [[nodiscard]] avb_timestamp_t now() const noexcept;
 
         /// @brief Suspend until the PI servo reports synchronization, or timeout expires.
-        [[nodiscard]] task<std::expected<void, std::error_code>>
-        wait_sync(std::chrono::milliseconds timeout) noexcept(false);
+        [[nodiscard]] task<std::expected<void, std::error_code>> wait_sync(std::chrono::milliseconds timeout) noexcept(false);
 
         /// @brief Signed offset from master in nanoseconds (diagnostic).
         [[nodiscard]] std::int64_t offset_ns() const noexcept;

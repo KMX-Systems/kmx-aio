@@ -116,8 +116,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
             }
 
             static constexpr std::array<char, 18> send_frames {
-                0, 0, 0, 4, 0, 0, 0, 0, 0,
-                0, 0, 0, 4, 1, 0, 0, 0, 0,
+                0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 4, 1, 0, 0, 0, 0,
             };
 
             if (auto w_res = co_await stream.write_all(std::span<const char>(send_frames.data(), send_frames.size())); !w_res)
@@ -135,7 +134,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
             }
 
             std::array<char, 9u> req_hdr {};
-            std::size_t total{};
+            std::size_t total {};
             while (total < req_hdr.size())
             {
                 auto r = co_await stream.read(std::span<char>(req_hdr.data() + total, req_hdr.size() - total));
@@ -161,18 +160,11 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
                 }
 
                 const char resp[] = {
-                    0x00, 0x00, 0x01,
-                    0x01,
-                    0x04,
-                    0x00, 0x00, 0x00, 0x01,
-                    static_cast<char>(0x88),
+                    0x00, 0x00, 0x01, 0x01, 0x04, 0x00, 0x00, 0x00, 0x01, static_cast<char>(0x88),
 
-                    0x00, 0x00, 0x15,
-                    0x00,
-                    0x01,
-                    0x00, 0x00, 0x00, 0x01,
-                    'H', 'e', 'l', 'l', 'o', ' ', 'f', 'r', 'o', 'm', ' ',
-                    'K', 'M', 'X', ' ', 'H', 'T', 'T', 'P', '/', '2',
+                    0x00, 0x00, 0x15, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 'H',
+                    'e',  'l',  'l',  'o',  ' ',  'f',  'r',  'o',  'm',  ' ',
+                    'K',  'M',  'X',  ' ',  'H',  'T',  'T',  'P',  '/',  '2',
                 };
 
                 if (auto w_res = co_await stream.write_all(std::span<const char>(resp, sizeof(resp))); !w_res)

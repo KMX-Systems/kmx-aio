@@ -152,7 +152,7 @@ namespace kmx::aio
         if (!file_res)
             return file_res;
 
-        switch(storage.ss_family)
+        switch (storage.ss_family)
         {
             case AF_INET:
             {

@@ -12,19 +12,19 @@ namespace kmx::aio::sample::v4l2::capture
 {
     struct config
     {
-        std::string                          device        { "/dev/video0" };
-        kmx::aio::readiness::v4l2::pixel_format format   { kmx::aio::readiness::v4l2::fourcc::yuyv };
-        kmx::aio::readiness::v4l2::frame_size size        { 640u, 480u };
-        kmx::aio::readiness::v4l2::frame_rate fps         {};
-        std::uint32_t                          buffer_count { 4u };
-        std::uint64_t                          max_frames   { 300u }; ///< 0 = unlimited
+        std::string device {"/dev/video0"};
+        kmx::aio::readiness::v4l2::pixel_format format {kmx::aio::readiness::v4l2::fourcc::yuyv};
+        kmx::aio::readiness::v4l2::frame_size size {640u, 480u};
+        kmx::aio::readiness::v4l2::frame_rate fps {};
+        std::uint32_t buffer_count {4u};
+        std::uint64_t max_frames {300u}; ///< 0 = unlimited
     };
 
     struct metrics
     {
         std::atomic_uint64_t frames_captured {};
-        std::atomic_uint64_t bytes_captured  {};
-        std::atomic_uint64_t errors          {};
+        std::atomic_uint64_t bytes_captured {};
+        std::atomic_uint64_t errors {};
     };
 
     class manager
@@ -38,7 +38,7 @@ namespace kmx::aio::sample::v4l2::capture
         void print_statistics() const;
         static void signal_handler(int signum) noexcept;
 
-        config  config_;
+        config config_;
         metrics metrics_;
 
         std::shared_ptr<kmx::aio::readiness::executor> executor_;
