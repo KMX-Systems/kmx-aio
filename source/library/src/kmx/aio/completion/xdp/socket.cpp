@@ -424,12 +424,13 @@ namespace kmx::aio::completion::xdp
             socklen_t optlen = sizeof(xdp_stat);
             if (::getsockopt(xsk_socket__fd(state_->xsk), SOL_XDP, XDP_STATISTICS, &xdp_stat, &optlen) == 0)
             {
-                state_->stats.kernel_rx_dropped = xdp_stat.rx_dropped;
-                state_->stats.kernel_rx_invalid_descs = xdp_stat.rx_invalid_descs;
-                state_->stats.kernel_tx_invalid_descs = xdp_stat.tx_invalid_descs;
-                state_->stats.kernel_rx_ring_full = xdp_stat.rx_ring_full;
-                state_->stats.kernel_rx_fill_ring_empty = xdp_stat.rx_fill_ring_empty_descs;
-                state_->stats.kernel_tx_ring_empty = xdp_stat.tx_ring_empty_descs;
+                auto& stats = state_->stats;
+                stats.kernel_rx_dropped = xdp_stat.rx_dropped;
+                stats.kernel_rx_invalid_descs = xdp_stat.rx_invalid_descs;
+                stats.kernel_tx_invalid_descs = xdp_stat.tx_invalid_descs;
+                stats.kernel_rx_ring_full = xdp_stat.rx_ring_full;
+                stats.kernel_rx_fill_ring_empty = xdp_stat.rx_fill_ring_empty_descs;
+                stats.kernel_tx_ring_empty = xdp_stat.tx_ring_empty_descs;
             }
         }
 #endif

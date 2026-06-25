@@ -21,7 +21,7 @@ namespace kmx::aio::completion::udp
         using result_task = socket::result_task;
         using create_result = std::expected<endpoint, std::error_code>;
 
-        [[nodiscard]] static create_result create(std::shared_ptr<executor> exec, int domain = AF_INET) noexcept;
+        [[nodiscard]] static create_result create(std::shared_ptr<executor> exec, const int domain = AF_INET) noexcept;
 
         explicit endpoint(socket&& sock) noexcept: socket_(std::move(sock)) {}
 

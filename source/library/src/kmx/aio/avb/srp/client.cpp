@@ -149,10 +149,8 @@ namespace kmx::aio::avb::srp
 
             // Notify any pending subscribe() waiters
             for (auto& w: pending_subs_)
-            {
                 if ((w.id == desc.stream_id) && !w.resolved.has_value())
                     w.resolved = desc;
-            }
         }
 
         // Receive loop
@@ -276,7 +274,6 @@ namespace kmx::aio::avb::srp
         auto& waiter = state_->pending_subs_.back();
 
         const auto deadline = std::chrono::steady_clock::now() + timeout;
-
         while (!waiter.resolved.has_value())
         {
             if (std::chrono::steady_clock::now() >= deadline)
