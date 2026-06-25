@@ -104,13 +104,36 @@ namespace kmx::aio
             T value = std::move(storage_[tail]);
             const auto next_tail = (tail + 1u) & mask_;
             tail_.store(next_tail, std::memory_order_release);
+            tail_.notify_all();
 
             const auto occ_after_pop = (head - next_tail) & mask_;
             const auto low = low_watermark_.load(std::memory_order_acquire);
             if (occ_after_pop <= low)
-                throttled_.store(false, std::memory_order_release);
+            {
+                const bool was_throttled = throttled_.exchange(false, std::memory_order_acq_rel);
+                if (was_throttled)
+                    throttled_.notify_all();
+            }
 
             return value;
+        }
+
+        /// @brief Blocks until the channel can accept at least one more element.
+        /// @details Uses atomic wait/notify to avoid busy-spinning while the producer
+        ///          is throttled or the ring is full.
+        void wait_until_can_send() noexcept
+        {
+            while (true)
+            {
+                if (can_send())
+                    return;
+
+                const auto tail_snapshot = tail_.load(std::memory_order_acquire);
+                if (throttled_.load(std::memory_order_acquire))
+                    throttled_.wait(true, std::memory_order_relaxed);
+                else
+                    tail_.wait(tail_snapshot, std::memory_order_relaxed);
+            }
         }
 
         /// @brief Checks if the channel is currently empty (consumer perspective).
@@ -138,7 +161,10 @@ namespace kmx::aio
 
             const auto occ = occupancy();
             const bool current_throttled = throttled_.load(std::memory_order_acquire);
-            throttled_.store(compute_throttled(occ, low, high, current_throttled), std::memory_order_release);
+            const bool next_throttled = compute_throttled(occ, low, high, current_throttled);
+            throttled_.store(next_throttled, std::memory_order_release);
+            if (current_throttled && !next_throttled)
+                throttled_.notify_all();
         }
 
         /// @brief Returns current producer credits before high watermark is reached.

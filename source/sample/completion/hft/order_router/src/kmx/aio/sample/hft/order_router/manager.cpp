@@ -35,9 +35,9 @@ namespace kmx::aio::sample::hft::order_router
                 .quantity = static_cast<std::uint32_t>((i % 10u) + 1u) * 100u,
             };
 
-            // Spin until there is room in the channel (back-pressure).
+            // Block only when the channel is actually throttled or full.
             while (!order_channel.try_push(std::move(o)))
-                std::this_thread::yield();
+                order_channel.wait_until_can_send();
         }
 
         const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - start);
