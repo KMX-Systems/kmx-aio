@@ -95,7 +95,8 @@ namespace kmx::aio::completion::spdk
 
     device::device(device&&) noexcept = default;
 
-    std::expected<device, std::error_code> device::create(std::shared_ptr<executor> exec, const device_config& config) noexcept
+    std::expected<std::uint64_t, std::error_code> device::validate_create_config(const std::shared_ptr<executor>& exec,
+                                                                                  const device_config& config) noexcept
     {
         if (!exec)
             return std::unexpected(to_std_error_code(error_code::invalid_argument));
@@ -111,111 +112,137 @@ namespace kmx::aio::completion::spdk
         if (total_bytes_u64 > std::numeric_limits<std::size_t>::max())
             return std::unexpected(to_std_error_code(error_code::invalid_argument));
 
-        device out {};
+        return total_bytes_u64;
+    }
+
+    std::expected<void, std::error_code> device::initialize_state(device& out, std::shared_ptr<executor> exec,
+                                                                  const device_config& config) noexcept
+    {
         out.state_.reset(new (std::nothrow) state {});
         if (!out.state_)
             return std::unexpected(std::make_error_code(std::errc::not_enough_memory));
 
         out.state_->exec = std::move(exec);
         out.state_->config = config;
+        return {};
+    }
 
-#if !defined(KMX_AIO_FEATURE_SPDK)
+    std::expected<void, std::error_code> device::initialize_fallback_storage(state& state, const std::uint64_t total_bytes_u64) noexcept
+    {
         try
         {
-            out.state_->storage.resize(static_cast<std::size_t>(total_bytes_u64));
+            state.storage.resize(static_cast<std::size_t>(total_bytes_u64));
         }
         catch (...)
         {
             return std::unexpected(std::make_error_code(std::errc::not_enough_memory));
         }
 
+        return {};
+    }
+
+#if defined(KMX_AIO_FEATURE_SPDK)
+    std::expected<void, std::error_code> device::initialize_spdk_backend(state& state) noexcept
+    {
+        const auto init_result = runtime::initialize();
+        if (!init_result)
+            return std::unexpected(init_result.error());
+
+        state.io_thread = spdk_thread_create("kmx-aio-spdk", nullptr);
+        if (!state.io_thread)
+            return std::unexpected(to_std_error_code(error_code::spdk_queue_pair_failed));
+
+        spdk_set_thread(state.io_thread);
+
+        const std::string bdev_name {state.config.bdev_name};
+        const int open_rc = spdk_bdev_open_ext(bdev_name.c_str(), true, on_bdev_event, &state, &state.bdev_desc);
+        if (open_rc != 0 || !state.bdev_desc)
+        {
+            shutdown_spdk_backend(state);
+            return std::unexpected(to_std_error_code(error_code::spdk_probe_failed));
+        }
+
+        state.bdev = spdk_bdev_desc_get_bdev(state.bdev_desc);
+        if (!state.bdev)
+        {
+            shutdown_spdk_backend(state);
+            return std::unexpected(to_std_error_code(error_code::spdk_probe_failed));
+        }
+
+        state.actual_block_size = spdk_bdev_get_block_size(state.bdev);
+        state.actual_block_count = spdk_bdev_get_num_blocks(state.bdev);
+        if (state.actual_block_size == 0u || state.actual_block_count == 0u)
+        {
+            shutdown_spdk_backend(state);
+            return std::unexpected(to_std_error_code(error_code::spdk_probe_failed));
+        }
+
+        state.io_channel = spdk_bdev_get_io_channel(state.bdev_desc);
+        if (!state.io_channel)
+        {
+            shutdown_spdk_backend(state);
+            return std::unexpected(to_std_error_code(error_code::spdk_queue_pair_failed));
+        }
+
+        state.config.block_size = state.actual_block_size;
+        state.config.block_count = state.actual_block_count;
+        state.spdk_backend_enabled = true;
+        return {};
+    }
+
+    void device::shutdown_spdk_backend(state& state) noexcept
+    {
+        if (state.io_channel)
+            spdk_put_io_channel(state.io_channel);
+
+        if (state.bdev_desc)
+            spdk_bdev_close(state.bdev_desc);
+
+        if (state.io_thread)
+        {
+            spdk_thread_exit(state.io_thread);
+            while (!spdk_thread_is_exited(state.io_thread))
+                (void) spdk_thread_poll(state.io_thread, 0u, 0u);
+            spdk_thread_destroy(state.io_thread);
+        }
+
+        state.io_channel = nullptr;
+        state.bdev_desc = nullptr;
+        state.bdev = nullptr;
+        state.io_thread = nullptr;
+        state.actual_block_size = 0u;
+        state.actual_block_count = 0u;
+        state.spdk_backend_enabled = false;
+    }
+#endif
+
+    std::expected<device, std::error_code> device::create(std::shared_ptr<executor> exec, const device_config& config) noexcept
+    {
+        const auto total_bytes_u64 = validate_create_config(exec, config);
+        if (!total_bytes_u64)
+            return std::unexpected(total_bytes_u64.error());
+
+        device out {};
+        if (const auto init_state = initialize_state(out, std::move(exec), config); !init_state)
+            return std::unexpected(init_state.error());
+
+#if !defined(KMX_AIO_FEATURE_SPDK)
+        if (const auto fallback = initialize_fallback_storage(*out.state_, *total_bytes_u64); !fallback)
+            return std::unexpected(fallback.error());
+
         // Deterministic memory-backed fallback for environments without SPDK.
         return out;
 #else
         if (is_fallback_device_name(config.bdev_name))
         {
-            try
-            {
-                out.state_->storage.resize(static_cast<std::size_t>(total_bytes_u64));
-            }
-            catch (...)
-            {
-                return std::unexpected(std::make_error_code(std::errc::not_enough_memory));
-            }
+            if (const auto fallback = initialize_fallback_storage(*out.state_, *total_bytes_u64); !fallback)
+                return std::unexpected(fallback.error());
 
             return out;
         }
 
-        const auto init_result = runtime::initialize();
-        if (!init_result)
-            return std::unexpected(init_result.error());
-
-        out.state_->io_thread = spdk_thread_create("kmx-aio-spdk", nullptr);
-        if (!out.state_->io_thread)
-            return std::unexpected(to_std_error_code(error_code::spdk_queue_pair_failed));
-
-        spdk_set_thread(out.state_->io_thread);
-
-        const std::string bdev_name {config.bdev_name};
-        const int open_rc = spdk_bdev_open_ext(bdev_name.c_str(), true, on_bdev_event, out.state_.get(), &out.state_->bdev_desc);
-        if (open_rc != 0 || !out.state_->bdev_desc)
-        {
-            spdk_thread_exit(out.state_->io_thread);
-            while (!spdk_thread_is_exited(out.state_->io_thread))
-                (void) spdk_thread_poll(out.state_->io_thread, 0u, 0u);
-            spdk_thread_destroy(out.state_->io_thread);
-            out.state_->io_thread = nullptr;
-            return std::unexpected(to_std_error_code(error_code::spdk_probe_failed));
-        }
-
-        out.state_->bdev = spdk_bdev_desc_get_bdev(out.state_->bdev_desc);
-        if (!out.state_->bdev)
-        {
-            spdk_bdev_close(out.state_->bdev_desc);
-            out.state_->bdev_desc = nullptr;
-
-            spdk_thread_exit(out.state_->io_thread);
-            while (!spdk_thread_is_exited(out.state_->io_thread))
-                (void) spdk_thread_poll(out.state_->io_thread, 0u, 0u);
-            spdk_thread_destroy(out.state_->io_thread);
-            out.state_->io_thread = nullptr;
-            return std::unexpected(to_std_error_code(error_code::spdk_probe_failed));
-        }
-
-        out.state_->actual_block_size = spdk_bdev_get_block_size(out.state_->bdev);
-        out.state_->actual_block_count = spdk_bdev_get_num_blocks(out.state_->bdev);
-        if (out.state_->actual_block_size == 0u || out.state_->actual_block_count == 0u)
-        {
-            spdk_bdev_close(out.state_->bdev_desc);
-            out.state_->bdev_desc = nullptr;
-            out.state_->bdev = nullptr;
-
-            spdk_thread_exit(out.state_->io_thread);
-            while (!spdk_thread_is_exited(out.state_->io_thread))
-                (void) spdk_thread_poll(out.state_->io_thread, 0u, 0u);
-            spdk_thread_destroy(out.state_->io_thread);
-            out.state_->io_thread = nullptr;
-            return std::unexpected(to_std_error_code(error_code::spdk_probe_failed));
-        }
-
-        out.state_->io_channel = spdk_bdev_get_io_channel(out.state_->bdev_desc);
-        if (!out.state_->io_channel)
-        {
-            spdk_bdev_close(out.state_->bdev_desc);
-            out.state_->bdev_desc = nullptr;
-            out.state_->bdev = nullptr;
-
-            spdk_thread_exit(out.state_->io_thread);
-            while (!spdk_thread_is_exited(out.state_->io_thread))
-                (void) spdk_thread_poll(out.state_->io_thread, 0u, 0u);
-            spdk_thread_destroy(out.state_->io_thread);
-            out.state_->io_thread = nullptr;
-            return std::unexpected(to_std_error_code(error_code::spdk_queue_pair_failed));
-        }
-
-        out.state_->config.block_size = out.state_->actual_block_size;
-        out.state_->config.block_count = out.state_->actual_block_count;
-        out.state_->spdk_backend_enabled = true;
+        if (const auto backend = initialize_spdk_backend(*out.state_); !backend)
+            return std::unexpected(backend.error());
 
         return out;
 #endif
@@ -356,26 +383,7 @@ namespace kmx::aio::completion::spdk
 
         std::unique_lock lock(state_->mutex);
         spdk_set_thread(state_->io_thread);
-
-        if (state_->io_channel)
-            spdk_put_io_channel(state_->io_channel);
-
-        if (state_->bdev_desc)
-            spdk_bdev_close(state_->bdev_desc);
-
-        if (state_->io_thread)
-        {
-            spdk_thread_exit(state_->io_thread);
-            while (!spdk_thread_is_exited(state_->io_thread))
-                (void) spdk_thread_poll(state_->io_thread, 0u, 0u);
-            spdk_thread_destroy(state_->io_thread);
-        }
-
-        state_->io_channel = nullptr;
-        state_->bdev_desc = nullptr;
-        state_->bdev = nullptr;
-        state_->io_thread = nullptr;
-        state_->spdk_backend_enabled = false;
+        shutdown_spdk_backend(*state_);
 #endif
     }
 

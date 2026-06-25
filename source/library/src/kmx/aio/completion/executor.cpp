@@ -186,23 +186,12 @@ namespace kmx::aio::completion
     task<std::expected<void, std::error_code>> executor::async_connect(const fd_t fd, const sockaddr* addr,
                                                                        const socklen_t addrlen) noexcept(false)
     {
-        io_context ctx {};
-        auto* const sqe = ::io_uring_get_sqe(&ring_);
-        if (sqe == nullptr)
-        {
-            metrics_.submission_full_count.fetch_add(1u, mem_order);
-            co_return std::unexpected(std::make_error_code(std::errc::no_buffer_space));
-        }
+        const auto result = co_await await_uring_result([fd, addr, addrlen](auto* sqe, auto&) {
+            ::io_uring_prep_connect(sqe, fd, addr, addrlen);
+        });
 
-        ::io_uring_prep_connect(sqe, fd, addr, addrlen);
-        ::io_uring_sqe_set_data(sqe, &ctx);
-        if (const auto sub = submit(); !sub)
-            co_return std::unexpected(sub.error());
-
-        metrics_.total_submissions.fetch_add(1u, mem_order);
-        co_await io_awaiter {ctx};
-        if (ctx.result < 0)
-            co_return std::unexpected(std::error_code(-ctx.result, std::generic_category()));
+        if (!result)
+            co_return std::unexpected(result.error());
 
         co_return std::expected<void, std::error_code> {};
     }
@@ -210,50 +199,27 @@ namespace kmx::aio::completion
     task<std::expected<std::size_t, std::error_code>> executor::async_recvmsg(const fd_t fd, msghdr* msg,
                                                                               const unsigned flags) noexcept(false)
     {
-        io_context ctx {};
-        auto* const sqe = ::io_uring_get_sqe(&ring_);
-        if (sqe == nullptr)
-        {
-            metrics_.submission_full_count.fetch_add(1u, mem_order);
-            co_return std::unexpected(std::make_error_code(std::errc::no_buffer_space));
-        }
+        const auto result = co_await await_uring_result([fd, msg, flags](auto* sqe, auto&) {
+            ::io_uring_prep_recvmsg(sqe, fd, msg, flags);
+        });
 
-        ::io_uring_prep_recvmsg(sqe, fd, msg, flags);
-        ::io_uring_sqe_set_data(sqe, &ctx);
+        if (!result)
+            co_return std::unexpected(result.error());
 
-        if (const auto sub = submit(); !sub)
-            co_return std::unexpected(sub.error());
-
-        metrics_.total_submissions.fetch_add(1u, mem_order);
-        co_await io_awaiter {ctx};
-        if (ctx.result < 0)
-            co_return std::unexpected(std::error_code(-ctx.result, std::generic_category()));
-
-        co_return static_cast<std::size_t>(ctx.result);
+        co_return static_cast<std::size_t>(*result);
     }
 
     task<std::expected<std::size_t, std::error_code>> executor::async_sendmsg(const fd_t fd, const msghdr* msg,
                                                                               const unsigned flags) noexcept(false)
     {
-        io_context ctx {};
-        auto* const sqe = ::io_uring_get_sqe(&ring_);
-        if (sqe == nullptr)
-        {
-            metrics_.submission_full_count.fetch_add(1u, mem_order);
-            co_return std::unexpected(std::make_error_code(std::errc::no_buffer_space));
-        }
+        const auto result = co_await await_uring_result([fd, msg, flags](auto* sqe, auto&) {
+            ::io_uring_prep_sendmsg(sqe, fd, msg, flags);
+        });
 
-        ::io_uring_prep_sendmsg(sqe, fd, msg, flags);
-        ::io_uring_sqe_set_data(sqe, &ctx);
-        if (const auto sub = submit(); !sub)
-            co_return std::unexpected(sub.error());
+        if (!result)
+            co_return std::unexpected(result.error());
 
-        metrics_.total_submissions.fetch_add(1u, mem_order);
-        co_await io_awaiter {ctx};
-        if (ctx.result < 0)
-            co_return std::unexpected(std::error_code(-ctx.result, std::generic_category()));
-
-        co_return static_cast<std::size_t>(ctx.result);
+        co_return static_cast<std::size_t>(*result);
     }
 
     task<std::expected<void, std::error_code>> executor::async_cancel(const std::uint64_t user_data) noexcept(false)
@@ -380,7 +346,6 @@ namespace kmx::aio::completion
 
                 io_thread_.join();
             }
-
             return;
         }
 
@@ -420,14 +385,36 @@ namespace kmx::aio::completion
         return static_cast<std::size_t>(ret);
     }
 
+    template <typename Prepare>
+    task<std::expected<int, std::error_code>> executor::await_uring_result(Prepare&& prepare) noexcept(false)
+    {
+        io_context ctx {};
+        auto* const sqe = ::io_uring_get_sqe(&ring_);
+        if (sqe == nullptr)
+        {
+            metrics_.submission_full_count.fetch_add(1u, mem_order);
+            co_return std::unexpected(std::make_error_code(std::errc::no_buffer_space));
+        }
+
+        prepare(sqe, ctx);
+        ::io_uring_sqe_set_data(sqe, &ctx);
+
+        if (const auto sub = submit(); !sub)
+            co_return std::unexpected(sub.error());
+
+        metrics_.total_submissions.fetch_add(1u, mem_order);
+        co_await io_awaiter {ctx};
+        if (ctx.result < 0)
+            co_return std::unexpected(std::error_code(-ctx.result, std::generic_category()));
+
+        co_return ctx.result;
+    }
+
     void executor::process_completions() noexcept
     {
-        ::io_uring_cqe* cqe {};
-
-        while (::io_uring_peek_cqe(&ring_, &cqe) == 0)
+        for(::io_uring_cqe* cqe {}; ::io_uring_peek_cqe(&ring_, &cqe) == 0; )
         {
             metrics_.total_completions.fetch_add(1u, mem_order);
-
             auto* const ctx = static_cast<io_context*>(::io_uring_cqe_get_data(cqe));
             if (ctx != nullptr)
             {

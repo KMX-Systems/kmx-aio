@@ -61,6 +61,19 @@ namespace kmx::aio::completion::spdk
 
     private:
         struct state;
+
+        [[nodiscard]] static std::expected<std::uint64_t, std::error_code> validate_create_config(const std::shared_ptr<executor>& exec,
+                                                                                                   const device_config& config) noexcept;
+        [[nodiscard]] static std::expected<void, std::error_code> initialize_state(device& out, std::shared_ptr<executor> exec,
+                                                                                   const device_config& config) noexcept;
+        [[nodiscard]] static std::expected<void, std::error_code> initialize_fallback_storage(state& state,
+                                                                                              std::uint64_t total_bytes_u64) noexcept;
+
+#if defined(KMX_AIO_FEATURE_SPDK)
+        [[nodiscard]] static std::expected<void, std::error_code> initialize_spdk_backend(state& state) noexcept;
+        static void shutdown_spdk_backend(state& state) noexcept;
+#endif
+
         std::unique_ptr<state> state_ {};
     };
 

@@ -29,6 +29,16 @@
 
 namespace kmx::aio::avb
 {
+    [[nodiscard]] inline avb_timestamp_t timestamp_from_index(const std::array<::timespec, 3u>& ts, const std::size_t index) noexcept
+    {
+        if (index >= ts.size() || ts[index].tv_sec <= 0)
+            return 0;
+
+        return static_cast<avb_timestamp_t>(ts[index].tv_sec) * 1'000'000'000ULL + static_cast<avb_timestamp_t>(ts[index].tv_nsec);
+    }
+
+    [[nodiscard]] avb_timestamp_t extract_timestamp_from_ancillary(::msghdr& msg) noexcept;
+
     /// @brief Private implementation base shared across both AVB execution pillars.
     template <typename Executor>
     struct base_eth_socket
@@ -141,7 +151,6 @@ namespace kmx::aio::avb
         {
             // Large enough for max Ethernet frame (1518 bytes)
             std::vector<std::byte> frame_buf(1518);
-
             alignas(::cmsghdr) std::array<std::byte, 1024u> ctrl_buf {};
             ::sockaddr_ll src {};
             ::iovec iov {frame_buf.data(), frame_buf.size()};
@@ -163,34 +172,11 @@ namespace kmx::aio::avb
 
             frame_buf.resize(static_cast<std::size_t>(nr));
 
-            // Extract hardware/software timestamp from ancillary data
-            avb_timestamp_t hw_ts = 0;
-            for (const ::cmsghdr* cmsg = CMSG_FIRSTHDR(&msg); cmsg != nullptr; cmsg = CMSG_NXTHDR(&msg, cmsg))
-            {
-                if ((cmsg->cmsg_level == SOL_SOCKET) && (cmsg->cmsg_type == SO_TIMESTAMPING))
-                {
-                    // kernel returns three timespec64 values: software, _, hardware
-                    std::array<::timespec, 3u> ts {};
-                    std::memcpy(ts.data(), CMSG_DATA(cmsg), sizeof(ts));
-                    // Prefer hardware [2] then software [0]
-                    hw_ts = timestamp_from_index(ts, 2u);
-                    if (hw_ts == 0)
-                        hw_ts = timestamp_from_index(ts, 0u);
-                }
-            }
+            const avb_timestamp_t hw_ts = extract_timestamp_from_ancillary(msg);
 
             return std::make_pair(std::move(frame_buf), hw_ts);
         }
-
     private:
-        [[nodiscard]] static avb_timestamp_t timestamp_from_index(const std::array<::timespec, 3u>& ts, const std::size_t index) noexcept
-        {
-            if (index >= ts.size() || ts[index].tv_sec <= 0)
-                return 0;
-
-            return static_cast<avb_timestamp_t>(ts[index].tv_sec) * 1'000'000'000ULL + static_cast<avb_timestamp_t>(ts[index].tv_nsec);
-        }
-
         [[nodiscard]] std::expected<void, std::error_code> resolve_iface(std::string_view iface)
         {
             // Get interface index

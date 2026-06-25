@@ -82,7 +82,7 @@ namespace kmx::aio::avb
         false)
     {
         std::vector<std::byte> frame_buf(1518);
-        alignas(::cmsghdr) std::array<std::byte, 1024> ctrl_buf {};
+        alignas(::cmsghdr) std::array<std::byte, 1024u> ctrl_buf {};
         ::sockaddr_ll src {};
         ::iovec iov {frame_buf.data(), frame_buf.size()};
         ::msghdr msg {};
@@ -99,21 +99,7 @@ namespace kmx::aio::avb
 
         frame_buf.resize(static_cast<std::size_t>(*res));
 
-        // Extract hardware timestamp from ancillary data
-        avb_timestamp_t hw_ts = 0;
-        for (::cmsghdr* cmsg = CMSG_FIRSTHDR(&msg); cmsg != nullptr; cmsg = CMSG_NXTHDR(&msg, cmsg))
-        {
-            if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SO_TIMESTAMPING)
-            {
-                std::array<::timespec, 3u> ts {};
-                std::memcpy(ts.data(), CMSG_DATA(cmsg), sizeof(ts));
-                // Prefer hardware [2], fall back to software [0]
-                if (ts[2].tv_sec > 0)
-                    hw_ts = static_cast<avb_timestamp_t>(ts[2].tv_sec) * 1'000'000'000ULL + static_cast<avb_timestamp_t>(ts[2].tv_nsec);
-                else if (ts[0].tv_sec > 0)
-                    hw_ts = static_cast<avb_timestamp_t>(ts[0].tv_sec) * 1'000'000'000ULL + static_cast<avb_timestamp_t>(ts[0].tv_nsec);
-            }
-        }
+        const avb_timestamp_t hw_ts = extract_timestamp_from_ancillary(msg);
 
         co_return std::make_pair(std::move(frame_buf), hw_ts);
     }

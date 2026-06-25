@@ -214,6 +214,10 @@ namespace kmx::aio::completion
         };
 
     private:
+        /// @brief Submits a prepared SQE, waits for completion, and returns the CQE result.
+        template <typename Prepare>
+        [[nodiscard]] task<std::expected<int, std::error_code>> await_uring_result(Prepare&& prepare) noexcept(false);
+
         /// @brief Submits all pending SQEs to the kernel.
         /// @return Number of submitted entries, or error.
         [[nodiscard]] std::expected<std::size_t, std::error_code> submit() noexcept;

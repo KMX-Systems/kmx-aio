@@ -107,9 +107,10 @@ namespace kmx::aio::avb::srp
         task<std::expected<void, std::error_code>> send_domain() noexcept(false)
         {
             msrp_domain_pdu_t pdu {};
-            pdu.attr_value.sr_class_id = 6u;       // SR Class A
-            pdu.attr_value.sr_class_priority = 3u; // PCP 3
-            pdu.attr_value.sr_class_vid = ::htons(2u);
+            auto& attr = pdu.attr_value;
+            attr.sr_class_id = 6u;       // SR Class A
+            attr.sr_class_priority = 3u; // PCP 3
+            attr.sr_class_vid = ::htons(2u);
 
             const std::uint16_t attr_list_len =
                 static_cast<std::uint16_t>(sizeof(mrp_vector_header_t) + sizeof(domain_attr_t) + 1u // three-packed events

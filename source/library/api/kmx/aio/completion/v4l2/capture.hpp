@@ -166,6 +166,17 @@ namespace kmx::aio::completion::v4l2
 
         capture(std::shared_ptr<executor> exec, file_descriptor&& fd, capture_config cfg, std::vector<mmap_buffer> buffers) noexcept;
 
+        [[nodiscard]] static std::expected<file_descriptor, kmx::aio::error_code> open_device(const capture_config& cfg) noexcept;
+        [[nodiscard]] static std::expected<void, kmx::aio::error_code> validate_capabilities(fd_t device_fd) noexcept;
+        [[nodiscard]] static std::expected<void, kmx::aio::error_code> negotiate_format(fd_t device_fd, capture_config& cfg) noexcept;
+        [[nodiscard]] static std::expected<void, kmx::aio::error_code> negotiate_frame_rate(fd_t device_fd, const capture_config& cfg) noexcept;
+        [[nodiscard]] static std::expected<std::vector<mmap_buffer>, kmx::aio::error_code> request_and_map_buffers(fd_t device_fd,
+                                                               capture_config& cfg) noexcept;
+        [[nodiscard]] static std::expected<void, kmx::aio::error_code> queue_all_buffers(fd_t device_fd,
+                                                  const std::vector<mmap_buffer>& buffers) noexcept;
+        [[nodiscard]] static std::expected<void, kmx::aio::error_code> start_streaming(fd_t device_fd) noexcept;
+        static void unmap_buffers(std::vector<mmap_buffer>& buffers) noexcept;
+
         /// @brief Unmaps all mmap'd buffers. Called from destructor and failed create().
         void unmap_buffers() noexcept;
 
