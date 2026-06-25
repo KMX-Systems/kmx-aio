@@ -40,9 +40,13 @@ namespace kmx::aio::detail
         if (auto* alloc = get_thread_allocator())
             if (size <= alloc->slot_size())
                 if (void* ptr = alloc->allocate())
+                {
+                    get_allocator_statistics().slab_allocations.fetch_add(1u, std::memory_order_relaxed);
                     return ptr;
+                }
 
         /// Fall back to standard allocation if slab is exhausted or frame is too large.
+        get_allocator_statistics().heap_allocations.fetch_add(1u, std::memory_order_relaxed);
         return ::operator new(size);
     }
 

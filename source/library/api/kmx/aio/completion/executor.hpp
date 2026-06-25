@@ -152,6 +152,12 @@ namespace kmx::aio::completion
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] task<std::expected<void, std::error_code>> async_cancel(const std::uint64_t user_data) noexcept(false);
 
+        /// @brief Waits for a relative timeout using io_uring's native timeout support.
+        /// @param duration_ns Timeout duration in nanoseconds.
+        /// @return A task yielding success or an error.
+        /// @throws std::bad_alloc (coroutine frame allocation).
+        [[nodiscard]] task<std::expected<void, std::error_code>> async_timeout(std::uint64_t duration_ns) noexcept(false);
+
         /// @brief Submits a one-shot poll for events on a file descriptor via io_uring.
         /// @details Issues `IORING_OP_POLL_ADD` to the ring, suspends the coroutine, and resumes
         ///          it when the kernel signals the requested events. Returns the triggered

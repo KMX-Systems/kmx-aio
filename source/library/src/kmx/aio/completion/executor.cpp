@@ -279,6 +279,36 @@ namespace kmx::aio::completion
         co_return std::expected<void, std::error_code> {};
     }
 
+    task<std::expected<void, std::error_code>> executor::async_timeout(const std::uint64_t duration_ns) noexcept(false)
+    {
+        io_context ctx {};
+        auto* const sqe = ::io_uring_get_sqe(&ring_);
+        if (sqe == nullptr)
+        {
+            metrics_.submission_full_count.fetch_add(1u, mem_order);
+            co_return std::unexpected(std::make_error_code(std::errc::no_buffer_space));
+        }
+
+        __kernel_timespec ts {
+            .tv_sec = static_cast<decltype(__kernel_timespec::tv_sec)>(duration_ns / 1'000'000'000ULL),
+            .tv_nsec = static_cast<decltype(__kernel_timespec::tv_nsec)>(duration_ns % 1'000'000'000ULL),
+        };
+
+        ::io_uring_prep_timeout(sqe, &ts, 1u, 0u);
+        ::io_uring_sqe_set_data(sqe, &ctx);
+
+        if (const auto sub = submit(); !sub)
+            co_return std::unexpected(sub.error());
+
+        metrics_.total_submissions.fetch_add(1u, mem_order);
+        co_await io_awaiter {ctx};
+
+        if ((ctx.result < 0) && (ctx.result != -ETIME))
+            co_return std::unexpected(std::error_code(-ctx.result, std::generic_category()));
+
+        co_return std::expected<void, std::error_code> {};
+    }
+
     task<std::expected<int, std::error_code>> executor::async_poll(const fd_t fd, const unsigned poll_mask) noexcept(false)
     {
         if (fd < 0)
@@ -398,7 +428,7 @@ namespace kmx::aio::completion
         {
             metrics_.total_completions.fetch_add(1u, mem_order);
 
-            auto* ctx = static_cast<io_context*>(::io_uring_cqe_get_data(cqe));
+            auto* const ctx = static_cast<io_context*>(::io_uring_cqe_get_data(cqe));
             if (ctx != nullptr)
             {
                 ctx->result = cqe->res;

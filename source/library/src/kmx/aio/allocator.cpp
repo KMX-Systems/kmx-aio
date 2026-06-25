@@ -5,6 +5,7 @@
 namespace kmx::aio
 {
     thread_local slab_allocator* t_current_allocator = nullptr;
+    allocator_statistics g_allocator_statistics {};
 
     void set_thread_allocator(slab_allocator* alloc) noexcept
     {
@@ -14,5 +15,10 @@ namespace kmx::aio
     slab_allocator* get_thread_allocator() noexcept
     {
         return t_current_allocator;
+    }
+
+    allocator_statistics& get_allocator_statistics() noexcept
+    {
+        return g_allocator_statistics;
     }
 } // namespace kmx::aio

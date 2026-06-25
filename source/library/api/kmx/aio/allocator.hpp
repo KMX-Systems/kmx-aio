@@ -3,6 +3,7 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <atomic>
     #include <cassert>
     #include <cstddef>
     #include <cstdlib>
@@ -153,5 +154,21 @@ namespace kmx::aio
 
     /// @brief Retrieves the thread-local instance of the slab allocator.
     [[nodiscard]] slab_allocator* get_thread_allocator() noexcept;
+
+    /// @brief Global counters describing coroutine-frame allocation routing.
+    struct allocator_statistics
+    {
+        std::atomic_uint64_t slab_allocations {};
+        std::atomic_uint64_t heap_allocations {};
+
+        void reset() noexcept
+        {
+            slab_allocations.store(0u, std::memory_order_relaxed);
+            heap_allocations.store(0u, std::memory_order_relaxed);
+        }
+    };
+
+    /// @brief Returns the process-wide allocator statistics.
+    [[nodiscard]] allocator_statistics& get_allocator_statistics() noexcept;
 
 } // namespace kmx::aio

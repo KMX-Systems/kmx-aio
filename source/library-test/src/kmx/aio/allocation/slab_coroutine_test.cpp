@@ -28,12 +28,23 @@ namespace
         co_return result + 1;
     }
 
+    /// @brief Coroutine deliberately inflated to exceed tiny slab slots.
+    kmx::aio::task<int> oversized_coro(const int value)
+    {
+        std::array<std::byte, 256u> padding {};
+        co_await std::suspend_always {};
+        co_return value + static_cast<int>(padding.size());
+    }
+
 } // namespace
 
 TEST_CASE("coroutine frames allocate from thread-local slab", "[allocation][slab][coroutine]")
 {
     // Allocator configured for typical coroutine frame sizes (~256-512 bytes).
     auto alloc = std::make_unique<kmx::aio::slab_allocator>(512, 256);
+    auto& stats = kmx::aio::get_allocator_statistics();
+
+    stats.reset();
 
     REQUIRE(alloc->allocated() == 0u);
     REQUIRE(alloc->available() == 256u);
@@ -47,6 +58,8 @@ TEST_CASE("coroutine frames allocate from thread-local slab", "[allocation][slab
         // After co_await, coroutine frame is still allocated.
         const auto allocated_count_1 = alloc->allocated();
         REQUIRE(allocated_count_1 >= 1u); // At least one frame in slab.
+        REQUIRE(stats.slab_allocations.load(std::memory_order_relaxed) >= 1u);
+        REQUIRE(stats.heap_allocations.load(std::memory_order_relaxed) == 0u);
     } // Coroutine destroyed here, frame deallocated.
 
     REQUIRE(alloc->allocated() == 0u);
@@ -138,17 +151,22 @@ TEST_CASE("coroutine frame exceeding slab slot falls back to malloc", "[allocati
 {
     // Create a very small slab (slot_size 64) that coroutine frames may exceed.
     auto alloc = std::make_unique<kmx::aio::slab_allocator>(64, 10);
+    auto& stats = kmx::aio::get_allocator_statistics();
+
+    stats.reset();
 
     kmx::aio::set_thread_allocator(alloc.get());
 
     // Spawn a coroutine (typical frame size ~200+ bytes).
     // The allocator should fall back to ::operator new for the frame.
     {
-        auto t = simple_coro(99);
+        auto t = oversized_coro(99);
         // Slab may or may not have allocated (depends on frame size).
         // The test verifies fallback logic doesn't crash.
         REQUIRE(true); // Coroutine created successfully.
     }
+
+    REQUIRE(stats.heap_allocations.load(std::memory_order_relaxed) >= 1u);
 
     // Verify no memory leak from fallback (frame should be freed via ::operator delete).
     kmx::aio::set_thread_allocator(nullptr);
