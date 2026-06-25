@@ -82,8 +82,8 @@ namespace kmx::aio::avb
             ::sock_txtime txtime_cfg {};
             txtime_cfg.clockid = CLOCK_TAI;
             txtime_cfg.flags = 0;
-            ::setsockopt(raw_fd, SOL_SOCKET, SO_TXTIME, &txtime_cfg, sizeof(txtime_cfg));
 
+            ::setsockopt(raw_fd, SOL_SOCKET, SO_TXTIME, &txtime_cfg, sizeof(txtime_cfg));
             return {};
         }
 
@@ -125,6 +125,7 @@ namespace kmx::aio::avb
             {
                 if (errno == EAGAIN || errno == EWOULDBLOCK)
                     return {}; // Non-blocking; caller should retry after EPOLLOUT
+
                 return std::unexpected(error_from_errno());
             }
 

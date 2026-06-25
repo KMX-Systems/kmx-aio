@@ -28,10 +28,8 @@ namespace kmx::aio::completion::test::integration
             return std::unexpected(std::error_code(ret, std::generic_category()));
 
         for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu)
-        {
             if (CPU_ISSET(cpu, &allowed) != 0)
                 return cpu;
-        }
 
         return std::unexpected(std::make_error_code(std::errc::no_such_device));
     }

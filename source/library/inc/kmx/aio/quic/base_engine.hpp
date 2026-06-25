@@ -102,7 +102,7 @@ namespace kmx::aio::quic
                 ::lsquic_stream_wantwrite(stream, 1);
             else
                 ::lsquic_stream_wantread(stream, 1);
-            return nullptr;
+            return {};
         }
 
         static void on_read(::lsquic_stream_t* stream, ::lsquic_stream_ctx_t* /*ctx*/)
@@ -236,7 +236,7 @@ namespace kmx::aio::quic
             socket_ = std::make_unique<UdpSocket>(std::move(*sock_res));
 
             // Bind to ephemeral port
-            static constexpr std::array<uint8_t, 4u> any_ip = {0, 0, 0, 0};
+            static constexpr std::array<uint8_t, 4u> any_ip {0, 0, 0, 0};
             if (auto bind_res = bind_socket(any_ip, 0); !bind_res)
                 return std::unexpected(bind_res.error());
 
@@ -252,7 +252,6 @@ namespace kmx::aio::quic
             ::lsquic_conn_t* const conn = ::lsquic_engine_connect(lsquic_engine_, N_LSQVER, reinterpret_cast<sockaddr*>(&local_addr_),
                                                                   reinterpret_cast<sockaddr*>(&peer_addr_result->storage),
                                                                   static_cast<void*>(this), nullptr, host, 0, nullptr, 0, nullptr, 0);
-
             if (!conn)
                 return std::unexpected(error_from_errno());
 

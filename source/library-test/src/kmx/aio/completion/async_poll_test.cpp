@@ -37,9 +37,8 @@ namespace kmx::aio::completion
             state->revents = *result;
         }
         else
-        {
             state->error = result.error();
-        }
+
         exec->stop();
     }
 
@@ -90,6 +89,7 @@ namespace kmx::aio::completion
             state->is_error = true;
             state->error = result.error();
         }
+
         exec->stop();
     }
 

@@ -31,6 +31,7 @@ namespace kmx::aio::tls::test::integration
             wire.push_back(static_cast<std::uint8_t>(protocol.size()));
             wire.insert(wire.end(), protocol.begin(), protocol.end());
         }
+
         return wire;
     }
 
@@ -40,7 +41,7 @@ namespace kmx::aio::tls::test::integration
         STATIC_REQUIRE(alpn_api_surface<kmx::aio::completion::tls::stream>);
 
         const auto wire = encode_alpn_wire_format({"h2", "http/1.1"});
-        const std::array<std::uint8_t, 12> expected {
+        static constexpr std::array<std::uint8_t, 12> expected {
             2u,
             static_cast<std::uint8_t>('h'),
             static_cast<std::uint8_t>('2'),

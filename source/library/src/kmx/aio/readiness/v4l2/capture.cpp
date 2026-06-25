@@ -198,7 +198,7 @@ namespace kmx::aio::readiness::v4l2
             {
                 for (auto& b: buffers)
                     ::munmap(b.ptr, b.length);
-                    
+
                 return std::unexpected(kmx::aio::from_errno(errno));
             }
         }

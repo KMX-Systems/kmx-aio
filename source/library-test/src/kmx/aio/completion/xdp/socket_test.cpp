@@ -45,15 +45,15 @@ namespace kmx::aio::completion::xdp
 
         auto sock = std::move(*sock_result);
 
-        const std::array<std::byte, 3u> payload_a {
-            std::byte {0x11},
-            std::byte {0x22},
-            std::byte {0x33},
+        static constexpr std::array<std::byte, 3u> payload_a {
+            std::byte {0x11u},
+            std::byte {0x22u},
+            std::byte {0x33u},
         };
 
-        const std::array<std::byte, 2u> payload_b {
-            std::byte {0x44},
-            std::byte {0x55},
+        static constexpr std::array<std::byte, 2u> payload_b {
+            std::byte {0x44u},
+            std::byte {0x55u},
         };
 
         const auto send_a = co_await sock.send(std::span<const std::byte>(payload_a));
@@ -72,8 +72,8 @@ namespace kmx::aio::completion::xdp
             co_return;
         }
 
-        const std::array<std::byte, 1u> payload_c {
-            std::byte {0x66},
+        static constexpr std::array<std::byte, 1u> payload_c {
+            std::byte {0x66u},
         };
 
         const auto send_c = co_await sock.send(std::span<const std::byte>(payload_c));
@@ -82,8 +82,8 @@ namespace kmx::aio::completion::xdp
             exec->stop();
             co_return;
         }
-        state->send_overflow_error = send_c.error();
 
+        state->send_overflow_error = send_c.error();
         const auto recv_a = co_await sock.recv();
         if (!recv_a)
         {
@@ -104,7 +104,6 @@ namespace kmx::aio::completion::xdp
         }
 
         sock.release_frame(recv_a->addr);
-
         const auto recv_b = co_await sock.recv();
         if (!recv_b)
         {
@@ -125,7 +124,6 @@ namespace kmx::aio::completion::xdp
         }
 
         sock.release_frame(recv_b->addr);
-
         const auto recv_empty = co_await sock.recv();
         if (recv_empty)
         {

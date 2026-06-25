@@ -65,7 +65,7 @@ namespace kmx::aio::completion::udp
 
         const port_t recv_port = ::ntohs(bound_addr.sin_port);
 
-        const std::array<std::byte, 8u> payload {
+        static constexpr std::array<std::byte, 8u> payload {
             std::byte {0x01}, std::byte {0x02}, std::byte {0x03}, std::byte {0x04},
             std::byte {0x05}, std::byte {0x06}, std::byte {0x07}, std::byte {0x08},
         };

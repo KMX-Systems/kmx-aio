@@ -31,10 +31,8 @@ namespace kmx::aio::kernel_bypass::test::integration
         std::uint64_t value {};
         std::string unit;
         while (meminfo >> label >> value >> unit)
-        {
             if (label == "HugePages_Total:")
                 return value > 0u;
-        }
 
         return false;
     }
@@ -50,7 +48,7 @@ namespace kmx::aio::kernel_bypass::test::integration
 
     [[nodiscard]] static task<void> run_spdk_cycle(std::shared_ptr<completion::executor> exec, std::shared_ptr<test_state> state)
     {
-        auto init_res = completion::spdk::runtime::initialize();
+        const auto init_res = completion::spdk::runtime::initialize();
         if (!init_res && init_res.error() != std::make_error_code(std::errc::function_not_supported))
         {
             state->spdk_error = init_res.error();
@@ -60,22 +58,16 @@ namespace kmx::aio::kernel_bypass::test::integration
 
         completion::spdk::device_config cfg {.bdev_name = "kmx-spdk-fallback", .block_size = 4096u, .block_count = 10u};
 
-        auto dev_res = completion::spdk::device::create(exec, cfg);
+        const auto dev_res = completion::spdk::device::create(exec, cfg);
         if (dev_res)
-        {
             state->spdk_init_ok = true;
-        }
         else
-        {
             state->spdk_error = dev_res.error();
-        }
 
         // Clean teardown integration test
-        auto fini = completion::spdk::runtime::finalize();
+        const auto fini = completion::spdk::runtime::finalize();
         if (!fini && fini.error() != std::make_error_code(std::errc::function_not_supported))
-        {
             state->spdk_error = fini.error();
-        }
 
         exec->stop();
         co_return;
@@ -94,16 +86,12 @@ namespace kmx::aio::kernel_bypass::test::integration
             .tx_ring_size = 2u,
         };
 
-        auto sock_res = completion::xdp::socket::create(exec, cfg);
+        const auto sock_res = completion::xdp::socket::create(exec, cfg);
         if (sock_res)
-        {
             state->xdp_init_ok = true;
-        }
         else
-        {
             // If host lacks CAP_NET_ADMIN or driver support, fallback mock triggers.
             state->xdp_error = sock_res.error();
-        }
 
         exec->stop();
         co_return;
@@ -134,9 +122,7 @@ namespace kmx::aio::kernel_bypass::test::integration
 
         // Test SPDK Storage Context Lifecycle Next (when host has hugepages)
         if (!hugepages_available())
-        {
             SKIP("pillar1 SPDK integration skipped: no hugepages available on this host");
-        }
         else
         {
             comp_exec->spawn(run_spdk_cycle(comp_exec, state));
@@ -147,9 +133,9 @@ namespace kmx::aio::kernel_bypass::test::integration
         // std::errc::function_not_supported means CI doesn't have QBS feature SPDK enabled - valid path.
         // SPDK init failures indicate environment permission misses (DPDK hugepages), which might happen naturally in unprivileged runners,
         // so we document that failure paths execute deterministically and do not stall the engine.
-        REQUIRE((state->spdk_init_ok == true || state->spdk_error.value() != 0));
+        REQUIRE((state->spdk_init_ok || (state->spdk_error.value() != 0)));
 
         // XDP fallback engine ensures it returns 'ok' when software backend fires.
-        REQUIRE((state->xdp_init_ok == true || state->xdp_error.value() != 0));
+        REQUIRE((state->xdp_init_ok || (state->xdp_error.value() != 0)));
     }
 } // namespace kmx::aio::kernel_bypass::test::integration

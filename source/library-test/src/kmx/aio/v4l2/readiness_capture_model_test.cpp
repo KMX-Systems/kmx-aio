@@ -17,14 +17,14 @@ using readiness_v4l2::capture_step_results;
 
 TEST_CASE("readiness and completion v4l2 models agree on frame accounting", "[v4l2][readiness][completion][model]")
 {
-    const std::array<capture_frame_result, 4u> readiness_frames {
+    static constexpr std::array<capture_frame_result, 4u> readiness_frames {
         capture_frame_result {.recv_ok = true, .frame_ok = true, .bytes_used = 512u},
         capture_frame_result {.recv_ok = true, .frame_ok = false, .bytes_used = 1024u},
         capture_frame_result {.recv_ok = false, .frame_ok = true, .bytes_used = 2048u},
         capture_frame_result {.recv_ok = true, .frame_ok = true, .bytes_used = 1536u},
     };
 
-    const std::array<completion_v4l2::capture_frame_result, 4u> completion_frames {
+    static constexpr std::array<completion_v4l2::capture_frame_result, 4u> completion_frames {
         completion_v4l2::capture_frame_result {.recv_ok = true, .frame_ok = true, .bytes_used = 512u},
         completion_v4l2::capture_frame_result {.recv_ok = true, .frame_ok = false, .bytes_used = 1024u},
         completion_v4l2::capture_frame_result {.recv_ok = false, .frame_ok = true, .bytes_used = 2048u},

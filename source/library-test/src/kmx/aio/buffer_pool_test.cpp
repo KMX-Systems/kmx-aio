@@ -231,7 +231,7 @@ TEST_CASE("buffer_pool zero-copy reuse", "[buffer_pool][zero-copy]")
         for (int i = 0; i < 3; ++i)
         {
             auto h = pool.acquire();
-            h->resize(1024);
+            h->resize(1024u);
             handles.push_back(std::move(h));
         }
 
@@ -260,7 +260,7 @@ TEST_CASE("buffer_pool zero-copy reuse", "[buffer_pool][zero-copy]")
 
 TEST_CASE("buffer_pool interleaved acquire-release", "[buffer_pool][fragmentation]")
 {
-    kmx::aio::buffer_pool<int, 100> pool;
+    kmx::aio::buffer_pool<int, 100u> pool;
 
     // Allocate in bursts, release randomly
     for (int cycle = 0; cycle < 3; ++cycle)
@@ -299,7 +299,7 @@ TEST_CASE("buffer_pool interleaved acquire-release", "[buffer_pool][fragmentatio
 
 TEST_CASE("buffer_pool thread-safe concurrent acquire/release", "[buffer_pool][thread-safety]")
 {
-    kmx::aio::buffer_pool<int, 50> pool;
+    kmx::aio::buffer_pool<int, 50u> pool;
     std::atomic<int> errors = 0;
     std::atomic<int> value_mismatches = 0;
 
@@ -348,7 +348,7 @@ TEST_CASE("buffer_pool thread-safe concurrent acquire/release", "[buffer_pool][t
 
 TEST_CASE("buffer_pool const access", "[buffer_pool][buffer_handle]")
 {
-    kmx::aio::buffer_pool<std::string, 5> pool;
+    kmx::aio::buffer_pool<std::string, 5u> pool;
 
     auto handle = pool.acquire();
     *handle = "hello";
