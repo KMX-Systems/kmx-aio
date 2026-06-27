@@ -114,6 +114,33 @@ namespace kmx::aio::completion::xdp
 
     private:
         struct state;
+
+        [[nodiscard]] static std::expected<void, std::error_code> validate_create_args(const std::shared_ptr<executor>& exec,
+                                                                                       const socket_config& config) noexcept;
+
+        [[nodiscard]] static std::expected<void, std::error_code> initialize_state(std::shared_ptr<executor> exec,
+                                                                                    const socket_config& config,
+                                                                                    socket& out) noexcept;
+
+        [[nodiscard]] static std::expected<void, std::error_code> validate_send_args(const state& state,
+                                                 std::span<const std::byte> data) noexcept;
+
+        [[nodiscard]] static std::expected<void, std::error_code> send_via_fallback(state& state,
+                                                std::span<const std::byte> data) noexcept;
+
+#if defined(KMX_AIO_FEATURE_AF_XDP)
+        [[nodiscard]] static std::expected<void, std::error_code> initialize_af_xdp_backend(state& state) noexcept;
+
+        [[nodiscard]] static std::expected<void, std::error_code> allocate_umem(state& state) noexcept;
+
+        [[nodiscard]] static std::expected<void, std::error_code> create_xsk_socket(state& state) noexcept;
+
+        [[nodiscard]] static std::expected<void, std::error_code> send_via_af_xdp_backend(state& state,
+                                                   std::span<const std::byte> data) noexcept;
+
+        static void seed_free_frames(state& state) noexcept;
+#endif
+
         std::unique_ptr<state> state_ {};
     };
 

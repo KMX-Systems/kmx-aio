@@ -153,7 +153,8 @@ namespace kmx::aio::completion::xdp
 #endif
     }
 
-    std::expected<socket, std::error_code> socket::create(std::shared_ptr<executor> exec, const socket_config& config) noexcept
+    std::expected<void, std::error_code> socket::validate_create_args(const std::shared_ptr<executor>& exec,
+                                                                      const socket_config& config) noexcept
     {
         if (!exec)
             return std::unexpected(to_std_error_code(error_code::invalid_argument));
@@ -172,7 +173,12 @@ namespace kmx::aio::completion::xdp
             (config.rx_ring_size > config.frame_count) || (config.tx_ring_size > config.frame_count))
             return std::unexpected(to_std_error_code(error_code::xdp_ring_setup_failed));
 
-        socket out {};
+        return {};
+    }
+
+    std::expected<void, std::error_code> socket::initialize_state(std::shared_ptr<executor> exec, const socket_config& config,
+                                                                  socket& out) noexcept
+    {
         out.state_.reset(new (std::nothrow) state {});
         if (!out.state_)
             return std::unexpected(std::make_error_code(std::errc::not_enough_memory));
@@ -181,61 +187,174 @@ namespace kmx::aio::completion::xdp
         out.state_->config = config;
 
 #if defined(KMX_AIO_FEATURE_AF_XDP)
-        const std::string interface_name {config.interface_name};
+        return initialize_af_xdp_backend(*out.state_);
+#else
+        return {};
+#endif
+    }
+
+    std::expected<void, std::error_code> socket::validate_send_args(const state& state, std::span<const std::byte> data) noexcept
+    {
+        if (data.empty())
+            return std::unexpected(to_std_error_code(error_code::invalid_argument));
+
+        if (data.size() > state.config.frame_size)
+            return std::unexpected(to_std_error_code(error_code::buffer_overflow));
+
+        return {};
+    }
+
+#if defined(KMX_AIO_FEATURE_AF_XDP)
+    std::expected<void, std::error_code> socket::initialize_af_xdp_backend(state& state) noexcept
+    {
+        const std::string interface_name {state.config.interface_name};
         if (::if_nametoindex(interface_name.c_str()) == 0u)
             return std::unexpected(to_std_error_code(error_code::xdp_queue_bind_failed));
 
-        if (config.frame_count > (std::numeric_limits<std::uint64_t>::max() / config.frame_size))
+        if (state.config.frame_count > (std::numeric_limits<std::uint64_t>::max() / state.config.frame_size))
             return std::unexpected(to_std_error_code(error_code::invalid_argument));
 
-        out.state_->umem_size = config.frame_count * config.frame_size;
+        state.umem_size = state.config.frame_count * state.config.frame_size;
 
+        if (auto umem = allocate_umem(state); !umem)
+            return umem;
+
+        if (auto xsk = create_xsk_socket(state); !xsk)
+            return xsk;
+
+        seed_free_frames(state);
+        refill_fill_ring(state);
+        state.af_xdp_backend_enabled = true;
+        return {};
+    }
+
+    std::expected<void, std::error_code> socket::allocate_umem(state& state) noexcept
+    {
         void* umem_raw = nullptr;
-        if (::posix_memalign(&umem_raw, 4096u, static_cast<std::size_t>(out.state_->umem_size)) != 0 || !umem_raw)
+        if (::posix_memalign(&umem_raw, 4096u, static_cast<std::size_t>(state.umem_size)) != 0 || !umem_raw)
             return std::unexpected(to_std_error_code(error_code::xdp_umem_registration_failed));
 
-        out.state_->umem_area.reset(umem_raw);
-        std::memset(out.state_->umem_area.get(), 0, static_cast<std::size_t>(out.state_->umem_size));
+        state.umem_area.reset(umem_raw);
+        std::memset(state.umem_area.get(), 0, static_cast<std::size_t>(state.umem_size));
 
         xsk_umem_config umem_cfg {};
-        umem_cfg.fill_size = config.fill_ring_size;
-        umem_cfg.comp_size = config.comp_ring_size;
-        umem_cfg.frame_size = config.frame_size;
+        umem_cfg.fill_size = state.config.fill_ring_size;
+        umem_cfg.comp_size = state.config.comp_ring_size;
+        umem_cfg.frame_size = state.config.frame_size;
         umem_cfg.frame_headroom = 0u;
         umem_cfg.flags = 0u;
 
-        const int umem_rc = xsk_umem__create(&out.state_->umem, out.state_->umem_area.get(), out.state_->umem_size, &out.state_->fill,
-                                             &out.state_->comp, &umem_cfg);
+        const int umem_rc = xsk_umem__create(&state.umem, state.umem_area.get(), state.umem_size, &state.fill, &state.comp, &umem_cfg);
         if (umem_rc != 0)
             return std::unexpected(to_std_error_code(map_xdp_error(umem_rc)));
 
+        return {};
+    }
+
+    std::expected<void, std::error_code> socket::create_xsk_socket(state& state) noexcept
+    {
+        const std::string interface_name {state.config.interface_name};
+
         xsk_socket_config sock_cfg {};
-        sock_cfg.rx_size = config.rx_ring_size;
-        sock_cfg.tx_size = config.tx_ring_size;
+        sock_cfg.rx_size = state.config.rx_ring_size;
+        sock_cfg.tx_size = state.config.tx_ring_size;
         sock_cfg.libbpf_flags = 0u;
         sock_cfg.xdp_flags = 0u;
 
         sock_cfg.bind_flags = {};
-        if (config.need_wakeup)
+        if (state.config.need_wakeup)
             sock_cfg.bind_flags |= XDP_USE_NEED_WAKEUP;
-        if (config.force_zero_copy)
+        if (state.config.force_zero_copy)
             sock_cfg.bind_flags |= XDP_ZEROCOPY;
 
-        const int xsk_rc = xsk_socket__create(&out.state_->xsk, interface_name.c_str(), config.queue_id, out.state_->umem, &out.state_->rx,
-                                              &out.state_->tx, &sock_cfg);
+        const int xsk_rc = xsk_socket__create(&state.xsk, interface_name.c_str(), state.config.queue_id, state.umem, &state.rx, &state.tx,
+                                              &sock_cfg);
         if (xsk_rc != 0)
             return std::unexpected(to_std_error_code(map_xdp_error(xsk_rc)));
 
-        for (std::uint64_t i = 0u; i < config.frame_count; ++i)
-            out.state_->free_frame_addrs.push_back(i * config.frame_size);
+        return {};
+    }
 
-        refill_fill_ring(*out.state_);
-        out.state_->af_xdp_backend_enabled = true;
-        return out;
-#else
-        // Graceful fallback keeps API behavior deterministic on hosts without AF_XDP support.
-        return out;
+    std::expected<void, std::error_code> socket::send_via_af_xdp_backend(state& state, std::span<const std::byte> data) noexcept
+    {
+        recycle_completion_frames(state);
+
+        if (state.free_frame_addrs.empty())
+        {
+            state.stats.tx_dropped_ring_full++;
+            return std::unexpected(to_std_error_code(error_code::ring_full));
+        }
+
+        const std::uint64_t addr = state.free_frame_addrs.front();
+        state.free_frame_addrs.pop_front();
+
+        auto* const tx_data = reinterpret_cast<std::byte*>(xsk_umem__get_data(state.umem_area.get(), addr));
+        if (!tx_data)
+        {
+            state.stats.umem_alloc_failures++;
+            state.free_frame_addrs.push_front(addr);
+            return std::unexpected(to_std_error_code(error_code::internal_error));
+        }
+
+        std::memcpy(tx_data, data.data(), data.size());
+
+        std::uint32_t idx {};
+        const std::uint32_t reserved = xsk_ring_prod__reserve(&state.tx, 1u, &idx);
+        if (reserved != 1u)
+        {
+            state.stats.tx_dropped_ring_full++;
+            state.free_frame_addrs.push_front(addr);
+            return std::unexpected(to_std_error_code(error_code::ring_full));
+        }
+
+        xdp_desc* tx_desc = xsk_ring_prod__tx_desc(&state.tx, idx);
+        tx_desc->addr = addr;
+        tx_desc->len = static_cast<std::uint32_t>(data.size());
+        xsk_ring_prod__submit(&state.tx, 1u);
+        state.stats.tx_frames_sent++;
+
+        if (xsk_ring_prod__needs_wakeup(&state.tx))
+        {
+            state.stats.wakeups_triggered++;
+            (void) ::sendto(xsk_socket__fd(state.xsk), nullptr, 0, MSG_DONTWAIT, nullptr, 0);
+        }
+
+        return {};
+    }
+
+    void socket::seed_free_frames(state& state) noexcept
+    {
+        for (std::uint64_t i = 0u; i < state.config.frame_count; ++i)
+            state.free_frame_addrs.push_back(i * state.config.frame_size);
+    }
 #endif
+
+    std::expected<void, std::error_code> socket::send_via_fallback(state& state, std::span<const std::byte> data) noexcept
+    {
+        std::vector<std::byte> payload(data.size());
+        std::memcpy(payload.data(), data.data(), data.size());
+
+        if (state.pending_rx.size() >= state.config.frame_count)
+            return std::unexpected(to_std_error_code(error_code::ring_full));
+
+        const std::uint64_t addr = state.next_frame_addr++;
+        state.pending_rx.emplace_back(addr, std::move(payload));
+        return {};
+    }
+
+    std::expected<socket, std::error_code> socket::create(std::shared_ptr<executor> exec, const socket_config& config) noexcept
+    {
+        if (auto validation = validate_create_args(exec, config); !validation)
+            return std::unexpected(validation.error());
+
+        socket out {};
+        if (auto initialized = initialize_state(std::move(exec), config, out); !initialized)
+            return std::unexpected(initialized.error());
+
+#if !defined(KMX_AIO_FEATURE_AF_XDP)
+        // Graceful fallback keeps API behavior deterministic on hosts without AF_XDP support.
+#endif
+        return out;
     }
 
     task<std::expected<frame, std::error_code>> socket::recv() noexcept(false)
@@ -304,72 +423,24 @@ namespace kmx::aio::completion::xdp
         if (!state_)
             co_return std::unexpected(to_std_error_code(error_code::bad_descriptor));
 
-        if (data.empty())
-            co_return std::unexpected(to_std_error_code(error_code::invalid_argument));
-
-        if (data.size() > state_->config.frame_size)
-            co_return std::unexpected(to_std_error_code(error_code::buffer_overflow));
+        state& st = *state_;
+        if (auto validation = validate_send_args(st, data); !validation)
+            co_return std::unexpected(validation.error());
 
 #if defined(KMX_AIO_FEATURE_AF_XDP)
-        std::unique_lock lock(state_->mutex);
-        if (state_->af_xdp_backend_enabled)
+        std::unique_lock lock(st.mutex);
+        if (st.af_xdp_backend_enabled)
         {
-            recycle_completion_frames(*state_);
-
-            if (state_->free_frame_addrs.empty())
-            {
-                state_->stats.tx_dropped_ring_full++;
-                co_return std::unexpected(to_std_error_code(error_code::ring_full));
-            }
-
-            const std::uint64_t addr = state_->free_frame_addrs.front();
-            state_->free_frame_addrs.pop_front();
-
-            auto* const tx_data = reinterpret_cast<std::byte*>(xsk_umem__get_data(state_->umem_area.get(), addr));
-            if (!tx_data)
-            {
-                state_->stats.umem_alloc_failures++;
-                state_->free_frame_addrs.push_front(addr);
-                co_return std::unexpected(to_std_error_code(error_code::internal_error));
-            }
-
-            std::memcpy(tx_data, data.data(), data.size());
-
-            std::uint32_t idx {};
-            const std::uint32_t reserved = xsk_ring_prod__reserve(&state_->tx, 1u, &idx);
-            if (reserved != 1u)
-            {
-                state_->stats.tx_dropped_ring_full++;
-                state_->free_frame_addrs.push_front(addr);
-                co_return std::unexpected(to_std_error_code(error_code::ring_full));
-            }
-
-            xdp_desc* tx_desc = xsk_ring_prod__tx_desc(&state_->tx, idx);
-            tx_desc->addr = addr;
-            tx_desc->len = static_cast<std::uint32_t>(data.size());
-            xsk_ring_prod__submit(&state_->tx, 1u);
-            state_->stats.tx_frames_sent++;
-
-            if (xsk_ring_prod__needs_wakeup(&state_->tx))
-            {
-                state_->stats.wakeups_triggered++;
-                (void) ::sendto(xsk_socket__fd(state_->xsk), nullptr, 0, MSG_DONTWAIT, nullptr, 0);
-            }
-            co_return std::expected<void, std::error_code> {};
+            co_return send_via_af_xdp_backend(st, data);
         }
+
+        co_return send_via_fallback(st, data);
 #endif
 
-        std::vector<std::byte> payload(data.size());
-        std::memcpy(payload.data(), data.data(), data.size());
-
-        std::unique_lock lock_fallback(state_->mutex);
-        if (state_->pending_rx.size() >= state_->config.frame_count)
-            co_return std::unexpected(to_std_error_code(error_code::ring_full));
-
-        const std::uint64_t addr = state_->next_frame_addr++;
-        state_->pending_rx.emplace_back(addr, std::move(payload));
-
-        co_return std::expected<void, std::error_code> {};
+#if !defined(KMX_AIO_FEATURE_AF_XDP)
+        std::unique_lock lock(st.mutex);
+        co_return send_via_fallback(st, data);
+#endif
     }
 
     void socket::release_frame(const std::uint64_t addr) noexcept

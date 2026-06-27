@@ -35,7 +35,7 @@ namespace kmx::aio
             free_head_ = nullptr;
             for (std::size_t i = slot_count_; i > 0u; --i)
             {
-                auto* slot = reinterpret_cast<slot_header*>(storage_.data() + ((i - 1u) * slot_size_));
+                auto* const slot = reinterpret_cast<slot_header*>(storage_.data() + ((i - 1u) * slot_size_));
                 slot->next = free_head_;
                 free_head_ = slot;
             }
@@ -84,7 +84,7 @@ namespace kmx::aio
             if (free_head_ == nullptr)
                 return nullptr;
 
-            auto* slot = free_head_;
+            auto* const slot = free_head_;
             free_head_ = slot->next;
             ++allocated_;
             return static_cast<void*>(slot);
@@ -98,7 +98,7 @@ namespace kmx::aio
             if (ptr == nullptr)
                 return;
 
-            auto* slot = static_cast<slot_header*>(ptr);
+            auto* const slot = static_cast<slot_header*>(ptr);
             slot->next = free_head_;
             free_head_ = slot;
             --allocated_;
@@ -124,8 +124,8 @@ namespace kmx::aio
             if (ptr == nullptr)
                 return false;
 
-            const auto* p = static_cast<const std::byte*>(ptr);
-            const auto* start = storage_.data();
+            const auto* const p = static_cast<const std::byte*>(ptr);
+            const auto* const start = storage_.data();
             return p >= start && p < (start + storage_.size());
         }
 
