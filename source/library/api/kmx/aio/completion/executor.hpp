@@ -8,6 +8,7 @@
     #include <expected>
     #include <liburing.h>
     #include <memory>
+    #include <mutex>
     #include <span>
     #include <stop_token>
     #include <system_error>
@@ -264,6 +265,8 @@ namespace kmx::aio::completion
         ::io_uring ring_ {};
 
         mutable statistics metrics_;
+        // Guards all access to io_thread_ inherited from executor_base.
+        mutable std::mutex io_thread_mutex_;
     };
 
 } // namespace kmx::aio::completion

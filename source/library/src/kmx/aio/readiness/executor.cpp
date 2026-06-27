@@ -169,18 +169,33 @@ namespace kmx::aio::readiness
 
     void executor::run() noexcept(false)
     {
+        const auto initial_work = active_work_.load(mem_order);
         if (!running_.exchange(true, std::memory_order_acq_rel))
+        {
+            const std::lock_guard lock(io_thread_mutex_);
             io_thread_ = std::jthread([this](std::stop_token st) { process_events(st); });
+        }
 
         std::unique_lock lock(idle_mutex_);
-        idle_cv_.wait(lock, [this] { return !running_.load(mem_order) || (active_work_.load(mem_order) == 0); });
+        idle_cv_.wait(lock,
+                      [this, initial_work] {
+                          return !running_.load(mem_order)
+                              || ((initial_work > 0u) && (active_work_.load(mem_order) == 0u));
+                      });
 
         if (running_.load(mem_order))
             stop();
 
         // If stop() was called from the I/O thread itself, join may be deferred.
-        if (io_thread_.joinable() && (io_thread_.get_id() != std::this_thread::get_id()))
-            io_thread_.join();
+        std::jthread thread_to_join;
+        {
+            const std::lock_guard thread_lock(io_thread_mutex_);
+            if (io_thread_.joinable() && (io_thread_.get_id() != std::this_thread::get_id()))
+                thread_to_join = std::move(io_thread_);
+        }
+
+        if (thread_to_join.joinable())
+            thread_to_join.join();
     }
 
     void executor::stop() noexcept
@@ -188,26 +203,40 @@ namespace kmx::aio::readiness
         if (running_.exchange(false, std::memory_order_acq_rel))
         {
             idle_cv_.notify_all();
-            if (io_thread_.joinable())
+            std::jthread thread_to_join;
             {
-                io_thread_.request_stop();
-                // A timeout in epoll_wait will eventually unblock it.
-                // For immediate unblocking, a pipe-to-self or eventfd would be needed.
+                const std::lock_guard lock(io_thread_mutex_);
+                if (io_thread_.joinable())
+                {
+                    io_thread_.request_stop();
+                    // A timeout in epoll_wait will eventually unblock it.
+                    // For immediate unblocking, a pipe-to-self or eventfd would be needed.
 
-                // Avoid joining the current thread. This can occur when a task
-                // resumed by this executor requests stop().
-                if (io_thread_.get_id() == std::this_thread::get_id())
-                    return;
+                    // Avoid joining the current thread. This can occur when a task
+                    // resumed by this executor requests stop().
+                    if (io_thread_.get_id() == std::this_thread::get_id())
+                        return;
 
-                io_thread_.join();
+                    thread_to_join = std::move(io_thread_);
+                }
             }
+
+            if (thread_to_join.joinable())
+                thread_to_join.join();
 
             return;
         }
 
         // Allow external completion of deferred join.
-        if (io_thread_.joinable() && (io_thread_.get_id() != std::this_thread::get_id()))
-            io_thread_.join();
+        std::jthread thread_to_join;
+        {
+            const std::lock_guard lock(io_thread_mutex_);
+            if (io_thread_.joinable() && (io_thread_.get_id() != std::this_thread::get_id()))
+                thread_to_join = std::move(io_thread_);
+        }
+
+        if (thread_to_join.joinable())
+            thread_to_join.join();
     }
 
     std::expected<bool, std::error_code> executor::is_io_thread_affined_to(const int core_id) noexcept
@@ -215,13 +244,18 @@ namespace kmx::aio::readiness
         if (core_id < 0)
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
 
-        if (!io_thread_.joinable())
-            return std::unexpected(std::make_error_code(std::errc::operation_not_permitted));
-
         cpu_set_t cpuset {};
         CPU_ZERO(&cpuset);
 
-        const int ret = ::pthread_getaffinity_np(io_thread_.native_handle(), sizeof(cpu_set_t), &cpuset);
+        int ret {};
+        {
+            const std::lock_guard lock(io_thread_mutex_);
+            if (!io_thread_.joinable())
+                return std::unexpected(std::make_error_code(std::errc::operation_not_permitted));
+
+            ret = ::pthread_getaffinity_np(io_thread_.native_handle(), sizeof(cpu_set_t), &cpuset);
+        }
+
         if (ret != 0)
             return std::unexpected(std::error_code(ret, std::generic_category()));
 

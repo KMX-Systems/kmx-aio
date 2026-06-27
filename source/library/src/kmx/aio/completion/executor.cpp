@@ -316,18 +316,28 @@ namespace kmx::aio::completion
     void executor::run() noexcept(false)
     {
         if (!running_.exchange(true, std::memory_order_acq_rel))
+        {
+            const std::lock_guard thread_lock(io_thread_mutex_);
             io_thread_ = std::jthread([this](std::stop_token st) { event_loop(st); });
+        }
 
         std::unique_lock lock(idle_mutex_);
-        idle_cv_.wait(lock, [this] { return !running_.load(mem_order) || (active_work_.load(mem_order) == 0); });
+        idle_cv_.wait(lock, [this] { return !running_.load(mem_order) || (active_work_.load(mem_order) == 0u); });
 
         if (running_.load(mem_order))
             stop();
 
         // If stop() was initiated from the I/O thread itself, join is deferred.
         // Ensure the control thread joins here before returning.
-        if (io_thread_.joinable() && (io_thread_.get_id() != std::this_thread::get_id()))
-            io_thread_.join();
+        std::jthread thread_to_join;
+        {
+            const std::lock_guard thread_lock(io_thread_mutex_);
+            if (io_thread_.joinable() && (io_thread_.get_id() != std::this_thread::get_id()))
+                thread_to_join = std::move(io_thread_);
+        }
+
+        if (thread_to_join.joinable())
+            thread_to_join.join();
     }
 
     void executor::stop() noexcept
@@ -335,24 +345,39 @@ namespace kmx::aio::completion
         if (running_.exchange(false, std::memory_order_acq_rel))
         {
             idle_cv_.notify_all();
-            if (io_thread_.joinable())
+            std::jthread thread_to_join;
             {
-                io_thread_.request_stop();
+                const std::lock_guard thread_lock(io_thread_mutex_);
+                if (io_thread_.joinable())
+                {
+                    io_thread_.request_stop();
 
-                // Avoid joining the current thread. This can happen if a coroutine
-                // resumed on the I/O loop calls exec->stop().
-                if (io_thread_.get_id() == std::this_thread::get_id())
-                    return;
+                    // Avoid joining the current thread. This can happen if a coroutine
+                    // resumed on the I/O loop calls exec->stop().
+                    if (io_thread_.get_id() == std::this_thread::get_id())
+                        return;
 
-                io_thread_.join();
+                    thread_to_join = std::move(io_thread_);
+                }
             }
+
+            if (thread_to_join.joinable())
+                thread_to_join.join();
+
             return;
         }
 
         // If already marked as stopped but join is still pending (e.g., self-stop path),
         // allow an external thread to finalize the join.
-        if (io_thread_.joinable() && (io_thread_.get_id() != std::this_thread::get_id()))
-            io_thread_.join();
+        std::jthread thread_to_join;
+        {
+            const std::lock_guard thread_lock(io_thread_mutex_);
+            if (io_thread_.joinable() && (io_thread_.get_id() != std::this_thread::get_id()))
+                thread_to_join = std::move(io_thread_);
+        }
+
+        if (thread_to_join.joinable())
+            thread_to_join.join();
     }
 
     std::expected<bool, std::error_code> executor::is_io_thread_affined_to(const int core_id) noexcept
@@ -360,13 +385,18 @@ namespace kmx::aio::completion
         if (core_id < 0)
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
 
-        if (!io_thread_.joinable())
-            return std::unexpected(std::make_error_code(std::errc::operation_not_permitted));
-
         cpu_set_t cpuset {};
         CPU_ZERO(&cpuset);
 
-        const int ret = ::pthread_getaffinity_np(io_thread_.native_handle(), sizeof(cpu_set_t), &cpuset);
+        int ret {};
+        {
+            const std::lock_guard thread_lock(io_thread_mutex_);
+            if (!io_thread_.joinable())
+                return std::unexpected(std::make_error_code(std::errc::operation_not_permitted));
+
+            ret = ::pthread_getaffinity_np(io_thread_.native_handle(), sizeof(cpu_set_t), &cpuset);
+        }
+
         if (ret != 0)
             return std::unexpected(std::error_code(ret, std::generic_category()));
 

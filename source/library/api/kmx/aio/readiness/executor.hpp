@@ -182,6 +182,8 @@ namespace kmx::aio::readiness
 
         std::unordered_map<event_key, std::deque<std::coroutine_handle<>>, event_key_hash> subscribers_;
         std::mutex subscribers_mutex_;
+        // Guards all access to io_thread_ inherited from executor_base.
+        mutable std::mutex io_thread_mutex_;
 
         mutable statistics metrics_;
     };
