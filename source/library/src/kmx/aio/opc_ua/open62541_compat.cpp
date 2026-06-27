@@ -225,8 +225,6 @@ UA_StatusCode KMX_UA_Client_sendAsyncWriteRequest(UA_Client* client,
 UA_StatusCode KMX_UA_Client_sendAsyncCallRequest(UA_Client* client,
                                                  const char* objectNodeId,
                                                  const char* methodNodeId,
-                                                 const char* const* /*inputArguments*/,
-                                                 const UA_UInt32 /*inputArgumentsSize*/,
                                                  const char* const* inputArguments,
                                                  const UA_UInt32 inputArgumentsSize,
                                                  const UA_UInt32 requestId,
@@ -239,10 +237,6 @@ UA_StatusCode KMX_UA_Client_sendAsyncCallRequest(UA_Client* client,
     if ((client->channel_state != UA_SECURECHANNELSTATE_CONNECTED) || (client->session_state != UA_SESSIONSTATE_ACTIVATED))
         return UA_STATUSCODE_BADNOTCONNECTED;
 
-    client->pending_calls.push_back(pending_call_request {
-        .request_id = requestId,
-        .object_node_id = objectNodeId,
-        .method_node_id = methodNodeId,
     pending_call_request request {
         .request_id = requestId,
         .object_node_id = objectNodeId,
