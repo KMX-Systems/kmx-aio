@@ -121,15 +121,26 @@ namespace kmx::aio
         /// @brief Blocks until the channel can accept at least one more element.
         /// @details Uses atomic wait/notify to avoid busy-spinning while the producer
         ///          is throttled or the ring is full.
+        /// @note Snapshot invariants:
+        ///       1) sendability and wait target are derived from the same head/tail snapshot,
+        ///       2) if the snapshot shows room, return immediately,
+        ///       3) otherwise wait on either throttled_ or tail_ using that same snapshot value.
+        ///       This avoids missed wakeups where a consumer pop happens between independent checks.
         void wait_until_can_send() noexcept
         {
             while (true)
             {
-                if (can_send())
+                const auto head = head_.load(std::memory_order_acquire);
+                const auto tail_snapshot = tail_.load(std::memory_order_acquire);
+                const auto occ = (head - tail_snapshot) & mask_;
+                const auto low = low_watermark_.load(std::memory_order_acquire);
+                const auto high = high_watermark_.load(std::memory_order_acquire);
+                const bool throttled = compute_throttled(occ, low, high, throttled_.load(std::memory_order_acquire));
+
+                if (!throttled && (occ < usable_capacity()))
                     return;
 
-                const auto tail_snapshot = tail_.load(std::memory_order_acquire);
-                if (throttled_.load(std::memory_order_acquire))
+                if (throttled)
                     throttled_.wait(true, std::memory_order_relaxed);
                 else
                     tail_.wait(tail_snapshot, std::memory_order_relaxed);
