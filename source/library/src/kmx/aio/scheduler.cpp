@@ -15,7 +15,11 @@ namespace kmx::aio
 
     scheduler::~scheduler() noexcept
     {
-        for (auto& worker: workers_)
+        // Move workers to a local so they are joined before synchronization
+        // primitives (cv_/queue_mutex_) are destroyed with the object.
+        auto workers = std::move(workers_);
+
+        for (auto& worker: workers)
             worker.request_stop();
 
         cv_.notify_all();

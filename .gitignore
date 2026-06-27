@@ -30,12 +30,15 @@
 # Other
 *.user
 *.spv
+*.bg
 
-# IDEs and build folders
+# IDEs, build and other folders
 .cmake/
 .idea/
 .qtcreator/
 .vscode/
+asan/
 build/
 default/
-
+debug/
+tsan/
