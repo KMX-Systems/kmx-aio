@@ -1,0 +1,71 @@
+name: ci-avb
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qbs liburing-dev libssl-dev catch2 gcc-14 g++-14
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+          sudo update-alternatives --set g++ /usr/bin/g++-14
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
+          sudo update-alternatives --set gcc /usr/bin/gcc-14
+
+      - name: Configure and build debug
+        run: |
+          cd source
+          qbs build -f source.qbs config:debug -j 2 \
+            project.enable_openonload:false \
+            project.enable_af_xdp:false \
+            project.enable_spdk:false \
+            project.enable_quic:false
+
+      - name: Run unit tests
+        run: |
+          cd source
+          TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+          if [[ -z "$TEST_BIN" ]]; then
+            echo "kmx-aio-test binary not found"
+            exit 1
+          fi
+          timeout 90s "$TEST_BIN"
+
+      - name: Flake guard for channel backpressure wait
+        run: |
+          cd source
+          TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+          if [[ -z "$TEST_BIN" ]]; then
+            echo "kmx-aio-test binary not found"
+            exit 1
+          fi
+          for i in $(seq 1 20); do
+            echo "flake-guard run $i"
+            timeout 20s "$TEST_BIN" "channel wait_until_can_send unblocks when consumer pops from a full ring"
+          done
+
+      - name: AVB sample CLI smoke tests
+        run: |
+          cd source
+          TALKER_BIN="$(find debug -type f -name sample-avb-talker | head -n 1)"
+          LISTENER_BIN="$(find debug -type f -name sample-avb-listener | head -n 1)"
+          if [[ -z "$TALKER_BIN" || -z "$LISTENER_BIN" ]]; then
+            echo "sample-avb binaries not found"
+            exit 1
+          fi
+          "$TALKER_BIN" --help | head -n 15
+          "$LISTENER_BIN" --help | head -n 15
+          "$TALKER_BIN" --period-us 0 && exit 1 || true
+          "$LISTENER_BIN" --sync-timeout-s 0 && exit 1 || true
