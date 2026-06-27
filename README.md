@@ -1,6 +1,6 @@
 # kmx-aio
 
-**kmx-aio** is a modern, high-performance C++26 asynchronous I/O library designed for building non-blocking network applications on Linux. It leverages C++20 coroutines to provide a clean, synchronous-looking API for asynchronous operations across two execution models: readiness (`epoll`) and completion (`io_uring`).
+**kmx-aio** is a modern, high-performance C++26 asynchronous I/O library designed for building non-blocking network applications on Linux. It leverages C++ coroutines to provide a clean, synchronous-looking API for asynchronous operations across two execution models: readiness (`epoll`) and completion (`io_uring`).
 
 ## Key Features
 
@@ -11,23 +11,24 @@
 * **Type-Safe Error Handling**: Extensive use of `std::expected` and `std::error_code` for robust error management.
 * **TCP Networking**: Built-in support for TCP listeners and streams.
 * **UDP Networking**: Dual-layer API in readiness model — low-level `readiness::udp::socket` and high-level `readiness::udp::endpoint` with automatic address management. Completion model provides socket-level `completion::udp::socket` only.
-* **TLS/ALPN**: Encrypted streams (BoringSSL-backed, both models) with Application Layer Protocol Negotiation for seamless HTTP/2 handshakes.
-* **QUIC + HTTP/3**: Full QUIC engine (both models) with lsquic backing; HTTP/3 server/client samples included.
+* **[TLS](https://www.rfc-editor.org/rfc/rfc8446)/[ALPN](https://www.rfc-editor.org/rfc/rfc7301)**: Encrypted streams ([BoringSSL](https://boringssl.googlesource.com/boringssl/)-backed, both models) with Application Layer Protocol Negotiation for seamless HTTP/2 handshakes.
+* **QUIC + [HTTP/3](https://www.rfc-editor.org/rfc/rfc9114)**: Full QUIC engine (both models) with [lsquic](https://github.com/litespeedtech/lsquic) backing; HTTP/3 server/client samples included.
 * **Async Timers**: Readiness timer (`timerfd` + `epoll`) and completion timer (`io_uring` timeout op).
-* **Async V4L2 Capture** (Readiness + Completion): Readiness mode uses epoll-driven frame capture; completion mode uses `IORING_OP_POLL_ADD` plus synchronous `VIDIOC_DQBUF` (hybrid model) in the same io_uring executor. Frames land in `co_await`-returned `frame_view` objects that auto-requeue mmap'd kernel buffers on destruction.
+* **[V4L2](https://linuxtv.org) Async Capture** (Readiness + Completion): Readiness mode uses epoll-driven frame capture; completion mode uses `IORING_OP_POLL_ADD` plus synchronous `VIDIOC_DQBUF` (hybrid model) in the same io_uring executor. Frames land in `co_await`-returned `frame_view` objects that auto-requeue mmap'd kernel buffers on destruction.
 * **Completion `async_poll(fd, mask)`**: First-class one-shot `IORING_OP_POLL_ADD` primitive to await arbitrary fd readiness (V4L2, eventfd, timerfd, signalfd, netlink) inside `completion::executor`; callers re-arm by invoking it again.
 * **Buffer Pool Primitives**: `kmx::aio::buffer_pool` and `kmx::aio::buffer_handle` provide fixed-capacity RAII buffer leasing for deterministic zero-copy workflows.
-* **Channel Backpressure**: `kmx::aio::channel` now supports watermark-based producer throttling and credit reporting.
+* **Channel Backpressure**: `kmx::aio::channel` supports watermark-based producer throttling and credit reporting.
 * **HTTP/2**: Full codec, stream, frame, and HPACK serialization stack (no model affinity).
-* **AVB (Audio Video Bridging, IEEE 802.1)** (Completion model): Raw Ethernet socket with hardware timestamping, gPTP clock synchronization, and SRP client for stream reservation.
-* **AF_XDP Packet Socket** (Completion model, gated): Kernel-bypass packet filtering with eBPF support and UMEM ring management.
-* **SPDK Block I/O** (Completion model, gated): NVMe, generic bdev, and storage acceleration via DPDK.
+* **OPC UA** (feature-gated): Async client/server/subscription facade with [open62541](https://open62541.org) backend support, plus shim fallback for feature-off builds and tests.
+* **AVB (Audio Video Bridging, [IEEE 802.1](https://1.ieee802.org/avbridges/))** (Completion model): Raw Ethernet socket with hardware timestamping, gPTP clock synchronization, and SRP client for stream reservation.
+* **[AF_XDP Packet Socket](https://www.kernel.org/doc/html/latest/networking/af_xdp.html)** (Completion model, gated): Kernel-bypass packet filtering with eBPF support and UMEM ring management.
+* **[SPDK Block I/O](https://spdk.io/)** (Completion model, gated): NVMe, generic bdev, and storage acceleration via DPDK.
 
 ## Requirements
 
 * **Operating System**: Linux (requires `sys/epoll.h`).
-* **Compiler**: A C++ compiler supporting C++26 features (e.g., recent GCC or Clang).
-* **Build System**: QBS (Qt Build Suite).
+* **Compiler**: GCC or Clang with C++26 support; standard library must provide `std::expected`, `std::span`, `std::variant`, and coroutines (GCC 12+ or Clang 15+).
+* **Build Tool**: [QBS (Qt Build Suite)](https://wiki.qt.io/Qbs) — configure and build all products via the `qbs` CLI.
 
 ## Dependencies
 
@@ -35,31 +36,28 @@
 
 * **Linux kernel interfaces**: `epoll`, sockets, `timerfd`, and `io_uring` (via `liburing`).
 * **POSIX networking**: `arpa/inet.h`, `netinet/in.h`, and related socket APIs.
-* **liburing** (required for completion model): `liburing-dev` package provides headers and runtime for io_uring async I/O.
-
-### Build Dependencies
-
-* **QBS**: used to configure and build all products (`qbs` CLI).
-* **C++26 toolchain**: compiler and standard library with support for coroutines and modern library features used by this project (for example `std::expected`, `std::span`, and `std::variant`).
+* **[liburing](https://github.com/axboe/liburing)** (required for completion model): `liburing-dev` package provides headers and runtime for io_uring async I/O.
 
 ### Test-Only Dependencies
 
-* **Catch2**: required only for `kmx-aio-test` (linked as `Catch2Main` and `Catch2` in `source/library-test/unit-test.qbs`).
+* **[Catch2](https://github.com/catchorg/Catch2)**: required only for `kmx-aio-test` (linked as `Catch2Main` and `Catch2` in `source/library-test/unit-test.qbs`).
 
 ### Third-Party Runtime Libraries
 
-* **None** beyond the standard C/C++ runtime and Linux system libraries.
+* **None** required by default beyond the standard C/C++ runtime and Linux system libraries.
+* When `project.enable_opc_ua:true`, [open62541](https://open62541.org) is linked as a static archive from the local vendored prefix.
 
-### Optional Pillar 1 Prerequisites
+### Optional Feature-Gated Prerequisites
 
-These are only required when the corresponding feature gate is enabled (which is the default).
-Disable the gate if you lack a dependency.
+These are only required when the corresponding feature gate is enabled.
+Most gates are on by default; disable any gate if you lack its dependency.
 
-* **QUIC / HTTP/3** (enabled by default): BoringSSL and lsquic libraries. Build both via `build/install_lsquic.sh` (see below).
-* **AF_XDP** (enabled by default): `libbpf-dev`, `libxdp-dev`, `libelf-dev`, `zlib1g-dev`, `clang`, `llvm`.
-* **SPDK** (enabled by default): `libaio-dev`, `libnuma-dev`, `uuid-dev`, `meson`, `ninja-build`, and SPDK runtime libraries.
-* **AVB / IEEE 802.1** (Completion model, enabled by default): Kernel with PTP/hardware timestamping support (most modern NIC drivers); user must have `CAP_NET_RAW` privilege.
-* **OpenOnload** (enabled by default): OpenOnload userspace/runtime installation from vendor packages (optional; gracefully degrades if unavailable).
+* **QUIC / HTTP/3** (enabled by default): [BoringSSL](https://boringssl.googlesource.com/boringssl/) and [lsquic](https://github.com/litespeedtech/lsquic) libraries. Build both via `build/install_lsquic.sh` (see below).
+* **OPC UA** (disabled by default): [open62541](https://open62541.org) headers and library. Build locally via `build/install_open62541.sh` (see below), then enable with QBS feature flags.
+* **AF_XDP** (enabled by default): `libbpf-dev`, `libxdp-dev`, `libelf-dev`, `zlib1g-dev`, `clang`, `llvm` ([libbpf](https://github.com/libbpf/libbpf), [libxdp](https://github.com/xdp-project/xdp-tools)).
+* **SPDK** (enabled by default): `libaio-dev`, `libnuma-dev`, `uuid-dev`, `meson`, `ninja-build`, and [SPDK](https://spdk.io) runtime libraries.
+* **AVB / [IEEE 802.1](https://1.ieee802.org/avbridges/)** (Completion model, enabled by default): Kernel with PTP/hardware timestamping support (most modern NIC drivers); user must have `CAP_NET_RAW` privilege.
+* **OpenOnload** (enabled by default): [OpenOnload](https://github.com/Xilinx/onload) userspace/runtime installation from vendor packages (optional; gracefully degrades if unavailable).
 
 #### Mandatory Dependencies (Ubuntu/Debian)
 
@@ -79,15 +77,14 @@ sudo apt install -y \
 
 #### Build BoringSSL and lsquic (Required for TLS and QUIC)
 
-Before building `kmx-aio` with TLS or QUIC support, run the helper script:
+Before building `kmx-aio` with TLS or QUIC support, run the helper script from the repository root:
 
 ```bash
-cd /path/to/kmx-aio
 bash build/install_lsquic.sh
 ```
 
-This clones and builds BoringSSL (required by all TLS streams and the QUIC engine)
-and lsquic (required by the QUIC HTTP/3 features). Both are installed to `build/`
+This clones and builds [BoringSSL](https://boringssl.googlesource.com/boringssl/) (required by all TLS streams and the QUIC engine)
+and [lsquic](https://github.com/litespeedtech/lsquic) (required by the QUIC HTTP/3 features). Both are installed to `build/`
 and linked into the library. **This step is mandatory** if you intend to use TLS
 or QUIC; skip only if you disable both gates.
 
@@ -98,6 +95,23 @@ pkg-config --modversion liburing
 pkg-config --modversion libbpf
 pkg-config --modversion libxdp
 pkg-config --modversion spdk_nvme
+```
+
+#### Build open62541 for OPC UA (Optional, Feature-Gated)
+
+Build and install [open62541](https://open62541.org) into the local workspace prefix by running the helper script from the repository root:
+
+```bash
+bash build/install_open62541.sh
+```
+
+Enable OPC UA with vendored static linkage:
+
+```bash
+qbs build -f source/source.qbs config:debug -j"$(nproc)" \
+    project.enable_opc_ua:true \
+    project.opc_ua_vendored:true \
+    project.opc_ua_prefix:"$PWD/build/open62541/install-local"
 ```
 
 #### Install SPDK Libraries (Ubuntu/Debian)
@@ -218,7 +232,8 @@ sudo sysctl --system
 1. Probe candidate SPDK bdev names with the discovery sample:
 
 ```bash
-DISCOVERY_BIN=$(find ./source/default -path "*/kmx-aio-sample-spdk-discovery" -type f | head -1)
+DISCOVERY_BIN=$(find ./debug ./default -path "*/kmx-aio-sample-spdk-discovery" -type f 2>/dev/null | head -1)
+[ -n "$DISCOVERY_BIN" ] || { echo "kmx-aio-sample-spdk-discovery not found"; exit 1; }
 "$DISCOVERY_BIN"
 "$DISCOVERY_BIN" Nvme0n1 Malloc0n1
 ```
@@ -271,26 +286,27 @@ sudo mkdir -p /dev/hugepages
 sudo mount -a
 ```
 
-## Optional Pillar 1 Feature Gates
+## Optional Feature Gates
 
-Pillar 1 technologies are wired behind explicit QBS feature switches and are
-**enabled by default**. Disable them at build time if your environment lacks the
+These feature-gated subsystems are wired behind explicit QBS feature switches and are
+**mostly enabled by default** (OPC UA is currently default-off). Disable them at build time if your environment lacks the
 required dependencies (e.g., SPDK libraries, libxdp, OpenOnload headers):
 
 ```bash
 # Build without SPDK and AF_XDP, keep QUIC and AVB:
-qbs build \
-    projects.source.enable_spdk:false \
-    projects.source.enable_af_xdp:false
+qbs build -f source/source.qbs \
+    project.enable_spdk:false \
+    project.enable_af_xdp:false
 ```
 
-Default state (all enabled):
+Default state (`source/source.qbs`):
 
-* `projects.source.enable_openonload:true` — OpenOnload zero-copy accelerator (readiness only)
-* `projects.source.enable_af_xdp:true` — AF_XDP packet socket (completion only)
-* `projects.source.enable_spdk:true` — SPDK block device I/O (completion only)
-* `projects.source.enable_quic:true` — QUIC engine and HTTP/3 (both models)
-* `projects.source.enable_avb:true` — Audio Video Bridging (completion model only)
+* `project.enable_openonload:true` — OpenOnload zero-copy accelerator (readiness only)
+* `project.enable_af_xdp:true` — AF_XDP packet socket (completion only)
+* `project.enable_spdk:true` — SPDK block device I/O (completion only)
+* `project.enable_quic:true` — QUIC engine and HTTP/3 (both models)
+* `project.enable_avb:true` — Audio Video Bridging (completion model only)
+* `project.enable_opc_ua:false` — OPC UA facade/backend integration (off by default)
 
 When enabled, compile-time defines are exported by `kmx-aio-lib`:
 
@@ -299,6 +315,70 @@ When enabled, compile-time defines are exported by `kmx-aio-lib`:
 * `KMX_AIO_FEATURE_SPDK=1`
 * `KMX_AIO_FEATURE_QUIC=1`
 * `KMX_AIO_FEATURE_AVB=1`
+* `KMX_AIO_FEATURE_OPC_UA=1` (only when `project.enable_opc_ua:true`)
+
+## OPC UA Support
+
+Based on the [OPC UA specification](https://opcfoundation.org) with [open62541](https://open62541.org) as the feature-on backend.
+
+### Current Scope
+
+* Async OPC UA facade APIs: `kmx::aio::opc_ua::client`, `kmx::aio::opc_ua::server`, and `kmx::aio::opc_ua::subscription`.
+* Open62541 compatibility boundary: `source/library/inc/kmx/aio/opc_ua/open62541_compat.hpp`.
+* Feature-off shim path for deterministic tests and portability.
+
+### Behavior Notes
+
+* Method call outputs are surfaced as strings in `method_call_result.output_arguments`.
+* Scalar conversions include string, signed/unsigned integers, boolean, float, and double.
+* Float/double string formatting currently follows compact `std::to_string`-normalized output in integration tests (for example `"1.25"`, `"2.5"`).
+* Unsupported output types map to `UA_STATUSCODE_BADTYPEMISMATCH` through the async callback bridge.
+
+### OPC UA Test Commands
+
+Run fast OPC UA client service tests (exclude slow integration cases):
+
+```bash
+TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+"$TEST_BIN" "[opc_ua][client][service]~[slow]"
+```
+
+Run slow integration conversion cases:
+
+```bash
+TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+"$TEST_BIN" "opc_ua compat async call converts typed outputs"
+"$TEST_BIN" "opc_ua compat async call returns bad type mismatch for unsupported output"
+```
+
+## Testing Workflow
+
+Build and run tests with a timeout so local runs cannot block indefinitely:
+
+```bash
+qbs build -f source/source.qbs config:debug -j"$(nproc)"
+bash build/run-tests-bounded.sh
+```
+
+Run the previously flaky channel wait case repeatedly (local flake guard):
+
+```bash
+RUNS=40 TIMEOUT_SECONDS=20 TEST_FILTER="channel wait_until_can_send unblocks when consumer pops from a full ring" \
+    bash build/run-tests-bounded.sh
+```
+
+Run sanitizer builds/tests:
+
+```bash
+bash build/run-sanitizer-tests.sh
+```
+
+Sanitizer feature toggles are exposed via QBS project properties:
+
+* `project.enable_asan:true`
+* `project.enable_tsan:true`
+
+Use one sanitizer at a time.
 
 ## Architecture
 
@@ -348,8 +428,7 @@ Built on Linux `io_uring` for asynchronous completion-based I/O. Submit operatio
 | `v4l2::capture` | Hybrid V4L2 capture: io_uring poll (`POLLIN`) + synchronous `VIDIOC_DQBUF` |
 | `quic::engine` | Template instantiation: `generic_engine<executor, udp::socket>` |
 | `xdp::socket` | **AF_XDP kernel-bypass packet socket**: UMEM registration, RX/TX/fill/completion rings (gated: `enable_af_xdp`) |
-| `spdk::runtime`, `spdk::device` | **SPDK NVMe/bdev access**: init, bdev enumeration, async device I/O (gated: `enable_spdk`) |
-| `spdk::device` | Block device abstraction; includes malloc fallback backend |
+| `spdk::runtime`, `spdk::device` | **SPDK NVMe/bdev access**: init, bdev enumeration, async device I/O; `spdk::device` includes malloc fallback backend (gated: `enable_spdk`) |
 | `avb::eth_socket` | Raw Ethernet socket with hardware timestamping |
 
 ### Cross-Model Abstractions
@@ -382,12 +461,13 @@ Quick reference showing which APIs are available in each execution model:
 | **AF_XDP Packets** | ❌ Not available | ✅ Kernel-bypass (gated) | Feature-gated; eBPF packet filtering |
 | **SPDK Block I/O** | ❌ Not available | ✅ NVMe/bdev (gated) | Feature-gated; DPDK-backed |
 | **OpenOnload** | ✅ Zero-copy extensions | ❌ Not available | Readiness-only; headers-only; gracefully disabled |
+| **OPC UA** | ✅ (feature-gated) | ✅ (feature-gated) | Backend-neutral facade; not executor-model-specific; disabled by default |
 
 **Legend:**
 
 * ✅ Available / Fully implemented
 * ❌ Not available in this model
-* Feature-gated = Enabled by default; disable with `projects.source.enable_*:false`
+* ⚙ Feature-gated — gate-controlled via `project.enable_*`; most are on by default; `enable_opc_ua` is off by default
 * Headers-only = API declared but no implementation; graceful degradation at runtime
 
 ## Project Structure
@@ -408,8 +488,10 @@ kmx-aio/
 │   │   │   ├── http2/               # HTTP/2 codec, frames, HPACK
 │   │   │   ├── avb/                 # Audio Video Bridging / IEEE 802.1
 │   │   │   │   ├── eth_socket.hpp, gptp/, srp/
+│   │   │   ├── opc_ua/              # OPC UA facade (feature-gated)
+│   │   │   │   └── client.hpp, server.hpp, subscription.hpp, types.hpp, error.hpp
 │   │   │   └── quic/                # QUIC generic engine
-│   │   ├── inc/kmx/aio/             # Private headers
+│   │   ├── inc/kmx/aio/             # Private headers (opc_ua/open62541_compat.hpp, ...)
 │   │   ├── src/                     # Implementation (.cpp) files
 │   │   └── lib.qbs                  # Library build definition
 │   ├── library-test/                # Unit tests and integration tests
@@ -432,8 +514,10 @@ kmx-aio/
 │   └── source.qbs                   # Root build definition
 ├── build/
 │   ├── install_lsquic.sh            # Build BoringSSL + lsquic
+│   ├── install_open62541.sh         # Build open62541 for OPC UA
 │   ├── boringssl/                   # BoringSSL repo (cloned by install_lsquic.sh)
-│   └── lsquic/                      # lsquic repo (cloned by install_lsquic.sh)
+│   ├── lsquic/                      # lsquic repo (cloned by install_lsquic.sh)
+│   └── open62541/                   # open62541 repo (cloned by install_open62541.sh)
 └── README.md, LICENSE, etc.
 ```
 
@@ -442,50 +526,62 @@ kmx-aio/
 ### TCP Echo Server
 
 ```cpp
+#include <iostream>
 #include <kmx/aio/readiness/executor.hpp>
 #include <kmx/aio/readiness/tcp/listener.hpp>
 #include <kmx/aio/readiness/tcp/stream.hpp>
-#include <iostream>
+#include <span>
+#include <utility>
+#include <vector>
 
 using namespace kmx::aio;
 
 // Coroutine to handle a single client
-task<void> handle_client(readiness::tcp::stream stream) {
-    std::vector<char> buffer(1024);
+task<void> handle_client(readiness::tcp::stream stream)
+{
+    std::vector<char> buffer(1024u);
 
-    try {
-        while (true) {
+    try
+    {
+        while (true)
+        {
             // Asynchronously read data
             auto read_result = co_await stream.read(buffer);
-            if (!read_result || *read_result == 0) break; // Error or EOF
+            if (!read_result || *read_result == 0)
+                break; // Error or EOF
 
             // Echo data back
-            auto write_result = co_await stream.write(
-                std::span(buffer.data(), *read_result)
-            );
-            if (!write_result) break;
+            auto write_result = co_await stream.write(std::span(buffer.data(), *read_result));
+            if (!write_result)
+                break;
         }
-    } catch (...) {
+    }
+    catch (...)
+    {
         // Handle exceptions
     }
 }
 
 // Root task to accept connections
-task<void> accept_loop(readiness::executor& exec) {
-    readiness::tcp::listener listener(exec, "127.0.0.1", 8080);
+task<void> accept_loop(readiness::executor& exec)
+{
+    readiness::tcp::listener listener(exec, "127.0.0.1", 8080u);
     listener.listen();
 
-    while (true) {
+    while (true)
+    {
         auto accept_result = co_await listener.accept();
-        if (accept_result) {
+        if (accept_result)
+        {
             readiness::tcp::stream client_stream(exec, std::move(*accept_result));
             exec.spawn(handle_client(std::move(client_stream)));
         }
     }
 }
 
-int main() {
-    readiness::executor_config cfg{ .thread_count = 1 };
+int main()
+{
+    readiness::executor_config cfg{ .thread_count = 1u };
     readiness::executor exec(cfg);
     exec.spawn(accept_loop(exec));
     exec.run();
@@ -496,16 +592,23 @@ int main() {
 ### UDP Echo Server (high-level API)
 
 ```cpp
+#include <array>
+#include <arpa/inet.h>
+#include <cstddef>
+#include <cstring>
 #include <kmx/aio/readiness/executor.hpp>
 #include <kmx/aio/readiness/udp/endpoint.hpp>
 #include <netinet/in.h>
-#include <cstring>
+#include <span>
+#include <sys/socket.h>
 
 using namespace kmx::aio;
 
-task<void> udp_echo(readiness::executor& exec) {
+task<void> udp_echo(readiness::executor& exec)
+{
     auto ep = readiness::udp::endpoint::create(exec, AF_INET);
-    if (!ep) co_return; // handle error
+    if (!ep)
+        co_return; // handle error
 
     // Bind to a port
     ::sockaddr_in addr{};
@@ -515,23 +618,23 @@ task<void> udp_echo(readiness::executor& exec) {
     ::bind(ep->raw().get_fd(), reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
 
     std::array<std::byte, 2048u> buf;
-    while (true) {
+    while (true)
+    {
         sockaddr_storage peer{};
         ::socklen_t peer_len{};
 
         auto recv_result = co_await ep->recv(buf, peer, peer_len);
-        if (!recv_result) break;
+        if (!recv_result)
+            break;
 
         // Echo the datagram back to the sender
-        co_await ep->send(
-            std::span(buf.data(), *recv_result),
-            reinterpret_cast<sockaddr*>(&peer), peer_len
-        );
+        co_await ep->send(std::span(buf.data(), *recv_result), reinterpret_cast<sockaddr*>(&peer), peer_len);
     }
 }
 
-int main() {
-    readiness::executor_config cfg{ .thread_count = 1 };
+int main()
+{
+    readiness::executor_config cfg{ .thread_count = 1u };
     readiness::executor exec(cfg);
     exec.spawn(udp_echo(exec));
     exec.run();
@@ -542,28 +645,35 @@ int main() {
 ### Async V4L2 Frame Capture (Readiness)
 
 ```cpp
+#include <cstddef>
 #include <kmx/aio/readiness/executor.hpp>
 #include <kmx/aio/readiness/v4l2/capture.hpp>
+#include <span>
 
 using namespace kmx::aio;
 
-task<void> capture_frames(readiness::executor& exec) {
-    auto cap = readiness::v4l2::capture::create(exec, {
-        .device       = "/dev/video0",
-        .format       = readiness::v4l2::fourcc::nv12,
-        .size         = {1920u, 1080u},
-        .fps          = {1u, 30u},  // 30 fps
-        .buffer_count = 4u,
-    });
-    if (!cap) co_return; // handle error
+task<void> capture_frames(readiness::executor& exec)
+{
+    auto cap = readiness::v4l2::capture::create(exec,
+                                                {
+                                                    .device       = "/dev/video0",
+                                                    .format       = readiness::v4l2::fourcc::nv12,
+                                                    .size         = {1920u, 1080u},
+                                                    .fps          = {1u, 30u}, // 30 fps
+                                                    .buffer_count = 4u,
+                                                });
+    if (!cap)
+        co_return; // handle error
 
     // Negotiated values may differ from requested
     auto& cfg = cap->config();
 
-    while (true) {
+    while (true)
+    {
         // Suspends via epoll until the driver has a filled buffer
         auto frame = co_await cap->next_frame();
-        if (!frame) break; // device error
+        if (!frame)
+            break; // device error
 
         // Zero-copy view into the mmap'd kernel buffer
         std::span<const std::byte> pixels = frame->data();
@@ -575,8 +685,9 @@ task<void> capture_frames(readiness::executor& exec) {
     }
 }
 
-int main() {
-    readiness::executor_config cfg{ .thread_count = 1 };
+int main()
+{
+    readiness::executor_config cfg{ .thread_count = 1u };
     readiness::executor exec(cfg);
     exec.spawn(capture_frames(exec));
     exec.run();
@@ -591,33 +702,41 @@ The `capture::create()` factory performs the complete V4L2 initialisation sequen
 reflected back into `capture::config()` after construction.
 
 No external library dependency is required — `linux/videodev2.h` is a standard
-Linux kernel header.
+Linux kernel header. See the [Video4Linux community hub](https://linuxtv.org) for
+the V4L2 API specification and `v4l2-compliance` test suite.
 
 ### Async V4L2 Frame Capture (Completion Hybrid)
 
 ```cpp
 #include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/completion/v4l2/capture.hpp>
+#include <memory>
 
 using namespace kmx::aio;
 
-task<void> capture_frames(std::shared_ptr<completion::executor> exec) {
-    auto cap = completion::v4l2::capture::create(exec, {
-        .device       = "/dev/video0",
-        .format       = completion::v4l2::fourcc::yuyv,
-        .size         = {1280u, 720u},
-        .fps          = {1u, 30u},
-        .buffer_count = 4u,
-    });
-    if (!cap) co_return;
+task<void> capture_frames(std::shared_ptr<completion::executor> exec)
+{
+    auto cap = completion::v4l2::capture::create(exec,
+                                                 {
+                                                     .device       = "/dev/video0",
+                                                     .format       = completion::v4l2::fourcc::yuyv,
+                                                     .size         = {1280u, 720u},
+                                                     .fps          = {1u, 30u},
+                                                     .buffer_count = 4u,
+                                                 });
+    if (!cap)
+        co_return;
 
-    while (true) {
+    while (true)
+    {
         // Suspends by submitting IORING_OP_POLL_ADD(POLLIN|POLLERR|...)
         auto frame = co_await cap->next_frame();
-        if (!frame) break;
+        if (!frame)
+            break;
 
-        process_frame(frame->data(), frame->metadata().width, frame->metadata().height,
-                      frame->metadata().timestamp_ns);
+        process_frame(
+            frame->data(), frame->metadata().width, frame->metadata().height, frame->metadata().timestamp_ns
+        );
         // frame destructs here -> VIDIOC_QBUF re-enqueues buffer
     }
 }
@@ -634,19 +753,22 @@ poll and then dequeues exactly one frame when the fd becomes ready.
 ### One-Shot Timer
 
 ```cpp
-#include <kmx/aio/readiness/executor.hpp>
-#include <kmx/aio/readiness/descriptor/timer.hpp>
 #include <iostream>
+#include <kmx/aio/readiness/descriptor/timer.hpp>
+#include <kmx/aio/readiness/executor.hpp>
+#include <time.h>
 
 using namespace kmx::aio;
 
-task<void> delayed_action(readiness::executor& exec) {
+task<void> delayed_action(readiness::executor& exec)
+{
     auto tmr = readiness::descriptor::timer::create(); // CLOCK_MONOTONIC, non-blocking
-    if (!tmr) co_return;
+    if (!tmr)
+        co_return;
 
     // Fire once after 500 ms
     itimerspec ts{};
-    ts.it_value.tv_nsec = 500'000'000; // 500 ms
+    ts.it_value.tv_nsec = 500'000'000u; // 500 ms
     tmr->set_time(0, ts);
 
     auto result = co_await tmr->wait(exec);
@@ -654,8 +776,9 @@ task<void> delayed_action(readiness::executor& exec) {
         std::cout << "Timer fired " << *result << " time(s)\n";
 }
 
-int main() {
-    readiness::executor_config cfg{ .thread_count = 1 };
+int main()
+{
+    readiness::executor_config cfg{ .thread_count = 1u };
     readiness::executor exec(cfg);
     exec.spawn(delayed_action(exec));
     exec.run();
@@ -702,26 +825,25 @@ Use this flow to run the completion AVB talker/listener samples with matching st
 1. Build the project:
 
 ```bash
-cd /home/io/Development/kmx-aio
-qbs build -f source/source.qbs config:debug -j 4
+# Run from the repository root
+qbs build -f source/source.qbs config:debug -j"$(nproc)"
 ```
 
-2. Locate the sample binaries (hashed build directories):
+1. Locate the sample binaries (hashed build directories):
 
 ```bash
-cd /home/io/Development/kmx-aio
 find debug -type f -name sample-avb-talker
 find debug -type f -name sample-avb-listener
 ```
 
-3. Ensure runtime capabilities (raw Ethernet + clock discipline):
+1. Ensure runtime capabilities (raw Ethernet + clock discipline):
 
 ```bash
 sudo setcap cap_net_raw,cap_sys_time+ep /path/to/sample-avb-talker
 sudo setcap cap_net_raw,cap_sys_time+ep /path/to/sample-avb-listener
 ```
 
-4. Start talker on Host A:
+1. Start talker on Host A:
 
 ```bash
 /path/to/sample-avb-talker \
@@ -732,7 +854,7 @@ sudo setcap cap_net_raw,cap_sys_time+ep /path/to/sample-avb-listener
     --period-us 125
 ```
 
-5. Start listener on Host B (must subscribe to the exact talker stream id + source MAC):
+1. Start listener on Host B (must subscribe to the exact talker stream id + source MAC):
 
 ```bash
 /path/to/sample-avb-listener \
@@ -743,7 +865,7 @@ sudo setcap cap_net_raw,cap_sys_time+ep /path/to/sample-avb-listener
     --period-us 125
 ```
 
-6. Verify expected behavior in logs:
+1. Verify expected behavior in logs:
 
 * Talker prints `synced=true` and ongoing `offset/path_delay` diagnostics.
 * Listener prints `synced=true`, increasing `parsed`, and jitter statistics.
@@ -772,13 +894,13 @@ debug/sample-avb-talker.*/sample-avb-talker --help | head -n 20
 debug/sample-avb-listener.*/sample-avb-listener --help | head -n 20
 ```
 
-2. MAC parser validation (expected: non-zero exit + explicit invalid MAC error):
+1. MAC parser validation (expected: non-zero exit + explicit invalid MAC error):
 
 ```bash
 debug/sample-avb-listener.*/sample-avb-listener --iface eth0 --talker-mac not-a-mac --stream-id 1
 ```
 
-3. gPTP/SRP timeout-path validation (expected: startup timeout error without AVB fabric):
+1. gPTP/SRP timeout-path validation (expected: startup timeout error without AVB fabric):
 
 ```bash
 debug/sample-avb-talker.*/sample-avb-talker \
@@ -819,13 +941,13 @@ The library uses `std::expected<T, error_code>` for error propagation. Uncaught 
 The project uses QBS for building.
 
 ```bash
-qbs build profile:default
+qbs build -f source/source.qbs profile:default
 ```
 
-Or to build specifically the library or samples:
+Or to build everything explicitly from the source tree definition:
 
 ```bash
-qbs build project:source # Builds everything in source/
+qbs build -f source/source.qbs # Builds everything in source/
 ```
 
 ## Static Analysis (clang-tidy)
@@ -859,7 +981,7 @@ You can pass any extra `run-clang-tidy` arguments, for example:
 
 ```bash
 cd source
-./clang-tidy.sh -checks='-*,clang-analyzer-*,bugprone-*' -header-filter='^/home/io/Development/kmx-aio/source/library/'
+./clang-tidy.sh -checks='-*,clang-analyzer-*,bugprone-*' -header-filter='^.*/source/library/'
 ```
 
 ## License

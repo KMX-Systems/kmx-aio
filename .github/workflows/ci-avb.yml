@@ -33,7 +33,20 @@ jobs:
             echo "kmx-aio-test binary not found"
             exit 1
           fi
-          "$TEST_BIN"
+          timeout 90s "$TEST_BIN"
+
+      - name: Flake guard for channel backpressure wait
+        run: |
+          cd source
+          TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+          if [[ -z "$TEST_BIN" ]]; then
+            echo "kmx-aio-test binary not found"
+            exit 1
+          fi
+          for i in $(seq 1 20); do
+            echo "flake-guard run $i"
+            timeout 20s "$TEST_BIN" "channel wait_until_can_send unblocks when consumer pops from a full ring"
+          done
 
       - name: AVB sample CLI smoke tests
         run: |
