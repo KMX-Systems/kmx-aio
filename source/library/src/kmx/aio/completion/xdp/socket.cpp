@@ -4,8 +4,6 @@
 #include <kmx/aio/completion/xdp/socket.hpp>
 #include <kmx/aio/error_code.hpp>
 
-#include <xdp/xsk.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
