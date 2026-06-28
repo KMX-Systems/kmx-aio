@@ -14,7 +14,7 @@
 * **[TLS](https://www.rfc-editor.org/rfc/rfc8446)/[ALPN](https://www.rfc-editor.org/rfc/rfc7301)**: Encrypted streams ([BoringSSL](https://boringssl.googlesource.com/boringssl/)-backed, both models) with Application Layer Protocol Negotiation for seamless HTTP/2 handshakes.
 * **QUIC + [HTTP/3](https://www.rfc-editor.org/rfc/rfc9114)**: Full QUIC engine (both models) with [lsquic](https://github.com/litespeedtech/lsquic) backing; HTTP/3 server/client samples included.
 * **Async Timers**: Readiness timer (`timerfd` + `epoll`) and completion timer (`io_uring` timeout op).
-* **[V4L2](https://linuxtv.org) Async Capture** (Readiness + Completion): Readiness mode uses epoll-driven frame capture; completion mode uses `IORING_OP_POLL_ADD` plus synchronous `VIDIOC_DQBUF` (hybrid model) in the same io_uring executor. Frames land in `co_await`-returned `frame_view` objects that auto-requeue mmap'd kernel buffers on destruction.
+* **[V4L2](https://linuxtv.org) Async Capture** (Readiness + Completion): Readiness mode uses epoll-driven frame capture; completion mode uses `IORING_OP_POLL_ADD` plus synchronous `VIDIOC_DQBUF` (hybrid model) in the same io_uring executor. Targets V4L2 streaming devices such as USB webcams, MIPI CSI-2 pipelines, and GMSL camera chains. Frames land in `co_await`-returned `frame_view` objects that auto-requeue mmap'd kernel buffers on destruction.
 * **Completion `async_poll(fd, mask)`**: First-class one-shot `IORING_OP_POLL_ADD` primitive to await arbitrary fd readiness (V4L2, eventfd, timerfd, signalfd, netlink) inside `completion::executor`; callers re-arm by invoking it again.
 * **Buffer Pool Primitives**: `kmx::aio::buffer_pool` and `kmx::aio::buffer_handle` provide fixed-capacity RAII buffer leasing for deterministic zero-copy workflows.
 * **Channel Backpressure**: `kmx::aio::channel` supports watermark-based producer throttling and credit reporting.
@@ -698,7 +698,9 @@ int main()
 The `capture::create()` factory performs the complete V4L2 initialisation sequence
 (`QUERYCAP` → `S_FMT` → `S_PARM` → `REQBUFS` → `QUERYBUF`/`mmap` × N → `QBUF` × N →
 `register_fd` → `STREAMON`) and returns a fully streaming device ready for
-`next_frame()`. The negotiated pixel format, resolution and buffer count are
+`next_frame()`, targeting common streaming endpoints including USB webcams,
+MIPI CSI-2 camera pipelines, and GMSL camera chains. The negotiated pixel
+format, resolution and buffer count are
 reflected back into `capture::config()` after construction.
 
 No external library dependency is required — `linux/videodev2.h` is a standard
@@ -746,6 +748,8 @@ Completion V4L2 is a hybrid model by kernel design: io_uring provides readiness
 notification (`IORING_OP_POLL_ADD`), then the library performs `VIDIOC_DQBUF`
 synchronously after wake-up. This keeps V4L2 capture in the same
 `completion::executor` ring as sockets and timers.
+It targets the same streaming device classes as readiness mode, including USB
+webcams, MIPI CSI-2 camera pipelines, and GMSL camera chains.
 
 The poll operation is intentionally one-shot: each `next_frame()` call re-submits
 poll and then dequeues exactly one frame when the fd becomes ready.
