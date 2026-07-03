@@ -117,9 +117,9 @@ StaticLibrary {
 
         if (project.enable_quic)
         {
-            libs.push("/home/io/Development/kmx-aio/build/lsquic/build/src/liblsquic/liblsquic.a");
-            libs.push("/home/io/Development/3rd/boringssl/build/libssl.a");
-            libs.push("/home/io/Development/3rd/boringssl/build/libcrypto.a");
+            libs.push(product.sourceDirectory + "/../../build/lsquic/build/src/liblsquic/liblsquic.a");
+            libs.push(product.sourceDirectory + "/../../build/boringssl/build/libssl.a");
+            libs.push(product.sourceDirectory + "/../../build/boringssl/build/libcrypto.a");
             libs.push("z");
         }
 

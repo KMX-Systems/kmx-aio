@@ -12,6 +12,7 @@ CppApplication {
         "inc_dep",
         "../../../../library/api",
         "../../../../library/inc_dep",
+        "../../../../../build/lsquic/include",
     ]
 
     // Enable QUIC feature gate locally if needed, but the library should have it

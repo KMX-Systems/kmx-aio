@@ -51,6 +51,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
         {
             std::atomic_uint64_t bytes_received {};
             std::atomic_uint64_t bytes_sent {};
+            std::atomic_uint64_t messages_received {};
             std::atomic_uint64_t errors {};
             std::atomic_bool rx_active {false};
             std::atomic_bool tx_active {false};

@@ -4,18 +4,19 @@
 #include <cstdint>
 #include <iostream>
 #include <kmx/aio/completion/quic/engine.hpp>
+#include <lsquic.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <string_view>
-#include <vector>
 
 namespace kmx::aio::sample::quic::echo_server
 {
     using namespace kmx::aio;
     using namespace kmx::aio::completion;
 
-    task<void> handle_stream(std::span<char> data)
+    task<void> handle_stream(::lsquic_stream_t* /*stream*/, kmx::aio::quic::stream_payload payload)
     {
+        auto data = payload.bytes();
         std::string_view msg(data.data(), data.size());
         std::cout << "Received QUIC stream data: " << msg << "\n";
         co_return;
@@ -24,8 +25,23 @@ namespace kmx::aio::sample::quic::echo_server
     auto async_main(std::shared_ptr<executor> exec) -> task<void>
     {
         ::SSL_CTX* ssl_ctx = ::SSL_CTX_new(TLS_server_method());
-        ::SSL_CTX_use_certificate_chain_file(ssl_ctx, "/tmp/quic_cert.pem");
-        ::SSL_CTX_use_PrivateKey_file(ssl_ctx, "/tmp/quic_key.pem", SSL_FILETYPE_PEM);
+        if (!ssl_ctx)
+        {
+            std::cerr << "Failed to create server SSL_CTX\n";
+            co_return;
+        }
+        if (::SSL_CTX_use_certificate_chain_file(ssl_ctx, "/tmp/quic_cert.pem") != 1)
+        {
+            std::cerr << "Failed to load /tmp/quic_cert.pem\n";
+            ::SSL_CTX_free(ssl_ctx);
+            co_return;
+        }
+        if (::SSL_CTX_use_PrivateKey_file(ssl_ctx, "/tmp/quic_key.pem", SSL_FILETYPE_PEM) != 1)
+        {
+            std::cerr << "Failed to load /tmp/quic_key.pem\n";
+            ::SSL_CTX_free(ssl_ctx);
+            co_return;
+        }
 
         kmx::aio::completion::quic::engine engine(*exec);
         engine.set_stream_handler(handle_stream);
@@ -35,6 +51,7 @@ namespace kmx::aio::sample::quic::echo_server
         if (!res)
         {
             std::cerr << "Failed to start QUIC engine: " << res.error().message() << "\n";
+            ::SSL_CTX_free(ssl_ctx);
             co_return;
         }
 

@@ -3,6 +3,7 @@
 #include <array>
 #include <iostream>
 #include <kmx/aio/completion/quic/engine.hpp>
+#include <lsquic.h>
 #include <memory>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
@@ -14,13 +15,16 @@ namespace kmx::aio::sample::quic::http3_client
     using namespace kmx::aio;
     using namespace kmx::aio::completion;
 
-    task<void> handle_stream(std::span<char> data)
+    task<void> handle_stream(::lsquic_stream_t* stream, kmx::aio::quic::stream_payload payload)
     {
+        auto data = payload.bytes();
         std::string_view response(data.data(), data.size());
         std::cout << "\n[HTTP/3 Client] Received Server Response:\n"
                   << "--------------------------------------------------------\n"
                   << response << "\n"
                   << "--------------------------------------------------------\n";
+
+        ::lsquic_conn_close(::lsquic_stream_conn(stream));
         co_return; // No further action needed.
     }
 
@@ -28,6 +32,18 @@ namespace kmx::aio::sample::quic::http3_client
     {
         // Client SSL setup
         ::SSL_CTX* ssl_ctx = ::SSL_CTX_new(TLS_client_method());
+        if (!ssl_ctx)
+        {
+            std::cerr << "Failed to create client SSL_CTX\n";
+            co_return;
+        }
+        static constexpr std::array<unsigned char, 8u> kmx_alpn_wire = {7u, 'k', 'm', 'x', '-', 'a', 'i', 'o'};
+        if (::SSL_CTX_set_alpn_protos(ssl_ctx, kmx_alpn_wire.data(), static_cast<unsigned int>(kmx_alpn_wire.size())) != 0)
+        {
+            std::cerr << "Failed to configure client ALPN\n";
+            ::SSL_CTX_free(ssl_ctx);
+            co_return;
+        }
         // For testing purposes, we might not verify the cert directly.
         ::SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_NONE, nullptr);
 
