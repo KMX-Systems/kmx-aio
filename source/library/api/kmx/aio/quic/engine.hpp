@@ -13,12 +13,28 @@
         #include <system_error>
 
         #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/buffer_pool.hpp>
         #include <kmx/aio/quic/settings.hpp>
         #include <kmx/aio/task.hpp>
     #endif
 
+struct lsquic_stream;
+
 namespace kmx::aio::quic
 {
+    inline constexpr std::size_t stream_payload_capacity = 4096u;
+    using stream_payload_buffer = std::array<char, stream_payload_capacity>;
+
+    /// @brief Move-only payload view backed by preallocated storage.
+    struct stream_payload
+    {
+        buffer_handle<stream_payload_buffer> storage;
+        std::size_t size {};
+
+        [[nodiscard]] auto bytes() noexcept(false) -> std::span<char> { return {storage->data(), size}; }
+        [[nodiscard]] auto bytes() const noexcept(false) -> std::span<const char> { return {storage->data(), size}; }
+    };
+
     /// @brief Generic QUIC engine template.
     /// @details Provides a unified interface for lsquic-based engines,
     ///          parameterized by Executor and UdpSocket types.
@@ -29,7 +45,8 @@ namespace kmx::aio::quic
     {
     public:
         /// @brief Callback invoked when a new QUIC stream is accepted.
-        using stream_handler_t = std::function<task<void>(std::span<char>)>;
+        /// @details The stream pointer is non-owning and valid only while the stream remains open.
+        using stream_handler_t = std::function<task<void>(::lsquic_stream*, stream_payload)>;
 
         /// @brief Constructor.
         /// @param exec The executor to bind this engine to.

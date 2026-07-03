@@ -106,11 +106,12 @@ namespace kmx::aio::sample::tcp::echo_uring::server
 
         std::span<char> buffer_span(static_cast<char*>(registered_buffers_[rx_buf_idx].iov_base), buffer_size);
 
+        std::size_t messages_received {};
+
         try
         {
             executor_->spawn(client_sender(stream_ptr, client_id, stats));
 
-            std::size_t messages_received {};
             std::size_t received_bytes {};
 
             while (true)
@@ -147,6 +148,8 @@ namespace kmx::aio::sample::tcp::echo_uring::server
         }
 
         free_buffer(rx_buf_idx);
+
+        stats->messages_received.fetch_add(messages_received, std::memory_order_relaxed);
 
         stats->rx_active.store(false, std::memory_order_relaxed);
         update_closed_state(stats);
