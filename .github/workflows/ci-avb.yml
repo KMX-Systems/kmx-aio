@@ -69,3 +69,61 @@ jobs:
           "$LISTENER_BIN" --help | head -n 15
           "$TALKER_BIN" --period-us 0 && exit 1 || true
           "$LISTENER_BIN" --sync-timeout-s 0 && exit 1 || true
+
+  quic-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qbs liburing-dev libssl-dev catch2 gcc-14 g++-14 git cmake
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+          sudo update-alternatives --set g++ /usr/bin/g++-14
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
+          sudo update-alternatives --set gcc /usr/bin/gcc-14
+
+      - name: Bootstrap QUIC dependencies
+        run: |
+          bash build/install_lsquic.sh
+
+      - name: Configure and build QUIC smoke artifacts
+        run: |
+          cd source
+          qbs build -f source.qbs config:debug -j 2 \
+            project.enable_openonload:false \
+            project.enable_af_xdp:false \
+            project.enable_spdk:false \
+            project.enable_quic:true \
+            qbs.products:sample-quic-echo-readiness-server,sample-quic-echo-readiness-client,sample-quic-http3-server,sample-quic-http3-client,kmx-aio-test
+
+      - name: Generate temporary QUIC TLS certs
+        run: |
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout /tmp/quic_key.pem \
+            -out /tmp/quic_cert.pem \
+            -subj "/CN=localhost" \
+            -days 1 >/dev/null 2>&1
+
+      - name: Run readiness QUIC smoke test (5s bounded client)
+        run: |
+          cd source
+          TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+          if [[ -z "$TEST_BIN" ]]; then
+            echo "kmx-aio-test binary not found"
+            exit 1
+          fi
+          timeout 30s "$TEST_BIN" "[quic][readiness][integration][smoke]"
+
+      - name: Run completion QUIC HTTP3 smoke test (5s bounded client)
+        run: |
+          cd source
+          TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+          if [[ -z "$TEST_BIN" ]]; then
+            echo "kmx-aio-test binary not found"
+            exit 1
+          fi
+          timeout 30s "$TEST_BIN" "[quic][http3][integration][smoke]"
