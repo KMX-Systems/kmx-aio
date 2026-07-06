@@ -139,7 +139,7 @@ namespace kmx::aio::completion::v4l2
     }
 
     std::expected<std::vector<capture::mmap_buffer>, kmx::aio::error_code> capture::request_and_map_buffers(const fd_t device_fd,
-                                                                                                              capture_config& cfg) noexcept
+                                                                                                            capture_config& cfg) noexcept
     {
         ::v4l2_requestbuffers req {};
         req.count = cfg.buffer_count;
@@ -170,8 +170,7 @@ namespace kmx::aio::completion::v4l2
                 return std::unexpected(kmx::aio::from_errno(errno));
             }
 
-            void* const ptr =
-                ::mmap(nullptr, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, device_fd, static_cast<off_t>(buf.m.offset));
+            void* const ptr = ::mmap(nullptr, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, device_fd, static_cast<off_t>(buf.m.offset));
             if (ptr == MAP_FAILED) // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
             {
                 unmap_buffers(buffers);

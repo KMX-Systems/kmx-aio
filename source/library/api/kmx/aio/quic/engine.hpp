@@ -104,10 +104,9 @@ namespace kmx::aio::quic
         /// @param config    QUIC protocol settings.
         /// @return Success or an error code once connection is established.
         [[nodiscard]] task<std::expected<void, std::error_code>> connect(ip_address_t peer_ip, port_t peer_port,
-                                         const std::string& hostname,
-                                         const std::vector<std::string>& payloads,
-                                         void* ssl_ctx = nullptr,
-                                         const settings& config = {}) noexcept(false);
+                                                                         const std::string& hostname,
+                                                                         const std::vector<std::string>& payloads, void* ssl_ctx = nullptr,
+                                                                         const settings& config = {}) noexcept(false);
 
     private:
         struct impl;

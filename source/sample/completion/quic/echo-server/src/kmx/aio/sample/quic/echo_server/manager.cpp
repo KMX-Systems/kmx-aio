@@ -17,13 +17,12 @@ namespace kmx::aio::sample::quic::echo_server
     using namespace kmx::aio;
     using namespace kmx::aio::completion;
 
-    static int select_kmx_alpn(::SSL* /*ssl*/, const unsigned char** out, unsigned char* outlen,
-                               const unsigned char* in, unsigned int inlen, void* /*arg*/)
+    static int select_kmx_alpn(::SSL* /*ssl*/, const unsigned char** out, unsigned char* outlen, const unsigned char* in,
+                               unsigned int inlen, void* /*arg*/)
     {
         static constexpr std::array<unsigned char, 8u> kmx_alpn_wire = {7u, 'k', 'm', 'x', '-', 'a', 'i', 'o'};
-        const int selected = ::SSL_select_next_proto(
-            reinterpret_cast<unsigned char**>(const_cast<unsigned char**>(out)), outlen, in, inlen, kmx_alpn_wire.data(),
-            static_cast<unsigned int>(kmx_alpn_wire.size()));
+        const int selected = ::SSL_select_next_proto(reinterpret_cast<unsigned char**>(const_cast<unsigned char**>(out)), outlen, in, inlen,
+                                                     kmx_alpn_wire.data(), static_cast<unsigned int>(kmx_alpn_wire.size()));
         return selected == OPENSSL_NPN_NEGOTIATED ? SSL_TLSEXT_ERR_OK : SSL_TLSEXT_ERR_ALERT_FATAL;
     }
 
@@ -34,8 +33,8 @@ namespace kmx::aio::sample::quic::echo_server
         std::cout << "Received QUIC stream data: " << msg << "\n";
 
         const std::string preview(msg.substr(0, std::min<std::size_t>(40u, msg.size())));
-        const std::string response =
-            std::format("stream_id={} len={} preview='{}'\n", static_cast<unsigned long long>(::lsquic_stream_id(stream)), msg.size(), preview);
+        const std::string response = std::format("stream_id={} len={} preview='{}'\n",
+                                                 static_cast<unsigned long long>(::lsquic_stream_id(stream)), msg.size(), preview);
 
         std::size_t written {};
         while (written < response.size())
@@ -43,8 +42,8 @@ namespace kmx::aio::sample::quic::echo_server
             const ssize_t chunk = ::lsquic_stream_write(stream, response.data() + written, response.size() - written);
             if (chunk <= 0)
             {
-                std::cerr << "Failed to write QUIC echo response on stream "
-                          << static_cast<unsigned long long>(::lsquic_stream_id(stream)) << "\n";
+                std::cerr << "Failed to write QUIC echo response on stream " << static_cast<unsigned long long>(::lsquic_stream_id(stream))
+                          << "\n";
                 co_return;
             }
 

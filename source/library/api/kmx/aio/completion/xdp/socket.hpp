@@ -119,14 +119,12 @@ namespace kmx::aio::completion::xdp
                                                                                        const socket_config& config) noexcept;
 
         [[nodiscard]] static std::expected<void, std::error_code> initialize_state(std::shared_ptr<executor> exec,
-                                                                                    const socket_config& config,
-                                                                                    socket& out) noexcept;
+                                                                                   const socket_config& config, socket& out) noexcept;
 
         [[nodiscard]] static std::expected<void, std::error_code> validate_send_args(const state& state,
-                                                 std::span<const std::byte> data) noexcept;
+                                                                                     std::span<const std::byte> data) noexcept;
 
-        [[nodiscard]] static std::expected<void, std::error_code> send_via_fallback(state& state,
-                                                std::span<const std::byte> data) noexcept;
+        [[nodiscard]] static std::expected<void, std::error_code> send_via_fallback(state& state, std::span<const std::byte> data) noexcept;
 
 #if defined(KMX_AIO_FEATURE_AF_XDP)
         [[nodiscard]] static std::expected<void, std::error_code> initialize_af_xdp_backend(state& state) noexcept;
@@ -136,7 +134,7 @@ namespace kmx::aio::completion::xdp
         [[nodiscard]] static std::expected<void, std::error_code> create_xsk_socket(state& state) noexcept;
 
         [[nodiscard]] static std::expected<void, std::error_code> send_via_af_xdp_backend(state& state,
-                                                   std::span<const std::byte> data) noexcept;
+                                                                                          std::span<const std::byte> data) noexcept;
 
         static void seed_free_frames(state& state) noexcept;
 #endif

@@ -10,10 +10,7 @@ namespace kmx::aio::opc_ua
         class opc_ua_error_category final: public std::error_category
         {
         public:
-            const char* name() const noexcept override
-            {
-                return "opc_ua";
-            }
+            const char* name() const noexcept override { return "opc_ua"; }
 
             std::string message(const int ev) const override
             {

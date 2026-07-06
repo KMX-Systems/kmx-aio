@@ -1,6 +1,6 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/opc_ua/error.hpp>
 #include <kmx/aio/opc_ua/client.hpp>
+#include <kmx/aio/opc_ua/error.hpp>
 #include <kmx/aio/opc_ua/subscription.hpp>
 
 #include <kmx/aio/channel.hpp>
@@ -16,22 +16,15 @@ namespace kmx::aio::opc_ua
     {
         [[nodiscard]] bool is_valid(const subscription_config& config) noexcept
         {
-            return config.publishing_interval_ms > 0.0
-                && config.lifetime_count > 0u
-                && config.max_keepalive_count > 0u
-                && config.max_keepalive_count <= config.lifetime_count
-                && config.max_notifications_per_publish > 0u
-                && config.notification_queue_capacity >= 2u;
+            return config.publishing_interval_ms > 0.0 && config.lifetime_count > 0u && config.max_keepalive_count > 0u &&
+                   config.max_keepalive_count <= config.lifetime_count && config.max_notifications_per_publish > 0u &&
+                   config.notification_queue_capacity >= 2u;
         }
     }
 
     struct subscription::impl
     {
-        explicit impl(subscription_config cfg) noexcept:
-            config(std::move(cfg)),
-            notifications(config.notification_queue_capacity)
-        {
-        }
+        explicit impl(subscription_config cfg) noexcept: config(std::move(cfg)), notifications(config.notification_queue_capacity) {}
 
         subscription_config config;
         channel<notification> notifications;
@@ -41,13 +34,11 @@ namespace kmx::aio::opc_ua
         std::chrono::steady_clock::time_point next_heartbeat_due {};
     };
 
-    subscription::subscription(subscription_config config) noexcept:
-        impl_(std::make_unique<impl>(std::move(config)))
+    subscription::subscription(subscription_config config) noexcept: impl_(std::make_unique<impl>(std::move(config)))
     {
     }
 
-    subscription::subscription(client& bound_client, subscription_config config) noexcept:
-        impl_(std::make_unique<impl>(std::move(config)))
+    subscription::subscription(client& bound_client, subscription_config config) noexcept: impl_(std::make_unique<impl>(std::move(config)))
     {
         impl_->bound_client = &bound_client;
     }
