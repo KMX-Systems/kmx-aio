@@ -1,29 +1,30 @@
-#include <kmx/aio/sample/quic/http3_server/manager.hpp>
+#include <kmx/aio/sample/quic/echo_server/manager.hpp>
 
+#include <algorithm>
 #include <array>
 #include <charconv>
-#include <cerrno>
+#include <cstdint>
 #include <cstdlib>
+#include <format>
 #include <iostream>
-#include <kmx/aio/completion/quic/engine.hpp>
+#include <kmx/aio/readiness/quic/engine.hpp>
 #include <lsquic.h>
-#include <memory>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <string>
 #include <string_view>
 
-namespace kmx::aio::sample::quic::http3_server
+namespace kmx::aio::sample::quic::echo_server
 {
     using namespace kmx::aio;
-    using namespace kmx::aio::completion;
+    using namespace kmx::aio::readiness;
 
     namespace detail
     {
         auto parse_listen_port_from_env() -> std::uint16_t
         {
             constexpr std::uint16_t default_port = 12345u;
-            const char* const env = std::getenv("KMX_QUIC_HTTP3_PORT");
+            const char* const env = std::getenv("KMX_QUIC_ECHO_PORT");
             if (!env || env[0] == '\0')
                 return default_port;
 
@@ -49,22 +50,24 @@ namespace kmx::aio::sample::quic::http3_server
     task<void> handle_stream(::lsquic_stream_t* stream, kmx::aio::quic::stream_payload payload)
     {
         auto data = payload.bytes();
-        std::string_view request(data.data(), data.size());
-        std::cout << "Received QUIC stream data (HTTP req):\n" << request << "\n";
+        std::string_view msg(data.data(), data.size());
+        std::cout << "Received QUIC stream data: " << msg << "\n";
 
-        // Simple HTTP/0.9 over QUIC response
-        std::string response = "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n<html><body><h1>Hello from KMX AIO "
-                               "QUIC HTTP3 Server!</h1></body></html>\n";
+        const std::string preview(msg.substr(0, std::min<std::size_t>(40u, msg.size())));
+        const std::string response = std::format("stream_id={} len={} preview='{}'\n",
+                                                 static_cast<unsigned long long>(::lsquic_stream_id(stream)), msg.size(), preview);
 
-        std::size_t written = 0;
+        std::size_t written {};
         while (written < response.size())
         {
             const ssize_t chunk = ::lsquic_stream_write(stream, response.data() + written, response.size() - written);
             if (chunk <= 0)
             {
-                std::cerr << "Failed to write HTTP3 response on QUIC stream. errno=" << errno << "\n";
+                std::cerr << "Failed to write QUIC echo response on stream " << static_cast<unsigned long long>(::lsquic_stream_id(stream))
+                          << "\n";
                 co_return;
             }
+
             written += static_cast<std::size_t>(chunk);
         }
 
@@ -97,10 +100,10 @@ namespace kmx::aio::sample::quic::http3_server
 
         const std::uint16_t listen_port = detail::parse_listen_port_from_env();
 
-        kmx::aio::completion::quic::engine engine(*exec);
+        kmx::aio::readiness::quic::engine engine(*exec);
         engine.set_stream_handler(handle_stream);
 
-        static constexpr std::array<std::uint8_t, 4u> ip = {127u, 0u, 0u, 1u};
+        static constexpr std::array<std::uint8_t, 4u> ip {127u, 0u, 0u, 1u};
         auto res = co_await engine.start(ip, listen_port, ssl_ctx);
         if (!res)
         {
@@ -109,13 +112,12 @@ namespace kmx::aio::sample::quic::http3_server
             co_return;
         }
 
-        std::cout << "QUIC (HTTP3) server listening on 127.0.0.1:" << listen_port << "\n";
+        std::cout << "QUIC readiness server listening on 127.0.0.1:" << listen_port << "\n";
 
         auto process_res = co_await engine.process();
         if (!process_res)
-        {
             std::cerr << "Engine process error: " << process_res.error().message() << "\n";
-        }
+
         ::SSL_CTX_free(ssl_ctx);
     }
 }

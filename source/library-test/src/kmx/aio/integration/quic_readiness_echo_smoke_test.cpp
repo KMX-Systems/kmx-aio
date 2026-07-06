@@ -1,10 +1,9 @@
-/// @file aio/integration/quic_http3_smoke_test.cpp
-/// @brief Completion QUIC HTTP3 smoke test validating handshake -> stream -> response -> close sequence.
+/// @file aio/integration/quic_readiness_echo_smoke_test.cpp
+/// @brief Readiness QUIC echo smoke test validating handshake -> multi-stream responses -> close.
 
 #if defined(KMX_AIO_FEATURE_QUIC)
 
     #include <catch2/catch_test_macros.hpp>
-    #include <catch2/generators/catch_generators.hpp>
 
     #include <sys/wait.h>
 
@@ -20,12 +19,6 @@
 namespace kmx::aio::quic::test::integration
 {
     namespace fs = std::filesystem;
-
-    enum class quic_engine_case
-    {
-        completion_http3,
-        readiness_echo,
-    };
 
     [[nodiscard]] static auto read_file_text(const fs::path& path) -> std::string
     {
@@ -97,39 +90,28 @@ namespace kmx::aio::quic::test::integration
         return std::nullopt;
     }
 
-    TEST_CASE("QUIC smoke handshake-stream-response-close parametrized", "[quic][http3][readiness][integration][smoke][slow]")
+    TEST_CASE("readiness QUIC echo handshake-stream-response-close smoke", "[quic][readiness][integration][smoke][slow]")
     {
-        const auto engine_case = GENERATE(quic_engine_case::completion_http3, quic_engine_case::readiness_echo);
-
         const auto repo_root_opt = find_repo_root();
         REQUIRE(repo_root_opt.has_value());
 
         const fs::path repo_root = *repo_root_opt;
-        const bool is_completion = engine_case == quic_engine_case::completion_http3;
-        const auto server_bin_name = is_completion ? "sample-quic-http3-server" : "sample-quic-echo-readiness-server";
-        const auto client_bin_name = is_completion ? "sample-quic-http3-client" : "sample-quic-echo-readiness-client";
-        const auto server_bin_opt = find_binary_under_debug(repo_root, server_bin_name);
-        const auto client_bin_opt = find_binary_under_debug(repo_root, client_bin_name);
+        const auto server_bin_opt = find_binary_under_debug(repo_root, "sample-quic-echo-readiness-server");
+        const auto client_bin_opt = find_binary_under_debug(repo_root, "sample-quic-echo-readiness-client");
 
         if (!server_bin_opt.has_value() || !client_bin_opt.has_value())
-            SKIP("QUIC smoke skipped: build readiness/completion QUIC sample binaries first");
+            SKIP("Readiness QUIC echo smoke skipped: build sample-quic-echo-readiness-server and sample-quic-echo-readiness-client first");
 
         const fs::path cert_path = "/tmp/quic_cert.pem";
         const fs::path key_path = "/tmp/quic_key.pem";
         if (!fs::exists(cert_path) || !fs::exists(key_path))
-            SKIP("QUIC smoke skipped: missing /tmp/quic_cert.pem or /tmp/quic_key.pem");
+            SKIP("Readiness QUIC echo smoke skipped: missing /tmp/quic_cert.pem or /tmp/quic_key.pem");
 
         const auto now_ns = std::chrono::steady_clock::now().time_since_epoch().count();
-        const std::uint16_t test_port = is_completion
-                                            ? static_cast<std::uint16_t>(30000u + static_cast<std::uint16_t>(now_ns % 10000u))
-                                            : static_cast<std::uint16_t>(20000u + static_cast<std::uint16_t>(now_ns % 20000u));
-        const fs::path server_log = fs::path("/tmp") /
-                                    ((is_completion ? "kmx_http3_server_smoke_" : "kmx_quic_readiness_echo_server_smoke_") +
-                                     std::to_string(now_ns) + ".log");
-        const fs::path client_log = fs::path("/tmp") /
-                                    ((is_completion ? "kmx_http3_client_smoke_" : "kmx_quic_readiness_echo_client_smoke_") +
-                                     std::to_string(now_ns) + ".log");
-        const std::string port_env = (is_completion ? "KMX_QUIC_HTTP3_PORT=" : "KMX_QUIC_ECHO_PORT=") + std::to_string(test_port);
+        const std::uint16_t test_port = static_cast<std::uint16_t>(20000u + static_cast<std::uint16_t>(now_ns % 20000u));
+        const fs::path server_log = fs::path("/tmp") / ("kmx_quic_readiness_echo_server_smoke_" + std::to_string(now_ns) + ".log");
+        const fs::path client_log = fs::path("/tmp") / ("kmx_quic_readiness_echo_client_smoke_" + std::to_string(now_ns) + ".log");
+        const std::string port_env = "KMX_QUIC_ECHO_PORT=" + std::to_string(test_port);
 
         const std::string server_cmd = "env " + port_env + " LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} " +
                                        shell_quote(server_bin_opt->string()) + " > " + shell_quote(server_log.string()) + " 2>&1";
@@ -159,40 +141,23 @@ namespace kmx::aio::quic::test::integration
 
         INFO("client log path: " << client_log.string());
         INFO("server log path: " << server_log.string());
-        INFO("engine_case: " << (is_completion ? "completion_http3" : "readiness_echo"));
         INFO("client exit code: " << client_exit);
         INFO("client log:\n" << client_text);
         INFO("server log:\n" << server_text);
 
         REQUIRE(client_exit == 0);
 
-        if (is_completion)
-        {
-            REQUIRE(contains_markers_in_order(client_text, {
-                                                               "on_hsk_done called",
-                                                               "[HTTP/3 Client] Received Server Response:",
-                                                               "on_conn_closed called, status=8 (LSCONN_ST_CLOSED)",
-                                                           }));
+        REQUIRE(contains_markers_in_order(client_text, {
+                                                           "on_hsk_done called",
+                                                           "[QUIC Readiness Echo Client] Response #1",
+                                                           "[QUIC Readiness Echo Client] Response #2",
+                                                           "on_conn_closed called, status=8 (LSCONN_ST_CLOSED)",
+                                                       }));
 
-            REQUIRE(contains_markers_in_order(server_text, {
-                                                               "Received QUIC stream data (HTTP req):",
-                                                               "on_conn_closed called, status=8 (LSCONN_ST_CLOSED)",
-                                                           }));
-        }
-        else
-        {
-            REQUIRE(contains_markers_in_order(client_text, {
-                                                               "on_hsk_done called",
-                                                               "[QUIC Readiness Echo Client] Response #1",
-                                                               "[QUIC Readiness Echo Client] Response #2",
-                                                               "on_conn_closed called, status=8 (LSCONN_ST_CLOSED)",
-                                                           }));
-
-            REQUIRE(contains_markers_in_order(server_text, {
-                                                               "Received QUIC stream data:",
-                                                               "on_conn_closed called, status=8 (LSCONN_ST_CLOSED)",
-                                                           }));
-        }
+        REQUIRE(contains_markers_in_order(server_text, {
+                                                           "Received QUIC stream data:",
+                                                           "on_conn_closed called, status=8 (LSCONN_ST_CLOSED)",
+                                                       }));
     }
 } // namespace kmx::aio::quic::test::integration
 

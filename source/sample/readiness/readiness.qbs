@@ -15,6 +15,8 @@ Project {
         "tls/h2_alpn_client/tls-h2-alpn-readiness-client.qbs",
         "udp/minimal/client/udp-minimal-client.qbs",
         "udp/minimal/server/udp-minimal-server.qbs",
+        "quic/echo-server/sample-quic-echo-readiness-server.qbs",
+        "quic/echo-client/sample-quic-echo-readiness-client.qbs",
         "tcp/echo/common/tcp-echo-common.qbs",
         "tcp/echo/client/tcp-echo-client.qbs",
         "tcp/echo/server/tcp-echo-server.qbs",

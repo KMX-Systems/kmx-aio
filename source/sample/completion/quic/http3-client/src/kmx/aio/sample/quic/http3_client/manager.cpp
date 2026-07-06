@@ -1,6 +1,8 @@
 #include <kmx/aio/sample/quic/http3_client/manager.hpp>
 
 #include <array>
+#include <charconv>
+#include <cstdlib>
 #include <iostream>
 #include <kmx/aio/completion/quic/engine.hpp>
 #include <lsquic.h>
@@ -14,6 +16,25 @@ namespace kmx::aio::sample::quic::http3_client
 {
     using namespace kmx::aio;
     using namespace kmx::aio::completion;
+
+    namespace detail
+    {
+        auto parse_peer_port_from_env() -> std::uint16_t
+        {
+            constexpr std::uint16_t default_port = 12345u;
+            const char* const env = std::getenv("KMX_QUIC_HTTP3_PORT");
+            if (!env || env[0] == '\0')
+                return default_port;
+
+            std::uint32_t parsed {};
+            const char* const end = env + std::char_traits<char>::length(env);
+            const auto [ptr, ec] = std::from_chars(env, end, parsed);
+            if (ec != std::errc() || ptr != end || parsed == 0u || parsed > 65535u)
+                return default_port;
+
+            return static_cast<std::uint16_t>(parsed);
+        }
+    }
 
     task<void> handle_stream(::lsquic_stream_t* stream, kmx::aio::quic::stream_payload payload)
     {
@@ -54,7 +75,7 @@ namespace kmx::aio::sample::quic::http3_client
         // Dial the server
         std::string payload = "GET / HTTP/0.9\r\nHost: localhost\r\nConnection: close\r\n\r\n";
         static constexpr std::array<unsigned char, 4> peer_ip = {127, 0, 0, 1};
-        static constexpr std::uint16_t peer_port = 12345;
+        const std::uint16_t peer_port = detail::parse_peer_port_from_env();
 
         std::cout << "[HTTP/3 Client] Connecting to 127.0.0.1:" << peer_port << "...\n";
 
