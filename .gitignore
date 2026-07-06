@@ -38,7 +38,8 @@
 .qtcreator/
 .vscode/
 asan/
-build/
+build/*
+!build/install_lsquic.sh
 default/
 debug/
 tsan/

@@ -93,12 +93,13 @@ jobs:
       - name: Configure and build QUIC smoke artifacts
         run: |
           cd source
+          PRODUCTS="sample-quic-echo-readiness-server,sample-quic-echo-readiness-client,sample-quic-http3-server,sample-quic-http3-client,kmx-aio-test"
           qbs build -f source.qbs config:debug -j 2 \
+            --products "$PRODUCTS" \
             project.enable_openonload:false \
             project.enable_af_xdp:false \
             project.enable_spdk:false \
-            project.enable_quic:true \
-            qbs.products:sample-quic-echo-readiness-server,sample-quic-echo-readiness-client,sample-quic-http3-server,sample-quic-http3-client,kmx-aio-test
+            project.enable_quic:true
 
       - name: Generate temporary QUIC TLS certs
         run: |
