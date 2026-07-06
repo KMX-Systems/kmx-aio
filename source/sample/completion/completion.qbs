@@ -11,6 +11,7 @@ Project {
         "spdk/minimal/spdk-minimal.qbs",
         "spdk/discovery/spdk-discovery.qbs",
         "xdp/packet_filter/xdp-packet-filter.qbs",
+        "quic/echo-client/sample-quic-echo-client.qbs",
         "quic/echo-server/sample-quic-echo-server.qbs",
         "quic/http3-server/sample-quic-http3-server.qbs",
         "quic/http3-client/sample-quic-http3-client.qbs",

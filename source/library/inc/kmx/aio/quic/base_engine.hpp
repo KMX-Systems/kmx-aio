@@ -13,11 +13,13 @@
 #include <functional>
 #include <memory>
 #include <netinet/in.h>
+#include <queue>
 #include <source_location>
 #include <span>
 #include <string>
 #include <sys/socket.h>
 #include <system_error>
+#include <vector>
 
 extern "C"
 {
@@ -50,7 +52,7 @@ namespace kmx::aio::quic
         void* ssl_ctx_ {};
         bool running_ {};
         bool is_client_ {false};
-        std::string client_payload_ {};
+        std::queue<std::string> client_payloads_ {};
 
         explicit base_impl(Executor& exec) noexcept: exec_(exec) {}
 
@@ -113,7 +115,11 @@ namespace kmx::aio::quic
         {
             auto* const self = static_cast<base_impl*>(stream_if_ctx);
             if (self->is_client_)
-                ::lsquic_conn_make_stream(conn);
+            {
+                const std::size_t streams_to_open = self->client_payloads_.size();
+                for (std::size_t i = 0; i < streams_to_open; ++i)
+                    ::lsquic_conn_make_stream(conn);
+            }
             return reinterpret_cast<::lsquic_conn_ctx_t*>(stream_if_ctx);
         }
 
@@ -163,14 +169,7 @@ namespace kmx::aio::quic
             auto handle_read_result = [&](const ssize_t nr) -> void
             {
                 if (nr == 0)
-                {
                     ::lsquic_stream_close(stream);
-                    if (self->is_client_)
-                    {
-                        ::lsquic_conn_close(::lsquic_stream_conn(stream));
-                        self->running_ = false;
-                    }
-                }
             };
 
             if (!self->stream_handler_)
@@ -215,11 +214,30 @@ namespace kmx::aio::quic
         static void on_write(::lsquic_stream_t* stream, ::lsquic_stream_ctx_t* /*ctx*/)
         {
             auto* const self = reinterpret_cast<base_impl*>(::lsquic_conn_get_ctx(::lsquic_stream_conn(stream)));
-            if (self->is_client_ && !self->client_payload_.empty())
+            if (self->is_client_ && !self->client_payloads_.empty())
             {
-                ::lsquic_stream_write(stream, self->client_payload_.data(), self->client_payload_.size());
+                std::string payload = std::move(self->client_payloads_.front());
+                self->client_payloads_.pop();
+
+                std::size_t written {};
+                while (written < payload.size())
+                {
+                    const ssize_t chunk = ::lsquic_stream_write(stream, payload.data() + written, payload.size() - written);
+                    if (chunk <= 0)
+                    {
+                        logger::log(logger::level::warn,
+                                    std::source_location::current(),
+                                    "QUIC client write failed on stream {}, written={}/{}",
+                                    static_cast<unsigned long long>(::lsquic_stream_id(stream)),
+                                    written,
+                                    payload.size());
+                        break;
+                    }
+
+                    written += static_cast<std::size_t>(chunk);
+                }
+
                 ::lsquic_stream_flush(stream);
-                self->client_payload_.clear();
                 ::lsquic_stream_wantwrite(stream, 0);
                 ::lsquic_stream_wantread(stream, 1);
             }
@@ -332,7 +350,63 @@ namespace kmx::aio::quic
 
             ssl_ctx_ = ssl_ctx;
             is_client_ = true;
-            client_payload_ = client_payload;
+            while (!client_payloads_.empty())
+                client_payloads_.pop();
+
+            if (!client_payload.empty())
+                client_payloads_.push(client_payload);
+            socket_ = std::make_unique<UdpSocket>(std::move(*sock_res));
+
+            // Bind to ephemeral port
+            static constexpr std::array<uint8_t, 4u> any_ip {0, 0, 0, 0};
+            if (auto bind_res = bind_socket(any_ip, 0); !bind_res)
+                return std::unexpected(bind_res.error());
+
+            if (auto init_res = init_lsquic(config, 0); !init_res)
+                return std::unexpected(init_res.error());
+
+            auto peer_addr_result = make_socket_address(peer_ip, peer_port);
+            if (!peer_addr_result)
+                return std::unexpected(peer_addr_result.error());
+
+            if (::connect(socket_->get_fd(), reinterpret_cast<sockaddr*>(&peer_addr_result->storage), peer_addr_result->length) < 0)
+                return std::unexpected(error_from_errno());
+
+            ::socklen_t local_len = sizeof(local_addr_);
+            if (::getsockname(socket_->get_fd(), reinterpret_cast<sockaddr*>(&local_addr_), &local_len) < 0)
+                return std::unexpected(error_from_errno());
+
+            const char* host = hostname.empty() ? nullptr : hostname.c_str();
+
+            ::lsquic_conn_t* const conn = ::lsquic_engine_connect(lsquic_engine_, N_LSQVER, reinterpret_cast<sockaddr*>(&local_addr_),
+                                                                  reinterpret_cast<sockaddr*>(&peer_addr_result->storage),
+                                                                  static_cast<void*>(this), nullptr, host, 0, nullptr, 0, nullptr, 0);
+            if (!conn)
+                return std::unexpected(error_from_errno());
+
+            return {};
+        }
+
+        [[nodiscard]] std::expected<void, std::error_code> connect_setup(std::expected<UdpSocket, std::error_code>&& sock_res,
+                                                                         const ip_address_t peer_ip, const port_t peer_port,
+                                                                         const std::string& hostname,
+                                                                         const std::vector<std::string>& client_payloads,
+                                                                         void* ssl_ctx, const kmx::aio::quic::settings& config)
+        {
+            if (!sock_res)
+                return std::unexpected(sock_res.error());
+
+            ssl_ctx_ = ssl_ctx;
+            is_client_ = true;
+            while (!client_payloads_.empty())
+                client_payloads_.pop();
+
+            for (const auto& payload: client_payloads)
+            {
+                if (!payload.empty())
+                    client_payloads_.push(payload);
+            }
+
             socket_ = std::make_unique<UdpSocket>(std::move(*sock_res));
 
             // Bind to ephemeral port
