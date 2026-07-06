@@ -1,0 +1,10 @@
+#pragma once
+
+#include <kmx/aio/readiness/executor.hpp>
+#include <kmx/aio/task.hpp>
+#include <memory>
+
+namespace kmx::aio::sample::quic::echo_client
+{
+    auto async_main(std::shared_ptr<kmx::aio::readiness::executor> exec) -> kmx::aio::task<void>;
+}

@@ -13,6 +13,7 @@
 #include <functional>
 #include <memory>
 #include <netinet/in.h>
+#include <optional>
 #include <queue>
 #include <source_location>
 #include <span>
@@ -28,11 +29,27 @@ extern "C"
 
 #include <kmx/aio/basic_types.hpp>
 #include <kmx/aio/quic/settings.hpp>
+#include <kmx/aio/readiness/descriptor/timer.hpp>
 #include <kmx/aio/task.hpp>
 #include <kmx/logger.hpp>
 
 namespace kmx::aio::quic
 {
+    namespace detail
+    {
+        [[nodiscard]] auto readiness_watchdog_tick_ns_from_env() noexcept -> long;
+        [[nodiscard]] auto conn_status_to_string(::LSQUIC_CONN_STATUS status) noexcept -> std::string_view;
+        void configure_stream_if(::lsquic_stream_if& stream_if, ::lsquic_conn_ctx_t* (*on_new_conn)(void*, ::lsquic_conn_t*),
+                                 void (*on_conn_closed)(::lsquic_conn_t*),
+                                 ::lsquic_stream_ctx_t* (*on_new_stream)(void*, ::lsquic_stream_t*),
+                                 void (*on_read)(::lsquic_stream_t*, ::lsquic_stream_ctx_t*),
+                                 void (*on_write)(::lsquic_stream_t*, ::lsquic_stream_ctx_t*),
+                                 void (*on_close)(::lsquic_stream_t*, ::lsquic_stream_ctx_t*),
+                                 void (*on_hsk_done)(::lsquic_conn_t*, enum lsquic_hsk_status)) noexcept;
+        void apply_lsquic_settings(::lsquic_engine_settings& lsquic_settings, const kmx::aio::quic::settings& config,
+                                   unsigned lsquic_flags) noexcept;
+    } // namespace detail
+
     /// @brief Common QUIC engine implementation shared between readiness and completion models.
     /// @tparam Executor  The executor type (readiness::executor or completion::executor).
     /// @tparam UdpSocket The UDP socket type (readiness::udp::socket or completion::udp::socket).
@@ -53,39 +70,9 @@ namespace kmx::aio::quic
         bool running_ {};
         bool is_client_ {false};
         std::queue<std::string> client_payloads_ {};
+        const long readiness_idle_tick_ns_ {detail::readiness_watchdog_tick_ns_from_env()};
 
         explicit base_impl(Executor& exec) noexcept: exec_(exec) {}
-
-        [[nodiscard]] static std::string_view conn_status_to_string(const connection_status_t status) noexcept
-        {
-            switch (status)
-            {
-                case LSCONN_ST_HSK_IN_PROGRESS:
-                    return "LSCONN_ST_HSK_IN_PROGRESS";
-                case LSCONN_ST_CONNECTED:
-                    return "LSCONN_ST_CONNECTED";
-                case LSCONN_ST_HSK_FAILURE:
-                    return "LSCONN_ST_HSK_FAILURE";
-                case LSCONN_ST_GOING_AWAY:
-                    return "LSCONN_ST_GOING_AWAY";
-                case LSCONN_ST_TIMED_OUT:
-                    return "LSCONN_ST_TIMED_OUT";
-                case LSCONN_ST_RESET:
-                    return "LSCONN_ST_RESET";
-                case LSCONN_ST_USER_ABORTED:
-                    return "LSCONN_ST_USER_ABORTED";
-                case LSCONN_ST_ERROR:
-                    return "LSCONN_ST_ERROR";
-                case LSCONN_ST_CLOSED:
-                    return "LSCONN_ST_CLOSED";
-                case LSCONN_ST_PEER_GOING_AWAY:
-                    return "LSCONN_ST_PEER_GOING_AWAY";
-                case LSCONN_ST_VERNEG_FAILURE:
-                    return "LSCONN_ST_VERNEG_FAILURE";
-                default:
-                    return "LSCONN_ST_UNKNOWN";
-            }
-        }
 
         ~base_impl() noexcept
         {
@@ -142,7 +129,7 @@ namespace kmx::aio::quic
             const auto status = ::lsquic_conn_status(conn, errbuf.data(), errbuf.size());
             logger::log(logger::level::info, std::source_location::current(),
                         "[QUIC DEBUG] on_conn_closed called, status={} ({}), reason='{}'", static_cast<int>(status),
-                        conn_status_to_string(status), errbuf.data());
+                        detail::conn_status_to_string(status), errbuf.data());
 
             if (self && self->is_client_)
                 self->running_ = false;
@@ -157,9 +144,7 @@ namespace kmx::aio::quic
                         static_cast<int>(status), self ? self->is_client_ : false);
 
             if (self && self->is_client_)
-            {
                 logger::log(logger::level::info, std::source_location::current(), "[QUIC DEBUG] on_hsk_done: client handshake completed");
-            }
         }
 
         static ::lsquic_stream_ctx_t* on_new_stream(void* stream_if_ctx, ::lsquic_stream_t* stream)
@@ -274,13 +259,8 @@ namespace kmx::aio::quic
                 return std::unexpected(error_from_errno(EINVAL));
 
             static ::lsquic_stream_if stream_if {};
-            stream_if.on_new_conn = on_new_conn;
-            stream_if.on_conn_closed = on_conn_closed;
-            stream_if.on_new_stream = on_new_stream;
-            stream_if.on_read = on_read;
-            stream_if.on_write = on_write;
-            stream_if.on_close = on_close;
-            stream_if.on_hsk_done = on_hsk_done;
+            detail::configure_stream_if(stream_if, on_new_conn, on_conn_closed, on_new_stream, on_read, on_write, on_close,
+                                        on_hsk_done);
 
             ::lsquic_engine_api engine_api {};
             engine_api.ea_packets_out = send_packets_out;
@@ -293,10 +273,7 @@ namespace kmx::aio::quic
             engine_api.ea_alpn = "kmx-aio";
 
             static ::lsquic_engine_settings lsquic_settings {};
-            ::lsquic_engine_init_settings(&lsquic_settings, lsquic_flags);
-            lsquic_settings.es_max_streams_in = config.max_streams_in;
-            lsquic_settings.es_idle_timeout = config.idle_conn_timeout_sec;
-            lsquic_settings.es_max_cfcw = config.max_cfcwnd;
+            detail::apply_lsquic_settings(lsquic_settings, config, lsquic_flags);
             engine_api.ea_settings = &lsquic_settings;
 
             lsquic_engine_ = ::lsquic_engine_new(lsquic_flags, &engine_api);
@@ -350,46 +327,11 @@ namespace kmx::aio::quic
                                                                          const std::string& hostname, const std::string& client_payload,
                                                                          void* ssl_ctx, const kmx::aio::quic::settings& config)
         {
-            if (!sock_res)
-                return std::unexpected(sock_res.error());
-
-            ssl_ctx_ = ssl_ctx;
-            is_client_ = true;
-            while (!client_payloads_.empty())
-                client_payloads_.pop();
+            clear_client_payload_queue();
 
             if (!client_payload.empty())
                 client_payloads_.push(client_payload);
-            socket_ = std::make_unique<UdpSocket>(std::move(*sock_res));
-
-            // Bind to ephemeral port
-            static constexpr std::array<uint8_t, 4u> any_ip {0, 0, 0, 0};
-            if (auto bind_res = bind_socket(any_ip, 0); !bind_res)
-                return std::unexpected(bind_res.error());
-
-            if (auto init_res = init_lsquic(config, 0); !init_res)
-                return std::unexpected(init_res.error());
-
-            auto peer_addr_result = make_socket_address(peer_ip, peer_port);
-            if (!peer_addr_result)
-                return std::unexpected(peer_addr_result.error());
-
-            if (::connect(socket_->get_fd(), reinterpret_cast<sockaddr*>(&peer_addr_result->storage), peer_addr_result->length) < 0)
-                return std::unexpected(error_from_errno());
-
-            ::socklen_t local_len = sizeof(local_addr_);
-            if (::getsockname(socket_->get_fd(), reinterpret_cast<sockaddr*>(&local_addr_), &local_len) < 0)
-                return std::unexpected(error_from_errno());
-
-            const char* host = hostname.empty() ? nullptr : hostname.c_str();
-
-            ::lsquic_conn_t* const conn = ::lsquic_engine_connect(lsquic_engine_, N_LSQVER, reinterpret_cast<sockaddr*>(&local_addr_),
-                                                                  reinterpret_cast<sockaddr*>(&peer_addr_result->storage),
-                                                                  static_cast<void*>(this), nullptr, host, 0, nullptr, 0, nullptr, 0);
-            if (!conn)
-                return std::unexpected(error_from_errno());
-
-            return {};
+            return connect_setup_common(std::move(sock_res), peer_ip, peer_port, hostname, ssl_ctx, config);
         }
 
         [[nodiscard]] std::expected<void, std::error_code> connect_setup(std::expected<UdpSocket, std::error_code>&& sock_res,
@@ -398,24 +340,37 @@ namespace kmx::aio::quic
                                                                          const std::vector<std::string>& client_payloads, void* ssl_ctx,
                                                                          const kmx::aio::quic::settings& config)
         {
+            clear_client_payload_queue();
+
+            for (const auto& payload: client_payloads)
+                if (!payload.empty())
+                    client_payloads_.push(payload);
+
+            return connect_setup_common(std::move(sock_res), peer_ip, peer_port, hostname, ssl_ctx, config);
+        }
+
+      private:
+        void clear_client_payload_queue() noexcept
+        {
+            while (!client_payloads_.empty())
+                client_payloads_.pop();
+        }
+
+        [[nodiscard]] std::expected<void, std::error_code> connect_setup_common(std::expected<UdpSocket, std::error_code>&& sock_res,
+                                                                                 const ip_address_t peer_ip, const port_t peer_port,
+                                                                                 const std::string& hostname, void* ssl_ctx,
+                                                                                 const kmx::aio::quic::settings& config)
+        {
             if (!sock_res)
                 return std::unexpected(sock_res.error());
 
             ssl_ctx_ = ssl_ctx;
             is_client_ = true;
-            while (!client_payloads_.empty())
-                client_payloads_.pop();
-
-            for (const auto& payload: client_payloads)
-            {
-                if (!payload.empty())
-                    client_payloads_.push(payload);
-            }
 
             socket_ = std::make_unique<UdpSocket>(std::move(*sock_res));
 
             // Bind to ephemeral port
-            static constexpr std::array<uint8_t, 4u> any_ip {0, 0, 0, 0};
+            static constexpr std::array<std::uint8_t, 4u> any_ip {0, 0, 0, 0};
             if (auto bind_res = bind_socket(any_ip, 0); !bind_res)
                 return std::unexpected(bind_res.error());
 
@@ -444,6 +399,159 @@ namespace kmx::aio::quic
             return {};
         }
 
+        struct timer_guard_t
+        {
+            Executor& exec;
+            std::optional<kmx::aio::readiness::descriptor::timer>& tick;
+
+            ~timer_guard_t() noexcept
+            {
+                if (tick && tick->is_valid())
+                    if constexpr (requires(Executor& e) { e.unregister_fd(0); })
+                        exec.unregister_fd(tick->get());
+            }
+        };
+
+        static void prepare_recv_message(std::array<std::byte, 4096u>& packet_buf, ::sockaddr_storage& peer_addr, ::msghdr& msg,
+                                         ::iovec (&iov)[1u]) noexcept
+        {
+            iov[0].iov_base = packet_buf.data();
+            iov[0].iov_len = packet_buf.size();
+            msg.msg_name = &peer_addr;
+            msg.msg_namelen = sizeof(peer_addr);
+            msg.msg_iov = iov;
+            msg.msg_iovlen = 1;
+        }
+
+        void drive_engine_once() noexcept
+        {
+            ::lsquic_engine_process_conns(lsquic_engine_);
+            ::lsquic_engine_send_unsent_packets(lsquic_engine_);
+        }
+
+        void bootstrap_initial_packets() noexcept
+        {
+            for (int i = 0; i < 10; ++i)
+                drive_engine_once();
+        }
+
+        [[nodiscard]] std::expected<void, std::error_code>
+            setup_readiness_timer_if_needed(std::optional<kmx::aio::readiness::descriptor::timer>& readiness_tick)
+        {
+            if constexpr (requires(Executor& e) { e.async_timeout(std::uint64_t {}); })
+                return {};
+            else
+            {
+                auto timer_res = kmx::aio::readiness::descriptor::timer::create();
+                if (!timer_res)
+                    return std::unexpected(timer_res.error());
+
+                if (auto reg_res = exec_.register_fd(timer_res->get()); !reg_res)
+                    return std::unexpected(reg_res.error());
+
+                readiness_tick.emplace(std::move(*timer_res));
+                return {};
+            }
+        }
+
+        [[nodiscard]] std::expected<void, std::error_code> feed_packet_to_engine(const std::array<std::byte, 4096u>& packet_buf,
+                                                                                  const ssize_t recv_n,
+                                                                                  const ::sockaddr_storage& peer_addr)
+        {
+            const int packet_in_res =
+                ::lsquic_engine_packet_in(lsquic_engine_, reinterpret_cast<const unsigned char*>(packet_buf.data()),
+                                          static_cast<std::size_t>(recv_n), reinterpret_cast<::sockaddr*>(&local_addr_),
+                                          reinterpret_cast<::sockaddr*>(const_cast<::sockaddr_storage*>(&peer_addr)),
+                                          reinterpret_cast<void*>(this), 0);
+            if (packet_in_res < 0)
+            {
+                logger::log(logger::level::error, std::source_location::current(), "lsquic_engine_packet_in failed: {}", packet_in_res);
+                return std::unexpected(error_from_errno(EPROTO));
+            }
+
+            drive_engine_once();
+            return {};
+        }
+
+        task<std::expected<void, std::error_code>> wait_completion_idle_tick()
+        {
+            auto timeout_res = co_await exec_.async_timeout(1'000'000ULL); // 1 ms
+            if (!timeout_res)
+                co_return std::unexpected(timeout_res.error());
+
+            co_return std::expected<void, std::error_code> {};
+        }
+
+        task<std::expected<void, std::error_code>> wait_readiness_idle_tick(kmx::aio::readiness::descriptor::timer& readiness_tick)
+        {
+            ::itimerspec one_ms {};
+            one_ms.it_value.tv_nsec = readiness_idle_tick_ns_;
+
+            if (auto arm_res = readiness_tick.set_time(0, one_ms); !arm_res)
+                co_return std::unexpected(arm_res.error());
+
+            auto tick_res = co_await readiness_tick.wait(exec_);
+            if (!tick_res)
+                co_return std::unexpected(tick_res.error());
+
+            co_return std::expected<void, std::error_code> {};
+        }
+
+        task<std::expected<void, std::error_code>> process_completion_receive_iteration(std::array<std::byte, 4096u>& packet_buf,
+                                                                                         ::msghdr& msg,
+                                                                                         const ::sockaddr_storage& peer_addr)
+        {
+            const ssize_t recv_n = ::recvmsg(socket_->get_fd(), &msg, MSG_DONTWAIT);
+            if (recv_n < 0)
+            {
+                if (would_block(errno))
+                {
+                    auto idle_res = co_await wait_completion_idle_tick();
+                    if (!idle_res)
+                        co_return std::unexpected(idle_res.error());
+
+                    co_return std::expected<void, std::error_code> {};
+                }
+
+                co_return std::unexpected(error_from_errno());
+            }
+
+            if (recv_n > 0)
+                if (auto packet_res = feed_packet_to_engine(packet_buf, recv_n, peer_addr); !packet_res)
+                    co_return std::unexpected(packet_res.error());
+
+            co_return std::expected<void, std::error_code> {};
+        }
+
+        task<std::expected<void, std::error_code>> process_readiness_receive_iteration(std::array<std::byte, 4096u>& packet_buf,
+                                                                                        ::msghdr& msg,
+                                                                                        const ::sockaddr_storage& peer_addr,
+                                                                                        kmx::aio::readiness::descriptor::timer& readiness_tick)
+        {
+            const ssize_t recv_n = ::recvmsg(socket_->get_fd(), &msg, MSG_DONTWAIT);
+            if (recv_n < 0)
+            {
+                if (would_block(errno))
+                {
+                    auto idle_res = co_await wait_readiness_idle_tick(readiness_tick);
+                    if (!idle_res)
+                        co_return std::unexpected(idle_res.error());
+
+                    co_return std::expected<void, std::error_code> {};
+                }
+
+                co_return std::unexpected(error_from_errno());
+            }
+
+            if (recv_n > 0)
+                if (auto packet_res = feed_packet_to_engine(packet_buf, recv_n, peer_addr); !packet_res)
+                    co_return std::unexpected(packet_res.error());
+
+            co_return std::expected<void, std::error_code> {};
+        }
+
+      public:
+
         /// @brief Shared event processing loop.
         task<std::expected<void, std::error_code>> process()
         {
@@ -451,88 +559,32 @@ namespace kmx::aio::quic
             std::array<std::byte, 4096u> packet_buf {};
             ::msghdr msg {};
             ::iovec iov[1u] {};
+            std::optional<kmx::aio::readiness::descriptor::timer> readiness_tick;
+            [[maybe_unused]] timer_guard_t timer_guard {exec_, readiness_tick};
 
-            // Do initial lsquic processing to emit Initial packets before recvmsg-driven processing.
-            for (int i = 0; i < 10; ++i)
-            {
-                ::lsquic_engine_process_conns(lsquic_engine_);
-                ::lsquic_engine_send_unsent_packets(lsquic_engine_);
-            }
+            if (auto setup_res = setup_readiness_timer_if_needed(readiness_tick); !setup_res)
+                co_return std::unexpected(setup_res.error());
+
+            bootstrap_initial_packets();
 
             while (running_)
             {
-                ::lsquic_engine_process_conns(lsquic_engine_);
-                ::lsquic_engine_send_unsent_packets(lsquic_engine_);
+                drive_engine_once();
 
                 ::sockaddr_storage peer_addr {};
-
-                iov[0].iov_base = packet_buf.data();
-                iov[0].iov_len = packet_buf.size();
-                msg.msg_name = &peer_addr;
-                msg.msg_namelen = sizeof(peer_addr);
-                msg.msg_iov = iov;
-                msg.msg_iovlen = 1;
+                prepare_recv_message(packet_buf, peer_addr, msg, iov);
 
                 if constexpr (requires(Executor& e) { e.async_timeout(std::uint64_t {}); })
                 {
-                    const ssize_t recv_n = ::recvmsg(socket_->get_fd(), &msg, MSG_DONTWAIT);
-                    if (recv_n < 0)
-                    {
-                        if (would_block(errno))
-                        {
-                            // Keep driving lsquic timers while no UDP datagram is currently available.
-                            auto timeout_res = co_await exec_.async_timeout(1'000'000ULL); // 1 ms
-                            if (!timeout_res)
-                                co_return std::unexpected(timeout_res.error());
-                            continue;
-                        }
-
-                        co_return std::unexpected(error_from_errno());
-                    }
-
-                    if (recv_n > 0)
-                    {
-                        const int packet_in_res =
-                            ::lsquic_engine_packet_in(lsquic_engine_, reinterpret_cast<const unsigned char*>(packet_buf.data()),
-                                                      static_cast<std::size_t>(recv_n), reinterpret_cast<::sockaddr*>(&local_addr_),
-                                                      reinterpret_cast<::sockaddr*>(&peer_addr), reinterpret_cast<void*>(this), 0);
-                        if (packet_in_res < 0)
-                        {
-                            logger::log(logger::level::error, std::source_location::current(), "lsquic_engine_packet_in failed: {}",
-                                        packet_in_res);
-                            co_return std::unexpected(error_from_errno(EPROTO));
-                        }
-
-                        ::lsquic_engine_process_conns(lsquic_engine_);
-                        ::lsquic_engine_send_unsent_packets(lsquic_engine_);
-                    }
+                    auto iter_res = co_await process_completion_receive_iteration(packet_buf, msg, peer_addr);
+                    if (!iter_res)
+                        co_return std::unexpected(iter_res.error());
                 }
                 else
                 {
-                    auto recv_res = co_await socket_->recvmsg(&msg);
-                    if (!recv_res)
-                    {
-                        logger::log(logger::level::error, std::source_location::current(), "[QUIC DEBUG] recvmsg error: {}",
-                                    recv_res.error().message());
-                        co_return std::unexpected(recv_res.error());
-                    }
-
-                    if (*recv_res > 0)
-                    {
-                        const int packet_in_res =
-                            ::lsquic_engine_packet_in(lsquic_engine_, reinterpret_cast<const unsigned char*>(packet_buf.data()), *recv_res,
-                                                      reinterpret_cast<::sockaddr*>(&local_addr_),
-                                                      reinterpret_cast<::sockaddr*>(&peer_addr), reinterpret_cast<void*>(this), 0);
-                        if (packet_in_res < 0)
-                        {
-                            logger::log(logger::level::error, std::source_location::current(), "lsquic_engine_packet_in failed: {}",
-                                        packet_in_res);
-                            co_return std::unexpected(error_from_errno(EPROTO));
-                        }
-
-                        ::lsquic_engine_process_conns(lsquic_engine_);
-                        ::lsquic_engine_send_unsent_packets(lsquic_engine_);
-                    }
+                    auto iter_res = co_await process_readiness_receive_iteration(packet_buf, msg, peer_addr, *readiness_tick);
+                    if (!iter_res)
+                        co_return std::unexpected(iter_res.error());
                 }
             }
 

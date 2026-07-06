@@ -373,6 +373,23 @@ Run sanitizer builds/tests:
 bash build/run-sanitizer-tests.sh
 ```
 
+Run QUIC smoke tests explicitly (readiness + completion):
+
+```bash
+TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+"$TEST_BIN" "[quic][readiness][integration][smoke]"
+"$TEST_BIN" "[quic][http3][integration][smoke]"
+```
+
+Optional QUIC smoke tuning environment variables:
+
+* `KMX_AIO_QUIC_READINESS_WATCHDOG_NS` (default `10000000`): readiness QUIC watchdog tick in nanoseconds.
+    Accepted range is `1000000` to `100000000` (1 ms to 100 ms). Invalid values fall back to default.
+* `KMX_QUIC_ECHO_PORT`: override readiness QUIC echo sample port (default `12345`).
+* `KMX_QUIC_HTTP3_PORT`: override completion QUIC HTTP/3 sample port (default `12345`).
+
+These are useful when running parallel smoke tests to avoid fixed-port collisions.
+
 Sanitizer feature toggles are exposed via QBS project properties:
 
 * `project.enable_asan:true`
