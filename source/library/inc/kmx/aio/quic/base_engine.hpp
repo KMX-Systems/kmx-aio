@@ -60,18 +60,30 @@ namespace kmx::aio::quic
         {
             switch (status)
             {
-                case LSCONN_ST_HSK_IN_PROGRESS: return "LSCONN_ST_HSK_IN_PROGRESS";
-                case LSCONN_ST_CONNECTED: return "LSCONN_ST_CONNECTED";
-                case LSCONN_ST_HSK_FAILURE: return "LSCONN_ST_HSK_FAILURE";
-                case LSCONN_ST_GOING_AWAY: return "LSCONN_ST_GOING_AWAY";
-                case LSCONN_ST_TIMED_OUT: return "LSCONN_ST_TIMED_OUT";
-                case LSCONN_ST_RESET: return "LSCONN_ST_RESET";
-                case LSCONN_ST_USER_ABORTED: return "LSCONN_ST_USER_ABORTED";
-                case LSCONN_ST_ERROR: return "LSCONN_ST_ERROR";
-                case LSCONN_ST_CLOSED: return "LSCONN_ST_CLOSED";
-                case LSCONN_ST_PEER_GOING_AWAY: return "LSCONN_ST_PEER_GOING_AWAY";
-                case LSCONN_ST_VERNEG_FAILURE: return "LSCONN_ST_VERNEG_FAILURE";
-                default: return "LSCONN_ST_UNKNOWN";
+                case LSCONN_ST_HSK_IN_PROGRESS:
+                    return "LSCONN_ST_HSK_IN_PROGRESS";
+                case LSCONN_ST_CONNECTED:
+                    return "LSCONN_ST_CONNECTED";
+                case LSCONN_ST_HSK_FAILURE:
+                    return "LSCONN_ST_HSK_FAILURE";
+                case LSCONN_ST_GOING_AWAY:
+                    return "LSCONN_ST_GOING_AWAY";
+                case LSCONN_ST_TIMED_OUT:
+                    return "LSCONN_ST_TIMED_OUT";
+                case LSCONN_ST_RESET:
+                    return "LSCONN_ST_RESET";
+                case LSCONN_ST_USER_ABORTED:
+                    return "LSCONN_ST_USER_ABORTED";
+                case LSCONN_ST_ERROR:
+                    return "LSCONN_ST_ERROR";
+                case LSCONN_ST_CLOSED:
+                    return "LSCONN_ST_CLOSED";
+                case LSCONN_ST_PEER_GOING_AWAY:
+                    return "LSCONN_ST_PEER_GOING_AWAY";
+                case LSCONN_ST_VERNEG_FAILURE:
+                    return "LSCONN_ST_VERNEG_FAILURE";
+                default:
+                    return "LSCONN_ST_UNKNOWN";
             }
         }
 
@@ -129,8 +141,8 @@ namespace kmx::aio::quic
             std::array<char, 512u> errbuf {};
             const auto status = ::lsquic_conn_status(conn, errbuf.data(), errbuf.size());
             logger::log(logger::level::info, std::source_location::current(),
-                        "[QUIC DEBUG] on_conn_closed called, status={} ({}), reason='{}'",
-                        static_cast<int>(status), conn_status_to_string(status), errbuf.data());
+                        "[QUIC DEBUG] on_conn_closed called, status={} ({}), reason='{}'", static_cast<int>(status),
+                        conn_status_to_string(status), errbuf.data());
 
             if (self && self->is_client_)
                 self->running_ = false;
@@ -141,14 +153,12 @@ namespace kmx::aio::quic
         static void on_hsk_done(::lsquic_conn_t* conn, enum lsquic_hsk_status status)
         {
             auto* const self = reinterpret_cast<base_impl*>(::lsquic_conn_get_ctx(conn));
-            logger::log(logger::level::info, std::source_location::current(),
-                        "[QUIC DEBUG] on_hsk_done called, status={}, is_client_={}",
+            logger::log(logger::level::info, std::source_location::current(), "[QUIC DEBUG] on_hsk_done called, status={}, is_client_={}",
                         static_cast<int>(status), self ? self->is_client_ : false);
 
             if (self && self->is_client_)
             {
-                logger::log(logger::level::info, std::source_location::current(),
-                            "[QUIC DEBUG] on_hsk_done: client handshake completed");
+                logger::log(logger::level::info, std::source_location::current(), "[QUIC DEBUG] on_hsk_done: client handshake completed");
             }
         }
 
@@ -190,9 +200,7 @@ namespace kmx::aio::quic
                 const ssize_t nr = ::lsquic_stream_read(stream, scratch.data(), scratch.size());
                 if (nr > 0)
                 {
-                    logger::log(logger::level::warn,
-                                std::source_location::current(),
-                                "QUIC payload pool exhausted; dropping {} byte(s)",
+                    logger::log(logger::level::warn, std::source_location::current(), "QUIC payload pool exhausted; dropping {} byte(s)",
                                 static_cast<std::size_t>(nr));
                     return;
                 }
@@ -225,12 +233,9 @@ namespace kmx::aio::quic
                     const ssize_t chunk = ::lsquic_stream_write(stream, payload.data() + written, payload.size() - written);
                     if (chunk <= 0)
                     {
-                        logger::log(logger::level::warn,
-                                    std::source_location::current(),
+                        logger::log(logger::level::warn, std::source_location::current(),
                                     "QUIC client write failed on stream {}, written={}/{}",
-                                    static_cast<unsigned long long>(::lsquic_stream_id(stream)),
-                                    written,
-                                    payload.size());
+                                    static_cast<unsigned long long>(::lsquic_stream_id(stream)), written, payload.size());
                         break;
                     }
 
@@ -390,8 +395,8 @@ namespace kmx::aio::quic
         [[nodiscard]] std::expected<void, std::error_code> connect_setup(std::expected<UdpSocket, std::error_code>&& sock_res,
                                                                          const ip_address_t peer_ip, const port_t peer_port,
                                                                          const std::string& hostname,
-                                                                         const std::vector<std::string>& client_payloads,
-                                                                         void* ssl_ctx, const kmx::aio::quic::settings& config)
+                                                                         const std::vector<std::string>& client_payloads, void* ssl_ctx,
+                                                                         const kmx::aio::quic::settings& config)
         {
             if (!sock_res)
                 return std::unexpected(sock_res.error());
@@ -468,7 +473,7 @@ namespace kmx::aio::quic
                 msg.msg_iov = iov;
                 msg.msg_iovlen = 1;
 
-                if constexpr (requires (Executor& e) { e.async_timeout(std::uint64_t {}); })
+                if constexpr (requires(Executor& e) { e.async_timeout(std::uint64_t {}); })
                 {
                     const ssize_t recv_n = ::recvmsg(socket_->get_fd(), &msg, MSG_DONTWAIT);
                     if (recv_n < 0)
@@ -507,8 +512,8 @@ namespace kmx::aio::quic
                     auto recv_res = co_await socket_->recvmsg(&msg);
                     if (!recv_res)
                     {
-                        logger::log(logger::level::error, std::source_location::current(),
-                                    "[QUIC DEBUG] recvmsg error: {}", recv_res.error().message());
+                        logger::log(logger::level::error, std::source_location::current(), "[QUIC DEBUG] recvmsg error: {}",
+                                    recv_res.error().message());
                         co_return std::unexpected(recv_res.error());
                     }
 
@@ -516,8 +521,8 @@ namespace kmx::aio::quic
                     {
                         const int packet_in_res =
                             ::lsquic_engine_packet_in(lsquic_engine_, reinterpret_cast<const unsigned char*>(packet_buf.data()), *recv_res,
-                                                      reinterpret_cast<::sockaddr*>(&local_addr_), reinterpret_cast<::sockaddr*>(&peer_addr),
-                                                      reinterpret_cast<void*>(this), 0);
+                                                      reinterpret_cast<::sockaddr*>(&local_addr_),
+                                                      reinterpret_cast<::sockaddr*>(&peer_addr), reinterpret_cast<void*>(this), 0);
                         if (packet_in_res < 0)
                         {
                             logger::log(logger::level::error, std::source_location::current(), "lsquic_engine_packet_in failed: {}",

@@ -176,6 +176,7 @@ namespace kmx::aio::avb
 
             return std::make_pair(std::move(frame_buf), hw_ts);
         }
+
     private:
         [[nodiscard]] std::expected<void, std::error_code> resolve_iface(std::string_view iface)
         {

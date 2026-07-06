@@ -45,8 +45,8 @@ namespace kmx::aio::sample::quic::echo_client
         std::string_view response(data.data(), data.size());
         const auto seen = responses_received.fetch_add(1u) + 1u;
 
-        std::cout << "[QUIC Echo Client] Response #" << seen << " on stream "
-                  << static_cast<unsigned long long>(::lsquic_stream_id(stream)) << ": " << response << "\n";
+        std::cout << "[QUIC Echo Client] Response #" << seen << " on stream " << static_cast<unsigned long long>(::lsquic_stream_id(stream))
+                  << ": " << response << "\n";
 
         const auto target = close_after_responses.load();
         if (target > 0u && seen >= target)
@@ -88,8 +88,7 @@ namespace kmx::aio::sample::quic::echo_client
             "echo stream B payload",
         };
 
-        std::cout << "[QUIC Echo Client] Connecting to 127.0.0.1:" << peer_port << " with " << payloads.size()
-                  << " streams...\n";
+        std::cout << "[QUIC Echo Client] Connecting to 127.0.0.1:" << peer_port << " with " << payloads.size() << " streams...\n";
         std::cout << "[QUIC Echo Client] close_after_responses=" << close_after_responses.load() << "\n";
 
         auto res = co_await engine.connect(peer_ip, peer_port, "localhost", payloads, ssl_ctx);

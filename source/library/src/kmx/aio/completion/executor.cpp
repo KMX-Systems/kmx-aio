@@ -186,9 +186,8 @@ namespace kmx::aio::completion
     task<std::expected<void, std::error_code>> executor::async_connect(const fd_t fd, const sockaddr* addr,
                                                                        const socklen_t addrlen) noexcept(false)
     {
-        const auto result = co_await await_uring_result([fd, addr, addrlen](auto* sqe, auto&) {
-            ::io_uring_prep_connect(sqe, fd, addr, addrlen);
-        });
+        const auto result =
+            co_await await_uring_result([fd, addr, addrlen](auto* sqe, auto&) { ::io_uring_prep_connect(sqe, fd, addr, addrlen); });
 
         if (!result)
             co_return std::unexpected(result.error());
@@ -199,9 +198,8 @@ namespace kmx::aio::completion
     task<std::expected<std::size_t, std::error_code>> executor::async_recvmsg(const fd_t fd, msghdr* msg,
                                                                               const unsigned flags) noexcept(false)
     {
-        const auto result = co_await await_uring_result([fd, msg, flags](auto* sqe, auto&) {
-            ::io_uring_prep_recvmsg(sqe, fd, msg, flags);
-        });
+        const auto result =
+            co_await await_uring_result([fd, msg, flags](auto* sqe, auto&) { ::io_uring_prep_recvmsg(sqe, fd, msg, flags); });
 
         if (!result)
             co_return std::unexpected(result.error());
@@ -212,9 +210,8 @@ namespace kmx::aio::completion
     task<std::expected<std::size_t, std::error_code>> executor::async_sendmsg(const fd_t fd, const msghdr* msg,
                                                                               const unsigned flags) noexcept(false)
     {
-        const auto result = co_await await_uring_result([fd, msg, flags](auto* sqe, auto&) {
-            ::io_uring_prep_sendmsg(sqe, fd, msg, flags);
-        });
+        const auto result =
+            co_await await_uring_result([fd, msg, flags](auto* sqe, auto&) { ::io_uring_prep_sendmsg(sqe, fd, msg, flags); });
 
         if (!result)
             co_return std::unexpected(result.error());
@@ -442,7 +439,7 @@ namespace kmx::aio::completion
 
     void executor::process_completions() noexcept
     {
-        for(::io_uring_cqe* cqe {}; ::io_uring_peek_cqe(&ring_, &cqe) == 0; )
+        for (::io_uring_cqe* cqe {}; ::io_uring_peek_cqe(&ring_, &cqe) == 0;)
         {
             metrics_.total_completions.fetch_add(1u, mem_order);
             auto* const ctx = static_cast<io_context*>(::io_uring_cqe_get_data(cqe));

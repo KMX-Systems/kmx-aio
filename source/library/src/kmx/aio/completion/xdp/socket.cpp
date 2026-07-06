@@ -265,8 +265,8 @@ namespace kmx::aio::completion::xdp
         if (state.config.force_zero_copy)
             sock_cfg.bind_flags |= XDP_ZEROCOPY;
 
-        const int xsk_rc = xsk_socket__create(&state.xsk, interface_name.c_str(), state.config.queue_id, state.umem, &state.rx, &state.tx,
-                                              &sock_cfg);
+        const int xsk_rc =
+            xsk_socket__create(&state.xsk, interface_name.c_str(), state.config.queue_id, state.umem, &state.rx, &state.tx, &sock_cfg);
         if (xsk_rc != 0)
             return std::unexpected(to_std_error_code(map_xdp_error(xsk_rc)));
 
@@ -350,7 +350,7 @@ namespace kmx::aio::completion::xdp
             return std::unexpected(initialized.error());
 
 #if !defined(KMX_AIO_FEATURE_AF_XDP)
-        // Graceful fallback keeps API behavior deterministic on hosts without AF_XDP support.
+            // Graceful fallback keeps API behavior deterministic on hosts without AF_XDP support.
 #endif
         return out;
     }

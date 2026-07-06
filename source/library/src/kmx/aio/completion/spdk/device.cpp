@@ -4,9 +4,9 @@
 #include <kmx/aio/completion/spdk/device.hpp>
 #include <kmx/aio/completion/spdk/runtime.hpp>
 
-#include <kmx/aio/error_code.hpp>
 #include <cstddef>
 #include <cstring>
+#include <kmx/aio/error_code.hpp>
 #include <limits>
 #include <mutex>
 #include <new>
@@ -93,7 +93,7 @@ namespace kmx::aio::completion::spdk
     device::device(device&&) noexcept = default;
 
     std::expected<std::uint64_t, std::error_code> device::validate_create_config(const std::shared_ptr<executor>& exec,
-                                                                                  const device_config& config) noexcept
+                                                                                 const device_config& config) noexcept
     {
         if (!exec)
             return std::unexpected(to_std_error_code(error_code::invalid_argument));

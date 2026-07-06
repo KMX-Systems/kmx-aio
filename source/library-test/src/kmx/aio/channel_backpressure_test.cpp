@@ -123,15 +123,17 @@ TEST_CASE("channel wait_until_can_send unblocks when consumer pops from a full r
     REQUIRE_FALSE(ch.try_push(4));
 
     {
-        std::jthread consumer([&](std::stop_token) {
-            consumer_ready.store(true, std::memory_order_release);
-            while (ch.empty())
-                std::this_thread::yield();
+        std::jthread consumer(
+            [&](std::stop_token)
+            {
+                consumer_ready.store(true, std::memory_order_release);
+                while (ch.empty())
+                    std::this_thread::yield();
 
-            auto value = ch.try_pop();
-            if (value.has_value())
-                consumer_done.store(true, std::memory_order_release);
-        });
+                auto value = ch.try_pop();
+                if (value.has_value())
+                    consumer_done.store(true, std::memory_order_release);
+            });
 
         while (!consumer_ready.load(std::memory_order_acquire))
             std::this_thread::yield();
@@ -156,15 +158,17 @@ TEST_CASE("channel wait_until_can_send unblocks when throttle clears", "[channel
     REQUIRE_FALSE(ch.can_send());
 
     {
-        std::jthread consumer([&](std::stop_token) {
-            while (ch.can_send())
-                std::this_thread::yield();
+        std::jthread consumer(
+            [&](std::stop_token)
+            {
+                while (ch.can_send())
+                    std::this_thread::yield();
 
-            auto first = ch.try_pop();
-            auto second = ch.try_pop();
-            if (first.has_value() && second.has_value())
-                consumer_done.store(true, std::memory_order_release);
-        });
+                auto first = ch.try_pop();
+                auto second = ch.try_pop();
+                if (first.has_value() && second.has_value())
+                    consumer_done.store(true, std::memory_order_release);
+            });
 
         ch.wait_until_can_send();
     }
@@ -191,15 +195,17 @@ TEST_CASE("channel wait_until_can_send remains stable across repeated full-to-av
         REQUIRE_FALSE(ch.try_push(4));
 
         {
-            std::jthread consumer([&](std::stop_token) {
-                consumer_ready.store(true, std::memory_order_release);
-                while (ch.empty())
-                    std::this_thread::yield();
+            std::jthread consumer(
+                [&](std::stop_token)
+                {
+                    consumer_ready.store(true, std::memory_order_release);
+                    while (ch.empty())
+                        std::this_thread::yield();
 
-                auto value = ch.try_pop();
-                if (value.has_value())
-                    consumer_done.store(true, std::memory_order_release);
-            });
+                    auto value = ch.try_pop();
+                    if (value.has_value())
+                        consumer_done.store(true, std::memory_order_release);
+                });
 
             while (!consumer_ready.load(std::memory_order_acquire))
                 std::this_thread::yield();

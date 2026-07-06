@@ -177,11 +177,8 @@ namespace kmx::aio::readiness
         }
 
         std::unique_lock lock(idle_mutex_);
-        idle_cv_.wait(lock,
-                      [this, initial_work] {
-                          return !running_.load(mem_order)
-                              || ((initial_work > 0u) && (active_work_.load(mem_order) == 0u));
-                      });
+        idle_cv_.wait(lock, [this, initial_work]
+                      { return !running_.load(mem_order) || ((initial_work > 0u) && (active_work_.load(mem_order) == 0u)); });
 
         if (running_.load(mem_order))
             stop();

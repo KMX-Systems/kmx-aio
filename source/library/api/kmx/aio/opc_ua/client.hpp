@@ -4,9 +4,9 @@
 #pragma once
 #ifndef PCH
     #include <chrono>
+    #include <cstdint>
     #include <expected>
     #include <memory>
-    #include <cstdint>
     #include <system_error>
     #include <vector>
 
@@ -62,8 +62,8 @@ namespace kmx::aio::opc_ua
         /// @param method_node_id OPC UA method node id to invoke.
         /// @param input_arguments Method inputs represented as strings.
         /// @return Task resolving to method call output payload or error.
-        [[nodiscard]] task<std::expected<method_call_result, std::error_code>>
-        call_method(std::string object_node_id, std::string method_node_id, std::vector<std::string> input_arguments) noexcept(false);
+        [[nodiscard]] task<std::expected<method_call_result, std::error_code>> call_method(
+            std::string object_node_id, std::string method_node_id, std::vector<std::string> input_arguments) noexcept(false);
         /// @brief Check whether the client currently has an activated session.
         /// @return `true` when channel/session state is active.
         [[nodiscard]] bool has_active_session() const noexcept;
@@ -75,15 +75,14 @@ namespace kmx::aio::opc_ua
         /// @return Reference to cumulative statistics snapshot.
         [[nodiscard]] const statistics& get_stats() const noexcept;
 
-    #if !defined(KMX_AIO_FEATURE_OPC_UA)
+#if !defined(KMX_AIO_FEATURE_OPC_UA)
         /// @brief Test-only hook to inject one-shot status codes for next shim requests.
         /// @param read_status Status returned for next read callback.
         /// @param write_status Status returned for next write callback.
         /// @param call_status Status returned for next call callback.
-        void __kmx_test_set_next_request_statuses(std::uint32_t read_status,
-                              std::uint32_t write_status,
-                              std::uint32_t call_status) noexcept;
-    #endif
+        void __kmx_test_set_next_request_statuses(std::uint32_t read_status, std::uint32_t write_status,
+                                                  std::uint32_t call_status) noexcept;
+#endif
 
     private:
         struct impl;

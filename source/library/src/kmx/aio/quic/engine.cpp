@@ -65,12 +65,9 @@ namespace kmx::aio::quic
     }
 
     template <typename Executor, typename UdpSocket>
-    task<std::expected<void, std::error_code>> generic_engine<Executor, UdpSocket>::connect(const ip_address_t peer_ip,
-                                                                                            const port_t peer_port,
-                                                                                            const std::string& hostname,
-                                                                                            const std::vector<std::string>& payloads,
-                                                                                            void* ssl_ctx,
-                                                                                            const settings& config) noexcept(false)
+    task<std::expected<void, std::error_code>> generic_engine<Executor, UdpSocket>::connect(
+        const ip_address_t peer_ip, const port_t peer_port, const std::string& hostname, const std::vector<std::string>& payloads,
+        void* ssl_ctx, const settings& config) noexcept(false)
     {
         if constexpr (requires { UdpSocket::create(impl_->exec_, ip_family(peer_ip)); })
             co_return impl_->connect_setup(UdpSocket::create(impl_->exec_, ip_family(peer_ip)), peer_ip, peer_port, hostname, payloads,

@@ -3,18 +3,18 @@
 
 #if defined(KMX_AIO_FEATURE_QUIC)
 
-#include <catch2/catch_test_macros.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <sys/wait.h>
+    #include <sys/wait.h>
 
-#include <chrono>
-#include <cstdlib>
-#include <filesystem>
-#include <fstream>
-#include <optional>
-#include <string>
-#include <string_view>
-#include <vector>
+    #include <chrono>
+    #include <cstdlib>
+    #include <filesystem>
+    #include <fstream>
+    #include <optional>
+    #include <string>
+    #include <string_view>
+    #include <vector>
 
 namespace kmx::aio::quic::test::integration
 {
@@ -76,8 +76,8 @@ namespace kmx::aio::quic::test::integration
         return std::nullopt;
     }
 
-    [[nodiscard]] static auto find_binary_under_debug(const fs::path& repo_root, const std::string_view binary_name)
-        -> std::optional<fs::path>
+    [[nodiscard]] static auto find_binary_under_debug(const fs::path& repo_root,
+                                                      const std::string_view binary_name) -> std::optional<fs::path>
     {
         const fs::path debug_dir = repo_root / "debug";
         if (!fs::exists(debug_dir) || !fs::is_directory(debug_dir))
@@ -111,24 +111,22 @@ namespace kmx::aio::quic::test::integration
         const fs::path server_log = fs::path("/tmp") / ("kmx_http3_server_smoke_" + std::to_string(now_ns) + ".log");
         const fs::path client_log = fs::path("/tmp") / ("kmx_http3_client_smoke_" + std::to_string(now_ns) + ".log");
 
-        const std::string server_cmd =
-            "env LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} " + shell_quote(server_bin_opt->string()) + " > "
-            + shell_quote(server_log.string()) + " 2>&1";
-        const std::string client_cmd =
-            "timeout 15s env LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} " + shell_quote(client_bin_opt->string()) + " > "
-            + shell_quote(client_log.string()) + " 2>&1";
+        const std::string server_cmd = "env LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} " +
+                                       shell_quote(server_bin_opt->string()) + " > " + shell_quote(server_log.string()) + " 2>&1";
+        const std::string client_cmd = "timeout 15s env LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} " +
+                                       shell_quote(client_bin_opt->string()) + " > " + shell_quote(client_log.string()) + " 2>&1";
 
-        const std::string script =
-            "set -u -o pipefail; "
-                        "pkill -x sample-quic-http3-server >/dev/null 2>&1 || true; "
-            + server_cmd + " & "
-            + "srv=$!; "
-              "sleep 2; "
-            + client_cmd + "; "
-              "client_rc=$?; "
-              "kill \"$srv\" >/dev/null 2>&1 || true; "
-              "wait \"$srv\" >/dev/null 2>&1 || true; "
-              "exit \"$client_rc\"";
+        const std::string script = "set -u -o pipefail; "
+                                   "pkill -x sample-quic-http3-server >/dev/null 2>&1 || true; " +
+                                   server_cmd + " & " +
+                                   "srv=$!; "
+                                   "sleep 2; " +
+                                   client_cmd +
+                                   "; "
+                                   "client_rc=$?; "
+                                   "kill \"$srv\" >/dev/null 2>&1 || true; "
+                                   "wait \"$srv\" >/dev/null 2>&1 || true; "
+                                   "exit \"$client_rc\"";
 
         const std::string full_cmd = "bash -lc " + shell_quote(script);
         const int run_rc = std::system(full_cmd.c_str());
@@ -148,18 +146,16 @@ namespace kmx::aio::quic::test::integration
 
         REQUIRE(client_exit == 0);
 
-        REQUIRE(contains_markers_in_order(client_text,
-                                          {
-                                              "on_hsk_done called",
-                                              "[HTTP/3 Client] Received Server Response:",
-                                              "on_conn_closed called, status=8 (LSCONN_ST_CLOSED)",
-                                          }));
+        REQUIRE(contains_markers_in_order(client_text, {
+                                                           "on_hsk_done called",
+                                                           "[HTTP/3 Client] Received Server Response:",
+                                                           "on_conn_closed called, status=8 (LSCONN_ST_CLOSED)",
+                                                       }));
 
-        REQUIRE(contains_markers_in_order(server_text,
-                                          {
-                                              "Received QUIC stream data (HTTP req):",
-                                              "on_conn_closed called, status=8 (LSCONN_ST_CLOSED)",
-                                          }));
+        REQUIRE(contains_markers_in_order(server_text, {
+                                                           "Received QUIC stream data (HTTP req):",
+                                                           "on_conn_closed called, status=8 (LSCONN_ST_CLOSED)",
+                                                       }));
     }
 } // namespace kmx::aio::quic::test::integration
 

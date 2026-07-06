@@ -16,13 +16,12 @@ namespace kmx::aio::sample::quic::http3_server
     using namespace kmx::aio;
     using namespace kmx::aio::completion;
 
-    static int select_kmx_alpn(::SSL* /*ssl*/, const unsigned char** out, unsigned char* outlen,
-                               const unsigned char* in, unsigned int inlen, void* /*arg*/)
+    static int select_kmx_alpn(::SSL* /*ssl*/, const unsigned char** out, unsigned char* outlen, const unsigned char* in,
+                               unsigned int inlen, void* /*arg*/)
     {
         static constexpr std::array<unsigned char, 8u> kmx_alpn_wire = {7u, 'k', 'm', 'x', '-', 'a', 'i', 'o'};
-        const int selected = ::SSL_select_next_proto(
-            reinterpret_cast<unsigned char**>(const_cast<unsigned char**>(out)), outlen, in, inlen, kmx_alpn_wire.data(),
-            static_cast<unsigned int>(kmx_alpn_wire.size()));
+        const int selected = ::SSL_select_next_proto(reinterpret_cast<unsigned char**>(const_cast<unsigned char**>(out)), outlen, in, inlen,
+                                                     kmx_alpn_wire.data(), static_cast<unsigned int>(kmx_alpn_wire.size()));
         return selected == OPENSSL_NPN_NEGOTIATED ? SSL_TLSEXT_ERR_OK : SSL_TLSEXT_ERR_ALERT_FATAL;
     }
 

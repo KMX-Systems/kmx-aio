@@ -1,6 +1,6 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/opc_ua/server.hpp>
 #include <kmx/aio/opc_ua/open62541_compat.hpp>
+#include <kmx/aio/opc_ua/server.hpp>
 
 #include <chrono>
 #include <memory>
@@ -35,10 +35,7 @@ namespace kmx::aio::opc_ua
 
     struct server::impl
     {
-        explicit impl(server_config cfg) noexcept:
-            config(std::move(cfg))
-        {
-        }
+        explicit impl(server_config cfg) noexcept: config(std::move(cfg)) {}
 
         server_config config;
         UA_Server* native_server = nullptr;
@@ -52,8 +49,7 @@ namespace kmx::aio::opc_ua
         }
     };
 
-    server::server(server_config config) noexcept:
-        impl_(std::make_unique<impl>(std::move(config)))
+    server::server(server_config config) noexcept: impl_(std::make_unique<impl>(std::move(config)))
     {
     }
 
@@ -69,8 +65,7 @@ namespace kmx::aio::opc_ua
         if (impl_->native_server != nullptr)
             co_return std::unexpected(make_error_code(error::invalid_configuration));
 
-        if (impl_->config.mode != security_mode::none
-            && (impl_->config.certificate_path.empty() || impl_->config.private_key_path.empty()))
+        if (impl_->config.mode != security_mode::none && (impl_->config.certificate_path.empty() || impl_->config.private_key_path.empty()))
             co_return std::unexpected(make_error_code(error::invalid_configuration));
 
         impl_->native_server = UA_Server_new();

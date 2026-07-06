@@ -53,7 +53,8 @@ namespace kmx::aio::opc_ua
             bool completed = false;
         };
 
-        task<void> run_read(client& c, std::string node_id, std::shared_ptr<coroutine_result_state<std::expected<read_result, std::error_code>>> state,
+        task<void> run_read(client& c, std::string node_id,
+                            std::shared_ptr<coroutine_result_state<std::expected<read_result, std::error_code>>> state,
                             std::shared_ptr<completion::executor> exec)
         {
             state->result.emplace(co_await c.read_node(std::move(node_id)));
@@ -62,9 +63,7 @@ namespace kmx::aio::opc_ua
             co_return;
         }
 
-        task<void> run_write(client& c,
-                             std::string node_id,
-                             std::string value,
+        task<void> run_write(client& c, std::string node_id, std::string value,
                              std::shared_ptr<coroutine_result_state<std::expected<void, std::error_code>>> state,
                              std::shared_ptr<completion::executor> exec)
         {
@@ -74,13 +73,9 @@ namespace kmx::aio::opc_ua
             co_return;
         }
 
-        task<void>
-        run_call(client& c,
-                 std::string object_id,
-                 std::string method_id,
-                 std::vector<std::string> args,
-                 std::shared_ptr<coroutine_result_state<std::expected<method_call_result, std::error_code>>> state,
-                 std::shared_ptr<completion::executor> exec)
+        task<void> run_call(client& c, std::string object_id, std::string method_id, std::vector<std::string> args,
+                            std::shared_ptr<coroutine_result_state<std::expected<method_call_result, std::error_code>>> state,
+                            std::shared_ptr<completion::executor> exec)
         {
             state->result.emplace(co_await c.call_method(std::move(object_id), std::move(method_id), std::move(args)));
             state->completed = true;
@@ -88,8 +83,7 @@ namespace kmx::aio::opc_ua
             co_return;
         }
 
-        task<void> run_connect(client& c,
-                               std::shared_ptr<coroutine_result_state<std::expected<void, std::error_code>>> state,
+        task<void> run_connect(client& c, std::shared_ptr<coroutine_result_state<std::expected<void, std::error_code>>> state,
                                std::shared_ptr<completion::executor> exec)
         {
             state->result.emplace(co_await c.connect());
@@ -98,8 +92,7 @@ namespace kmx::aio::opc_ua
             co_return;
         }
 
-        task<void> run_iterate(client& c,
-                               const std::chrono::milliseconds timeout,
+        task<void> run_iterate(client& c, const std::chrono::milliseconds timeout,
                                std::shared_ptr<coroutine_result_state<std::expected<bool, std::error_code>>> state,
                                std::shared_ptr<completion::executor> exec)
         {
@@ -117,11 +110,8 @@ namespace kmx::aio::opc_ua
             std::vector<std::string> output_arguments;
         };
 
-        void compat_call_capture_callback(void* user_data,
-                                          const UA_UInt32 /*request_id*/,
-                                          const UA_StatusCode status,
-                                          const char* const* output_arguments,
-                                          const UA_UInt32 output_arguments_size)
+        void compat_call_capture_callback(void* user_data, const UA_UInt32 /*request_id*/, const UA_StatusCode status,
+                                          const char* const* output_arguments, const UA_UInt32 output_arguments_size)
         {
             auto* state = static_cast<compat_call_capture_state*>(user_data);
             if (state == nullptr)
@@ -138,17 +128,10 @@ namespace kmx::aio::opc_ua
             }
         }
 
-        UA_StatusCode typed_method_callback(UA_Server* /*server*/,
-                                            const UA_NodeId* /*session_id*/,
-                                            void* /*session_context*/,
-                                            const UA_NodeId* /*method_id*/,
-                                            void* /*method_context*/,
-                                            const UA_NodeId* /*object_id*/,
-                                            void* /*object_context*/,
-                                            const size_t /*input_size*/,
-                                            const UA_Variant* /*input*/,
-                                            const size_t output_size,
-                                            UA_Variant* output)
+        UA_StatusCode typed_method_callback(UA_Server* /*server*/, const UA_NodeId* /*session_id*/, void* /*session_context*/,
+                                            const UA_NodeId* /*method_id*/, void* /*method_context*/, const UA_NodeId* /*object_id*/,
+                                            void* /*object_context*/, const size_t /*input_size*/, const UA_Variant* /*input*/,
+                                            const size_t output_size, UA_Variant* output)
         {
             if ((output == nullptr) || (output_size < 4u))
                 return UA_STATUSCODE_BADINTERNALERROR;
@@ -173,16 +156,10 @@ namespace kmx::aio::opc_ua
             return UA_Variant_setScalarCopy(&output[3], &out_double, &UA_TYPES[UA_TYPES_DOUBLE]);
         }
 
-        UA_StatusCode unsupported_output_method_callback(UA_Server* /*server*/,
-                                                         const UA_NodeId* /*session_id*/,
-                                                         void* /*session_context*/,
-                                                         const UA_NodeId* /*method_id*/,
-                                                         void* /*method_context*/,
-                                                         const UA_NodeId* /*object_id*/,
-                                                         void* /*object_context*/,
-                                                         const size_t /*input_size*/,
-                                                         const UA_Variant* /*input*/,
-                                                         const size_t output_size,
+        UA_StatusCode unsupported_output_method_callback(UA_Server* /*server*/, const UA_NodeId* /*session_id*/, void* /*session_context*/,
+                                                         const UA_NodeId* /*method_id*/, void* /*method_context*/,
+                                                         const UA_NodeId* /*object_id*/, void* /*object_context*/,
+                                                         const size_t /*input_size*/, const UA_Variant* /*input*/, const size_t output_size,
                                                          UA_Variant* output)
         {
             if ((output == nullptr) || (output_size < 1u))
@@ -192,8 +169,7 @@ namespace kmx::aio::opc_ua
             return UA_Variant_setScalarCopy(&output[0], &out_node_id, &UA_TYPES[UA_TYPES_NODEID]);
         }
 
-        task<void> run_server_start(server& s,
-                                    std::shared_ptr<coroutine_result_state<std::expected<void, std::error_code>>> state,
+        task<void> run_server_start(server& s, std::shared_ptr<coroutine_result_state<std::expected<void, std::error_code>>> state,
                                     std::shared_ptr<completion::executor> exec)
         {
             state->result.emplace(co_await s.start());
@@ -202,8 +178,7 @@ namespace kmx::aio::opc_ua
             co_return;
         }
 
-        task<void> run_server_iterate(server& s,
-                                      const std::chrono::milliseconds timeout,
+        task<void> run_server_iterate(server& s, const std::chrono::milliseconds timeout,
                                       std::shared_ptr<coroutine_result_state<std::expected<std::uint16_t, std::error_code>>> state,
                                       std::shared_ptr<completion::executor> exec)
         {
@@ -213,8 +188,7 @@ namespace kmx::aio::opc_ua
             co_return;
         }
 
-        task<void> run_server_stop(server& s,
-                                   std::shared_ptr<coroutine_result_state<std::expected<void, std::error_code>>> state,
+        task<void> run_server_stop(server& s, std::shared_ptr<coroutine_result_state<std::expected<void, std::error_code>>> state,
                                    std::shared_ptr<completion::executor> exec)
         {
             state->result.emplace(co_await s.stop());
@@ -223,8 +197,7 @@ namespace kmx::aio::opc_ua
             co_return;
         }
 
-        task<void> run_disconnect(client& c,
-                                  std::shared_ptr<coroutine_result_state<std::expected<void, std::error_code>>> state,
+        task<void> run_disconnect(client& c, std::shared_ptr<coroutine_result_state<std::expected<void, std::error_code>>> state,
                                   std::shared_ptr<completion::executor> exec)
         {
             state->result.emplace(co_await c.disconnect());
@@ -261,7 +234,8 @@ namespace kmx::aio::opc_ua
         }
 
         bool connected = false;
-        const auto stop_server = [&s]() {
+        const auto stop_server = [&s]()
+        {
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
             auto exec = std::make_shared<completion::executor>();
             exec->spawn(run_server_stop(s, state, exec));
@@ -346,7 +320,8 @@ namespace kmx::aio::opc_ua
         UA_Client* native_client = UA_Client_new();
         REQUIRE(native_client != nullptr);
 
-        const auto cleanup = [&native_server, &native_client]() {
+        const auto cleanup = [&native_server, &native_client]()
+        {
             if (native_client != nullptr)
             {
                 static_cast<void>(UA_Client_disconnect(native_client));
@@ -389,19 +364,9 @@ namespace kmx::aio::opc_ua
         output_args[3].valueRank = UA_VALUERANK_SCALAR;
 
         const UA_NodeId method_node_id = UA_NODEID_STRING(1, method_name);
-        const UA_StatusCode add_status = UA_Server_addMethodNode(native_server,
-                                                                  method_node_id,
-                                                                  UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
-                                                                  UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                                      UA_QUALIFIEDNAME(1, method_name),
-                                                                  method_attr,
-                                                                  &typed_method_callback,
-                                                                  0u,
-                                                                  nullptr,
-                                                                  4u,
-                                                                  output_args,
-                                                                  nullptr,
-                                                                  nullptr);
+        const UA_StatusCode add_status = UA_Server_addMethodNode(
+            native_server, method_node_id, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
+            UA_QUALIFIEDNAME(1, method_name), method_attr, &typed_method_callback, 0u, nullptr, 4u, output_args, nullptr, nullptr);
         REQUIRE(add_status == UA_STATUSCODE_GOOD);
 
         const UA_StatusCode startup_status = UA_Server_run_startup(native_server);
@@ -431,15 +396,8 @@ namespace kmx::aio::opc_ua
         REQUIRE(activated);
 
         compat_call_capture_state capture;
-        const UA_StatusCode submit_status =
-            KMX_UA_Client_sendAsyncCallRequest(native_client,
-                                               "ns=0;i=85",
-                                               "ns=1;s=CompatTypedMethod",
-                                               nullptr,
-                                               0u,
-                                               1u,
-                                               &compat_call_capture_callback,
-                                               &capture);
+        const UA_StatusCode submit_status = KMX_UA_Client_sendAsyncCallRequest(native_client, "ns=0;i=85", "ns=1;s=CompatTypedMethod",
+                                                                               nullptr, 0u, 1u, &compat_call_capture_callback, &capture);
         REQUIRE(submit_status == UA_STATUSCODE_GOOD);
 
         for (int i = 0; i < 100 && !capture.done; ++i)
@@ -472,7 +430,8 @@ namespace kmx::aio::opc_ua
         UA_Client* native_client = UA_Client_new();
         REQUIRE(native_client != nullptr);
 
-        const auto cleanup = [&native_server, &native_client]() {
+        const auto cleanup = [&native_server, &native_client]()
+        {
             if (native_client != nullptr)
             {
                 static_cast<void>(UA_Client_disconnect(native_client));
@@ -503,19 +462,10 @@ namespace kmx::aio::opc_ua
         output_arg.valueRank = UA_VALUERANK_SCALAR;
 
         const UA_NodeId method_node_id = UA_NODEID_STRING(1, method_name);
-        const UA_StatusCode add_status = UA_Server_addMethodNode(native_server,
-                                                                  method_node_id,
-                                                                  UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
-                                                                  UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-                                      UA_QUALIFIEDNAME(1, method_name),
-                                                                  method_attr,
-                                                                  &unsupported_output_method_callback,
-                                                                  0u,
-                                                                  nullptr,
-                                                                  1u,
-                                                                  &output_arg,
-                                                                  nullptr,
-                                                                  nullptr);
+        const UA_StatusCode add_status =
+            UA_Server_addMethodNode(native_server, method_node_id, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
+                                    UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT), UA_QUALIFIEDNAME(1, method_name), method_attr,
+                                    &unsupported_output_method_callback, 0u, nullptr, 1u, &output_arg, nullptr, nullptr);
         REQUIRE(add_status == UA_STATUSCODE_GOOD);
 
         const UA_StatusCode startup_status = UA_Server_run_startup(native_server);
@@ -545,15 +495,8 @@ namespace kmx::aio::opc_ua
         REQUIRE(activated);
 
         compat_call_capture_state capture;
-        const UA_StatusCode submit_status =
-            KMX_UA_Client_sendAsyncCallRequest(native_client,
-                                               "ns=0;i=85",
-                                               "ns=1;s=CompatUnsupportedOutputMethod",
-                                               nullptr,
-                                               0u,
-                                               1u,
-                                               &compat_call_capture_callback,
-                                               &capture);
+        const UA_StatusCode submit_status = KMX_UA_Client_sendAsyncCallRequest(
+            native_client, "ns=0;i=85", "ns=1;s=CompatUnsupportedOutputMethod", nullptr, 0u, 1u, &compat_call_capture_callback, &capture);
         REQUIRE(submit_status == UA_STATUSCODE_GOOD);
 
         for (int i = 0; i < 100 && !capture.done; ++i)
@@ -731,9 +674,7 @@ namespace kmx::aio::opc_ua
         REQUIRE(iterate_state->result->has_value());
 
         {
-            c.__kmx_test_set_next_request_statuses(UA_STATUSCODE_BADTIMEOUT,
-                                                   UA_STATUSCODE_GOOD,
-                                                   UA_STATUSCODE_GOOD);
+            c.__kmx_test_set_next_request_statuses(UA_STATUSCODE_BADTIMEOUT, UA_STATUSCODE_GOOD, UA_STATUSCODE_GOOD);
             auto state = std::make_shared<coroutine_result_state<std::expected<read_result, std::error_code>>>();
             auto exec = std::make_shared<completion::executor>();
             exec->spawn(run_read(c, "ns=2;s=Demo.Static.Scalar.String", state, exec));
@@ -747,9 +688,7 @@ namespace kmx::aio::opc_ua
         }
 
         {
-            c.__kmx_test_set_next_request_statuses(UA_STATUSCODE_GOOD,
-                                                   UA_STATUSCODE_BADINTERNALERROR,
-                                                   UA_STATUSCODE_GOOD);
+            c.__kmx_test_set_next_request_statuses(UA_STATUSCODE_GOOD, UA_STATUSCODE_BADINTERNALERROR, UA_STATUSCODE_GOOD);
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
             auto exec = std::make_shared<completion::executor>();
             exec->spawn(run_write(c, "ns=2;s=Demo.Static.Scalar.String", "value", state, exec));
@@ -763,9 +702,7 @@ namespace kmx::aio::opc_ua
         }
 
         {
-            c.__kmx_test_set_next_request_statuses(UA_STATUSCODE_GOOD,
-                                                   UA_STATUSCODE_GOOD,
-                                                   UA_STATUSCODE_BADSECURECHANNELCLOSED);
+            c.__kmx_test_set_next_request_statuses(UA_STATUSCODE_GOOD, UA_STATUSCODE_GOOD, UA_STATUSCODE_BADSECURECHANNELCLOSED);
             auto state = std::make_shared<coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
             auto exec = std::make_shared<completion::executor>();
             exec->spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}, state, exec));
@@ -894,4 +831,3 @@ namespace kmx::aio::opc_ua
         }
     }
 }
-
