@@ -11,7 +11,6 @@ CppApplication {
     cpp.includePaths: [
         "inc",
         "api",
-        "../../../../library/api",
     ]
     cpp.dynamicLibraries: [
         "uring",

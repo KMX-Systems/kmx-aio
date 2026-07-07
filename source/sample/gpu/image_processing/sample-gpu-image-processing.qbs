@@ -8,7 +8,7 @@ CppApplication {
     cpp.enableRtti: false
     cpp.includePaths: [
         "inc",
-        "../../../library/api",
+        "api",
     ]
     cpp.defines: ["KMX_AIO_FEATURE_CUDA=1"]
 

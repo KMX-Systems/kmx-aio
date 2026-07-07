@@ -8,7 +8,7 @@ CppApplication {
     cpp.enableRtti: false
     cpp.includePaths: [
         "inc",
-        "../../../../library/api",
+        "api",
         "../../../../library/inc_dep",
         "../../../../../build/lsquic/include",
     ]
