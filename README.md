@@ -20,6 +20,7 @@
 * **Channel Backpressure**: `kmx::aio::channel` supports watermark-based producer throttling and credit reporting.
 * **HTTP/2**: Full codec, stream, frame, and HPACK serialization stack (no model affinity).
 * **OPC UA** (feature-gated): Async client/server/subscription facade with [open62541](https://open62541.org) backend support, plus shim fallback for feature-off builds and tests.
+* **GPU Completion Model (CUDA)** (feature-gated): Lightweight thread-per-core `gpu::executor` allowing `co_await` on asynchronous CUDA event completions (`gpu::event`) submitted to CUDA streams (`gpu::stream`).
 * **AVB (Audio Video Bridging, [IEEE 802.1](https://1.ieee802.org/avbridges/))** (Completion model): Raw Ethernet socket with hardware timestamping, gPTP clock synchronization, and SRP client for stream reservation.
 * **[AF_XDP Packet Socket](https://www.kernel.org/doc/html/latest/networking/af_xdp.html)** (Completion model, gated): Kernel-bypass packet filtering with eBPF support and UMEM ring management.
 * **[SPDK Block I/O](https://spdk.io/)** (Completion model, gated): NVMe, generic bdev, and storage acceleration via DPDK.
@@ -306,6 +307,7 @@ Default state (`source/source.qbs`):
 * `project.enable_spdk:true` — SPDK block device I/O (completion only)
 * `project.enable_quic:true` — QUIC engine and HTTP/3 (both models)
 * `project.enable_avb:true` — Audio Video Bridging (completion model only)
+* `project.enable_cuda:true` — GPU completion model (completion model only; defaults to `false` and degrades gracefully if no NVIDIA CUDA environment is found)
 * `project.enable_opc_ua:false` — OPC UA facade/backend integration (off by default)
 
 When enabled, compile-time defines are exported by `kmx-aio-lib`:
@@ -315,6 +317,7 @@ When enabled, compile-time defines are exported by `kmx-aio-lib`:
 * `KMX_AIO_FEATURE_SPDK=1`
 * `KMX_AIO_FEATURE_QUIC=1`
 * `KMX_AIO_FEATURE_AVB=1`
+* `KMX_AIO_FEATURE_CUDA=1`
 * `KMX_AIO_FEATURE_OPC_UA=1` (only when `project.enable_opc_ua:true`)
 
 ## OPC UA Support
@@ -511,6 +514,16 @@ Built on Linux `io_uring` for asynchronous completion-based I/O. Submit operatio
 | `spdk::runtime`, `spdk::device` | **SPDK NVMe/bdev access**: init, bdev enumeration, async device I/O; `spdk::device` includes malloc fallback backend (gated: `enable_spdk`) |
 | `avb::eth_socket` | Raw Ethernet socket with hardware timestamping |
 
+### GPU Completion-Model Namespace (`kmx::aio::gpu`)
+
+Built on CUDA streams and events for high-performance GPU tasks. Submit work asynchronously to streams and suspend your coroutine until the GPU signaling event fires.
+
+| Component | Purpose |
+| ----------- | ---------- |
+| `executor` | Host executor driving coroutine thread affinity and asynchronous event query/resumption |
+| `stream` | RAII wrapper around modern CUDA streams for asynchronous memory copies, memset, and kernels |
+| `event` | RAII wrapper around CUDA events allowing seamless C++20 `co_await` integration |
+
 ### Cross-Model Abstractions
 
 * **`kmx::aio::tls::stream<InnerStream>`**: Generic template; wraps TCP streams in both models; uses BoringSSL Memory BIOs for state machine decoupling from actual socket I/O.
@@ -542,6 +555,7 @@ Quick reference showing which APIs are available in each execution model:
 | **SPDK Block I/O** | ❌ Not available | ✅ NVMe/bdev (gated) | Feature-gated; DPDK-backed |
 | **OpenOnload** | ✅ Zero-copy extensions | ❌ Not available | Readiness-only; headers-only; gracefully disabled |
 | **OPC UA** | ✅ (feature-gated) | ✅ (feature-gated) | Backend-neutral facade; not executor-model-specific; disabled by default |
+| **GPU / CUDA** | ❌ Not available | ✅ Full (feature-gated) | Async events resumption, thread-per-core pinning |
 
 **Legend:**
 
@@ -565,6 +579,8 @@ kmx-aio/
 │   │   │   ├── completion/          # io_uring model APIs
 │   │   │   │   ├── executor.hpp, tcp/, udp/, timer.hpp
 │   │   │   │   ├── v4l2/, xdp/, spdk/, tls/, quic/, avb/
+│   │   │   ├── gpu/                 # GPU completion model APIs
+│   │   │   │   ├── executor.hpp, stream.hpp, event.hpp
 │   │   │   ├── http2/               # HTTP/2 codec, frames, HPACK
 │   │   │   ├── avb/                 # Audio Video Bridging / IEEE 802.1
 │   │   │   │   ├── eth_socket.hpp, gptp/, srp/
@@ -582,6 +598,8 @@ kmx-aio/
 │   │   │   ├── udp/                 # UDP echo, minimal server/client
 │   │   │   ├── tls/                 # TLS echo, HTTP/2 ALPN examples
 │   │   │   └── v4l2/                # V4L2 frame capture
+│   │   └── gpu/                     # GPU completion model samples
+│   │       └── image_processing/    # V4L2 + CUDA async image processing pipeline
 │   │   └── completion/              # Completion model samples (io_uring)
 │   │       ├── tcp/                 # TCP echo with io_uring
 │   │       ├── udp/                 # UDP echo with io_uring
