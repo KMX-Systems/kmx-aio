@@ -4,10 +4,12 @@
 #pragma once
 #ifndef PCH
     #include <atomic>
+    #include <chrono>
     #include <deque>
     #include <expected>
     #include <memory>
     #include <mutex>
+    #include <sys/socket.h>
     #include <sys/epoll.h>
     #include <unordered_map>
 
@@ -94,6 +96,27 @@ namespace kmx::aio::readiness
 
             return io_awaiter {*this, fd, type};
         }
+
+        /// @brief Asynchronously receives a message from a socket using readiness notifications.
+        /// @param fd Socket file descriptor.
+        /// @param msg Message descriptor for buffers/ancillary data.
+        /// @param flags Flags forwarded to recvmsg.
+        /// @return Number of bytes received or an error.
+        [[nodiscard]] task<std::expected<std::size_t, std::error_code>> async_recvmsg(fd_t fd, ::msghdr* msg,
+                                                                                      unsigned flags = 0u) noexcept(false);
+
+        /// @brief Asynchronously sends a message on a socket using readiness notifications.
+        /// @param fd Socket file descriptor.
+        /// @param msg Message descriptor for buffers/ancillary data.
+        /// @param flags Flags forwarded to sendmsg.
+        /// @return Number of bytes sent or an error.
+        [[nodiscard]] task<std::expected<std::size_t, std::error_code>> async_sendmsg(fd_t fd, const ::msghdr* msg,
+                                                                                      unsigned flags = 0u) noexcept(false);
+
+        /// @brief Asynchronously waits for a relative timeout duration.
+        /// @param duration_ns Timeout duration in nanoseconds.
+        /// @return Success or an error.
+        [[nodiscard]] task<std::expected<void, std::error_code>> async_timeout(std::uint64_t duration_ns) noexcept(false);
 
         /// @brief Submits a root task to the system.
         /// @throws std::bad_alloc if scheduling fails.

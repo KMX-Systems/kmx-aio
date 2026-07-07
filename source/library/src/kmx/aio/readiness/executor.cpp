@@ -3,11 +3,13 @@
 #include "kmx/aio/readiness/executor.hpp"
 
 #include "kmx/aio/error_code.hpp"
+#include "kmx/aio/readiness/descriptor/timer.hpp"
 #include "kmx/aio/readiness/openonload/extensions.hpp"
 #include "kmx/logger.hpp"
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <sys/socket.h>
 #include <pthread.h>
 #include <sched.h>
 #include <string_view>
@@ -149,6 +151,91 @@ namespace kmx::aio::readiness
         const auto handle = dt.handle;
 
         scheduler_->spawn([handle]() mutable { handle.resume(); });
+    }
+
+    task<std::expected<std::size_t, std::error_code>> executor::async_recvmsg(const fd_t fd, ::msghdr* msg,
+                                                                               const unsigned flags) noexcept(false)
+    {
+        if (fd < 0)
+            co_return std::unexpected(std::make_error_code(std::errc::bad_file_descriptor));
+        if (msg == nullptr)
+            co_return std::unexpected(std::make_error_code(std::errc::invalid_argument));
+
+        while (true)
+        {
+            const auto n = ::recvmsg(fd, msg, static_cast<int>(flags));
+            if (n >= 0)
+                co_return static_cast<std::size_t>(n);
+
+            if (would_block(errno))
+            {
+                co_await wait_io(fd, event_type::read);
+                continue;
+            }
+
+            co_return std::unexpected(error_from_errno());
+        }
+    }
+
+    task<std::expected<std::size_t, std::error_code>> executor::async_sendmsg(const fd_t fd, const ::msghdr* msg,
+                                                                               const unsigned flags) noexcept(false)
+    {
+        if (fd < 0)
+            co_return std::unexpected(std::make_error_code(std::errc::bad_file_descriptor));
+        if (msg == nullptr)
+            co_return std::unexpected(std::make_error_code(std::errc::invalid_argument));
+
+        while (true)
+        {
+            const auto n = ::sendmsg(fd, msg, static_cast<int>(flags));
+            if (n >= 0)
+                co_return static_cast<std::size_t>(n);
+
+            if (would_block(errno))
+            {
+                co_await wait_io(fd, event_type::write);
+                continue;
+            }
+
+            co_return std::unexpected(error_from_errno());
+        }
+    }
+
+    task<std::expected<void, std::error_code>> executor::async_timeout(const std::uint64_t duration_ns) noexcept(false)
+    {
+        if (duration_ns == 0u)
+            co_return std::expected<void, std::error_code> {};
+
+        auto timer_res = descriptor::timer::create();
+        if (!timer_res)
+            co_return std::unexpected(timer_res.error());
+
+        auto timer_fd = std::move(*timer_res);
+        if (const auto reg = register_fd(timer_fd.get()); !reg)
+            co_return std::unexpected(reg.error());
+
+        const struct unregister_guard
+        {
+            executor& exec;
+            fd_t fd;
+            ~unregister_guard() noexcept
+            {
+                if (fd >= 0)
+                    exec.unregister_fd(fd);
+            }
+        } guard {*this, timer_fd.get()};
+
+        ::itimerspec spec {};
+        spec.it_value.tv_sec = static_cast<decltype(::timespec::tv_sec)>(duration_ns / 1'000'000'000ULL);
+        spec.it_value.tv_nsec = static_cast<decltype(::timespec::tv_nsec)>(duration_ns % 1'000'000'000ULL);
+        if (const auto set = timer_fd.set_time(0, spec); !set)
+            co_return std::unexpected(set.error());
+
+        const auto wait = co_await timer_fd.wait(*this);
+        if (!wait)
+            co_return std::unexpected(wait.error());
+
+        co_return std::expected<void, std::error_code> {};
     }
 
     executor::detached_task_wrapper executor::execute_task(task<void> tsk, std::shared_ptr<executor> self) noexcept
