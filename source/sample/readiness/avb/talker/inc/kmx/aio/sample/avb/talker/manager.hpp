@@ -1,5 +1,5 @@
 /// @file kmx/aio/sample/avb/talker/manager.hpp
-/// @brief Completion-model AVB talker sample manager.
+/// @brief Readiness-model AVB talker sample manager.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 
@@ -9,9 +9,9 @@
 #include <string>
 
 #include <kmx/aio/avb/avb_types.hpp>
-#include <kmx/aio/completion/avb/gptp/clock.hpp>
-#include <kmx/aio/completion/avb/srp/client.hpp>
-#include <kmx/aio/completion/executor.hpp>
+#include <kmx/aio/readiness/avb/gptp/clock.hpp>
+#include <kmx/aio/readiness/avb/srp/client.hpp>
+#include <kmx/aio/readiness/executor.hpp>
 #include <kmx/aio/task.hpp>
 
 namespace kmx::aio::sample::avb::talker
@@ -49,9 +49,9 @@ namespace kmx::aio::sample::avb::talker
         config config_ {};
         metrics metrics_ {};
 
-        std::shared_ptr<kmx::aio::completion::executor> executor_ {};
-        std::unique_ptr<kmx::aio::completion::avb::gptp::clock> clock_ {};
-        std::unique_ptr<kmx::aio::completion::avb::srp::client> srp_ {};
-        static inline std::atomic<kmx::aio::completion::executor*> g_executor_ptr {};
+        std::shared_ptr<kmx::aio::readiness::executor> executor_ {};
+        std::unique_ptr<kmx::aio::readiness::avb::gptp::clock> clock_ {};
+        std::unique_ptr<kmx::aio::readiness::avb::srp::client> srp_ {};
+        static inline std::atomic<kmx::aio::readiness::executor*> g_executor_ptr {};
     };
 } // namespace kmx::aio::sample::avb::talker

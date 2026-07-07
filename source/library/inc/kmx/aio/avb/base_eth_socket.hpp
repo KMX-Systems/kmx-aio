@@ -51,6 +51,15 @@ namespace kmx::aio::avb
 
         explicit base_eth_socket(Executor& exec) noexcept: exec_(exec) {}
 
+        ~base_eth_socket() noexcept
+        {
+            if constexpr (requires(Executor& e, fd_t fd) { e.unregister_fd(fd); })
+            {
+                if (fd_.is_valid())
+                    exec_.unregister_fd(fd_.get());
+            }
+        }
+
         // Setup
 
         [[nodiscard]] std::expected<void, std::error_code> open_socket(std::string_view iface, std::uint16_t ethertype)
@@ -94,10 +103,20 @@ namespace kmx::aio::avb
             txtime_cfg.flags = 0;
 
             ::setsockopt(raw_fd, SOL_SOCKET, SO_TXTIME, &txtime_cfg, sizeof(txtime_cfg));
+
+            // Register with the epoll-based executor so async_recvmsg/async_sendmsg
+            // can suspend on EPOLLIN/EPOLLOUT events. Completion-model executors use
+            // io_uring ops directly and do not expose register_fd.
+            if constexpr (requires(Executor& e, fd_t fd) { e.register_fd(fd); })
+            {
+                if (auto reg = exec_.register_fd(raw_fd); !reg)
+                    return std::unexpected(reg.error());
+            }
+
             return {};
         }
 
-        // Send
+        // Send (synchronous, non-blocking — called only from completion TUs via base)
 
         [[nodiscard]] std::expected<void, std::error_code> do_send(const mac_address_t& dest_mac, std::span<const std::byte> payload,
                                                                    std::optional<avb_timestamp_t> tx_time)

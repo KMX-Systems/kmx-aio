@@ -4,7 +4,7 @@
 
 #include <kmx/aio/avb/base_eth_socket.hpp>
 #include <kmx/aio/avb/eth_socket.hpp>
-#include <kmx/aio/readiness/executor.hpp>
+#include <kmx/aio/completion/executor.hpp>
 
 namespace kmx::aio::avb
 {
@@ -119,6 +119,6 @@ namespace kmx::aio::avb
     }
 
     // Explicit instantiations
-    template class generic_eth_socket<kmx::aio::readiness::executor>;
+    template class generic_eth_socket<kmx::aio::completion::executor>;
 
 } // namespace kmx::aio::avb

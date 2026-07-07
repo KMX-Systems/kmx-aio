@@ -72,11 +72,3 @@ namespace kmx::aio::avb::srp
         std::unique_ptr<state> state_;
     };
 }
-
-// Pillar aliases
-#include <kmx/aio/completion/executor.hpp>
-
-namespace kmx::aio::completion::avb::srp
-{
-    using client = kmx::aio::avb::srp::generic_client<kmx::aio::completion::executor>;
-}
