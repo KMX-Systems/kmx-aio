@@ -10,7 +10,6 @@
 #include <system_error>
 
 #include <kmx/aio/avb/avb_types.hpp>
-#include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/task.hpp>
 
 namespace kmx::aio::avb::gptp
@@ -67,10 +66,4 @@ namespace kmx::aio::avb::gptp
         struct state;
         std::unique_ptr<state> state_;
     };
-}
-
-// Pillar aliases
-namespace kmx::aio::completion::avb::gptp
-{
-    using clock = kmx::aio::avb::gptp::generic_clock<kmx::aio::completion::executor>;
 }

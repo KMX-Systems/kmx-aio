@@ -13,7 +13,7 @@
 #include <kmx/aio/avb/gptp/clock.hpp>
 #include <kmx/aio/avb/gptp/messages.hpp>
 #include <kmx/aio/avb/gptp/servo.hpp>
-#include <kmx/aio/readiness/executor.hpp>
+#include <kmx/aio/completion/executor.hpp>
 #include <kmx/logger.hpp>
 
 namespace kmx::aio::avb::gptp
@@ -343,6 +343,6 @@ namespace kmx::aio::avb::gptp
 
     // Explicit instantiation
 
-    template class generic_clock<kmx::aio::readiness::executor>;
+    template class generic_clock<kmx::aio::completion::executor>;
 
 } // namespace kmx::aio::avb::gptp

@@ -17,6 +17,8 @@ Project {
         "udp/minimal/server/udp-minimal-server.qbs",
         "quic/echo-server/sample-quic-echo-readiness-server.qbs",
         "quic/echo-client/sample-quic-echo-readiness-client.qbs",
+        "avb/talker/sample-avb-readiness-talker.qbs",
+        "avb/listener/sample-avb-readiness-listener.qbs",
         "tcp/echo/common/tcp-echo-common.qbs",
         "tcp/echo/client/tcp-echo-client.qbs",
         "tcp/echo/server/tcp-echo-server.qbs",

@@ -16,7 +16,7 @@
 #include <kmx/aio/avb/eth_socket.hpp>
 #include <kmx/aio/avb/srp/client.hpp>
 #include <kmx/aio/avb/srp/messages.hpp>
-#include <kmx/aio/readiness/executor.hpp>
+#include <kmx/aio/completion/executor.hpp>
 #include <kmx/logger.hpp>
 
 namespace kmx::aio::avb::srp
@@ -310,6 +310,6 @@ namespace kmx::aio::avb::srp
 
     // Explicit instantiation
 
-    template class generic_client<kmx::aio::readiness::executor>;
+    template class generic_client<kmx::aio::completion::executor>;
 
 } // namespace kmx::aio::avb::srp
