@@ -12,14 +12,14 @@
 * **TCP Networking**: Built-in support for TCP listeners and streams.
 * **UDP Networking**: Dual-layer API in readiness model — low-level `readiness::udp::socket` and high-level `readiness::udp::endpoint` with automatic address management. Completion model provides socket-level `completion::udp::socket` only.
 * **[TLS](https://www.rfc-editor.org/rfc/rfc8446)/[ALPN](https://www.rfc-editor.org/rfc/rfc7301)**: Encrypted streams ([BoringSSL](https://boringssl.googlesource.com/boringssl/)-backed, both models) with Application Layer Protocol Negotiation for seamless HTTP/2 handshakes.
-* **QUIC + [HTTP/3](https://www.rfc-editor.org/rfc/rfc9114)**: Full QUIC engine (both models) with [lsquic](https://github.com/litespeedtech/lsquic) backing; HTTP/3 server/client samples included.
+* **[QUIC](https://datatracker.ietf.org/doc/rfc9000/) + [HTTP/3](https://www.rfc-editor.org/rfc/rfc9114)**: Full QUIC engine (both models) with [lsquic](https://github.com/litespeedtech/lsquic) backing; HTTP/3 server/client samples included.
 * **Async Timers**: Readiness timer (`timerfd` + `epoll`) and completion timer (`io_uring` timeout op).
 * **[V4L2](https://linuxtv.org) Async Capture** (Readiness + Completion): Readiness mode uses epoll-driven frame capture; completion mode uses `IORING_OP_POLL_ADD` plus synchronous `VIDIOC_DQBUF` (hybrid model) in the same io_uring executor. Targets V4L2 streaming devices such as USB webcams, MIPI CSI-2 pipelines, and GMSL camera chains. Frames land in `co_await`-returned `frame_view` objects that auto-requeue mmap'd kernel buffers on destruction.
 * **Completion `async_poll(fd, mask)`**: First-class one-shot `IORING_OP_POLL_ADD` primitive to await arbitrary fd readiness (V4L2, eventfd, timerfd, signalfd, netlink) inside `completion::executor`; callers re-arm by invoking it again.
 * **Buffer Pool Primitives**: `kmx::aio::buffer_pool` and `kmx::aio::buffer_handle` provide fixed-capacity RAII buffer leasing for deterministic zero-copy workflows.
 * **Channel Backpressure**: `kmx::aio::channel` supports watermark-based producer throttling and credit reporting.
 * **HTTP/2**: Full codec, stream, frame, and HPACK serialization stack (no model affinity).
-* **OPC UA** (feature-gated): Async client/server/subscription facade with [open62541](https://open62541.org) backend support, plus shim fallback for feature-off builds and tests.
+* **[OPC UA](https://en.wikipedia.org/wiki/OPC_Unified_Architecture)** (feature-gated): Async client/server/subscription facade with [open62541](https://open62541.org) backend support, plus shim fallback for feature-off builds and tests.
 * **GPU Completion Model (CUDA)** (feature-gated): Lightweight thread-per-core `gpu::executor` allowing `co_await` on asynchronous CUDA event completions (`gpu::event`) submitted to CUDA streams (`gpu::stream`).
 * **AVB (Audio Video Bridging, [IEEE 802.1](https://1.ieee802.org/avbridges/))** (Completion model): Raw Ethernet socket with hardware timestamping, gPTP clock synchronization, and SRP client for stream reservation.
 * **[AF_XDP Packet Socket](https://www.kernel.org/doc/html/latest/networking/af_xdp.html)** (Completion model, gated): Kernel-bypass packet filtering with eBPF support and UMEM ring management.
@@ -580,7 +580,7 @@ kmx-aio/
 │   │   │   │   ├── executor.hpp, tcp/, udp/, timer.hpp
 │   │   │   │   ├── v4l2/, xdp/, spdk/, tls/, quic/, avb/
 │   │   │   ├── gpu/                 # GPU completion model APIs
-│   │   │   │   ├── executor.hpp, stream.hpp, event.hpp
+│   │   │   │   └── executor.hpp     # executor, stream, and event public API
 │   │   │   ├── http2/               # HTTP/2 codec, frames, HPACK
 │   │   │   ├── avb/                 # Audio Video Bridging / IEEE 802.1
 │   │   │   │   ├── eth_socket.hpp, gptp/, srp/
@@ -598,9 +598,7 @@ kmx-aio/
 │   │   │   ├── udp/                 # UDP echo, minimal server/client
 │   │   │   ├── tls/                 # TLS echo, HTTP/2 ALPN examples
 │   │   │   └── v4l2/                # V4L2 frame capture
-│   │   └── gpu/                     # GPU completion model samples
-│   │       └── image_processing/    # V4L2 + CUDA async image processing pipeline
-│   │   └── completion/              # Completion model samples (io_uring)
+│   │   ├── completion/              # Completion model samples (io_uring)
 │   │       ├── tcp/                 # TCP echo with io_uring
 │   │       ├── udp/                 # UDP echo with io_uring
 │   │       ├── tls/                 # TLS echo, HTTP/2 ALPN examples
@@ -609,6 +607,8 @@ kmx-aio/
 │   │       ├── spdk/                # SPDK bdev discovery, minimal block I/O
 │   │       ├── xdp/                 # AF_XDP packet filter
 │   │       └── hft/                 # High-frequency trading order router
+│   │   └── gpu/                     # GPU completion model samples
+│   │       └── image_processing/    # V4L2 + CUDA async image processing pipeline
 │   └── source.qbs                   # Root build definition
 ├── build/
 │   ├── install_lsquic.sh            # Build BoringSSL + lsquic
