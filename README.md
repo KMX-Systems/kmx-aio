@@ -17,11 +17,11 @@
 * **[V4L2](https://linuxtv.org) Async Capture** (Readiness + Completion): Readiness mode uses epoll-driven frame capture; completion mode uses `IORING_OP_POLL_ADD` plus synchronous `VIDIOC_DQBUF` (hybrid model) in the same io_uring executor. Targets V4L2 streaming devices such as USB webcams, MIPI CSI-2 pipelines, and GMSL camera chains. Frames land in `co_await`-returned `frame_view` objects that auto-requeue mmap'd kernel buffers on destruction.
 * **Completion `async_poll(fd, mask)`**: First-class one-shot `IORING_OP_POLL_ADD` primitive to await arbitrary fd readiness (V4L2, eventfd, timerfd, signalfd, netlink) inside `completion::executor`; callers re-arm by invoking it again.
 * **Buffer Pool Primitives**: `kmx::aio::buffer_pool` and `kmx::aio::buffer_handle` provide fixed-capacity RAII buffer leasing for deterministic zero-copy workflows.
-* **Channel Backpressure**: `kmx::aio::channel` supports watermark-based producer throttling and credit reporting.
+* **[Channel Backpressure](https://www.geeksforgeeks.org/computer-networks/back-pressure-in-distributed-systems/)**: `kmx::aio::channel` supports watermark-based producer throttling and credit reporting.
 * **HTTP/2**: Full codec, stream, frame, and HPACK serialization stack (no model affinity).
 * **[OPC UA](https://en.wikipedia.org/wiki/OPC_Unified_Architecture)** (feature-gated): Async client/server/subscription facade with [open62541](https://open62541.org) backend support, plus shim fallback for feature-off builds and tests.
 * **GPU Completion Model (CUDA)** (feature-gated): Lightweight thread-per-core `gpu::executor` allowing `co_await` on asynchronous CUDA event completions (`gpu::event`) submitted to CUDA streams (`gpu::stream`).
-* **AVB (Audio Video Bridging, [IEEE 802.1](https://1.ieee802.org/avbridges/))** (Completion model): Raw Ethernet socket with hardware timestamping, gPTP clock synchronization, and SRP client for stream reservation.
+* **AVB (Audio Video Bridging, [IEEE 802.1](https://1.ieee802.org/avbridges/))**: Shared generic raw Ethernet socket, gPTP clock synchronization, and SRP client with model-specific aliases for readiness and completion; sample-validated in both models.
 * **[AF_XDP Packet Socket](https://www.kernel.org/doc/html/latest/networking/af_xdp.html)** (Completion model, gated): Kernel-bypass packet filtering with eBPF support and UMEM ring management.
 * **[SPDK Block I/O](https://spdk.io/)** (Completion model, gated): NVMe, generic bdev, and storage acceleration via DPDK.
 
@@ -56,8 +56,8 @@ Most gates are on by default; disable any gate if you lack its dependency.
 * **QUIC / HTTP/3** (enabled by default): [BoringSSL](https://boringssl.googlesource.com/boringssl/) and [lsquic](https://github.com/litespeedtech/lsquic) libraries. Build both via `build/install_lsquic.sh` (see below).
 * **OPC UA** (disabled by default): [open62541](https://open62541.org) headers and library. Build locally via `build/install_open62541.sh` (see below), then enable with QBS feature flags.
 * **AF_XDP** (enabled by default): `libbpf-dev`, `libxdp-dev`, `libelf-dev`, `zlib1g-dev`, `clang`, `llvm` ([libbpf](https://github.com/libbpf/libbpf), [libxdp](https://github.com/xdp-project/xdp-tools)).
-* **SPDK** (enabled by default): `libaio-dev`, `libnuma-dev`, `uuid-dev`, `meson`, `ninja-build`, and [SPDK](https://spdk.io) runtime libraries.
-* **AVB / [IEEE 802.1](https://1.ieee802.org/avbridges/)** (Completion model, enabled by default): Kernel with PTP/hardware timestamping support (most modern NIC drivers); user must have `CAP_NET_RAW` privilege.
+* **SPDK** (enabled by default): `libaio-dev`, `libnuma-dev`, `uuid-dev`, `meson`, `ninja-build`, and [SPDK](https://spdk.io) runtime libraries. A workspace-local build is supported via `project.spdk_prefix`.
+* **AVB / [IEEE 802.1](https://1.ieee802.org/avbridges/)** (Readiness + completion models, enabled by default): Kernel with PTP/hardware timestamping support (most modern NIC drivers); user must have `CAP_NET_RAW` privilege.
 * **OpenOnload** (enabled by default): [OpenOnload](https://github.com/Xilinx/onload) userspace/runtime installation from vendor packages (optional; gracefully degrades if unavailable).
 
 #### Mandatory Dependencies (Ubuntu/Debian)
@@ -143,6 +143,20 @@ cd spdk
 git submodule update --init --recursive
 ./configure --with-shared
 make -j"$(nproc)"
+```
+
+For a workspace-local installation that matches this repository's QBS wiring, use:
+
+```bash
+git clone --depth 1 --branch v24.09 https://github.com/spdk/spdk.git build/spdk-local/src
+git -C build/spdk-local/src submodule update --init --recursive
+cd build/spdk-local/src
+./configure --prefix="$PWD/../install-local" --with-shared \
+    --disable-tests --disable-unit-tests --disable-apps --disable-examples \
+    --without-fio --without-vhost --without-iscsi-initiator --without-rbd --without-xnvme \
+    --without-fc --without-rdma --without-crypto --without-vfio-user --without-virtio --without-nvme-cuse
+make -j"$(nproc)"
+make install
 ```
 
 If you see generated RPC build errors like undefined
@@ -305,8 +319,10 @@ Default state (`source/source.qbs`):
 * `project.enable_openonload:true` — OpenOnload zero-copy accelerator (readiness only)
 * `project.enable_af_xdp:true` — AF_XDP packet socket (completion only)
 * `project.enable_spdk:true` — SPDK block device I/O (completion only)
+* `project.spdk_prefix:"/usr/local"` — SPDK install prefix used by `kmx-aio-spdk` and umbrella consumers
+* `project.spdk_enable_crypto:true` — enables ISA-L / ISA-L crypto linkage for SPDK builds that were compiled with crypto support
 * `project.enable_quic:true` — QUIC engine and HTTP/3 (both models)
-* `project.enable_avb:true` — Audio Video Bridging (completion model only)
+* `project.enable_avb:true` — Audio Video Bridging (shared generic stack with readiness/completion aliases)
 * `project.enable_cuda:true` — GPU completion model (completion model only; defaults to `false` and degrades gracefully if no NVIDIA CUDA environment is found)
 * `project.enable_opc_ua:false` — OPC UA facade/backend integration (off by default)
 
@@ -366,9 +382,12 @@ Run a single CI-equivalent job locally:
 
 ```bash
 bash scripts/ci/run-ci-avb-local.sh --only build-and-test
+bash scripts/ci/run-ci-avb-local.sh --only artifact-split-smoke
 bash scripts/ci/run-ci-avb-local.sh --only quic-smoke
 bash scripts/ci/run-ci-avb-local.sh --only gpu-smoke
 ```
+
+`artifact-split-smoke` first enforces that sample and `library-test` consumer QBS products no longer depend on `kmx-aio-lib`, and that sample products gate optional artifacts with the matching `project.enable_*` condition, then bootstraps local `open62541` and `SPDK` prefixes and builds the expanded explicit-dependency set.
 
 The canonical script lives in `scripts/ci/` (versioned). On each run it sync-copies itself to
 `build/run-ci-avb-local.sh` for local convenience.
@@ -529,7 +548,7 @@ Built on CUDA streams and events for high-performance GPU tasks. Submit work asy
 * **`kmx::aio::tls::stream<InnerStream>`**: Generic template; wraps TCP streams in both models; uses BoringSSL Memory BIOs for state machine decoupling from actual socket I/O.
 * **`kmx::aio::quic::generic_engine<Executor, UdpSocket>`**: Template; lsquic backing; instantiated for both readiness and completion models.
 * **`kmx::aio::http2::*`**: Codec, stream, frame, and HPACK serialization; no executor affinity; available to both models.
-* **`kmx::aio::avb::*`**: IEEE 802.1 AVB/TSN stack (Completion model only); raw Ethernet socket, gPTP clock, SRP client.
+* **`kmx::aio::avb::*`**: IEEE 802.1 AVB/TSN shared generic stack; raw Ethernet socket, gPTP clock, SRP client, plus model-specific readiness/completion aliases.
 
 ### Memory and Synchronization
 
@@ -550,7 +569,7 @@ Quick reference showing which APIs are available in each execution model:
 | **Timers** | ✅ timerfd + epoll | ✅ io_uring timeout ops | Periodic and one-shot |
 | **V4L2 Capture** | ✅ Zero-copy mmap + epoll | ✅ Hybrid poll + DQBUF | Completion uses `IORING_OP_POLL_ADD`, then `VIDIOC_DQBUF` |
 | **HTTP/2** | ✅ Codec + ALPN | ✅ Codec + ALPN | No executor affinity |
-| **AVB/IEEE 802.1** | ❌ Not yet implemented | ✅ Eth socket | Requires `CAP_NET_RAW` and hardware timestamps |
+| **AVB/IEEE 802.1** | ✅ Available | ✅ Available | Shared generic AVB stack with readiness/completion aliases; sample-validated in both models |
 | **AF_XDP Packets** | ❌ Not available | ✅ Kernel-bypass (gated) | Feature-gated; eBPF packet filtering |
 | **SPDK Block I/O** | ❌ Not available | ✅ NVMe/bdev (gated) | Feature-gated; DPDK-backed |
 | **OpenOnload** | ✅ Zero-copy extensions | ❌ Not available | Readiness-only; headers-only; gracefully disabled |
@@ -587,9 +606,20 @@ kmx-aio/
 │   │   │   ├── opc_ua/              # OPC UA facade (feature-gated)
 │   │   │   │   └── client.hpp, server.hpp, subscription.hpp, types.hpp, error.hpp
 │   │   │   └── quic/                # QUIC generic engine
-│   │   ├── inc/kmx/aio/             # Private headers (opc_ua/open62541_compat.hpp, ...)
+│   │   ├── inc/kmx/aio/             # Private headers (opc_ua/open62541_compat.hpp, quic/base_engine.hpp, ...)
 │   │   ├── src/                     # Implementation (.cpp) files
-│   │   └── lib.qbs                  # Library build definition
+│   │   ├── core/core.qbs            # kmx-aio-core
+│   │   ├── readiness/readiness.qbs  # kmx-aio-readiness
+│   │   ├── completion/completion.qbs# kmx-aio-completion
+│   │   ├── http2/http2.qbs          # kmx-aio-http2
+│   │   ├── quic/quic.qbs            # kmx-aio-quic
+│   │   ├── avb/avb.qbs              # kmx-aio-avb
+│   │   ├── spdk/spdk.qbs            # kmx-aio-spdk
+│   │   ├── xdp/xdp.qbs              # kmx-aio-xdp
+│   │   ├── opcua/opcua.qbs          # kmx-aio-opcua
+│   │   ├── gpu/gpu.qbs              # kmx-aio-gpu
+│   │   ├── library.qbs              # Aggregates split sub-libraries
+│   │   └── lib.qbs                  # Umbrella compatibility artifact (kmx-aio-lib)
 │   ├── library-test/                # Unit tests and integration tests
 │   │   └── unit-test.qbs
 │   ├── sample/                      # Example applications
@@ -597,6 +627,7 @@ kmx-aio/
 │   │   │   ├── tcp/                 # TCP echo, minimal server/client
 │   │   │   ├── udp/                 # UDP echo, minimal server/client
 │   │   │   ├── tls/                 # TLS echo, HTTP/2 ALPN examples
+│   │   │   ├── avb/                 # AVB talker/listener samples on readiness aliases
 │   │   │   └── v4l2/                # V4L2 frame capture
 │   │   ├── completion/              # Completion model samples (io_uring)
 │   │       ├── tcp/                 # TCP echo with io_uring
@@ -613,9 +644,11 @@ kmx-aio/
 ├── build/
 │   ├── install_lsquic.sh            # Build BoringSSL + lsquic
 │   ├── install_open62541.sh         # Build open62541 for OPC UA
+│   ├── spdk-local/                  # Local SPDK checkout + install prefix (optional)
 │   ├── boringssl/                   # BoringSSL repo (cloned by install_lsquic.sh)
 │   ├── lsquic/                      # lsquic repo (cloned by install_lsquic.sh)
 │   └── open62541/                   # open62541 repo (cloned by install_open62541.sh)
+├── ARCHITECTURE.md                  # Artifact graph and ownership rules
 └── README.md, LICENSE, etc.
 ```
 
@@ -914,7 +947,7 @@ The library aims for API parity between readiness and completion models where ar
 * Symbol `KMX_AIO_OPENONLOAD_EXTENSIONS_AVAILABLE` (compile-time macro) is always `0` when the feature gate is disabled.
 * If installed, the library can detect and wrap OpenOnload sockets at runtime; graceful degradation occurs if OpenOnload is unavailable.
 
-**AVB / Audio Video Bridging (`completion::avb::*` only)**:
+**AVB / Audio Video Bridging (shared generic stack + model-specific aliases)**:
 
 * Requires `CAP_NET_RAW` capability for raw Ethernet socket creation.
 * Requires host NIC with IEEE 1588 PTP hardware timestamping support (most modern drivers support this; older NICs and virtual adapters may not).
@@ -922,7 +955,7 @@ The library aims for API parity between readiness and completion models where ar
 
 ### AVB Two-Host Quick Start (gPTP + SRP + AVTP)
 
-Use this flow to run the completion AVB talker/listener samples with matching stream identity and SRP reservation.
+Use this flow to run AVB talker/listener samples (completion or readiness aliases) with matching stream identity and SRP reservation.
 
 1. Build the project:
 
@@ -936,6 +969,8 @@ qbs build -f source/source.qbs config:debug -j"$(nproc)"
 ```bash
 find debug -type f -name sample-avb-talker
 find debug -type f -name sample-avb-listener
+find debug -type f -name sample-avb-readiness-talker
+find debug -type f -name sample-avb-readiness-listener
 ```
 
 1. Ensure runtime capabilities (raw Ethernet + clock discipline):
@@ -943,9 +978,11 @@ find debug -type f -name sample-avb-listener
 ```bash
 sudo setcap cap_net_raw,cap_sys_time+ep /path/to/sample-avb-talker
 sudo setcap cap_net_raw,cap_sys_time+ep /path/to/sample-avb-listener
+sudo setcap cap_net_raw,cap_sys_time+ep /path/to/sample-avb-readiness-talker
+sudo setcap cap_net_raw,cap_sys_time+ep /path/to/sample-avb-readiness-listener
 ```
 
-1. Start talker on Host A:
+1. Start talker on Host A (completion example):
 
 ```bash
 /path/to/sample-avb-talker \
@@ -956,7 +993,7 @@ sudo setcap cap_net_raw,cap_sys_time+ep /path/to/sample-avb-listener
     --period-us 125
 ```
 
-1. Start listener on Host B (must subscribe to the exact talker stream id + source MAC):
+1. Start listener on Host B (completion example; must subscribe to the exact talker stream id + source MAC):
 
 ```bash
 /path/to/sample-avb-listener \
@@ -966,6 +1003,8 @@ sudo setcap cap_net_raw,cap_sys_time+ep /path/to/sample-avb-listener
     --sync-timeout-s 5 \
     --period-us 125
 ```
+
+For readiness aliases, run `sample-avb-readiness-talker` / `sample-avb-readiness-listener` with the same argument pattern.
 
 1. Verify expected behavior in logs:
 
