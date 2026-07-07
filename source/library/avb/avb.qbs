@@ -1,0 +1,73 @@
+import qbs
+
+StaticLibrary {
+    Depends { name: "cpp" }
+    Depends { name: "kmx-aio-core" }
+    Depends { name: "kmx-aio-readiness" }
+
+    name: "kmx-aio-avb"
+    condition: project.enable_avb
+    consoleApplication: true
+    cpp.cxxLanguageVersion: "c++26"
+    cpp.enableRtti: false
+    cpp.driverFlags: {
+        var flags = [];
+        if (project.enable_asan)
+        {
+            flags.push("-fsanitize=address");
+            flags.push("-fno-omit-frame-pointer");
+        }
+        if (project.enable_tsan)
+        {
+            flags.push("-fsanitize=thread");
+            flags.push("-fno-omit-frame-pointer");
+        }
+        return flags;
+    }
+    cpp.defines: {
+        var defs = [];
+        if (project.enable_openonload)
+            defs.push("KMX_AIO_FEATURE_OPENONLOAD=1");
+        if (project.enable_af_xdp)
+            defs.push("KMX_AIO_FEATURE_AF_XDP=1");
+        if (project.enable_spdk)
+            defs.push("KMX_AIO_FEATURE_SPDK=1");
+        if (project.enable_quic)
+            defs.push("KMX_AIO_FEATURE_QUIC=1");
+        if (project.enable_avb)
+            defs.push("KMX_AIO_FEATURE_AVB=1");
+        if (project.enable_opc_ua)
+            defs.push("KMX_AIO_FEATURE_OPC_UA=1");
+        if (project.enable_cuda)
+            defs.push("KMX_AIO_FEATURE_CUDA=1");
+        if (project.enable_asan)
+            defs.push("KMX_AIO_SANITIZER_ASAN=1");
+        if (project.enable_tsan)
+            defs.push("KMX_AIO_SANITIZER_TSAN=1");
+        return defs;
+    }
+    cpp.includePaths: [
+        "../api",
+        "../inc",
+        "/usr/local/include",
+    ]
+    cpp.dynamicLibraries: [
+        "pthread",
+    ]
+    install: true
+    files: [
+        "../api/kmx/aio/avb/**.hpp",
+        "../inc/kmx/aio/avb/**.hpp",
+        "../src/kmx/aio/avb/**.cpp",
+        "../src/kmx/aio/avb/avtp/**.cpp",
+        "../src/kmx/aio/avb/gptp/**.cpp",
+        "../src/kmx/aio/avb/srp/**.cpp",
+    ]
+
+    Export {
+        Depends { name: "cpp" }
+        Depends { name: "kmx-aio-core" }
+        Depends { name: "kmx-aio-readiness" }
+        cpp.includePaths: [ product.sourceDirectory + "/../api" ]
+    }
+}

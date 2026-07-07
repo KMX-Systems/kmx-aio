@@ -1,7 +1,8 @@
 import qbs
 
 CppApplication {
-    Depends { name: "kmx-aio-lib" }
+    Depends { name: "kmx-aio-completion" }
+    Depends { name: "kmx-aio-avb" }
 
     name: "sample-avb-talker"
     condition: project.enable_avb

@@ -1,7 +1,9 @@
 import qbs
 
 CppApplication {
-    Depends { name: "kmx-aio-lib" }
+    condition: project.enable_af_xdp
+    Depends { name: "kmx-aio-completion" }
+    Depends { name: "kmx-aio-xdp" }
 
     name: "sample-xdp-packet-filter"
     consoleApplication: true

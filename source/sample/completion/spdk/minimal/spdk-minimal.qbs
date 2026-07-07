@@ -1,7 +1,9 @@
 import qbs
 
 CppApplication {
-    Depends { name: "kmx-aio-lib" }
+    condition: project.enable_spdk
+    Depends { name: "kmx-aio-completion" }
+    Depends { name: "kmx-aio-spdk" }
 
     name: "sample-spdk-minimal"
     consoleApplication: true

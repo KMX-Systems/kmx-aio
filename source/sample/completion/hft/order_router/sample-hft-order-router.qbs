@@ -12,7 +12,7 @@ CppApplication {
         "../../../../library/inc_dep",
     ]
 
-    Depends { name: "kmx-aio-lib" }
+    Depends { name: "kmx-aio-core" }
 
     files: [
         "inc/kmx/aio/sample/hft/order_router/**.hpp",

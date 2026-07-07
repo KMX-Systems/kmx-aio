@@ -2,6 +2,16 @@ import qbs
 
 StaticLibrary {
     Depends { name: "cpp" }
+    Depends { name: "kmx-aio-core" }
+    Depends { name: "kmx-aio-readiness" }
+    Depends { name: "kmx-aio-completion" }
+    Depends { name: "kmx-aio-http2" }
+    Depends { name: "kmx-aio-gpu"; condition: project.enable_cuda }
+    Depends { name: "kmx-aio-opcua"; condition: project.enable_opc_ua }
+    Depends { name: "kmx-aio-quic"; condition: project.enable_quic }
+    Depends { name: "kmx-aio-xdp"; condition: project.enable_af_xdp }
+    Depends { name: "kmx-aio-spdk"; condition: project.enable_spdk }
+    Depends { name: "kmx-aio-avb"; condition: project.enable_avb }
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.enableRtti: false
@@ -46,11 +56,15 @@ StaticLibrary {
         "inc",
         "inc_dep",
         "/usr/local/include",
+        project.enable_spdk && project.spdk_prefix ? project.spdk_prefix + "/include" : "",
+        project.enable_spdk && project.spdk_prefix ? project.spdk_prefix + "/include/dpdk" : "",
         "../../build/lsquic/include",
         project.enable_opc_ua && project.opc_ua_prefix ? project.opc_ua_prefix + "/include" : "",
     ]
     cpp.libraryPaths: [
         "/usr/local/lib",
+        project.enable_spdk && project.spdk_prefix ? project.spdk_prefix + "/lib" : "",
+        project.enable_spdk && project.spdk_prefix ? project.spdk_prefix + "/lib64" : "",
         project.enable_opc_ua && project.opc_ua_prefix ? project.opc_ua_prefix + "/lib" : "",
     ]
     cpp.dynamicLibraries: {
@@ -85,7 +99,6 @@ StaticLibrary {
             libs.push("rte_kvargs");
             libs.push("rte_log");
             libs.push("rte_telemetry");
-            libs.push("rte_argparse");
             libs.push("rte_mempool_ring");
             libs.push("rte_mempool");
             libs.push("rte_ring");
@@ -93,12 +106,6 @@ StaticLibrary {
             libs.push("rte_pci");
             libs.push("rte_power");
             libs.push("rte_timer");
-            libs.push("rte_power_acpi");
-            libs.push("rte_power_amd_pstate");
-            libs.push("rte_power_cppc");
-            libs.push("rte_power_intel_pstate");
-            libs.push("rte_power_intel_uncore");
-            libs.push("rte_power_kvm_vm");
             libs.push("rte_vhost");
             libs.push("rte_ethdev");
             libs.push("rte_meter");
@@ -111,8 +118,12 @@ StaticLibrary {
 
             libs.push("ssl");
             libs.push("crypto");
-            libs.push("isal");
-            libs.push("isal_crypto");
+
+            if (project.spdk_enable_crypto)
+            {
+                libs.push("isal");
+                libs.push("isal_crypto");
+            }
         }
 
         if (project.enable_quic)
@@ -152,63 +163,27 @@ StaticLibrary {
         // Private headers
         "inc/kmx/aio/**.hpp",
 
-        // Core/runtime sources
-        "src/kmx/aio/**.cpp",
+        // HTTP/2, GPU and OPC UA are provided by dedicated sub-libraries
 
-        // OPC UA sources
-        "api/kmx/aio/opc_ua/**.hpp",
-        "inc/kmx/aio/opc_ua/**.hpp",
-        "src/kmx/aio/opc_ua/**.cpp",
-
-        // Completion model sources
-        "api/kmx/aio/completion/**.hpp",
-        "api/kmx/aio/completion/tcp/**.hpp",
-        "api/kmx/aio/completion/udp/**.hpp",
-        "api/kmx/aio/completion/tls/**.hpp",
-        "api/kmx/aio/completion/spdk/**.hpp",
-        "api/kmx/aio/completion/v4l2/**.hpp",
-        "api/kmx/aio/completion/xdp/**.hpp",
-        "src/kmx/aio/completion/**.cpp",
-        "src/kmx/aio/completion/tcp/**.cpp",
-        "src/kmx/aio/completion/udp/**.cpp",
-        "src/kmx/aio/completion/tls/**.cpp",
-        "src/kmx/aio/completion/spdk/**.cpp",
-        "src/kmx/aio/completion/v4l2/**.cpp",
-        "src/kmx/aio/completion/xdp/**.cpp",
-        "src/kmx/aio/completion/quic/**.cpp",
-
-        // Readiness model sources
-        "api/kmx/aio/readiness/**.hpp",
-        "api/kmx/aio/readiness/descriptor/**.hpp",
-        "api/kmx/aio/readiness/tcp/**.hpp",
-        "api/kmx/aio/readiness/udp/**.hpp",
-        "api/kmx/aio/readiness/tls/**.hpp",
-        "api/kmx/aio/readiness/v4l2/**.hpp",
-        "src/kmx/aio/readiness/**.cpp",
-        "src/kmx/aio/readiness/descriptor/**.cpp",
-        "src/kmx/aio/readiness/tcp/**.cpp",
-        "src/kmx/aio/readiness/udp/**.cpp",
-        "src/kmx/aio/readiness/tls/**.cpp",
-        "src/kmx/aio/readiness/v4l2/**.cpp",
-        "src/kmx/aio/readiness/quic/**.cpp",
-        "src/kmx/aio/quic/**.cpp",
-
-        // AVB (Audio Video Bridging, IEEE 802.1) sources
-        "api/kmx/aio/avb/**.hpp",
-        "api/kmx/aio/completion/avb/**.hpp",
-        "api/kmx/aio/readiness/avb/**.hpp",
-        "inc/kmx/aio/avb/**.hpp",
-        "src/kmx/aio/avb/**.cpp",
-        "src/kmx/aio/avb/avtp/**.cpp",
-        "src/kmx/aio/avb/gptp/**.cpp",
-        "src/kmx/aio/avb/srp/**.cpp",
-
-        // GPU (CUDA) sources
-        "api/kmx/aio/gpu/**.hpp",
-        "src/kmx/aio/gpu/**.cpp",
+        // AVB is provided by dedicated sub-library
     ]
     Export {
         Depends { name: "cpp" }
+        Depends { name: "kmx-aio-core" }
+        Depends { name: "kmx-aio-readiness" }
+        Depends { name: "kmx-aio-completion" }
+        Depends { name: "kmx-aio-http2" }
+        Depends { name: "kmx-aio-gpu"; condition: project.enable_cuda }
+        Depends { name: "kmx-aio-opcua"; condition: project.enable_opc_ua }
+        Depends { name: "kmx-aio-quic"; condition: project.enable_quic }
+        Depends { name: "kmx-aio-xdp"; condition: project.enable_af_xdp }
+        Depends { name: "kmx-aio-spdk"; condition: project.enable_spdk }
+        Depends { name: "kmx-aio-avb"; condition: project.enable_avb }
         cpp.includePaths: [ product.sourceDirectory + "/api" ]
+        cpp.libraryPaths: [
+            project.enable_spdk && project.spdk_prefix ? project.spdk_prefix + "/lib" : "",
+            project.enable_spdk && project.spdk_prefix ? project.spdk_prefix + "/lib64" : "",
+            project.enable_opc_ua && project.opc_ua_prefix ? project.opc_ua_prefix + "/lib" : "",
+        ]
     }
 }

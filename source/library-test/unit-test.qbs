@@ -1,10 +1,16 @@
 import qbs
 
 CppApplication {
-    Depends
-    {
-        name: 'kmx-aio-lib'
-    }
+    Depends { name: "kmx-aio-core" }
+    Depends { name: "kmx-aio-readiness" }
+    Depends { name: "kmx-aio-completion" }
+    Depends { name: "kmx-aio-http2" }
+    Depends { name: "kmx-aio-gpu"; condition: project.enable_cuda }
+    Depends { name: "kmx-aio-opcua"; condition: project.enable_opc_ua }
+    Depends { name: "kmx-aio-quic"; condition: project.enable_quic }
+    Depends { name: "kmx-aio-xdp"; condition: project.enable_af_xdp }
+    Depends { name: "kmx-aio-spdk"; condition: project.enable_spdk }
+    Depends { name: "kmx-aio-avb"; condition: project.enable_avb }
 
     name: "kmx-aio-test"
     consoleApplication: true
@@ -69,4 +75,36 @@ CppApplication {
         "inc/kmx/aio/**.hpp",
         "src/**/*.cpp",
     ]
+    excludeFiles: {
+        var files = [];
+
+        if (!project.enable_opc_ua)
+            files.push("src/kmx/aio/opc_ua/**.cpp");
+
+        if (!project.enable_cuda)
+        {
+            files.push("src/kmx/aio/gpu/**.cpp");
+            files.push("src/kmx/aio/integration/gpu_image_processing_smoke_test.cpp");
+        }
+
+        if (!project.enable_spdk)
+        {
+            files.push("src/kmx/aio/completion/spdk/**.cpp");
+            files.push("src/kmx/aio/integration/pillar_1_integration_test.cpp");
+        }
+
+        if (!project.enable_af_xdp)
+            files.push("src/kmx/aio/completion/xdp/**.cpp");
+
+        if (!project.enable_avb)
+            files.push("src/kmx/aio/avb/**.cpp");
+
+        if (!project.enable_quic)
+        {
+            files.push("src/kmx/aio/integration/quic_http3_smoke_test.cpp");
+            files.push("src/kmx/aio/integration/quic_readiness_echo_smoke_test.cpp");
+        }
+
+        return files;
+    }
 }

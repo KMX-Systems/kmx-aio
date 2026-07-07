@@ -2,7 +2,7 @@ import qbs
 
 StaticLibrary {
     Depends { name: "cpp" }
-    Depends { name: "kmx-aio-lib" }
+    Depends { name: "kmx-aio-core" }
 
     name: "sample-tcp-echo-common"
     consoleApplication: true

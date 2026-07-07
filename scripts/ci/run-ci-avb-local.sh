@@ -19,6 +19,7 @@ Usage:
 Jobs:
   all
   build-and-test
+    artifact-split-smoke
   quic-smoke
   gpu-smoke
 USAGE
@@ -32,7 +33,7 @@ USAGE
     shift
 done
 
-if [[ "$job" != "all" && "$job" != "build-and-test" && "$job" != "quic-smoke" && "$job" != "gpu-smoke" ]]; then
+if [[ "$job" != "all" && "$job" != "build-and-test" && "$job" != "artifact-split-smoke" && "$job" != "quic-smoke" && "$job" != "gpu-smoke" ]]; then
     echo "Invalid --only value: $job" >&2
     exit 1
 fi
@@ -69,10 +70,20 @@ sync_script_into_build_dir() {
     fi
 }
 
+sync_script_into_build_dir
+
 require_cmd() {
     if ! command -v "$1" >/dev/null 2>&1; then
         echo "Required command missing: $1" >&2
         exit 1
+    fi
+}
+
+run_with_local_gcc_runtime() {
+    if [[ -d /opt/gcc-16/lib64 ]]; then
+        LD_LIBRARY_PATH="/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-}" "$@"
+    else
+        "$@"
     fi
 }
 
@@ -107,11 +118,11 @@ run_build_and_test() {
 
     local test_bin
     test_bin="$(find_test_bin)"
-    timeout 90s "$test_bin"
+    run_with_local_gcc_runtime timeout 90s "$test_bin"
 
     for i in $(seq 1 20); do
         echo "flake-guard run $i"
-        timeout 20s "$test_bin" "channel wait_until_can_send unblocks when consumer pops from a full ring"
+        run_with_local_gcc_runtime timeout 20s "$test_bin" "channel wait_until_can_send unblocks when consumer pops from a full ring"
     done
 
     local talker_bin listener_bin
@@ -165,8 +176,72 @@ run_quic_smoke() {
 
     local test_bin
     test_bin="$(find_test_bin)"
-    timeout 30s "$test_bin" "[quic][readiness][integration][smoke]"
-    timeout 30s "$test_bin" "[quic][http3][integration][smoke]"
+    run_with_local_gcc_runtime timeout 30s "$test_bin" "[quic][readiness][integration][smoke]"
+    run_with_local_gcc_runtime timeout 30s "$test_bin" "[quic][http3][integration][smoke]"
+}
+
+run_artifact_split_smoke() {
+    echo "==> artifact-split-smoke"
+
+    (
+        cd "$repo_root"
+        bash scripts/ci/check-sample-artifact-boundaries.sh
+    )
+
+    (
+        cd "$repo_root"
+        bash build/install_lsquic.sh
+        bash build/install_open62541.sh
+    )
+
+    if [[ ! -d "$repo_root/build/spdk-local/install-local" ]]; then
+        (
+            cd "$repo_root"
+            mkdir -p build/spdk-local
+            if [[ ! -d build/spdk-local/src/.git ]]; then
+                git clone --depth 1 --branch v24.09 https://github.com/spdk/spdk.git build/spdk-local/src
+            fi
+            git -C build/spdk-local/src submodule update --init --recursive
+            cd build/spdk-local/src
+            ./configure --prefix="$PWD/../install-local" --with-shared --disable-tests --disable-unit-tests --disable-apps --disable-examples \
+                --without-fio --without-vhost --without-iscsi-initiator --without-rbd --without-xnvme --without-fc --without-rdma \
+                --without-crypto --without-vfio-user --without-virtio --without-nvme-cuse
+            make -j"$(nproc)"
+            make install
+        )
+    fi
+
+    (
+        cd "$source_dir"
+        local products
+        products="sample-tcp-minimal-client,sample-tcp-minimal-server,sample-tcp-echo-client,sample-tcp-echo-server,sample-udp-minimal-client,sample-udp-minimal-server,sample-udp-echo-client,sample-udp-echo-server,sample-quic-echo-client,sample-quic-echo-server,sample-quic-echo-readiness-client,sample-quic-echo-readiness-server,sample-quic-http3-client,sample-quic-http3-server,sample-tls-echo-completion-client,sample-tls-echo-completion-server,sample-tls-echo-readiness-client,sample-tls-echo-readiness-server,sample-tls-h2-alpn-client,sample-tls-h2-alpn-server,sample-tls-h2-alpn-readiness-client,sample-tls-h2-alpn-readiness-server,sample-avb-talker,sample-avb-listener,sample-avb-readiness-talker,sample-avb-readiness-listener,sample-spdk-minimal,sample-spdk-discovery,sample-xdp-packet-filter,sample-v4l2-capture,sample-v4l2-completion-capture,sample-hft-order-router,kmx-aio-test"
+        qbs resolve -f source.qbs config:debug \
+            project.enable_openonload:false \
+            project.enable_af_xdp:true \
+            project.enable_spdk:true \
+            project.spdk_prefix:"$repo_root/build/spdk-local/install-local" \
+            project.spdk_enable_crypto:false \
+            project.enable_quic:true \
+            project.enable_avb:true \
+            project.enable_opc_ua:true \
+            project.opc_ua_vendored:true \
+            project.opc_ua_prefix:"$repo_root/build/open62541/install-local" \
+            project.enable_cuda:false
+
+        qbs build -f source.qbs config:debug -j 2 \
+            --products "$products" \
+            project.enable_openonload:false \
+            project.enable_af_xdp:true \
+            project.enable_spdk:true \
+            project.spdk_prefix:"$repo_root/build/spdk-local/install-local" \
+            project.spdk_enable_crypto:false \
+            project.enable_quic:true \
+            project.enable_avb:true \
+            project.enable_opc_ua:true \
+            project.opc_ua_vendored:true \
+            project.opc_ua_prefix:"$repo_root/build/open62541/install-local" \
+            project.enable_cuda:false
+    )
 }
 
 run_gpu_smoke() {
@@ -208,11 +283,11 @@ run_gpu_smoke() {
         exit 1
     fi
 
-    LD_LIBRARY_PATH="/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-}" timeout 30s "$sample_bin" \
+    run_with_local_gcc_runtime timeout 30s "$sample_bin" \
         --max-frames 1 --width 320 --height 240 --buffer-count 2 --gpu-device 0
 
     test_bin="$(find_test_bin)"
-    LD_LIBRARY_PATH="/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-}" timeout 60s "$test_bin" "[gpu]"
+    run_with_local_gcc_runtime timeout 60s "$test_bin" "[gpu]"
 }
 
 require_cmd qbs
@@ -222,11 +297,15 @@ sync_script_into_build_dir
 case "$job" in
     all)
         run_build_and_test
+        run_artifact_split_smoke
         run_quic_smoke
         run_gpu_smoke
         ;;
     build-and-test)
         run_build_and_test
+        ;;
+    artifact-split-smoke)
+        run_artifact_split_smoke
         ;;
     quic-smoke)
         run_quic_smoke
