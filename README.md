@@ -1024,15 +1024,35 @@ The library uses `std::expected<T, error_code>` for error propagation. Uncaught 
 
 The project uses QBS for building.
 
-```bash
-qbs build -f source/source.qbs profile:default
-```
-
-Or to build everything explicitly from the source tree definition:
+Dependency-light baseline build (works without optional accelerator stacks such as
+SPDK/AF_XDP/OpenOnload/QUIC):
 
 ```bash
-qbs build -f source/source.qbs # Builds everything in source/
+qbs resolve -f source/source.qbs config:debug \
+    project.enable_openonload:false \
+    project.enable_af_xdp:false \
+    project.enable_spdk:false \
+    project.enable_quic:false
+qbs build   -f source/source.qbs config:debug \
+    project.enable_openonload:false \
+    project.enable_af_xdp:false \
+    project.enable_spdk:false \
+    project.enable_quic:false
 ```
+
+Full-feature build (requires all optional dependencies installed):
+
+```bash
+qbs resolve -f source/source.qbs config:debug
+qbs build   -f source/source.qbs config:debug # Builds everything in source/
+```
+
+If QBS reports a profile/configuration mismatch (for example, "profile 'none' was
+used when last building"), run `qbs resolve` first for the same `-f`, `profile`,
+and `config` values you intend to build with.
+
+If you want to force a specific profile, use `profile:<name>` only after that
+profile exists in your local QBS setup.
 
 ## Static Analysis (clang-tidy)
 
