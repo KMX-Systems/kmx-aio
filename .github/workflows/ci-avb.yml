@@ -70,6 +70,77 @@ jobs:
           "$TALKER_BIN" --period-us 0 && exit 1 || true
           "$LISTENER_BIN" --sync-timeout-s 0 && exit 1 || true
 
+  artifact-split-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qbs liburing-dev libssl-dev catch2 gcc-14 g++-14 git cmake meson ninja-build \
+            python3 python3-jinja2 python3-pyelftools python3-tabulate libaio-dev libnuma-dev uuid-dev libelf-dev
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+          sudo update-alternatives --set g++ /usr/bin/g++-14
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
+          sudo update-alternatives --set gcc /usr/bin/gcc-14
+
+      - name: Bootstrap QUIC dependencies
+        run: |
+          bash build/install_lsquic.sh
+
+      - name: Bootstrap local open62541 prefix
+        run: |
+          bash build/install_open62541.sh
+
+      - name: Bootstrap local SPDK prefix
+        run: |
+          git clone --depth 1 --branch v24.09 https://github.com/spdk/spdk.git /tmp/spdk
+          git -C /tmp/spdk submodule update --init --recursive
+          cd /tmp/spdk
+          ./configure --prefix="$PWD/install-local" --with-shared --disable-tests --disable-unit-tests --disable-apps --disable-examples \
+            --without-fio --without-vhost --without-iscsi-initiator --without-rbd --without-xnvme --without-fc --without-rdma \
+            --without-crypto --without-vfio-user --without-virtio --without-nvme-cuse
+          make -j"$(nproc)"
+          make install
+
+      - name: Enforce sample artifact boundaries
+        run: |
+          bash scripts/ci/check-sample-artifact-boundaries.sh
+
+      - name: Build explicit-dependency samples and tests
+        run: |
+          cd source
+          PRODUCTS="sample-tcp-minimal-client,sample-tcp-minimal-server,sample-tcp-echo-client,sample-tcp-echo-server,sample-udp-minimal-client,sample-udp-minimal-server,sample-udp-echo-client,sample-udp-echo-server,sample-quic-echo-client,sample-quic-echo-server,sample-quic-echo-readiness-client,sample-quic-echo-readiness-server,sample-quic-http3-client,sample-quic-http3-server,sample-tls-echo-completion-client,sample-tls-echo-completion-server,sample-tls-echo-readiness-client,sample-tls-echo-readiness-server,sample-tls-h2-alpn-client,sample-tls-h2-alpn-server,sample-tls-h2-alpn-readiness-client,sample-tls-h2-alpn-readiness-server,sample-avb-talker,sample-avb-listener,sample-avb-readiness-talker,sample-avb-readiness-listener,sample-spdk-minimal,sample-spdk-discovery,sample-xdp-packet-filter,sample-v4l2-capture,sample-v4l2-completion-capture,sample-hft-order-router,kmx-aio-test"
+          qbs resolve -f source.qbs config:debug \
+            project.enable_openonload:false \
+            project.enable_af_xdp:true \
+            project.enable_spdk:true \
+            project.spdk_prefix:"/tmp/spdk/install-local" \
+            project.spdk_enable_crypto:false \
+            project.enable_quic:true \
+            project.enable_avb:true \
+            project.enable_opc_ua:true \
+            project.opc_ua_vendored:true \
+            project.opc_ua_prefix:"$GITHUB_WORKSPACE/build/open62541/install-local" \
+            project.enable_cuda:false
+
+          qbs build -f source.qbs config:debug -j 2 \
+            --products "$PRODUCTS" \
+            project.enable_openonload:false \
+            project.enable_af_xdp:true \
+            project.enable_spdk:true \
+            project.spdk_prefix:"/tmp/spdk/install-local" \
+            project.spdk_enable_crypto:false \
+            project.enable_quic:true \
+            project.enable_avb:true \
+            project.enable_opc_ua:true \
+            project.opc_ua_vendored:true \
+            project.opc_ua_prefix:"$GITHUB_WORKSPACE/build/open62541/install-local" \
+            project.enable_cuda:false
+
   quic-smoke:
     runs-on: ubuntu-latest
 

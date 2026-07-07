@@ -1,7 +1,7 @@
 import qbs
 
 CppApplication {
-    Depends { name: "kmx-aio-lib" }
+    Depends { name: "kmx-aio-readiness" }
 
     name: "sample-tls-h2-alpn-readiness-server"
     consoleApplication: true

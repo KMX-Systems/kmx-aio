@@ -5,6 +5,8 @@ Project {
     property bool enable_openonload: true
     property bool enable_af_xdp: true
     property bool enable_spdk: true
+    property string spdk_prefix: "/usr/local"
+    property bool spdk_enable_crypto: true
     property bool enable_quic: true
     property bool enable_avb: true
     property bool enable_opc_ua: false
@@ -15,7 +17,7 @@ Project {
     property bool enable_tsan: false
 
     references: [
-        "library/lib.qbs",
+        "library/library.qbs",
         "library-test/unit-test.qbs",
         "sample/sample.qbs",
     ]

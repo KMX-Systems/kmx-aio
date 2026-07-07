@@ -1,7 +1,7 @@
 import qbs
 
 CppApplication {
-    Depends { name: "kmx-aio-lib" }
+    Depends { name: "kmx-aio-completion" }
 
     // We don't have a specific common library for UDP, so we'll just not depend on one if not needed.
     // Or we use tcp-echo-common for random buffers if needed.

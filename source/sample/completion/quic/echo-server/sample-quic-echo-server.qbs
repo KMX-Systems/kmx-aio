@@ -17,7 +17,8 @@ CppApplication {
     // Enable QUIC feature gate locally if needed, but the library should have it
     cpp.defines: ["KMX_AIO_FEATURE_QUIC=1"]
 
-    Depends { name: "kmx-aio-lib" }
+    Depends { name: "kmx-aio-completion" }
+    Depends { name: "kmx-aio-quic" }
 
     files: [
         "inc/kmx/aio/sample/quic/echo_server/**.hpp",

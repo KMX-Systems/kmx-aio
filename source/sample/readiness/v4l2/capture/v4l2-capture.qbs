@@ -1,7 +1,7 @@
 import qbs
 
 CppApplication {
-    Depends { name: "kmx-aio-lib" }
+    Depends { name: "kmx-aio-readiness" }
 
     name: "sample-v4l2-capture"
     consoleApplication: true

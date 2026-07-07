@@ -1,7 +1,7 @@
 import qbs
 
 CppApplication {
-    Depends { name: "kmx-aio-lib" }
+    Depends { name: "kmx-aio-completion" }
     Depends { name: "sample-tcp-echo-common" }
 
     name: "sample-tcp-echo-uring-server"

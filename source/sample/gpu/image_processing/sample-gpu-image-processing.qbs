@@ -12,7 +12,8 @@ CppApplication {
     ]
     cpp.defines: ["KMX_AIO_FEATURE_CUDA=1"]
 
-    Depends { name: "kmx-aio-lib" }
+    Depends { name: "kmx-aio-completion" }
+    Depends { name: "kmx-aio-gpu" }
 
     files: [
         "inc/kmx/aio/sample/gpu/image_processing/**.hpp",
