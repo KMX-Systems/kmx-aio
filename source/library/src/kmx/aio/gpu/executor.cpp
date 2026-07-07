@@ -11,11 +11,17 @@
 #include <pthread.h>
 #include <queue>
 #include <stop_token>
+#include <thread>
 #include <utility>
 #include <vector>
 
 namespace kmx::aio::gpu
 {
+    namespace
+    {
+        thread_local executor* tls_current_gpu_executor = nullptr;
+    }
+
 
 /// CUDA Error Category (Conditional)
 #if defined(KMX_AIO_FEATURE_CUDA)
@@ -107,21 +113,33 @@ namespace kmx::aio::gpu
     template <typename T>
     void executor::spawn(task<T> coro) noexcept(false)
     {
-        // NOTE: Spawning a GPU task means enqueueing it for processing in run().
-        // Currently, the task is co_await'd (not stored directly) since task<T>
-        // manages its own coroutine lifecycle. A full implementation would:
-        //   1. Create a wrapper coroutine that co_awaits the task
-        //   2. Enqueue the wrapper's handle for resumption
-        //   3. Resume wrappers in run() loop
-        //
-        // For now, this is a placeholder that tracks task spawning statistics.
-        // Full implementation pending: GPU task scheduler integration.
-        (void) coro;
+        active_work_.fetch_add(1u, std::memory_order_acq_rel);
         stats_.total_tasks_spawned.fetch_add(1u, std::memory_order_release);
+
+        const auto self = shared_from_this();
+        auto detached = execute_task(std::move(coro), self);
+
+        {
+            std::lock_guard<std::mutex> lock(queue_mutex_);
+            pending_tasks_.push_back(detached.handle);
+        }
+
+        // Drive progress inline when no dedicated run() loop is active.
+        if (!running_.load(std::memory_order_acquire))
+        {
+            while (active_work_.load(std::memory_order_acquire) > 0u)
+            {
+                if (!poll_events())
+                    std::this_thread::yield();
+            }
+        }
     }
 
     void executor::run(std::stop_token stop_token) noexcept(false)
     {
+        stop_requested_.store(false, std::memory_order_release);
+        running_.store(true, std::memory_order_release);
+
         // Pin to CPU core if specified (thread-per-core architecture).
         if (config_.core_id >= 0)
         {
@@ -136,14 +154,20 @@ namespace kmx::aio::gpu
         }
 
         // GPU executor event loop started.
-        bool done = false;
-        while (!done && !stop_token.stop_requested() && !stop_requested_.load(std::memory_order_acquire))
+        while (true)
         {
-            done = !poll_events();
-            std::this_thread::yield();
+            const bool had_work = poll_events();
+
+            const bool external_stop = stop_token.stop_requested() || stop_requested_.load(std::memory_order_acquire);
+            if (external_stop && !has_pending_work())
+                break;
+
+            if (!had_work)
+                std::this_thread::yield();
         }
 
         finalize();
+        running_.store(false, std::memory_order_release);
         // GPU executor event loop exited.
     }
 
@@ -161,6 +185,19 @@ namespace kmx::aio::gpu
     void executor::reset_statistics() noexcept
     {
         stats_.reset();
+    }
+
+    void executor::register_waiting_coroutine(const event_handle event, const std::coroutine_handle<> h) noexcept
+    {
+        if (!event || !h)
+            return;
+
+        {
+            std::lock_guard<std::mutex> lock(queue_mutex_);
+            waiting_events_[event] = h;
+        }
+
+        stats_.total_events_created.fetch_add(1u, std::memory_order_release);
     }
 
 #if defined(KMX_AIO_FEATURE_CUDA)
@@ -205,7 +242,9 @@ namespace kmx::aio::gpu
         {
             if (handle)
             {
+                tls_current_gpu_executor = this;
                 handle.resume();
+                tls_current_gpu_executor = nullptr;
                 work_done = true;
             }
         }
@@ -220,18 +259,27 @@ namespace kmx::aio::gpu
                 auto coro_handle = it->second;
 
                 // Try to query event status (non-blocking).
-                // Note: We cast void* back to event* for is_ready() check.
-                // This is safe because we control the event lifecycle.
                 try
                 {
-                    auto* evt = static_cast<event*>(event_handle);
-                    if (evt && evt->is_ready())
+                    bool ready = false;
+#if defined(KMX_AIO_FEATURE_CUDA)
+                    const auto ret = ::cudaEventQuery(static_cast<::cudaEvent_t>(event_handle));
+                    if (ret == cudaSuccess)
+                        ready = true;
+                    else if (ret != cudaErrorNotReady)
+                        throw std::system_error(static_cast<int>(ret), cuda_category(), "cudaEventQuery failed");
+#else
+                    ready = true;
+#endif
+
+                    if (ready)
                     {
                         completed_events.push_back(event_handle);
                         if (coro_handle)
                         {
+                            tls_current_gpu_executor = this;
                             coro_handle.resume();
-                            stats_.total_tasks_completed.fetch_add(1u, std::memory_order_release);
+                            tls_current_gpu_executor = nullptr;
                             stats_.total_events_completed.fetch_add(1u, std::memory_order_release);
                             work_done = true;
                         }
@@ -251,6 +299,15 @@ namespace kmx::aio::gpu
         }
 
         return work_done || !completed_events.empty();
+    }
+
+    bool executor::has_pending_work() noexcept
+    {
+        if (active_work_.load(std::memory_order_acquire) > 0u)
+            return true;
+
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        return !pending_tasks_.empty() || !waiting_events_.empty();
     }
 
     void executor::process_events() noexcept
@@ -276,7 +333,6 @@ namespace kmx::aio::gpu
             // Silently ignore errors during finalization.
         }
 
-        // Clear any remaining waiting events.
         {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             waiting_events_.clear();
@@ -345,19 +401,11 @@ namespace kmx::aio::gpu
         {
             throw std::system_error(static_cast<int>(std::errc::invalid_argument), std::generic_category(), "stream handle is null");
         }
-        ::cudaEvent_t evt = nullptr;
-        const auto ret_create = ::cudaEventCreate(&evt);
-        if (ret_create != cudaSuccess)
-            throw std::system_error(static_cast<int>(ret_create), cuda_category(), "cudaEventCreate failed");
-
-        const auto ret_record = ::cudaEventRecord(evt, static_cast<::cudaStream_t>(handle_));
+        const auto ret_record = ::cudaEventRecord(static_cast<::cudaEvent_t>(e.handle_), static_cast<::cudaStream_t>(handle_));
         if (ret_record != cudaSuccess)
         {
-            ::cudaEventDestroy(evt);
             throw std::system_error(static_cast<int>(ret_record), cuda_category(), "cudaEventRecord failed");
         }
-
-        e.handle_ = evt;
 #else
         e.handle_ = reinterpret_cast<void*>(0xCAFEBABE); // Mock handle (distinctive pattern)
 #endif
@@ -450,19 +498,27 @@ namespace kmx::aio::gpu
 
     void event::awaiter::await_suspend(std::coroutine_handle<> h) noexcept
     {
-        // Register coroutine for resumption when event fires.
-        // Note: In mock mode, is_ready() returned true in await_ready(), so
-        // await_suspend is not called. In real CUDA mode, this would register
-        // the coroutine with the executor's event polling system.
-        //
-        // Currently, we don't have direct executor reference here.
-        // Future: Pass executor reference through event creation chain:
-        //   stream(executor_ref) -> event(executor_ref) -> awaiter(executor_ref)
-        // Then register: executor_ref->register_waiting_coroutine(event_, h);
-        //
-        // For now, this is a placeholder. The polling loop will eventually
-        // resume this coroutine when the event fires.
-        (void) h; // Suppress unused parameter warning.
+        auto* const exec = tls_current_gpu_executor;
+        if (exec == nullptr)
+        {
+#if defined(KMX_AIO_FEATURE_CUDA)
+            while (true)
+            {
+                const auto ret = ::cudaEventQuery(static_cast<::cudaEvent_t>(event_.handle_));
+                if (ret == cudaSuccess)
+                    break;
+
+                if (ret != cudaErrorNotReady)
+                    break;
+
+                std::this_thread::yield();
+            }
+#endif
+            h.resume();
+            return;
+        }
+
+        exec->register_waiting_coroutine(event_.handle_, h);
     }
 
     void event::destroy() noexcept
@@ -477,6 +533,26 @@ namespace kmx::aio::gpu
         handle_ = nullptr;
     }
 
+    template <typename T>
+    executor::detached_task_wrapper executor::execute_task(task<T> t, std::shared_ptr<executor> self) noexcept
+    {
+        try
+        {
+            if constexpr (std::is_void_v<T>)
+                co_await t;
+            else
+                (void) co_await t;
+        }
+        catch (...)
+        {
+            self->stats_.error_count.fetch_add(1u, std::memory_order_relaxed);
+        }
+
+        self->stats_.total_tasks_completed.fetch_add(1u, std::memory_order_release);
+        if (self->active_work_.fetch_sub(1u, std::memory_order_acq_rel) == 1u)
+            self->idle_cv_.notify_one();
+    }
+
 } // namespace kmx::aio::gpu
 
 /// Explicit template instantiation for spawn()
@@ -484,4 +560,6 @@ namespace kmx::aio::gpu
 {
     template void executor::spawn(task<void> coro) noexcept(false);
     template void executor::spawn(task<int> coro) noexcept(false);
+    template executor::detached_task_wrapper executor::execute_task(task<void> t, std::shared_ptr<executor> self) noexcept;
+    template executor::detached_task_wrapper executor::execute_task(task<int> t, std::shared_ptr<executor> self) noexcept;
 } // namespace kmx::aio::gpu
