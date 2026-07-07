@@ -128,3 +128,77 @@ jobs:
             exit 1
           fi
           timeout 30s "$TEST_BIN" "[quic][http3][integration][smoke]"
+
+  gpu-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qbs liburing-dev libssl-dev catch2 gcc-14 g++-14
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+          sudo update-alternatives --set g++ /usr/bin/g++-14
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
+          sudo update-alternatives --set gcc /usr/bin/gcc-14
+
+      - name: Detect CUDA-capable runner
+        id: cuda_check
+        run: |
+          if ! command -v nvidia-smi >/dev/null 2>&1; then
+            echo "No NVIDIA driver/runtime detected on runner; GPU smoke will be skipped."
+            echo "run_gpu=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ ! -f /usr/include/cuda_runtime.h ]] && [[ ! -f /usr/local/cuda/include/cuda_runtime.h ]]; then
+            echo "CUDA headers not detected on runner; GPU smoke will be skipped."
+            echo "run_gpu=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "run_gpu=true" >> "$GITHUB_OUTPUT"
+
+      - name: Configure and build GPU smoke artifacts
+        if: steps.cuda_check.outputs.run_gpu == 'true'
+        run: |
+          cd source
+          qbs resolve -f source.qbs config:debug \
+            project.enable_openonload:false \
+            project.enable_af_xdp:false \
+            project.enable_spdk:false \
+            project.enable_quic:false \
+            project.enable_cuda:true
+          PRODUCTS="kmx-aio-test,sample-gpu-image-processing"
+          qbs build -f source.qbs config:debug -j 2 \
+            --products "$PRODUCTS" \
+            project.enable_openonload:false \
+            project.enable_af_xdp:false \
+            project.enable_spdk:false \
+            project.enable_quic:false \
+            project.enable_cuda:true
+
+      - name: Run GPU sample smoke
+        if: steps.cuda_check.outputs.run_gpu == 'true'
+        run: |
+          cd source
+          SAMPLE_BIN="$(find debug -type f -name sample-gpu-image-processing | head -n 1)"
+          if [[ -z "$SAMPLE_BIN" ]]; then
+            echo "sample-gpu-image-processing binary not found"
+            exit 1
+          fi
+          timeout 30s "$SAMPLE_BIN" --max-frames 1 --width 320 --height 240 --buffer-count 2 --gpu-device 0
+
+      - name: Run GPU-tagged tests
+        if: steps.cuda_check.outputs.run_gpu == 'true'
+        run: |
+          cd source
+          TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+          if [[ -z "$TEST_BIN" ]]; then
+            echo "kmx-aio-test binary not found"
+            exit 1
+          fi
+          timeout 60s "$TEST_BIN" "[gpu]"
