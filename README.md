@@ -353,6 +353,23 @@ TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
 
 ## Testing Workflow
 
+Run the local equivalent of `.github/workflows/ci-avb.yml` from the versioned canonical script:
+
+```bash
+bash scripts/ci/run-ci-avb-local.sh --only all
+```
+
+Run a single CI-equivalent job locally:
+
+```bash
+bash scripts/ci/run-ci-avb-local.sh --only build-and-test
+bash scripts/ci/run-ci-avb-local.sh --only quic-smoke
+bash scripts/ci/run-ci-avb-local.sh --only gpu-smoke
+```
+
+The canonical script lives in `scripts/ci/` (versioned). On each run it sync-copies itself to
+`build/run-ci-avb-local.sh` for local convenience.
+
 Build and run tests with a timeout so local runs cannot block indefinitely:
 
 ```bash
@@ -389,6 +406,52 @@ Optional QUIC smoke tuning environment variables:
 * `KMX_QUIC_HTTP3_PORT`: override completion QUIC HTTP/3 sample port (default `12345`).
 
 These are useful when running parallel smoke tests to avoid fixed-port collisions.
+
+Run GPU smoke locally (requires NVIDIA driver + CUDA runtime/toolkit):
+
+```bash
+qbs build --products sample-gpu-image-processing,kmx-aio-test -f source/source.qbs config:debug -j"$(nproc)" \
+    project.enable_openonload:false \
+    project.enable_af_xdp:false \
+    project.enable_spdk:false \
+    project.enable_quic:false \
+    project.enable_cuda:true
+
+SAMPLE_BIN="$(find debug -type f -name sample-gpu-image-processing | head -n 1)"
+LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} \
+    "$SAMPLE_BIN" --max-frames 1 --width 320 --height 240 --buffer-count 2 --gpu-device 0
+
+TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} "$TEST_BIN" "[gpu]"
+```
+
+Run GPU smoke with NVIDIA forced on Linux PRIME on-demand profiles:
+
+```bash
+__NV_PRIME_RENDER_OFFLOAD=1 \
+__GLX_VENDOR_LIBRARY_NAME=nvidia \
+__VK_LAYER_NV_optimus=NVIDIA_only \
+LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} \
+    bash scripts/ci/run-ci-avb-local.sh --only gpu-smoke
+```
+
+Optional quick checks before running forced-NVIDIA smoke:
+
+```bash
+nvidia-smi
+ls /usr/include/cuda_runtime.h /usr/local/cuda/include/cuda_runtime.h 2>/dev/null
+```
+
+GPU smoke troubleshooting (local):
+
+* `nvidia-smi: command not found` or no GPUs listed:
+    NVIDIA driver/runtime is missing or not active on this machine.
+* `cuda_runtime.h: No such file or directory` during build:
+    CUDA toolkit headers are missing; install CUDA toolkit and retry.
+* `GLIBCXX_3.4.35 not found` at runtime:
+    Run binaries with `LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-}`.
+* V4L2 camera unavailable (`/dev/video0` open/configure failure):
+    Sample falls back to synthetic frames; use `--device` to point to another V4L2 node.
 
 Sanitizer feature toggles are exposed via QBS project properties:
 

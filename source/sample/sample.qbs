@@ -4,6 +4,7 @@ Project {
     references: [
         "readiness/readiness.qbs",
         "completion/completion.qbs",
+        "gpu/gpu.qbs",
     ]
 }
 

@@ -54,9 +54,8 @@ TEST_CASE("GPU event creation and query", "[gpu][event]")
     REQUIRE(event != nullptr);
     REQUIRE(event->handle() != nullptr);
 
-    // Query event status (mock returns true immediately).
-    const bool ready = event->is_ready();
-    REQUIRE(ready); // Mock implementation always ready.
+    // Query event status (on CUDA hardware this can be either ready or not-ready).
+    REQUIRE_NOTHROW(event->is_ready());
 
     event.reset(); // Destructor should clean up.
 }
@@ -69,7 +68,8 @@ TEST_CASE("GPU stream creates events", "[gpu][stream][event]")
     auto event = stream->create_event();
     REQUIRE(event.handle() != nullptr);
 
-    // Event should be ready immediately in mock mode.
+    // Ensure stream work has completed before asserting event readiness.
+    REQUIRE_NOTHROW(stream->synchronize());
     REQUIRE(event.is_ready());
 }
 

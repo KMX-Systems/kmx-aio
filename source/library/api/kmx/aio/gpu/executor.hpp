@@ -128,6 +128,10 @@ namespace kmx::aio::gpu
         /// @brief Resets all statistics counters.
         void reset_statistics() noexcept;
 
+        /// @brief Registers a coroutine waiting on a GPU event.
+        /// @details Intended for internal use by GPU event awaiters.
+        void register_waiting_coroutine(event_handle event, std::coroutine_handle<> h) noexcept;
+
         /// @brief Gets the GPU device ID this executor is bound to.
         [[nodiscard]] int gpu_device() const noexcept { return config_.gpu_device; }
 
@@ -135,6 +139,38 @@ namespace kmx::aio::gpu
         [[nodiscard]] int cpu_core() const noexcept { return config_.core_id; }
 
     private:
+        /// @brief Detached wrapper for top-level spawned tasks.
+        struct detached_task_wrapper
+        {
+            struct promise_type
+            {
+                detached_task_wrapper get_return_object() noexcept
+                {
+                    return detached_task_wrapper {std::coroutine_handle<promise_type>::from_promise(*this)};
+                }
+
+                std::suspend_always initial_suspend() const noexcept { return {}; }
+
+                struct final_awaiter
+                {
+                    bool await_ready() const noexcept { return false; }
+                    void await_suspend(std::coroutine_handle<promise_type> h) const noexcept { h.destroy(); }
+                    void await_resume() const noexcept {}
+                };
+
+                final_awaiter final_suspend() const noexcept { return {}; }
+                void unhandled_exception() noexcept { std::terminate(); }
+                void return_void() const noexcept {}
+            };
+
+            std::coroutine_handle<promise_type> handle;
+        };
+
+        template <typename T>
+        detached_task_wrapper execute_task(task<T> t, std::shared_ptr<executor> self) noexcept;
+
+        [[nodiscard]] bool has_pending_work() noexcept;
+
         executor_config config_;
         statistics stats_;
         std::deque<std::coroutine_handle<>> pending_tasks_;
