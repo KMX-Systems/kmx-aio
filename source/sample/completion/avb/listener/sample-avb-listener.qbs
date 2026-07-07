@@ -13,7 +13,6 @@ CppApplication {
         "inc",
         "../common/inc",
         "api",
-        "../../../../library/api",
         "../../../../library/inc",
     ]
     cpp.dynamicLibraries: [

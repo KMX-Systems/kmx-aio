@@ -31,7 +31,7 @@ namespace kmx::aio::opc_ua
             };
         }
 
-        [[nodiscard]] server_config make_test_server_config()
+        [[maybe_unused]] [[nodiscard]] server_config make_test_server_config()
         {
             return server_config {
                 .port = 4840u,

@@ -225,6 +225,9 @@ extern "C"
             .request_id = requestId,
             .object_node_id = objectNodeId,
             .method_node_id = methodNodeId,
+            .input_arguments = {},
+            .callback = callback,
+            .user_data = userData,
         };
         request.input_arguments.reserve(inputArgumentsSize);
         for (UA_UInt32 i = 0; i < inputArgumentsSize; ++i)
@@ -232,8 +235,6 @@ extern "C"
             const char* value = (inputArguments != nullptr) ? inputArguments[i] : nullptr;
             request.input_arguments.emplace_back(value == nullptr ? std::string {} : std::string {value});
         }
-        request.callback = callback;
-        request.user_data = userData;
 
         client->pending_calls.push_back(std::move(request));
         return UA_STATUSCODE_GOOD;

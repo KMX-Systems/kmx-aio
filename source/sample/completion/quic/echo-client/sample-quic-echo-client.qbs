@@ -10,7 +10,6 @@ CppApplication {
         "inc",
         "api",
         "inc_dep",
-        "../../../../library/api",
         "../../../../library/inc_dep",
         "../../../../../build/lsquic/include",
     ]
