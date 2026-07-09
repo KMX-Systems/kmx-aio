@@ -149,7 +149,7 @@ namespace
         return parse_status::ok;
     }
 
-    parse_status parse_args(int argc, const char** argv, kmx::aio::sample::avb::listener::config& cfg)    {
+    parse_status parse_args(int argc, const char* argv[], kmx::aio::sample::avb::listener::config& cfg)    {
         enum class option_kind
         {
             iface,
@@ -254,7 +254,7 @@ namespace
     }
 } // namespace
 
-int main(int argc, const char** argv) noexcept
+int main(int argc, const char* argv[]) noexcept
 {
     try
     {

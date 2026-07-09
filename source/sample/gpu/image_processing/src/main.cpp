@@ -36,7 +36,7 @@ namespace kmx::aio::sample::gpu::image_processing::detail
         return true;
     }
 
-    bool parse_args(const int argc, char** argv, kmx::aio::sample::gpu::image_processing::config& cfg,
+    bool parse_args(const int argc, char* argv[], kmx::aio::sample::gpu::image_processing::config& cfg,
                     bool& help_requested)
     {
         enum class option_kind
@@ -119,7 +119,7 @@ namespace kmx::aio::sample::gpu::image_processing::detail
     }
 } // namespace kmx::aio::sample::gpu::image_processing::detail
 
-int main(const int argc, char** argv) noexcept
+int main(const int argc, char* argv[]) noexcept
 {
     try
     {
