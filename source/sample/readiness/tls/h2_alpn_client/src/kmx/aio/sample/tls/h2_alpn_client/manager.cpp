@@ -100,7 +100,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
             co_return std::unexpected(reg_result.error());
 
         if (in_progress)
-            co_await executor_->wait_io(fd, event_type::write);
+            co_await executor_->wait_io(fd, kmx::aio::readiness::event_type::write);
 
         int so_error {};
         ::socklen_t len = sizeof(so_error);

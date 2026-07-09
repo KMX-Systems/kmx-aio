@@ -13,8 +13,8 @@
     #include <sys/epoll.h>
     #include <unordered_map>
 
-    #include <kmx/aio/basic_types.hpp>
     #include <kmx/aio/executor_base.hpp>
+    #include <kmx/aio/readiness/basic_types.hpp>
     #include <kmx/aio/readiness/descriptor/epoll.hpp>
     #include <kmx/aio/scheduler.hpp>
     #include <kmx/aio/task.hpp>
