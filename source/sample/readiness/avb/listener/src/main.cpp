@@ -36,12 +36,7 @@ namespace kmx::aio::sample::avb::listener::detail
     {
         if (!kmx::aio::sample::common::parse_mac_bytes(value, cfg.talker_mac))
         {
-            kmx::logger::log(
-                kmx::logger::level::error,
-                std::source_location::current(),
-                "Invalid --talker-mac value '{}'",
-                value
-            );
+            kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Invalid --talker-mac value '{}'", value);
             return parse_status::error;
         }
 
@@ -53,12 +48,8 @@ namespace kmx::aio::sample::avb::listener::detail
         std::uint16_t parsed {};
         if (!kmx::aio::sample::common::parse_unsigned_u16(value, parsed))
         {
-            kmx::logger::log(
-                kmx::logger::level::error,
-                std::source_location::current(),
-                "Invalid --stream-id value '{}' (expected 0..65535)",
-                value
-            );
+            kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
+                             "Invalid --stream-id value '{}' (expected 0..65535)", value);
             return parse_status::error;
         }
 
@@ -71,12 +62,7 @@ namespace kmx::aio::sample::avb::listener::detail
         std::uint64_t parsed {};
         if (!kmx::aio::sample::common::parse_unsigned_u64(value, parsed))
         {
-            kmx::logger::log(
-                kmx::logger::level::error,
-                std::source_location::current(),
-                "Invalid --max-frames value '{}'",
-                value
-            );
+            kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Invalid --max-frames value '{}'", value);
             return parse_status::error;
         }
 
@@ -84,33 +70,20 @@ namespace kmx::aio::sample::avb::listener::detail
         return parse_status::ok;
     }
 
-    static parse_status parse_period_us_option(
-        std::string_view value,
-        kmx::aio::sample::avb::listener::config& cfg,
-        std::uint64_t min_period_us,
-        std::uint64_t max_period_us
-    )
+    static parse_status parse_period_us_option(std::string_view value, kmx::aio::sample::avb::listener::config& cfg,
+                                               std::uint64_t min_period_us, std::uint64_t max_period_us)
     {
         std::uint64_t parsed {};
         if (!kmx::aio::sample::common::parse_unsigned_u64(value, parsed))
         {
-            kmx::logger::log(
-                kmx::logger::level::error,
-                std::source_location::current(),
-                "Invalid --period-us value '{}'",
-                value
-            );
+            kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Invalid --period-us value '{}'", value);
             return parse_status::error;
         }
 
         if (parsed < min_period_us || parsed > max_period_us)
         {
-            kmx::logger::log(
-                kmx::logger::level::error,
-                std::source_location::current(),
-                "Out-of-range --period-us value '{}' (expected 1..1000000)",
-                value
-            );
+            kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
+                             "Out-of-range --period-us value '{}' (expected 1..1000000)", value);
             return parse_status::error;
         }
 
@@ -118,33 +91,20 @@ namespace kmx::aio::sample::avb::listener::detail
         return parse_status::ok;
     }
 
-    static parse_status parse_sync_timeout_s_option(
-        std::string_view value,
-        kmx::aio::sample::avb::listener::config& cfg,
-        std::uint64_t min_sync_timeout_s,
-        std::uint64_t max_sync_timeout_s
-    )
+    static parse_status parse_sync_timeout_s_option(std::string_view value, kmx::aio::sample::avb::listener::config& cfg,
+                                                    std::uint64_t min_sync_timeout_s, std::uint64_t max_sync_timeout_s)
     {
         std::uint64_t parsed {};
         if (!kmx::aio::sample::common::parse_unsigned_u64(value, parsed))
         {
-            kmx::logger::log(
-                kmx::logger::level::error,
-                std::source_location::current(),
-                "Invalid --sync-timeout-s value '{}'",
-                value
-            );
+            kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Invalid --sync-timeout-s value '{}'", value);
             return parse_status::error;
         }
 
         if (parsed < min_sync_timeout_s || parsed > max_sync_timeout_s)
         {
-            kmx::logger::log(
-                kmx::logger::level::error,
-                std::source_location::current(),
-                "Out-of-range --sync-timeout-s value '{}' (expected 1..300)",
-                value
-            );
+            kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
+                             "Out-of-range --sync-timeout-s value '{}' (expected 1..300)", value);
             return parse_status::error;
         }
 
@@ -166,12 +126,9 @@ namespace kmx::aio::sample::avb::listener::detail
         };
 
         static const std::unordered_map<std::string_view, option_kind> option_table {
-            {"--iface", option_kind::iface},
-            {"--talker-mac", option_kind::talker_mac},
-            {"--stream-id", option_kind::stream_id},
-            {"--max-frames", option_kind::max_frames},
-            {"--period-us", option_kind::period_us},
-            {"--sync-timeout-s", option_kind::sync_timeout_s},
+            {"--iface", option_kind::iface},         {"--talker-mac", option_kind::talker_mac},
+            {"--stream-id", option_kind::stream_id}, {"--max-frames", option_kind::max_frames},
+            {"--period-us", option_kind::period_us}, {"--sync-timeout-s", option_kind::sync_timeout_s},
         };
 
         static constexpr std::uint64_t min_period_us = 1u;
@@ -238,15 +195,13 @@ namespace kmx::aio::sample::avb::listener::detail
                 }
                 case option_kind::period_us:
                 {
-                    if (const auto status = parse_period_us_option(value, cfg, min_period_us, max_period_us);
-                        status != parse_status::ok)
+                    if (const auto status = parse_period_us_option(value, cfg, min_period_us, max_period_us); status != parse_status::ok)
                         return status;
                     break;
                 }
                 case option_kind::sync_timeout_s:
                 {
-                    if (const auto status =
-                            parse_sync_timeout_s_option(value, cfg, min_sync_timeout_s, max_sync_timeout_s);
+                    if (const auto status = parse_sync_timeout_s_option(value, cfg, min_sync_timeout_s, max_sync_timeout_s);
                         status != parse_status::ok)
                         return status;
                     break;

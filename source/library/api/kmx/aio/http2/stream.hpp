@@ -1,3 +1,6 @@
+/// @file aio/http2/stream.hpp
+/// @brief HTTP/2 stream state machine definitions.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 
 #include "frame.hpp"

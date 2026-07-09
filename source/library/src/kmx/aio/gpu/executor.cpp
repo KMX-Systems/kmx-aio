@@ -22,7 +22,6 @@ namespace kmx::aio::gpu
         thread_local executor* tls_current_gpu_executor = nullptr;
     }
 
-
 /// CUDA Error Category (Conditional)
 #if defined(KMX_AIO_FEATURE_CUDA)
     class cuda_error_category: public std::error_category

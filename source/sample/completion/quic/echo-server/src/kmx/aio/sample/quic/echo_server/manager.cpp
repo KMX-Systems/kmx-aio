@@ -55,7 +55,8 @@ namespace kmx::aio::sample::quic::echo_server
         co_return;
     }
 
-    task<void> async_main(std::shared_ptr<executor> exec)    {
+    task<void> async_main(std::shared_ptr<executor> exec)
+    {
         ::SSL_CTX* ssl_ctx = ::SSL_CTX_new(TLS_server_method());
         if (!ssl_ctx)
         {

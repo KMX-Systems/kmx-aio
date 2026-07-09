@@ -26,5 +26,5 @@ namespace kmx::aio::sample::hft::order_router
     constexpr std::size_t channel_capacity = 4096u;
     constexpr std::size_t total_orders = 100'000u;
 
-    int execute_order_router() ;
+    int execute_order_router();
 }

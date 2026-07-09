@@ -9,8 +9,8 @@
     #include <expected>
     #include <memory>
     #include <mutex>
-    #include <sys/socket.h>
     #include <sys/epoll.h>
+    #include <sys/socket.h>
     #include <unordered_map>
 
     #include <kmx/aio/executor_base.hpp>

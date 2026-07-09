@@ -54,7 +54,9 @@ namespace kmx::aio::avb::test
     [[nodiscard]] static int lo_ifindex() noexcept
     {
         // Use a temporary INET socket for ioctl — avoids the CAP_NET_RAW issue.
-        struct ifreq ifr {};
+        struct ifreq ifr
+        {
+        };
         const int sock = ::socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
         if (sock < 0)
             return -1;
@@ -68,8 +70,7 @@ namespace kmx::aio::avb::test
     // Test 1: metric check — register_fd called after open()
     // -----------------------------------------------------------------------
 
-    TEST_CASE("avb readiness eth_socket::open registers fd with epoll executor",
-              "[avb][readiness][epoll][regression]")
+    TEST_CASE("avb readiness eth_socket::open registers fd with epoll executor", "[avb][readiness][epoll][regression]")
     {
         if (!has_cap_net_raw())
             SKIP("CAP_NET_RAW not available; skipping epoll registration metric test");
@@ -84,15 +85,16 @@ namespace kmx::aio::avb::test
         bool open_ok = false;
         std::error_code open_err {};
 
-        exec->spawn([&]() -> kmx::aio::task<void>
-        {
-            auto res = co_await sock.open("lo", ETH_P_ALL);
-            if (res)
-                open_ok = true;
-            else
-                open_err = res.error();
-            exec->stop();
-        }());
+        exec->spawn(
+            [&]() -> kmx::aio::task<void>
+            {
+                auto res = co_await sock.open("lo", ETH_P_ALL);
+                if (res)
+                    open_ok = true;
+                else
+                    open_err = res.error();
+                exec->stop();
+            }());
 
         exec->run();
 
@@ -132,18 +134,14 @@ namespace kmx::aio::avb::test
         // Broadcast destination so the AF_PACKET listener on lo receives it.
         std::memset(dest.sll_addr, 0xFF, ETH_ALEN);
 
-        const std::array<std::byte, 4u> payload {
-            std::byte {0xDE}, std::byte {0xAD}, std::byte {0xBE}, std::byte {0xEF}};
+        const std::array<std::byte, 4u> payload {std::byte {0xDE}, std::byte {0xAD}, std::byte {0xBE}, std::byte {0xEF}};
 
-        const ssize_t sent =
-            ::sendto(raw_fd, payload.data(), payload.size(), 0,
-                     reinterpret_cast<const ::sockaddr*>(&dest), sizeof(dest));
+        const ssize_t sent = ::sendto(raw_fd, payload.data(), payload.size(), 0, reinterpret_cast<const ::sockaddr*>(&dest), sizeof(dest));
         ::close(raw_fd);
         return (sent > 0);
     }
 
-    TEST_CASE("avb readiness eth_socket::recv completes after open (epoll fd registered)",
-              "[avb][readiness][epoll][regression][io]")
+    TEST_CASE("avb readiness eth_socket::recv completes after open (epoll fd registered)", "[avb][readiness][epoll][regression][io]")
     {
         if (!has_cap_net_raw())
             SKIP("CAP_NET_RAW not available; skipping behavioural IO test");
@@ -154,39 +152,39 @@ namespace kmx::aio::avb::test
 
         auto exec = std::make_shared<kmx::aio::readiness::executor>();
 
-        auto sock = std::make_shared<
-            kmx::aio::avb::generic_eth_socket<kmx::aio::readiness::executor>>(*exec);
+        auto sock = std::make_shared<kmx::aio::avb::generic_eth_socket<kmx::aio::readiness::executor>>(*exec);
 
         auto result = std::make_shared<recv_result>();
 
-        exec->spawn([exec, sock, result, ifidx]() -> kmx::aio::task<void>
-        {
-            // 1. Open the socket.
-            auto open_res = co_await sock->open("lo", ETH_P_ALL);
-            if (!open_res)
+        exec->spawn(
+            [exec, sock, result, ifidx]() -> kmx::aio::task<void>
             {
-                result->error = open_res.error();
+                // 1. Open the socket.
+                auto open_res = co_await sock->open("lo", ETH_P_ALL);
+                if (!open_res)
+                {
+                    result->error = open_res.error();
+                    exec->stop();
+                    co_return;
+                }
+
+                // 2. Schedule a loopback frame injection from a background thread so
+                //    the recv() below has data to consume without a second coroutine.
+                std::jthread sender([ifidx] { static_cast<void>(send_loopback_frame(ifidx)); });
+
+                // 3. co_await recv() — this is the path that hung before the fix.
+                //    If register_fd was not called, the coroutine would park here forever.
+                auto recv_res = co_await sock->recv();
+                if (recv_res)
+                {
+                    result->completed = true;
+                    result->bytes = recv_res->first.size();
+                }
+                else
+                    result->error = recv_res.error();
+
                 exec->stop();
-                co_return;
-            }
-
-            // 2. Schedule a loopback frame injection from a background thread so
-            //    the recv() below has data to consume without a second coroutine.
-            std::jthread sender([ifidx] { static_cast<void>(send_loopback_frame(ifidx)); });
-
-            // 3. co_await recv() — this is the path that hung before the fix.
-            //    If register_fd was not called, the coroutine would park here forever.
-            auto recv_res = co_await sock->recv();
-            if (recv_res)
-            {
-                result->completed = true;
-                result->bytes = recv_res->first.size();
-            }
-            else
-                result->error = recv_res.error();
-
-            exec->stop();
-        }());
+            }());
 
         // Run with a wall-clock safety net. If the test hangs, it will time out
         // in the test runner rather than blocking the suite indefinitely.

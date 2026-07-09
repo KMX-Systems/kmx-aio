@@ -1,3 +1,6 @@
+/// @file aio/http2/codec.hpp
+/// @brief HTTP/2 frame builder and HPACK codec definitions.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 
 #include "frame.hpp"

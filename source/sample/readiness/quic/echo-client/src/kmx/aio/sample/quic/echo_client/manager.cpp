@@ -22,7 +22,8 @@ namespace kmx::aio::sample::quic::echo_client
         std::atomic_uint32_t responses_received {};
         std::atomic_uint32_t close_after_responses {2u};
 
-        std::uint16_t parse_peer_port_from_env()        {
+        std::uint16_t parse_peer_port_from_env()
+        {
             constexpr std::uint16_t default_port = 12345u;
             const char* const env = std::getenv("KMX_QUIC_ECHO_PORT");
             if (!env || env[0] == '\0')
@@ -37,7 +38,8 @@ namespace kmx::aio::sample::quic::echo_client
             return static_cast<std::uint16_t>(parsed);
         }
 
-        std::uint32_t parse_response_target_from_env()        {
+        std::uint32_t parse_response_target_from_env()
+        {
             constexpr std::uint32_t default_target = 2u;
             const char* const env = std::getenv("KMX_QUIC_ECHO_CLIENT_CLOSE_AFTER_RESPONSES");
             if (!env || env[0] == '\0')
@@ -69,7 +71,8 @@ namespace kmx::aio::sample::quic::echo_client
         co_return;
     }
 
-    task<void> async_main(std::shared_ptr<executor> exec)    {
+    task<void> async_main(std::shared_ptr<executor> exec)
+    {
         detail::responses_received.store(0u);
         detail::close_after_responses.store(detail::parse_response_target_from_env());
 
@@ -101,8 +104,7 @@ namespace kmx::aio::sample::quic::echo_client
             "echo stream B payload",
         };
 
-        std::cout << "[QUIC Readiness Echo Client] Connecting to 127.0.0.1:" << peer_port << " with " << payloads.size()
-                  << " streams...\n";
+        std::cout << "[QUIC Readiness Echo Client] Connecting to 127.0.0.1:" << peer_port << " with " << payloads.size() << " streams...\n";
         std::cout << "[QUIC Readiness Echo Client] close_after_responses=" << detail::close_after_responses.load() << "\n";
 
         auto res = co_await engine.connect(peer_ip, peer_port, "localhost", payloads, ssl_ctx);

@@ -157,7 +157,8 @@ namespace kmx::aio::sample::avb::talker
                 metrics_.frames_sent.fetch_add(1u, mem_order);
             }
 
-            const auto wait_ns = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(config_.frame_period).count());
+            const auto wait_ns =
+                static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(config_.frame_period).count());
             const auto wait_res = co_await executor_->async_timeout(wait_ns);
             if (!wait_res)
                 break;

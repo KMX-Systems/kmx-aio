@@ -1,3 +1,6 @@
+/// @file aio/http2/frame.hpp
+/// @brief HTTP/2 frame definitions and utilities.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 
 #include <cstdint>

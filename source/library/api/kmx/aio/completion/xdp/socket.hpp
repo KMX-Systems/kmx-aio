@@ -20,42 +20,66 @@ namespace kmx::aio::completion::xdp
     /// @brief Configuration for AF_XDP socket creation.
     struct socket_config
     {
-        std::string_view interface_name {};   ///< Network interface to attach to (e.g. "eth0").
-        std::uint32_t queue_id {};            ///< NIC hardware queue index.
-        std::uint32_t frame_size = 4096u;     ///< UMEM frame size in bytes.
-        std::uint32_t frame_count = 4096u;    ///< Number of UMEM frames.
-        std::uint32_t fill_ring_size = 2048u; ///< Fill ring entry count.
-        std::uint32_t comp_ring_size = 2048u; ///< Completion ring entry count.
-        std::uint32_t rx_ring_size = 2048u;   ///< RX ring entry count.
-        std::uint32_t tx_ring_size = 2048u;   ///< TX ring entry count.
-        bool force_zero_copy = false;         ///< Force XDP_ZEROCOPY mode. Fails if driver doesn't support it.
-        bool need_wakeup = true;              ///< Enable XDP_USE_NEED_WAKEUP to optimize CPU usage.
+        /// @brief Network interface to attach to, such as "eth0".
+        std::string_view interface_name {};
+        /// @brief NIC hardware queue index.
+        std::uint32_t queue_id {};
+        /// @brief UMEM frame size in bytes.
+        std::uint32_t frame_size = 4096u;
+        /// @brief Number of UMEM frames.
+        std::uint32_t frame_count = 4096u;
+        /// @brief Fill ring entry count.
+        std::uint32_t fill_ring_size = 2048u;
+        /// @brief Completion ring entry count.
+        std::uint32_t comp_ring_size = 2048u;
+        /// @brief RX ring entry count.
+        std::uint32_t rx_ring_size = 2048u;
+        /// @brief TX ring entry count.
+        std::uint32_t tx_ring_size = 2048u;
+        /// @brief Forces XDP_ZEROCOPY mode when supported.
+        bool force_zero_copy = false;
+        /// @brief Enables XDP_USE_NEED_WAKEUP to reduce busy polling.
+        bool need_wakeup = true;
     };
 
     /// @brief Statistics for AF_XDP pipeline.
     struct statistics
     {
-        std::uint64_t rx_frames_received {};   ///< Total frames pulled from RX ring (userspace).
-        std::uint64_t tx_frames_sent {};       ///< Total frames submitted to TX ring (userspace).
-        std::uint64_t tx_dropped_ring_full {}; ///< TX frames dropped due to full TX ring (userspace).
-        std::uint64_t wakeups_triggered {};    ///< Times we had to do a syscall to wake up the kernel.
-        std::uint64_t umem_alloc_failures {};  ///< Times UMEM frame allocation failed.
+        /// @brief Total frames pulled from the RX ring in userspace.
+        std::uint64_t rx_frames_received {};
+        /// @brief Total frames submitted to the TX ring in userspace.
+        std::uint64_t tx_frames_sent {};
+        /// @brief TX frames dropped because the TX ring was full.
+        std::uint64_t tx_dropped_ring_full {};
+        /// @brief Times a syscall was needed to wake the kernel.
+        std::uint64_t wakeups_triggered {};
+        /// @brief Times UMEM frame allocation failed.
+        std::uint64_t umem_alloc_failures {};
 
         // Kernel-level hardware/driver stats.
-        std::uint64_t kernel_rx_dropped {};         ///< Dropped before reaching ring.
-        std::uint64_t kernel_rx_invalid_descs {};   ///< Invalid descriptors in RX.
-        std::uint64_t kernel_tx_invalid_descs {};   ///< Invalid descriptors in TX.
-        std::uint64_t kernel_rx_ring_full {};       ///< Hardware dropped because RX ring was full.
-        std::uint64_t kernel_rx_fill_ring_empty {}; ///< Hardware had to drop because fill ring was empty.
-        std::uint64_t kernel_tx_ring_empty {};      ///< Hardware couldn't pull because TX ring empty.
+        /// @brief Frames dropped before reaching the RX ring.
+        std::uint64_t kernel_rx_dropped {};
+        /// @brief Invalid descriptors seen in RX.
+        std::uint64_t kernel_rx_invalid_descs {};
+        /// @brief Invalid descriptors seen in TX.
+        std::uint64_t kernel_tx_invalid_descs {};
+        /// @brief Frames dropped because the RX ring was full.
+        std::uint64_t kernel_rx_ring_full {};
+        /// @brief Drops caused by an empty fill ring.
+        std::uint64_t kernel_rx_fill_ring_empty {};
+        /// @brief Times the kernel could not pull because the TX ring was empty.
+        std::uint64_t kernel_tx_ring_empty {};
     };
 
     /// @brief A received raw ethernet frame from AF_XDP.
     struct frame
     {
-        std::span<std::byte> data {}; ///< View into the UMEM region containing the frame.
-        std::uint64_t addr {};        ///< UMEM address for returning the frame to the fill ring.
-        std::uint32_t length {};      ///< Length of the frame in bytes.
+        /// @brief View into the UMEM region containing the frame.
+        std::span<std::byte> data {};
+        /// @brief UMEM address used to return the frame to the fill ring.
+        std::uint64_t addr {};
+        /// @brief Length of the frame in bytes.
+        std::uint32_t length {};
     };
 
     /// @brief AF_XDP socket for zero-copy raw packet processing.
@@ -113,32 +137,43 @@ namespace kmx::aio::completion::xdp
         [[nodiscard]] const statistics& get_stats() const noexcept;
 
     private:
+        /// @brief Internal implementation state for the socket.
         struct state;
 
+        /// @brief Validates create arguments before initialization.
         [[nodiscard]] static std::expected<void, std::error_code> validate_create_args(const std::shared_ptr<executor>& exec,
                                                                                        const socket_config& config) noexcept;
 
+        /// @brief Initializes the socket state and selects the backend.
         [[nodiscard]] static std::expected<void, std::error_code> initialize_state(std::shared_ptr<executor> exec,
                                                                                    const socket_config& config, socket& out) noexcept;
 
+        /// @brief Validates send arguments against the current socket state.
         [[nodiscard]] static std::expected<void, std::error_code> validate_send_args(const state& state,
                                                                                      std::span<const std::byte> data) noexcept;
 
+        /// @brief Sends data through the fallback backend.
         [[nodiscard]] static std::expected<void, std::error_code> send_via_fallback(state& state, std::span<const std::byte> data) noexcept;
 
 #if defined(KMX_AIO_FEATURE_AF_XDP)
+        /// @brief Initializes the AF_XDP backend.
         [[nodiscard]] static std::expected<void, std::error_code> initialize_af_xdp_backend(state& state) noexcept;
 
+        /// @brief Allocates the UMEM backing store.
         [[nodiscard]] static std::expected<void, std::error_code> allocate_umem(state& state) noexcept;
 
+        /// @brief Creates the XSK socket.
         [[nodiscard]] static std::expected<void, std::error_code> create_xsk_socket(state& state) noexcept;
 
+        /// @brief Sends data through the AF_XDP backend.
         [[nodiscard]] static std::expected<void, std::error_code> send_via_af_xdp_backend(state& state,
                                                                                           std::span<const std::byte> data) noexcept;
 
+        /// @brief Seeds the free-frame pool.
         static void seed_free_frames(state& state) noexcept;
 #endif
 
+        /// @brief Opaque owned implementation state.
         std::unique_ptr<state> state_ {};
     };
 
