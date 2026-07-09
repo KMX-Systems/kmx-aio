@@ -3,7 +3,6 @@ import qbs
 StaticLibrary {
     Depends { name: "cpp" }
     Depends { name: "kmx-aio-core" }
-    Depends { name: "kmx-aio-readiness" }
 
     name: "kmx-aio-quic"
     condition: project.enable_quic
@@ -59,13 +58,18 @@ StaticLibrary {
         "z",
     ]
     install: true
-    files: [
-        "../api/kmx/aio/quic/**.hpp",
-        "../api/kmx/aio/readiness/quic/**.hpp",
-        "../api/kmx/aio/completion/quic/**.hpp",
-        "../inc/kmx/aio/quic/**.hpp",
-        "../src/kmx/aio/quic/**.cpp",
-    ]
+    files: {
+        var entries = [
+            "../api/kmx/aio/quic/**.hpp",
+            "../api/kmx/aio/completion/quic/**.hpp",
+            "../inc/kmx/aio/quic/**.hpp",
+        ];
+
+        if (project.enable_readiness)
+            entries.push("../api/kmx/aio/readiness/quic/**.hpp");
+
+        return entries;
+    }
 
     Export {
         Depends { name: "cpp" }

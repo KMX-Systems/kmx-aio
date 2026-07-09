@@ -5,6 +5,7 @@ StaticLibrary {
     Depends { name: "kmx-aio-core" }
 
     name: "sample-tcp-echo-common"
+    condition: project.enable_completion || project.enable_readiness
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.debugInformation: true

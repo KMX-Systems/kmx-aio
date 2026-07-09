@@ -2,7 +2,7 @@ import qbs
 
 CppApplication {
     name: "sample-quic-echo-readiness-client"
-    condition: project.enable_quic
+    condition: project.enable_readiness && project.enable_quic
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.enableRtti: false

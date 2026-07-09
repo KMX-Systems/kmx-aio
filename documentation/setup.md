@@ -78,6 +78,11 @@ bash scripts/bootstrap_optional_deps.sh --spdk --v4l2
 
 ## Optional Feature Prerequisites
 
+Note on defaults:
+
+- The default project graph enables `core + completion + quic`.
+- Readiness, HTTP/2, HTTP/3, AVB, AF_XDP, SPDK, OPC UA, CUDA, and OpenOnload remain off until explicitly enabled with `project.enable_*:true`.
+
 - QUIC / HTTP/3: BoringSSL + lsquic (run [scripts/install_lsquic.sh](scripts/install_lsquic.sh))
 - OPC UA: open62541 (run [scripts/install_open62541.sh](scripts/install_open62541.sh))
 - AF_XDP: libbpf/libxdp toolchain available (run [scripts/install_af_xdp_deps.sh](scripts/install_af_xdp_deps.sh))

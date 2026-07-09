@@ -20,7 +20,7 @@
 * **[Channel Backpressure](https://www.geeksforgeeks.org/computer-networks/back-pressure-in-distributed-systems/)**: `kmx::aio::channel` supports watermark-based producer throttling and credit reporting.
 * **HTTP/2**: Full codec, stream, frame, and HPACK serialization stack (no model affinity).
 * **[OPC UA](https://en.wikipedia.org/wiki/OPC_Unified_Architecture)** (feature-gated): Backend-neutral async client/server/subscription facade with [open62541](https://open62541.org) backend support; this repository drives it through completion-executor progression, with a shim fallback for feature-off builds and tests.
-* **GPU Completion Model (CUDA)** (feature-gated): Lightweight thread-per-core `gpu::executor` allowing `co_await` on asynchronous CUDA event completions (`gpu::event`) submitted to CUDA streams (`gpu::stream`).
+* **GPU Completion Model ([CUDA](https://developer.nvidia.com/cuda/toolkit))** (feature-gated): Lightweight thread-per-core `gpu::executor` allowing `co_await` on asynchronous CUDA event completions (`gpu::event`) submitted to CUDA streams (`gpu::stream`).
 * **AVB (Audio Video Bridging, [IEEE 802.1](https://1.ieee802.org/avbridges/))**: Shared generic raw Ethernet socket, gPTP clock synchronization, and SRP client with model-specific aliases for readiness and completion; sample-validated in both models.
 * **[HFT](https://en.wikipedia.org/wiki/High-frequency_trading) Order Router Sample**: Completion-sample demo using `kmx::aio::channel` between CPU-pinned threads to show producer throttling and synthetic order routing stats.
 * **[AF_XDP Packet Socket](https://www.kernel.org/doc/html/latest/networking/af_xdp.html)** (Completion model, gated): Kernel-bypass packet filtering with eBPF support and UMEM ring management.
@@ -40,6 +40,7 @@ Quick reference showing which APIs are available in each execution model:
 | **Timers** | ✅ timerfd + epoll | ✅ io_uring timeout ops | Periodic and one-shot |
 | [**V4L2 Capture**](documentation/features/v4l2.md) | ✅ Zero-copy mmap + epoll | ✅ Hybrid poll + DQBUF | Completion uses `IORING_OP_POLL_ADD`, then `VIDIOC_DQBUF` |
 | **HTTP/2** | ✅ Codec + ALPN | ✅ Codec + ALPN | No executor affinity |
+| [**HTTP/3**](documentation/features/quic-http3.md) | ✅ Full | ✅ Full | HTTP/3 codec and message layer over QUIC |
 | [**AVB/IEEE 802.1**](documentation/features/avb.md) | ✅ Available | ✅ Available | Shared generic AVB stack with readiness/completion aliases; sample-validated in both models |
 | [**AF_XDP Packets**](documentation/features/af-xdp.md) | ❌ Not available | ✅ Kernel-bypass (gated) | Feature-gated; eBPF packet filtering |
 | [**SPDK Block I/O**](documentation/features/spdk.md) | ❌ Not available | ✅ NVMe/bdev (gated) | Feature-gated; DPDK-backed |
@@ -52,20 +53,20 @@ Quick reference showing which APIs are available in each execution model:
 
 * ✅ Available / Fully implemented
 * ❌ Not available in this model
-* ⚙ Feature-gated — gate-controlled via `project.enable_*`; most are on by default; `enable_opc_ua` is off by default
+* ⚙ Feature-gated — gate-controlled via `project.enable_*`; default active graph is `core + completion + quic`; readiness, HTTP/2, HTTP/3, AVB, AF_XDP, SPDK, OpenOnload, CUDA, and OPC UA are off by default
 * Headers-only = API declared but no implementation; graceful degradation at runtime
 
 ## Documentation
 
-- [Architecture](documentation/architecture.md)
-- [Core Primitives](documentation/features/core-primitives.md)
-- [Readiness Model (epoll)](documentation/features/readiness-epoll.md)
-- [Completion Model (io_uring)](documentation/features/completion-io-uring.md)
-- [Known Limitations](documentation/known-limitations.md)
-- [Setup and Dependencies](documentation/setup.md)
-- [Build and Feature Gates](documentation/build.md)
-- [Testing Workflow](documentation/testing.md)
-- [Static Analysis](documentation/static-analysis.md)
+* [Architecture](documentation/architecture.md)
+* [Core Primitives](documentation/features/core-primitives.md)
+* [Readiness Model (epoll)](documentation/features/readiness-epoll.md)
+* [Completion Model (io_uring)](documentation/features/completion-io-uring.md)
+* [Known Limitations](documentation/known-limitations.md)
+* [Setup and Dependencies](documentation/setup.md)
+* [Build and Feature Gates](documentation/build.md)
+* [Testing Workflow](documentation/testing.md)
+* [Static Analysis](documentation/static-analysis.md)
 
 ## License
 

@@ -2,9 +2,10 @@ import qbs
 
 CppApplication {
     Depends { name: "kmx-aio-core" }
-    Depends { name: "kmx-aio-readiness" }
+    Depends { name: "kmx-aio-readiness"; condition: project.enable_readiness }
     Depends { name: "kmx-aio-completion" }
-    Depends { name: "kmx-aio-http2" }
+    Depends { name: "kmx-aio-http2"; condition: project.enable_http2 }
+    Depends { name: "kmx-aio-http3"; condition: project.enable_http3 && project.enable_quic }
     Depends { name: "kmx-aio-gpu"; condition: project.enable_cuda }
     Depends { name: "kmx-aio-opcua"; condition: project.enable_opc_ua }
     Depends { name: "kmx-aio-quic"; condition: project.enable_quic }
@@ -97,11 +98,28 @@ CppApplication {
             files.push("src/kmx/aio/completion/xdp/**.cpp");
 
         if (!project.enable_avb)
-            files.push("src/kmx/aio/avb/**.cpp");
+            files.push("src/kmx/aio/avb/**/*.cpp");
+
+        if (!project.enable_http2)
+            files.push("src/kmx/aio/http2/**.cpp");
+
+        if (!project.enable_http3)
+            files.push("src/kmx/aio/http3/**.cpp");
+
+        if (!project.enable_http3)
+            files.push("src/kmx/aio/integration/quic_http3_smoke_test.cpp");
+
+        if (!project.enable_readiness)
+        {
+            files.push("src/kmx/aio/integration/readiness_core_pinning_test.cpp");
+            files.push("src/kmx/aio/integration/pillar_2_integration_test.cpp");
+            files.push("src/kmx/aio/integration/quic_readiness_echo_smoke_test.cpp");
+            files.push("src/kmx/aio/integration/quic_http3_smoke_test.cpp");
+            files.push("src/kmx/aio/v4l2/readiness_*.cpp");
+        }
 
         if (!project.enable_quic)
         {
-            files.push("src/kmx/aio/integration/quic_http3_smoke_test.cpp");
             files.push("src/kmx/aio/integration/quic_readiness_echo_smoke_test.cpp");
         }
 

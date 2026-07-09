@@ -1,6 +1,7 @@
 import qbs
 
 Project {
+    condition: project.enable_readiness
     references: [
         //"tcp/echo/tcp-echo.qbs",
         //"tcp/minimal/tcp-minimal.qbs",
@@ -19,7 +20,6 @@ Project {
         "quic/echo-client/sample-quic-echo-readiness-client.qbs",
         "avb/talker/sample-avb-readiness-talker.qbs",
         "avb/listener/sample-avb-readiness-listener.qbs",
-        "tcp/echo/common/tcp-echo-common.qbs",
         "tcp/echo/client/tcp-echo-client.qbs",
         "tcp/echo/server/tcp-echo-server.qbs",
         "v4l2/capture/v4l2-capture.qbs",
