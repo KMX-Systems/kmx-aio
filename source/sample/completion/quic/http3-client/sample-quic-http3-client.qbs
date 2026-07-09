@@ -2,7 +2,7 @@ import qbs
 
 CppApplication {
     name: "sample-quic-http3-client"
-    condition: project.enable_quic
+    condition: project.enable_http3 && project.enable_quic
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.enableRtti: false
@@ -19,6 +19,7 @@ CppApplication {
 
     Depends { name: "kmx-aio-completion" }
     Depends { name: "kmx-aio-quic" }
+    Depends { name: "kmx-aio-http3" }
 
     files: [
         "inc/kmx/aio/sample/quic/http3_client/**.hpp",

@@ -6,6 +6,7 @@ Project {
         "readiness/readiness.qbs",
         "completion/completion.qbs",
         "http2/http2.qbs",
+        "http3/http3.qbs",
         "gpu/gpu.qbs",
         "opcua/opcua.qbs",
         "quic/quic.qbs",

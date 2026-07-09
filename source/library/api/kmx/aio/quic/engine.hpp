@@ -20,6 +20,7 @@
     #endif
 
 struct lsquic_stream;
+struct lsquic_conn;
 
 namespace kmx::aio::quic
 {
@@ -48,6 +49,7 @@ namespace kmx::aio::quic
         /// @brief Callback invoked when a new QUIC stream is accepted.
         /// @details The stream pointer is non-owning and valid only while the stream remains open.
         using stream_handler_t = std::function<task<void>(::lsquic_stream*, stream_payload)>;
+        using post_handshake_stream_writer_t = std::function<void(::lsquic_stream*)>;
 
         /// @brief Constructor.
         /// @param exec The executor to bind this engine to.
@@ -55,6 +57,17 @@ namespace kmx::aio::quic
 
         /// @brief Sets the callback for accepted streams.
         void set_stream_handler(stream_handler_t handler) noexcept;
+
+        /// @brief Sets the ALPN identifier passed into lsquic engine setup.
+        void set_alpn(std::string alpn) noexcept;
+
+        /// @brief Configures how many local streams to request once handshake completes.
+        /// @details This is useful for protocol bootstrap writes (e.g. HTTP/3 control preface).
+        void set_post_handshake_stream_count(std::size_t count) noexcept;
+
+        /// @brief Sets the writer callback used for post-handshake bootstrap streams.
+        /// @details The callback is called once per bootstrap stream on first write opportunity.
+        void set_post_handshake_stream_writer(post_handshake_stream_writer_t writer) noexcept;
 
         /// @brief Non-copyable.
         generic_engine(const generic_engine&) = delete;

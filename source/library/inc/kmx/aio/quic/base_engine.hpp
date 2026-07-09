@@ -20,8 +20,10 @@
 #include <source_location>
 #include <span>
 #include <string>
+#include <string_view>
 #include <sys/socket.h>
 #include <system_error>
+#include <unordered_set>
 #include <vector>
 
 extern "C"
@@ -30,93 +32,33 @@ extern "C"
 }
 
 #include <kmx/aio/basic_types.hpp>
+#include <kmx/aio/quic/engine.hpp>
 #include <kmx/aio/quic/settings.hpp>
 #include <kmx/aio/readiness/descriptor/timer.hpp>
-#include <kmx/aio/task.hpp>
 #include <kmx/logger.hpp>
 
 namespace kmx::aio::quic
 {
+    namespace logger = ::kmx::logger;
+
     namespace detail
     {
-        [[nodiscard]] inline auto readiness_watchdog_tick_ns_from_env() noexcept -> long
-        {
-            static constexpr long default_tick_ns = 10'000'000L; // 10 ms
-            static constexpr long min_tick_ns = 1'000'000L;      // 1 ms
-            static constexpr long max_tick_ns = 100'000'000L;    // 100 ms
+        long readiness_watchdog_tick_ns_from_env() noexcept;
 
-            const char* const env = std::getenv("KMX_AIO_QUIC_READINESS_WATCHDOG_NS");
-            if (!env || env[0] == '\0')
-                return default_tick_ns;
+        std::string_view conn_status_to_string(const ::LSQUIC_CONN_STATUS status) noexcept;
 
-            std::uint64_t parsed {};
-            const char* const end = env + std::char_traits<char>::length(env);
-            const auto [ptr, ec] = std::from_chars(env, end, parsed);
-            if (ec != std::errc() || ptr != end)
-                return default_tick_ns;
+        void configure_stream_if(::lsquic_stream_if& stream_if, ::lsquic_conn_ctx_t* (*on_new_conn)(void*, ::lsquic_conn_t*),
+                                 void (*on_conn_closed)(::lsquic_conn_t*),
+                                 ::lsquic_stream_ctx_t* (*on_new_stream)(void*, ::lsquic_stream_t*),
+                                 void (*on_read)(::lsquic_stream_t*, ::lsquic_stream_ctx_t*),
+                                 void (*on_write)(::lsquic_stream_t*, ::lsquic_stream_ctx_t*),
+                                 void (*on_close)(::lsquic_stream_t*, ::lsquic_stream_ctx_t*),
+                                 void (*on_hsk_done)(::lsquic_conn_t*, enum lsquic_hsk_status)) noexcept;
 
-            if (parsed < static_cast<std::uint64_t>(min_tick_ns) || parsed > static_cast<std::uint64_t>(max_tick_ns))
-                return default_tick_ns;
+        void apply_lsquic_settings(::lsquic_engine_settings& lsquic_settings, const kmx::aio::quic::settings& config,
+                                   const unsigned lsquic_flags) noexcept;
 
-            return static_cast<long>(parsed);
-        }
-
-        [[nodiscard]] inline auto conn_status_to_string(const ::LSQUIC_CONN_STATUS status) noexcept -> std::string_view
-        {
-            switch (status)
-            {
-                case LSCONN_ST_HSK_IN_PROGRESS:
-                    return "LSCONN_ST_HSK_IN_PROGRESS";
-                case LSCONN_ST_CONNECTED:
-                    return "LSCONN_ST_CONNECTED";
-                case LSCONN_ST_HSK_FAILURE:
-                    return "LSCONN_ST_HSK_FAILURE";
-                case LSCONN_ST_GOING_AWAY:
-                    return "LSCONN_ST_GOING_AWAY";
-                case LSCONN_ST_TIMED_OUT:
-                    return "LSCONN_ST_TIMED_OUT";
-                case LSCONN_ST_RESET:
-                    return "LSCONN_ST_RESET";
-                case LSCONN_ST_USER_ABORTED:
-                    return "LSCONN_ST_USER_ABORTED";
-                case LSCONN_ST_ERROR:
-                    return "LSCONN_ST_ERROR";
-                case LSCONN_ST_CLOSED:
-                    return "LSCONN_ST_CLOSED";
-                case LSCONN_ST_PEER_GOING_AWAY:
-                    return "LSCONN_ST_PEER_GOING_AWAY";
-                case LSCONN_ST_VERNEG_FAILURE:
-                    return "LSCONN_ST_VERNEG_FAILURE";
-                default:
-                    return "LSCONN_ST_UNKNOWN";
-            }
-        }
-
-        inline void configure_stream_if(::lsquic_stream_if& stream_if, ::lsquic_conn_ctx_t* (*on_new_conn)(void*, ::lsquic_conn_t*),
-                                        void (*on_conn_closed)(::lsquic_conn_t*),
-                                        ::lsquic_stream_ctx_t* (*on_new_stream)(void*, ::lsquic_stream_t*),
-                                        void (*on_read)(::lsquic_stream_t*, ::lsquic_stream_ctx_t*),
-                                        void (*on_write)(::lsquic_stream_t*, ::lsquic_stream_ctx_t*),
-                                        void (*on_close)(::lsquic_stream_t*, ::lsquic_stream_ctx_t*),
-                                        void (*on_hsk_done)(::lsquic_conn_t*, enum lsquic_hsk_status)) noexcept
-        {
-            stream_if.on_new_conn = on_new_conn;
-            stream_if.on_conn_closed = on_conn_closed;
-            stream_if.on_new_stream = on_new_stream;
-            stream_if.on_read = on_read;
-            stream_if.on_write = on_write;
-            stream_if.on_close = on_close;
-            stream_if.on_hsk_done = on_hsk_done;
-        }
-
-        inline void apply_lsquic_settings(::lsquic_engine_settings& lsquic_settings, const kmx::aio::quic::settings& config,
-                                          const unsigned lsquic_flags) noexcept
-        {
-            ::lsquic_engine_init_settings(&lsquic_settings, lsquic_flags);
-            lsquic_settings.es_max_streams_in = config.max_streams_in;
-            lsquic_settings.es_idle_timeout = config.idle_conn_timeout_sec;
-            lsquic_settings.es_max_cfcw = config.max_cfcwnd;
-        }
+        bool is_local_initiated_stream(const ::lsquic_stream_t* stream, const bool is_client) noexcept;
     } // namespace detail
 
     /// @brief Common QUIC engine implementation shared between readiness and completion models.
@@ -138,7 +80,13 @@ namespace kmx::aio::quic
         void* ssl_ctx_ {};
         bool running_ {};
         bool is_client_ {false};
+        std::string alpn_ {"kmx-aio"};
         std::queue<std::string> client_payloads_ {};
+        std::size_t client_payload_streams_pending_ {};
+        std::size_t post_handshake_stream_count_ {};
+        std::size_t post_handshake_streams_pending_ {};
+        std::unordered_set<::lsquic_stream_t*> post_handshake_streams_ {};
+        std::function<void(::lsquic_stream_t*)> post_handshake_stream_writer_;
         const long readiness_idle_tick_ns_ {detail::readiness_watchdog_tick_ns_from_env()};
 
         explicit base_impl(Executor& exec) noexcept: exec_(exec) {}
@@ -181,13 +129,7 @@ namespace kmx::aio::quic
 
         static ::lsquic_conn_ctx_t* on_new_conn(void* stream_if_ctx, ::lsquic_conn_t* conn)
         {
-            auto* const self = static_cast<base_impl*>(stream_if_ctx);
-            if (self->is_client_)
-            {
-                const std::size_t streams_to_open = self->client_payloads_.size();
-                for (std::size_t i = 0; i < streams_to_open; ++i)
-                    ::lsquic_conn_make_stream(conn);
-            }
+            (void) conn;
             return reinterpret_cast<::lsquic_conn_ctx_t*>(stream_if_ctx);
         }
 
@@ -212,15 +154,47 @@ namespace kmx::aio::quic
             logger::log(logger::level::info, std::source_location::current(), "[QUIC DEBUG] on_hsk_done called, status={}, is_client_={}",
                         static_cast<int>(status), self ? self->is_client_ : false);
 
-            if (self && self->is_client_)
-                logger::log(logger::level::info, std::source_location::current(), "[QUIC DEBUG] on_hsk_done: client handshake completed");
+            if (self)
+            {
+                if (self->is_client_)
+                {
+                    logger::log(logger::level::info, std::source_location::current(),
+                                "[QUIC DEBUG] on_hsk_done: client handshake completed");
+
+                    const std::size_t streams_to_open = self->client_payloads_.size();
+                    self->client_payload_streams_pending_ += streams_to_open;
+                    for (std::size_t i = 0; i < streams_to_open; ++i)
+                        ::lsquic_conn_make_stream(conn);
+                }
+
+                if (self->post_handshake_stream_count_ > 0u)
+                {
+                    self->post_handshake_streams_pending_ += self->post_handshake_stream_count_;
+                    for (std::size_t i = 0; i < self->post_handshake_stream_count_; ++i)
+                        ::lsquic_conn_make_stream(conn);
+                }
+            }
         }
 
         static ::lsquic_stream_ctx_t* on_new_stream(void* stream_if_ctx, ::lsquic_stream_t* stream)
         {
             auto* const self = static_cast<base_impl*>(stream_if_ctx);
-            if (self->is_client_)
+            const bool is_local_stream = detail::is_local_initiated_stream(stream, self->is_client_);
+
+            if (is_local_stream)
+            {
+                if (self->client_payload_streams_pending_ > 0u)
+                {
+                    --self->client_payload_streams_pending_;
+                }
+                else if (self->post_handshake_streams_pending_ > 0u)
+                {
+                    --self->post_handshake_streams_pending_;
+                    self->post_handshake_streams_.insert(stream);
+                }
+
                 ::lsquic_stream_wantwrite(stream, 1);
+            }
             else
                 ::lsquic_stream_wantread(stream, 1);
             return reinterpret_cast<::lsquic_stream_ctx_t*>(stream_if_ctx);
@@ -233,7 +207,7 @@ namespace kmx::aio::quic
             auto handle_read_result = [&](const ssize_t nr) -> void
             {
                 if (nr == 0)
-                    ::lsquic_stream_close(stream);
+                    ::lsquic_stream_wantread(stream, 0);
             };
 
             if (!self->stream_handler_)
@@ -276,6 +250,31 @@ namespace kmx::aio::quic
         static void on_write(::lsquic_stream_t* stream, ::lsquic_stream_ctx_t* /*ctx*/)
         {
             auto* const self = reinterpret_cast<base_impl*>(::lsquic_conn_get_ctx(::lsquic_stream_conn(stream)));
+            if (self->is_client_)
+            {
+                const auto bootstrap_it = self->post_handshake_streams_.find(stream);
+                if (bootstrap_it != self->post_handshake_streams_.end())
+                {
+                    if (self->post_handshake_stream_writer_)
+                    {
+                        try
+                        {
+                            self->post_handshake_stream_writer_(stream);
+                        }
+                        catch (const std::exception& ex)
+                        {
+                            logger::log(logger::level::error, std::source_location::current(), "Post-handshake stream writer failed: {}",
+                                        ex.what());
+                        }
+                    }
+
+                    self->post_handshake_streams_.erase(bootstrap_it);
+                    ::lsquic_stream_wantwrite(stream, 0);
+                    ::lsquic_stream_wantread(stream, 1);
+                    return;
+                }
+            }
+
             if (self->is_client_ && !self->client_payloads_.empty())
             {
                 std::string payload = std::move(self->client_payloads_.front());
@@ -297,6 +296,7 @@ namespace kmx::aio::quic
                 }
 
                 ::lsquic_stream_flush(stream);
+                ::lsquic_stream_shutdown(stream, 1);
                 ::lsquic_stream_wantwrite(stream, 0);
                 ::lsquic_stream_wantread(stream, 1);
             }
@@ -316,7 +316,14 @@ namespace kmx::aio::quic
             return reinterpret_cast<struct ssl_ctx_st*>(self->ssl_ctx_);
         }
 
-        static void on_close(::lsquic_stream_t* /*stream*/, ::lsquic_stream_ctx_t* /*ctx*/) {}
+        static void on_close(::lsquic_stream_t* stream, ::lsquic_stream_ctx_t* /*ctx*/)
+        {
+            auto* const self = reinterpret_cast<base_impl*>(::lsquic_conn_get_ctx(::lsquic_stream_conn(stream)));
+            if (!self)
+                return;
+
+            self->post_handshake_streams_.erase(stream);
+        }
 
         // Shared initialisation
 
@@ -328,8 +335,7 @@ namespace kmx::aio::quic
                 return std::unexpected(error_from_errno(EINVAL));
 
             static ::lsquic_stream_if stream_if {};
-            detail::configure_stream_if(stream_if, on_new_conn, on_conn_closed, on_new_stream, on_read, on_write, on_close,
-                                        on_hsk_done);
+            detail::configure_stream_if(stream_if, on_new_conn, on_conn_closed, on_new_stream, on_read, on_write, on_close, on_hsk_done);
 
             ::lsquic_engine_api engine_api {};
             engine_api.ea_packets_out = send_packets_out;
@@ -339,7 +345,7 @@ namespace kmx::aio::quic
             engine_api.ea_lookup_cert = lookup_cert;
             engine_api.ea_cert_lu_ctx = this;
             engine_api.ea_get_ssl_ctx = get_ssl_ctx;
-            engine_api.ea_alpn = "kmx-aio";
+            engine_api.ea_alpn = alpn_.c_str();
 
             static ::lsquic_engine_settings lsquic_settings {};
             detail::apply_lsquic_settings(lsquic_settings, config, lsquic_flags);
@@ -418,7 +424,7 @@ namespace kmx::aio::quic
             return connect_setup_common(std::move(sock_res), peer_ip, peer_port, hostname, ssl_ctx, config);
         }
 
-      private:
+    private:
         void clear_client_payload_queue() noexcept
         {
             while (!client_payloads_.empty())
@@ -426,15 +432,18 @@ namespace kmx::aio::quic
         }
 
         [[nodiscard]] std::expected<void, std::error_code> connect_setup_common(std::expected<UdpSocket, std::error_code>&& sock_res,
-                                                                                 const ip_address_t peer_ip, const port_t peer_port,
-                                                                                 const std::string& hostname, void* ssl_ctx,
-                                                                                 const kmx::aio::quic::settings& config)
+                                                                                const ip_address_t peer_ip, const port_t peer_port,
+                                                                                const std::string& hostname, void* ssl_ctx,
+                                                                                const kmx::aio::quic::settings& config)
         {
             if (!sock_res)
                 return std::unexpected(sock_res.error());
 
             ssl_ctx_ = ssl_ctx;
             is_client_ = true;
+            client_payload_streams_pending_ = 0u;
+            post_handshake_streams_pending_ = 0u;
+            post_handshake_streams_.clear();
 
             socket_ = std::make_unique<UdpSocket>(std::move(*sock_res));
 
@@ -504,8 +513,8 @@ namespace kmx::aio::quic
                 drive_engine_once();
         }
 
-        [[nodiscard]] std::expected<void, std::error_code>
-            setup_readiness_timer_if_needed(std::optional<kmx::aio::readiness::descriptor::timer>& readiness_tick)
+        [[nodiscard]] std::expected<void, std::error_code> setup_readiness_timer_if_needed(
+            std::optional<kmx::aio::readiness::descriptor::timer>& readiness_tick)
         {
             if constexpr (requires(Executor& e) { e.async_timeout(std::uint64_t {}); })
                 return {};
@@ -524,14 +533,12 @@ namespace kmx::aio::quic
         }
 
         [[nodiscard]] std::expected<void, std::error_code> feed_packet_to_engine(const std::array<std::byte, 4096u>& packet_buf,
-                                                                                  const ssize_t recv_n,
-                                                                                  const ::sockaddr_storage& peer_addr)
+                                                                                 const ssize_t recv_n, const ::sockaddr_storage& peer_addr)
         {
-            const int packet_in_res =
-                ::lsquic_engine_packet_in(lsquic_engine_, reinterpret_cast<const unsigned char*>(packet_buf.data()),
-                                          static_cast<std::size_t>(recv_n), reinterpret_cast<::sockaddr*>(&local_addr_),
-                                          reinterpret_cast<::sockaddr*>(const_cast<::sockaddr_storage*>(&peer_addr)),
-                                          reinterpret_cast<void*>(this), 0);
+            const int packet_in_res = ::lsquic_engine_packet_in(
+                lsquic_engine_, reinterpret_cast<const unsigned char*>(packet_buf.data()), static_cast<std::size_t>(recv_n),
+                reinterpret_cast<::sockaddr*>(&local_addr_), reinterpret_cast<::sockaddr*>(const_cast<::sockaddr_storage*>(&peer_addr)),
+                reinterpret_cast<void*>(this), 0);
             if (packet_in_res < 0)
             {
                 logger::log(logger::level::error, std::source_location::current(), "lsquic_engine_packet_in failed: {}", packet_in_res);
@@ -567,8 +574,7 @@ namespace kmx::aio::quic
         }
 
         task<std::expected<void, std::error_code>> process_completion_receive_iteration(std::array<std::byte, 4096u>& packet_buf,
-                                                                                         ::msghdr& msg,
-                                                                                         const ::sockaddr_storage& peer_addr)
+                                                                                        ::msghdr& msg, const ::sockaddr_storage& peer_addr)
         {
             const ssize_t recv_n = ::recvmsg(socket_->get_fd(), &msg, MSG_DONTWAIT);
             if (recv_n < 0)
@@ -592,10 +598,9 @@ namespace kmx::aio::quic
             co_return std::expected<void, std::error_code> {};
         }
 
-        task<std::expected<void, std::error_code>> process_readiness_receive_iteration(std::array<std::byte, 4096u>& packet_buf,
-                                                                                        ::msghdr& msg,
-                                                                                        const ::sockaddr_storage& peer_addr,
-                                                                                        kmx::aio::readiness::descriptor::timer& readiness_tick)
+        task<std::expected<void, std::error_code>> process_readiness_receive_iteration(
+            std::array<std::byte, 4096u>& packet_buf, ::msghdr& msg, const ::sockaddr_storage& peer_addr,
+            kmx::aio::readiness::descriptor::timer& readiness_tick)
         {
             const ssize_t recv_n = ::recvmsg(socket_->get_fd(), &msg, MSG_DONTWAIT);
             if (recv_n < 0)
@@ -619,8 +624,7 @@ namespace kmx::aio::quic
             co_return std::expected<void, std::error_code> {};
         }
 
-      public:
-
+    public:
         /// @brief Shared event processing loop.
         task<std::expected<void, std::error_code>> process()
         {
