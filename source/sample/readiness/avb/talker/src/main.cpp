@@ -8,7 +8,7 @@
 #include <string_view>
 #include <unordered_map>
 
-namespace
+namespace kmx::aio::sample::avb::talker::detail
 {
     enum class parse_status
     {
@@ -17,7 +17,8 @@ namespace
         error,
     };
 
-    void print_usage(const char* program)    {
+    static void print_usage(const char* program)
+    {
         std::println("Usage: {} [--iface IFACE] [--dest-mac XX:XX:XX:XX:XX:XX] [--stream-id N] [--max-frames N] [--period-us N] "
                      "[--sync-timeout-s N] [--diagnostics-only]",
                      program);
@@ -31,7 +32,8 @@ namespace
         std::println("  --help            Show this help");
     }
 
-    parse_status parse_dest_mac_option(std::string_view value, kmx::aio::sample::avb::talker::config& cfg)    {
+    static parse_status parse_dest_mac_option(std::string_view value, kmx::aio::sample::avb::talker::config& cfg)
+    {
         if (!kmx::aio::sample::common::parse_mac_bytes(value, cfg.dest_mac))
         {
             kmx::logger::log(
@@ -46,7 +48,8 @@ namespace
         return parse_status::ok;
     }
 
-    parse_status parse_stream_id_option(std::string_view value, kmx::aio::sample::avb::talker::config& cfg)    {
+    static parse_status parse_stream_id_option(std::string_view value, kmx::aio::sample::avb::talker::config& cfg)
+    {
         std::uint16_t parsed {};
         if (!kmx::aio::sample::common::parse_unsigned_u16(value, parsed))
         {
@@ -63,7 +66,8 @@ namespace
         return parse_status::ok;
     }
 
-    parse_status parse_max_frames_option(std::string_view value, kmx::aio::sample::avb::talker::config& cfg)    {
+    static parse_status parse_max_frames_option(std::string_view value, kmx::aio::sample::avb::talker::config& cfg)
+    {
         std::uint64_t parsed {};
         if (!kmx::aio::sample::common::parse_unsigned_u64(value, parsed))
         {
@@ -80,7 +84,7 @@ namespace
         return parse_status::ok;
     }
 
-    parse_status parse_period_us_option(
+    static parse_status parse_period_us_option(
         std::string_view value,
         kmx::aio::sample::avb::talker::config& cfg,
         std::uint64_t min_period_us,
@@ -114,7 +118,7 @@ namespace
         return parse_status::ok;
     }
 
-    parse_status parse_sync_timeout_s_option(
+    static parse_status parse_sync_timeout_s_option(
         std::string_view value,
         kmx::aio::sample::avb::talker::config& cfg,
         std::uint64_t min_sync_timeout_s,
@@ -148,7 +152,8 @@ namespace
         return parse_status::ok;
     }
 
-    parse_status parse_args(int argc, const char* argv[], kmx::aio::sample::avb::talker::config& cfg)    {
+    static parse_status parse_args(int argc, const char* argv[], kmx::aio::sample::avb::talker::config& cfg)
+    {
         enum class option_kind
         {
             iface,
@@ -255,17 +260,17 @@ namespace
 
         return parse_status::ok;
     }
-} // namespace
+} // namespace kmx::aio::sample::avb::talker::detail
 
 int main(int argc, const char* argv[]) noexcept
 {
     try
     {
         kmx::aio::sample::avb::talker::config cfg {};
-        const auto parsed = parse_args(argc, argv, cfg);
-        if (parsed == parse_status::help)
+        const auto parsed = kmx::aio::sample::avb::talker::detail::parse_args(argc, argv, cfg);
+        if (parsed == kmx::aio::sample::avb::talker::detail::parse_status::help)
             return 0;
-        if (parsed == parse_status::error)
+        if (parsed == kmx::aio::sample::avb::talker::detail::parse_status::error)
             return 1;
 
         kmx::aio::sample::avb::talker::manager mgr {std::move(cfg)};

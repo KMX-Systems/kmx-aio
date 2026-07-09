@@ -8,7 +8,7 @@
 using namespace kmx::aio;
 using namespace kmx::aio::completion;
 
-int main()
+int main() noexcept
 {
     try
     {
@@ -21,5 +21,6 @@ int main()
         std::cerr << "Exception: " << e.what() << "\n";
         return 1;
     }
+
     return 0;
 }
