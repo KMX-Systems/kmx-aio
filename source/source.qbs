@@ -5,8 +5,8 @@ Project {
     property bool enable_openonload: true
     property bool enable_af_xdp: true
     property bool enable_spdk: true
-    property string spdk_prefix: "/usr/local"
-    property bool spdk_enable_crypto: true
+    property string spdk_prefix: sourceDirectory + "/../build/spdk-local/install-local"
+    property bool spdk_enable_crypto: false
     property bool enable_quic: true
     property bool enable_avb: true
     property bool enable_opc_ua: false
