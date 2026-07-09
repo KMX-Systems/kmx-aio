@@ -27,6 +27,24 @@ namespace kmx::aio::quic
     }
 
     template <typename Executor, typename UdpSocket>
+    void generic_engine<Executor, UdpSocket>::set_alpn(std::string alpn) noexcept
+    {
+        impl_->alpn_ = std::move(alpn);
+    }
+
+    template <typename Executor, typename UdpSocket>
+    void generic_engine<Executor, UdpSocket>::set_post_handshake_stream_count(const std::size_t count) noexcept
+    {
+        impl_->post_handshake_stream_count_ = count;
+    }
+
+    template <typename Executor, typename UdpSocket>
+    void generic_engine<Executor, UdpSocket>::set_post_handshake_stream_writer(post_handshake_stream_writer_t writer) noexcept
+    {
+        impl_->post_handshake_stream_writer_ = std::move(writer);
+    }
+
+    template <typename Executor, typename UdpSocket>
     task<std::expected<void, std::error_code>> generic_engine<Executor, UdpSocket>::start(const ip_address_t ip, const port_t port,
                                                                                           void* ssl_ctx,
                                                                                           const settings& config) noexcept(false)
