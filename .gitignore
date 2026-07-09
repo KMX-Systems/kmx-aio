@@ -39,7 +39,6 @@
 .vscode/
 asan/
 build/*
-!build/install_lsquic.sh
 default/
 debug/
 tsan/

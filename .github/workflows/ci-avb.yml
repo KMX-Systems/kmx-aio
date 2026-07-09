@@ -89,11 +89,11 @@ jobs:
 
       - name: Bootstrap QUIC dependencies
         run: |
-          bash build/install_lsquic.sh
+          bash scripts/install_lsquic.sh
 
       - name: Bootstrap local open62541 prefix
         run: |
-          bash build/install_open62541.sh
+          bash scripts/install_open62541.sh
 
       - name: Bootstrap local SPDK prefix
         run: |
@@ -159,7 +159,7 @@ jobs:
 
       - name: Bootstrap QUIC dependencies
         run: |
-          bash build/install_lsquic.sh
+          bash scripts/install_lsquic.sh
 
       - name: Configure and build QUIC smoke artifacts
         run: |
