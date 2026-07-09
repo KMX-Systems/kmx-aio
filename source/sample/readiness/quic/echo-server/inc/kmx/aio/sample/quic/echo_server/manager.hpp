@@ -6,5 +6,5 @@
 
 namespace kmx::aio::sample::quic::echo_server
 {
-    auto async_main(std::shared_ptr<kmx::aio::readiness::executor> exec) -> kmx::aio::task<void>;
+    kmx::aio::task<void> async_main(std::shared_ptr<kmx::aio::readiness::executor> exec) ;
 }

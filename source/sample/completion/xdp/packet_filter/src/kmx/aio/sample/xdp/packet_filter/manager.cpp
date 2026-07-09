@@ -32,8 +32,9 @@ namespace kmx::aio::sample::xdp::packet_filter
                          "Hint: if XDP program attach is blocked, check driver/offload support and kernel logs via 'dmesg | tail -n 50'");
     }
 
-    auto run_packet_filter(std::shared_ptr<kmx::aio::completion::executor> exec, std::shared_ptr<std::atomic_bool> ok,
-                           std::string interface_name, std::uint32_t queue_id) -> kmx::aio::task<void>
+    kmx::aio::task<void>
+    run_packet_filter(std::shared_ptr<kmx::aio::completion::executor> exec, std::shared_ptr<std::atomic_bool> ok,
+                      std::string interface_name, std::uint32_t queue_id)
     {
         kmx::aio::completion::xdp::socket_config cfg {
             .interface_name = interface_name,

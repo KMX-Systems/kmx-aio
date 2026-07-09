@@ -1,14 +1,17 @@
 #include <kmx/aio/sample/gpu/image_processing/manager.hpp>
+#include <kmx/aio/sample/common/cli_parse.hpp>
 
-#include <charconv>
+#include <cstdint>
 #include <exception>
 #include <iostream>
 #include <limits>
 #include <string_view>
+#include <unordered_map>
+#include <utility>
 
 namespace kmx::aio::sample::gpu::image_processing::detail
 {
-    auto print_usage() -> void
+    void print_usage()
     {
         std::cout << "Usage: sample-gpu-image-processing [options]\n"
                      "  --device <path>         V4L2 device (default: /dev/video0)\n"
@@ -20,26 +23,41 @@ namespace kmx::aio::sample::gpu::image_processing::detail
                      "  --help                  Show this help\n";
     }
 
-    template <typename T>
-    auto parse_unsigned_arg(const char* raw, T& out) -> bool
+    bool parse_gpu_device_option(const char* value, std::int16_t& out)
     {
-        std::uint64_t parsed {};
-        const auto* begin = raw;
-        const auto* end = raw + std::char_traits<char>::length(raw);
-        const auto [ptr, ec] = std::from_chars(begin, end, parsed);
-        if (ec != std::errc() || ptr != end)
+        std::uint64_t tmp {};
+        if (!kmx::aio::sample::common::parse_unsigned_u64_cstr(value, tmp))
             return false;
 
-        if (parsed > static_cast<std::uint64_t>(std::numeric_limits<T>::max()))
+        if (tmp > static_cast<std::uint64_t>(std::numeric_limits<std::int16_t>::max()))
             return false;
 
-        out = static_cast<T>(parsed);
+        out = static_cast<std::int16_t>(tmp);
         return true;
     }
 
-    auto parse_args(const int argc, char** argv, kmx::aio::sample::gpu::image_processing::config& cfg,
-                    bool& help_requested) -> bool
+    bool parse_args(const int argc, char** argv, kmx::aio::sample::gpu::image_processing::config& cfg,
+                    bool& help_requested)
     {
+        enum class option_kind
+        {
+            device,
+            max_frames,
+            width,
+            height,
+            buffer_count,
+            gpu_device,
+        };
+
+        static const std::unordered_map<std::string_view, option_kind> option_table {
+            {"--device", option_kind::device},
+            {"--max-frames", option_kind::max_frames},
+            {"--width", option_kind::width},
+            {"--height", option_kind::height},
+            {"--buffer-count", option_kind::buffer_count},
+            {"--gpu-device", option_kind::gpu_device},
+        };
+
         help_requested = false;
 
         for (int i = 1; i < argc; ++i)
@@ -59,53 +77,42 @@ namespace kmx::aio::sample::gpu::image_processing::detail
             }
 
             const char* const value = argv[++i];
-            if (arg == "--device")
+            const auto it = option_table.find(arg);
+            if (it == option_table.end())
             {
-                cfg.device = value;
-                continue;
+                std::cerr << "Unknown option: " << arg << "\n";
+                return false;
             }
 
-            if (arg == "--max-frames")
+            switch (it->second)
             {
-                if (!parse_unsigned_arg(value, cfg.max_frames))
+                case option_kind::device:
+                    cfg.device = value;
+                    break;
+                case option_kind::max_frames:
+                    if (!kmx::aio::sample::common::parse_unsigned_u64_cstr(value, cfg.max_frames))
+                        return false;
+                    break;
+                case option_kind::width:
+                    if (!kmx::aio::sample::common::parse_unsigned_u32_cstr(value, cfg.size.width))
+                        return false;
+                    break;
+                case option_kind::height:
+                    if (!kmx::aio::sample::common::parse_unsigned_u32_cstr(value, cfg.size.height))
+                        return false;
+                    break;
+                case option_kind::buffer_count:
+                    if (!kmx::aio::sample::common::parse_unsigned_u16_cstr(value, cfg.buffer_count))
+                        return false;
+                    break;
+                case option_kind::gpu_device:
+                    if (!parse_gpu_device_option(value, cfg.gpu_device))
+                        return false;
+                    break;
+                default:
+                    std::cerr << "Unknown option kind\n";
                     return false;
-                continue;
             }
-
-            if (arg == "--width")
-            {
-                if (!parse_unsigned_arg(value, cfg.size.width))
-                    return false;
-                continue;
-            }
-
-            if (arg == "--height")
-            {
-                if (!parse_unsigned_arg(value, cfg.size.height))
-                    return false;
-                continue;
-            }
-
-            if (arg == "--buffer-count")
-            {
-                if (!parse_unsigned_arg(value, cfg.buffer_count))
-                    return false;
-                continue;
-            }
-
-            if (arg == "--gpu-device")
-            {
-                std::uint64_t tmp {};
-                if (!parse_unsigned_arg(value, tmp))
-                    return false;
-                if (tmp > static_cast<std::uint64_t>(std::numeric_limits<std::int16_t>::max()))
-                    return false;
-                cfg.gpu_device = static_cast<std::int16_t>(tmp);
-                continue;
-            }
-
-            std::cerr << "Unknown option: " << arg << "\n";
-            return false;
         }
 
         return true;

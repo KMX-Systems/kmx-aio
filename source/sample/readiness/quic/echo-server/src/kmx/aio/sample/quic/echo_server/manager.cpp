@@ -21,8 +21,7 @@ namespace kmx::aio::sample::quic::echo_server
 
     namespace detail
     {
-        auto parse_listen_port_from_env() -> std::uint16_t
-        {
+        std::uint16_t parse_listen_port_from_env()        {
             constexpr std::uint16_t default_port = 12345u;
             const char* const env = std::getenv("KMX_QUIC_ECHO_PORT");
             if (!env || env[0] == '\0')
@@ -76,8 +75,7 @@ namespace kmx::aio::sample::quic::echo_server
         co_return;
     }
 
-    auto async_main(std::shared_ptr<executor> exec) -> task<void>
-    {
+    task<void> async_main(std::shared_ptr<executor> exec)    {
         ::SSL_CTX* ssl_ctx = ::SSL_CTX_new(TLS_server_method());
         if (!ssl_ctx)
         {
