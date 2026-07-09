@@ -5,9 +5,10 @@
 #include <fstream>
 #include <string>
 
-namespace
+#if !defined(KMX_AIO_FEATURE_SPDK)
+namespace kmx::aio::completion::spdk::runtime_test_detail
 {
-    [[nodiscard]] bool hugepages_available() noexcept
+    [[nodiscard]] static bool hugepages_available() noexcept
     {
         std::ifstream meminfo {"/proc/meminfo"};
         if (!meminfo)
@@ -26,10 +27,9 @@ namespace
     }
 }
 
-#if !defined(KMX_AIO_FEATURE_SPDK)
 TEST_CASE("spdk runtime unsupported when feature disabled", "[completion][spdk]")
 {
-    if (!hugepages_available())
+    if (!kmx::aio::completion::spdk::runtime_test_detail::hugepages_available())
         SKIP("spdk runtime test skipped: no hugepages available on this host");
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);

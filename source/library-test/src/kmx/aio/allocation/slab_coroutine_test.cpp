@@ -10,16 +10,16 @@
 #include <memory>
 #include <vector>
 
-namespace
+namespace kmx::aio::allocation::slab_coroutine_test_detail
 {
     /// @brief Test coroutine that yields a value from thread-local slab allocation.
-    kmx::aio::task<int> simple_coro(const int value)
+    static kmx::aio::task<int> simple_coro(const int value)
     {
         co_return value;
     }
 
     /// @brief Recursive coroutine to stress slab allocation chaining.
-    kmx::aio::task<int> recursive_coro(const int depth)
+    static kmx::aio::task<int> recursive_coro(const int depth)
     {
         if (depth <= 0)
             co_return 0;
@@ -29,14 +29,14 @@ namespace
     }
 
     /// @brief Coroutine deliberately inflated to exceed tiny slab slots.
-    kmx::aio::task<int> oversized_coro(const int value)
+    static kmx::aio::task<int> oversized_coro(const int value)
     {
         std::array<std::byte, 256u> padding {};
         co_await std::suspend_always {};
         co_return value + static_cast<int>(padding.size());
     }
 
-} // namespace
+} // namespace kmx::aio::allocation::slab_coroutine_test_detail
 
 TEST_CASE("coroutine frames allocate from thread-local slab", "[allocation][slab][coroutine]")
 {
@@ -54,7 +54,7 @@ TEST_CASE("coroutine frames allocate from thread-local slab", "[allocation][slab
 
     // Spawn a simple coroutine.
     {
-        auto t = simple_coro(42);
+        auto t = kmx::aio::allocation::slab_coroutine_test_detail::simple_coro(42);
         // After co_await, coroutine frame is still allocated.
         const auto allocated_count_1 = alloc->allocated();
         REQUIRE(allocated_count_1 >= 1u); // At least one frame in slab.
@@ -69,7 +69,7 @@ TEST_CASE("coroutine frames allocate from thread-local slab", "[allocation][slab
     {
         std::vector<kmx::aio::task<int>> tasks;
         for (int i = 0; i < 10; ++i)
-            tasks.emplace_back(simple_coro(i));
+            tasks.emplace_back(kmx::aio::allocation::slab_coroutine_test_detail::simple_coro(i));
 
         // All 10 frames should be allocated from slab.
         const auto allocated_count = alloc->allocated();
@@ -83,7 +83,7 @@ TEST_CASE("coroutine frames allocate from thread-local slab", "[allocation][slab
 
     // Recursive coroutines test: verify deep call chains don't exhaust slab.
     {
-        auto recursive = recursive_coro(5);
+        auto recursive = kmx::aio::allocation::slab_coroutine_test_detail::recursive_coro(5);
         // At most 6 frames on stack at once (depth 5 + initial).
         const auto allocated_count = alloc->allocated();
         REQUIRE(allocated_count <= 6u);
@@ -160,7 +160,7 @@ TEST_CASE("coroutine frame exceeding slab slot falls back to malloc", "[allocati
     // Spawn a coroutine (typical frame size ~200+ bytes).
     // The allocator should fall back to ::operator new for the frame.
     {
-        auto t = oversized_coro(99);
+        auto t = kmx::aio::allocation::slab_coroutine_test_detail::oversized_coro(99);
         // Slab may or may not have allocated (depends on frame size).
         // The test verifies fallback logic doesn't crash.
         REQUIRE(true); // Coroutine created successfully.
