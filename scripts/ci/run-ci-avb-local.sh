@@ -145,7 +145,7 @@ run_quic_smoke() {
 
     (
         cd "$repo_root"
-        bash build/install_lsquic.sh
+        bash scripts/install_lsquic.sh
     )
 
     (
@@ -190,8 +190,8 @@ run_artifact_split_smoke() {
 
     (
         cd "$repo_root"
-        bash build/install_lsquic.sh
-        bash build/install_open62541.sh
+        bash scripts/install_lsquic.sh
+        bash scripts/install_open62541.sh
     )
 
     if [[ ! -d "$repo_root/build/spdk-local/install-local" ]]; then
