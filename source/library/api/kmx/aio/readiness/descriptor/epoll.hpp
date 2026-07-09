@@ -5,6 +5,7 @@
     #include <vector>
 
     #include <kmx/aio/file_descriptor.hpp>
+    #include <kmx/aio/readiness/basic_types.hpp>
 #endif
 
 namespace kmx::aio::readiness::descriptor

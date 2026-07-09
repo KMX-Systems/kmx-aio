@@ -111,7 +111,7 @@ namespace kmx::aio::sample::tls::echo_readiness_client
 
         // If connect is in progress, wait for socket to be writable
         if (in_progress)
-            co_await executor_->wait_io(fd, event_type::write);
+            co_await executor_->wait_io(fd, kmx::aio::readiness::event_type::write);
 
         // Check connection status using wrapper
         int so_error {};
