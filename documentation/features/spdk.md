@@ -70,6 +70,18 @@ sudo apt install -y \
     libaio-dev libnuma-dev uuid-dev libssl-dev libelf-dev libpcap-dev
 ```
 
+  Or run the repository bootstrap script:
+
+  ```bash
+  bash scripts/install_spdk_local.sh
+  ```
+
+  Or via umbrella bootstrap:
+
+  ```bash
+  bash scripts/bootstrap_optional_deps.sh --spdk
+  ```
+
 Workspace-local SPDK build (recommended for this repository):
 
 ```bash

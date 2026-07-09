@@ -12,7 +12,7 @@ HTTP/3 sample applications are included under completion samples.
 Build BoringSSL and lsquic before using QUIC/TLS-enabled builds:
 
 ```bash
-bash build/install_lsquic.sh
+bash scripts/install_lsquic.sh
 ```
 
 ## Quick Smoke Tests

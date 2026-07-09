@@ -20,6 +20,18 @@ AF_XDP support is completion-model only and feature-gated.
 - `zlib1g-dev`
 - `clang`, `llvm`
 
+Install them on Ubuntu/Debian with:
+
+```bash
+bash scripts/install_af_xdp_deps.sh
+```
+
+Or via umbrella bootstrap:
+
+```bash
+bash scripts/bootstrap_optional_deps.sh --af-xdp
+```
+
 ## C++ Key Methods - Completion model
 
 Minimal API surface used by the AF_XDP sample:
