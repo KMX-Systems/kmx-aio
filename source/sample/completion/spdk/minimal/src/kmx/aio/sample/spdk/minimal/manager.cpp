@@ -20,7 +20,8 @@
 
 namespace kmx::aio::sample::spdk::minimal
 {
-    std::uint64_t read_nr_hugepages()    {
+    std::uint64_t read_nr_hugepages()
+    {
         std::ifstream in("/proc/sys/vm/nr_hugepages");
         std::uint64_t value = 0u;
         in >> value;
@@ -44,9 +45,8 @@ namespace kmx::aio::sample::spdk::minimal
                          "`LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH`.");
     }
 
-    kmx::aio::task<void>
-    run_spdk_probe(std::shared_ptr<kmx::aio::completion::executor> exec, std::shared_ptr<std::atomic_bool> ok,
-                   std::string bdev_name)
+    kmx::aio::task<void> run_spdk_probe(std::shared_ptr<kmx::aio::completion::executor> exec, std::shared_ptr<std::atomic_bool> ok,
+                                        std::string bdev_name)
     {
         kmx::aio::completion::spdk::device_config config {
             .bdev_name = bdev_name,

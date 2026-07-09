@@ -20,9 +20,12 @@ namespace kmx::aio::completion::spdk
     /// @brief Configuration for SPDK device construction.
     struct device_config
     {
-        std::string_view bdev_name {};     ///< Logical SPDK bdev identifier.
-        std::uint32_t block_size = 4096u;  ///< Block size in bytes.
-        std::uint64_t block_count = 1024u; ///< Total number of blocks.
+        /// @brief Logical SPDK bdev identifier.
+        std::string_view bdev_name {};
+        /// @brief Block size in bytes.
+        std::uint32_t block_size = 4096u;
+        /// @brief Total number of blocks.
+        std::uint64_t block_count = 1024u;
     };
 
     /// @brief Asynchronous block I/O device facade.
@@ -38,11 +41,17 @@ namespace kmx::aio::completion::spdk
         [[nodiscard]] static std::expected<device, std::error_code> create(std::shared_ptr<executor> exec,
                                                                            const device_config& config) noexcept;
 
+        /// @brief Creates an empty device handle.
         device() noexcept = default;
+        /// @brief Non-copyable.
         device(const device&) = delete;
+        /// @brief Non-copyable.
         device& operator=(const device&) = delete;
+        /// @brief Movable device handle.
         device(device&&) noexcept;
+        /// @brief Non-copyable assignment.
         device& operator=(device&&) noexcept = delete;
+        /// @brief Releases the device state.
         ~device() noexcept;
 
         /// @brief Reads contiguous blocks into a destination buffer.
@@ -60,20 +69,40 @@ namespace kmx::aio::completion::spdk
         [[nodiscard]] task<std::expected<void, std::error_code>> flush() noexcept(false);
 
     private:
+        /// @brief Internal device state shared by the implementation.
         struct state;
 
+        /// @brief Validates creation inputs and computes the expected capacity.
+        /// @param exec Completion executor used by the device.
+        /// @param config Device configuration.
+        /// @return The total byte count on success.
         [[nodiscard]] static std::expected<std::uint64_t, std::error_code> validate_create_config(const std::shared_ptr<executor>& exec,
                                                                                                   const device_config& config) noexcept;
+        /// @brief Allocates and initializes the device state.
+        /// @param out Device object receiving the initialized state.
+        /// @param exec Completion executor used by the device.
+        /// @param config Device configuration.
+        /// @return Success or an error code.
         [[nodiscard]] static std::expected<void, std::error_code> initialize_state(device& out, std::shared_ptr<executor> exec,
                                                                                    const device_config& config) noexcept;
+        /// @brief Initializes the fallback in-memory storage backend.
+        /// @param state Device state being initialized.
+        /// @param total_bytes_u64 Total storage size in bytes.
+        /// @return Success or an error code.
         [[nodiscard]] static std::expected<void, std::error_code> initialize_fallback_storage(state& state,
                                                                                               std::uint64_t total_bytes_u64) noexcept;
 
 #if defined(KMX_AIO_FEATURE_SPDK)
+        /// @brief Initializes the SPDK backend for the device.
+        /// @param state Device state being initialized.
+        /// @return Success or an error code.
         [[nodiscard]] static std::expected<void, std::error_code> initialize_spdk_backend(state& state) noexcept;
+        /// @brief Shuts down the SPDK backend for the device.
+        /// @param state Device state being torn down.
         static void shutdown_spdk_backend(state& state) noexcept;
 #endif
 
+        /// @brief Opaque implementation state owned by the device handle.
         std::unique_ptr<state> state_ {};
     };
 

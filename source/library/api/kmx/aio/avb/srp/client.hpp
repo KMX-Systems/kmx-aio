@@ -42,12 +42,18 @@ namespace kmx::aio::avb::srp
     class generic_client
     {
     public:
+        /// @brief Creates an SRP client bound to an executor.
         explicit generic_client(Executor& exec) noexcept;
+        /// @brief Releases SRP client resources.
         ~generic_client();
 
+        /// @brief Non-copyable.
         generic_client(const generic_client&) = delete;
+        /// @brief Non-copyable.
         generic_client& operator=(const generic_client&) = delete;
+        /// @brief Movable.
         generic_client(generic_client&&) = default;
+        /// @brief Movable.
         generic_client& operator=(generic_client&&) = default;
 
         /// @brief Bind to a NIC and start receiving MSRP frames.
@@ -68,7 +74,9 @@ namespace kmx::aio::avb::srp
         [[nodiscard]] task<std::expected<void, std::error_code>> withdraw(const stream_id_t& stream_id) noexcept(false);
 
     private:
+        /// @brief Opaque implementation state for the SRP client.
         struct state;
+        /// @brief Owned implementation state shared by public operations.
         std::unique_ptr<state> state_;
     };
 }

@@ -79,7 +79,7 @@ namespace kmx::aio::gpu
     ///            - Deterministic Allocation: Coroutine frames allocated from thread-local
     ///              slab allocator (see kmx::aio::allocator).
     ///
-    ///          SCOPE (per Plan.md):
+    ///          SCOPE:
     ///            - Provides coroutine resumption on CUDA stream/event completion.
     ///            - Excludes inference orchestration and model lifecycle policy.
     ///            - Excludes multi-device scheduling logic.

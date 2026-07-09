@@ -52,8 +52,9 @@ namespace kmx::aio::avb::gptp
         template <typename Duration>
         [[nodiscard]] task<std::expected<void, std::error_code>> sleep_for(Duration duration) noexcept(false)
         {
-            static_assert(requires(Executor& e) { e.async_timeout(std::uint64_t {}); },
-                          "Executor must support async_timeout(std::uint64_t duration_ns)");
+            static_assert(
+                requires(Executor& e) { e.async_timeout(std::uint64_t {}); },
+                "Executor must support async_timeout(std::uint64_t duration_ns)");
             const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(duration);
             co_return co_await exec_.async_timeout(static_cast<std::uint64_t>(ns.count()));
         }

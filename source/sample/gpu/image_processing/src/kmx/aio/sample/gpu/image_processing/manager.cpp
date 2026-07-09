@@ -22,7 +22,8 @@ namespace kmx::aio::sample::gpu::image_processing
 {
     namespace detail
     {
-        kmx::aio::task<void> gpu_process_frame(std::vector<std::uint8_t> host_frame)        {
+        kmx::aio::task<void> gpu_process_frame(std::vector<std::uint8_t> host_frame)
+        {
             kmx::aio::gpu::stream gpu_stream;
 
 #if defined(KMX_AIO_FEATURE_CUDA)
@@ -65,8 +66,7 @@ namespace kmx::aio::sample::gpu::image_processing
         }
 
         kmx::aio::task<void> capture_and_process(std::shared_ptr<kmx::aio::completion::executor> io_exec,
-                             std::shared_ptr<kmx::aio::gpu::executor> gpu_exec,
-                             const config& cfg) noexcept(false)
+                                                 std::shared_ptr<kmx::aio::gpu::executor> gpu_exec, const config& cfg) noexcept(false)
         {
             kmx::aio::completion::v4l2::capture_config cap_cfg {
                 .device = cfg.device,

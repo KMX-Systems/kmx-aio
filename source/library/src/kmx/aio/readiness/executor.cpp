@@ -9,10 +9,10 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
-#include <sys/socket.h>
 #include <pthread.h>
 #include <sched.h>
 #include <string_view>
+#include <sys/socket.h>
 #include <thread>
 
 namespace kmx::aio::readiness
@@ -154,7 +154,7 @@ namespace kmx::aio::readiness
     }
 
     task<std::expected<std::size_t, std::error_code>> executor::async_recvmsg(const fd_t fd, ::msghdr* msg,
-                                                                               const unsigned flags) noexcept(false)
+                                                                              const unsigned flags) noexcept(false)
     {
         if (fd < 0)
             co_return std::unexpected(std::make_error_code(std::errc::bad_file_descriptor));
@@ -178,7 +178,7 @@ namespace kmx::aio::readiness
     }
 
     task<std::expected<std::size_t, std::error_code>> executor::async_sendmsg(const fd_t fd, const ::msghdr* msg,
-                                                                               const unsigned flags) noexcept(false)
+                                                                              const unsigned flags) noexcept(false)
     {
         if (fd < 0)
             co_return std::unexpected(std::make_error_code(std::errc::bad_file_descriptor));

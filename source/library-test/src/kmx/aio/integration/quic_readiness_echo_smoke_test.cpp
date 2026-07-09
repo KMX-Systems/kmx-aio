@@ -125,8 +125,7 @@ namespace kmx::aio::quic::test::integration
         const std::string client_cmd = "timeout 5s env " + port_env + " LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} " +
                                        shell_quote(client_bin_opt->string()) + " > " + shell_quote(client_log.string()) + " 2>&1";
 
-        const std::string script = "set -u -o pipefail; " +
-                                   server_cmd + " & " +
+        const std::string script = "set -u -o pipefail; " + server_cmd + " & " +
                                    "srv=$!; "
                                    "sleep 1; " +
                                    client_cmd +

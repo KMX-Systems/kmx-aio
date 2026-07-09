@@ -22,7 +22,8 @@ namespace kmx::aio::sample::quic::echo_client
         inline std::atomic_uint32_t responses_received {};
         inline std::atomic_uint32_t close_after_responses {2u};
 
-        std::uint32_t parse_response_target_from_env()        {
+        std::uint32_t parse_response_target_from_env()
+        {
             constexpr std::uint32_t default_target = 2u;
             const char* const env = std::getenv("KMX_QUIC_ECHO_CLIENT_CLOSE_AFTER_RESPONSES");
             if (!env || env[0] == '\0')
@@ -54,7 +55,8 @@ namespace kmx::aio::sample::quic::echo_client
         co_return;
     }
 
-    task<void> async_main(std::shared_ptr<executor> exec)    {
+    task<void> async_main(std::shared_ptr<executor> exec)
+    {
         responses_received.store(0u);
         close_after_responses.store(parse_response_target_from_env());
 
