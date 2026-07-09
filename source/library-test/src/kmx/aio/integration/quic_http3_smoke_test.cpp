@@ -104,6 +104,27 @@ namespace kmx::aio::quic::test::integration
         return std::nullopt;
     }
 
+    [[nodiscard]] static auto find_spdk_runtime_dir(const fs::path& repo_root) -> std::optional<fs::path>
+    {
+        const std::vector<fs::path> search_roots = {
+            repo_root / "build",
+            repo_root / "debug",
+            repo_root / "default",
+        };
+
+        for (const auto& root: search_roots)
+        {
+            if (!fs::exists(root) || !fs::is_directory(root))
+                continue;
+
+            for (const auto& entry: fs::recursive_directory_iterator(root))
+                if (entry.is_regular_file() && entry.path().filename() == "libspdk_env_dpdk.so.15.0")
+                    return entry.path().parent_path();
+        }
+
+        return std::nullopt;
+    }
+
     TEST_CASE("QUIC smoke handshake-stream-response-close parametrized", "[quic][http3][readiness][integration][smoke][slow]")
     {
         const auto engine_case = GENERATE(quic_engine_case::completion_http3, quic_engine_case::readiness_echo);
@@ -117,8 +138,9 @@ namespace kmx::aio::quic::test::integration
         const auto client_bin_name = is_completion ? "sample-quic-http3-client" : "sample-quic-echo-readiness-client";
         const auto server_bin_opt = find_binary_under_debug(repo_root, server_bin_name);
         const auto client_bin_opt = find_binary_under_debug(repo_root, client_bin_name);
+        const auto spdk_runtime_dir_opt = find_spdk_runtime_dir(repo_root);
 
-        if (!server_bin_opt.has_value() || !client_bin_opt.has_value())
+        if (!server_bin_opt.has_value() || !client_bin_opt.has_value() || !spdk_runtime_dir_opt.has_value())
             SKIP("QUIC smoke skipped: build readiness/completion QUIC sample binaries first");
 
         const fs::path cert_path = "/tmp/quic_cert.pem";
@@ -127,24 +149,23 @@ namespace kmx::aio::quic::test::integration
             SKIP("QUIC smoke skipped: missing /tmp/quic_cert.pem or /tmp/quic_key.pem");
 
         const auto now_ns = std::chrono::steady_clock::now().time_since_epoch().count();
-        const std::uint16_t test_port = is_completion
-                                            ? static_cast<std::uint16_t>(30000u + static_cast<std::uint16_t>(now_ns % 10000u))
-                                            : static_cast<std::uint16_t>(20000u + static_cast<std::uint16_t>(now_ns % 20000u));
-        const fs::path server_log = fs::path("/tmp") /
-                                    ((is_completion ? "kmx_http3_server_smoke_" : "kmx_quic_readiness_echo_server_smoke_") +
-                                     std::to_string(now_ns) + ".log");
-        const fs::path client_log = fs::path("/tmp") /
-                                    ((is_completion ? "kmx_http3_client_smoke_" : "kmx_quic_readiness_echo_client_smoke_") +
-                                     std::to_string(now_ns) + ".log");
+        const std::uint16_t test_port = is_completion ? static_cast<std::uint16_t>(30000u + static_cast<std::uint16_t>(now_ns % 10000u)) :
+                                                        static_cast<std::uint16_t>(20000u + static_cast<std::uint16_t>(now_ns % 20000u));
+        const fs::path server_log =
+            fs::path("/tmp") /
+            ((is_completion ? "kmx_http3_server_smoke_" : "kmx_quic_readiness_echo_server_smoke_") + std::to_string(now_ns) + ".log");
+        const fs::path client_log =
+            fs::path("/tmp") /
+            ((is_completion ? "kmx_http3_client_smoke_" : "kmx_quic_readiness_echo_client_smoke_") + std::to_string(now_ns) + ".log");
         const std::string port_env = (is_completion ? "KMX_QUIC_HTTP3_PORT=" : "KMX_QUIC_ECHO_PORT=") + std::to_string(test_port);
+        const std::string ld_library_path = "LD_LIBRARY_PATH=/opt/gcc-16/lib64:" + spdk_runtime_dir_opt->string() + ":${LD_LIBRARY_PATH:-}";
 
-        const std::string server_cmd = "env " + port_env + " LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} " +
+        const std::string server_cmd = "env " + port_env + " " + ld_library_path + " stdbuf -oL -eL " +
                                        shell_quote(server_bin_opt->string()) + " > " + shell_quote(server_log.string()) + " 2>&1";
-        const std::string client_cmd = "timeout 5s env " + port_env + " LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} " +
+        const std::string client_cmd = "timeout 5s env " + port_env + " " + ld_library_path + " stdbuf -oL -eL " +
                                        shell_quote(client_bin_opt->string()) + " > " + shell_quote(client_log.string()) + " 2>&1";
 
-        const std::string script = "set -u -o pipefail; " +
-                                   server_cmd + " & " +
+        const std::string script = "set -u -o pipefail; " + server_cmd + " & " +
                                    "srv=$!; "
                                    "sleep 1; " +
                                    client_cmd +
@@ -182,7 +203,7 @@ namespace kmx::aio::quic::test::integration
                                                            }));
 
             REQUIRE(contains_markers_in_order(server_text, {
-                                                               "Received QUIC stream data (HTTP req):",
+                                                               "[HTTP/3 Server] Parsed request method=GET target=/ authority=localhost",
                                                                "on_conn_closed called, status=8 (LSCONN_ST_CLOSED)",
                                                            }));
         }

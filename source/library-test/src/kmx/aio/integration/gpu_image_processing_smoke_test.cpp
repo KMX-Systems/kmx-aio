@@ -90,8 +90,7 @@ namespace kmx::aio::gpu::test::integration
 
         const fs::path run_log = fs::path("/tmp") / ("kmx_gpu_image_processing_smoke_" + std::to_string(::getpid()) + ".log");
 
-        const std::string cmd = "env LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} " +
-                                shell_quote(sample_bin_opt->string()) +
+        const std::string cmd = "env LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} " + shell_quote(sample_bin_opt->string()) +
                                 " --max-frames 1 > " + shell_quote(run_log.string()) + " 2>&1";
         const std::string full_cmd = "bash -lc " + shell_quote(cmd);
         const int run_rc = std::system(full_cmd.c_str());
