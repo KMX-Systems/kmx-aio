@@ -3,6 +3,7 @@ import qbs
 CppApplication {
     Depends { name: "kmx-aio-readiness" }
     Depends { name: "kmx-aio-avb" }
+    Depends { name: "kmx-aio-sample-common" }
 
     name: "sample-avb-readiness-talker"
     condition: project.enable_avb
@@ -12,6 +13,7 @@ CppApplication {
     cpp.enableRtti: false
     cpp.includePaths: [
         "inc",
+        "../../../common/inc",
         "../../../completion/avb/common/inc",
         "../../api",
         "../../../../library/api",

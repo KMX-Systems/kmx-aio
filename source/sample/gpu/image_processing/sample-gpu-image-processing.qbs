@@ -9,7 +9,9 @@ CppApplication {
     cpp.includePaths: [
         "inc",
         "api",
+        "../../common/inc",
     ]
+    Depends { name: "kmx-aio-sample-common" }
     cpp.defines: ["KMX_AIO_FEATURE_CUDA=1"]
 
     Depends { name: "kmx-aio-completion" }
