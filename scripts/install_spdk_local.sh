@@ -49,3 +49,5 @@ popd >/dev/null
 
 echo "[spdk] Installed local prefix: ${SPDK_INSTALL_DIR}"
 echo "[spdk] Verify with: pkg-config --modversion spdk_nvme"
+echo "[spdk] Resolve with: qbs resolve -f source/source.qbs config:debug project.enable_spdk:true project.spdk_prefix:\"${SPDK_INSTALL_DIR}\""
+echo "[spdk] Build with:   qbs build -f source/source.qbs config:debug project.enable_spdk:true project.spdk_prefix:\"${SPDK_INSTALL_DIR}\""
