@@ -1,5 +1,5 @@
-#include <kmx/aio/sample/gpu/image_processing/manager.hpp>
 #include <kmx/aio/sample/common/cli_parse.hpp>
+#include <kmx/aio/sample/gpu/image_processing/manager.hpp>
 
 #include <cstdint>
 #include <exception>
@@ -36,8 +36,7 @@ namespace kmx::aio::sample::gpu::image_processing::detail
         return true;
     }
 
-    bool parse_args(const int argc, char* argv[], kmx::aio::sample::gpu::image_processing::config& cfg,
-                    bool& help_requested)
+    bool parse_args(const int argc, char* argv[], kmx::aio::sample::gpu::image_processing::config& cfg, bool& help_requested)
     {
         enum class option_kind
         {
@@ -50,12 +49,8 @@ namespace kmx::aio::sample::gpu::image_processing::detail
         };
 
         static const std::unordered_map<std::string_view, option_kind> option_table {
-            {"--device", option_kind::device},
-            {"--max-frames", option_kind::max_frames},
-            {"--width", option_kind::width},
-            {"--height", option_kind::height},
-            {"--buffer-count", option_kind::buffer_count},
-            {"--gpu-device", option_kind::gpu_device},
+            {"--device", option_kind::device}, {"--max-frames", option_kind::max_frames},     {"--width", option_kind::width},
+            {"--height", option_kind::height}, {"--buffer-count", option_kind::buffer_count}, {"--gpu-device", option_kind::gpu_device},
         };
 
         help_requested = false;
@@ -102,7 +97,7 @@ namespace kmx::aio::sample::gpu::image_processing::detail
                         return false;
                     break;
                 case option_kind::buffer_count:
-                    if (!kmx::aio::sample::common::parse_unsigned_u16_cstr(value, cfg.buffer_count))
+                    if (!kmx::aio::sample::common::parse_unsigned_u32_cstr(value, cfg.buffer_count))
                         return false;
                     break;
                 case option_kind::gpu_device:

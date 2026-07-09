@@ -9,7 +9,6 @@
 #include <optional>
 #include <source_location>
 #include <type_traits>
-#include <vector>
 
 #include <arpa/inet.h>
 
@@ -45,22 +44,23 @@ namespace kmx::aio::avb::srp
         // Listener: streams we have subscribed to
         std::map<stream_id_t, stream_descriptor, stream_id_less> listener_streams_ {};
 
-        // Pending subscribe waiters: stream_id → resolved descriptor
-        // Using a simple flag-based approach; one waiter per stream id.
+        // Pending subscribe waiters: stream_id → resolved descriptor.
+        // Stored in a map so coroutine references remain stable across suspension.
         struct sub_waiter
         {
             stream_id_t id {};
             std::optional<stream_descriptor> resolved {};
         };
-        std::vector<sub_waiter> pending_subs_ {};
+        std::map<stream_id_t, sub_waiter, stream_id_less> pending_subs_ {};
 
         explicit state(Executor& exec) noexcept: exec_(exec), sock_(exec) {}
 
         template <typename Duration>
         [[nodiscard]] task<std::expected<void, std::error_code>> sleep_for(Duration duration) noexcept(false)
         {
-            static_assert(requires(Executor& e) { e.async_timeout(std::uint64_t {}); },
-                          "Executor must support async_timeout(std::uint64_t duration_ns)");
+            static_assert(
+                requires(Executor& e) { e.async_timeout(std::uint64_t {}); },
+                "Executor must support async_timeout(std::uint64_t duration_ns)");
             const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(duration);
             co_return co_await exec_.async_timeout(static_cast<std::uint64_t>(ns.count()));
         }
@@ -152,9 +152,8 @@ namespace kmx::aio::avb::srp
             desc.accumulated_latency = ::ntohl(attr->accumulated_latency);
 
             // Notify any pending subscribe() waiters
-            for (auto& w: pending_subs_)
-                if ((w.id == desc.stream_id) && !w.resolved.has_value())
-                    w.resolved = desc;
+            if (auto waiter = pending_subs_.find(desc.stream_id); waiter != pending_subs_.end() && !waiter->second.resolved.has_value())
+                waiter->second.resolved = desc;
         }
 
         // Receive loop
@@ -263,19 +262,17 @@ namespace kmx::aio::avb::srp
     task<std::expected<stream_descriptor, std::error_code>> generic_client<Executor>::subscribe(
         const stream_id_t& stream_id, std::chrono::milliseconds timeout) noexcept(false)
     {
-        // Register a waiter entry
-        state_->pending_subs_.push_back({stream_id, {}});
-        auto& waiter = state_->pending_subs_.back();
+        // Register a waiter entry.
+        typename state::sub_waiter waiter_entry {stream_id, {}};
+        auto [waiter, inserted] = state_->pending_subs_.insert_or_assign(stream_id, std::move(waiter_entry));
+        (void) inserted;
 
         const auto deadline = std::chrono::steady_clock::now() + timeout;
-        while (!waiter.resolved.has_value())
+        while (!waiter->second.resolved.has_value())
         {
             if (std::chrono::steady_clock::now() >= deadline)
             {
-                // Remove the waiter
-                state_->pending_subs_.erase(std::remove_if(state_->pending_subs_.begin(), state_->pending_subs_.end(),
-                                                           [&](const auto& w) { return w.id == stream_id; }),
-                                            state_->pending_subs_.end());
+                state_->pending_subs_.erase(stream_id);
                 co_return std::unexpected(std::make_error_code(std::errc::timed_out));
             }
 
@@ -284,13 +281,11 @@ namespace kmx::aio::avb::srp
                 co_return std::unexpected(sleep.error());
         }
 
-        const stream_descriptor desc = *waiter.resolved;
+        const stream_descriptor desc = *waiter->second.resolved;
         state_->listener_streams_[stream_id] = desc;
 
         // Remove waiter
-        state_->pending_subs_.erase(
-            std::remove_if(state_->pending_subs_.begin(), state_->pending_subs_.end(), [&](const auto& w) { return w.id == stream_id; }),
-            state_->pending_subs_.end());
+        state_->pending_subs_.erase(stream_id);
 
         // Send initial Listener Ready
         auto send_res = co_await state_->send_listener_ready(desc);

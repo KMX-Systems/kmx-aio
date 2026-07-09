@@ -62,6 +62,7 @@ StaticLibrary {
         "../api/kmx/aio/task.hpp",
         "../src/kmx/aio/allocator.cpp",
         "../src/kmx/aio/basic_types.cpp",
+        "../src/kmx/aio/error_code.cpp",
         "../src/kmx/aio/file_descriptor.cpp",
         "../src/kmx/aio/scheduler.cpp",
         "../src/kmx/aio/task.cpp",
