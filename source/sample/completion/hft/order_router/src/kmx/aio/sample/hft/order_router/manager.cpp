@@ -101,8 +101,7 @@ namespace kmx::aio::sample::hft::order_router
         pthread_setaffinity_np(t.native_handle(), sizeof(cpu_set_t), &cpuset);
     }
 
-    auto execute_order_router() -> int
-    {
+    int execute_order_router()    {
         std::cout << "╔══════════════════════════════════════════════════════════╗\n"
                   << "║   KMX AIO · Phase 5 · HFT Order Router                 ║\n"
                   << "║   Lockless SPSC channel between CPU-pinned threads      ║\n"

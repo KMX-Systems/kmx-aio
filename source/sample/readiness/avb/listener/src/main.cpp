@@ -1,12 +1,12 @@
 #include <kmx/aio/sample/avb/listener/manager.hpp>
+#include <kmx/aio/sample/common/cli_parse.hpp>
 
-#include <charconv>
 #include <exception>
 #include <kmx/logger.hpp>
 #include <print>
 #include <source_location>
-#include <sstream>
 #include <string_view>
+#include <unordered_map>
 
 namespace
 {
@@ -17,8 +17,7 @@ namespace
         error,
     };
 
-    auto print_usage(const char* program) -> void
-    {
+    void print_usage(const char* program)    {
         std::println("Usage: {} [--iface IFACE] [--talker-mac XX:XX:XX:XX:XX:XX] [--stream-id N] [--max-frames N] [--period-us N] "
                      "[--sync-timeout-s N] [--diagnostics-only]",
                      program);
@@ -32,55 +31,144 @@ namespace
         std::println("  --help            Show this help");
     }
 
-    template <typename T>
-    auto parse_unsigned(std::string_view text, T& out) -> bool
-    {
-        const char* begin = text.data();
-        const char* end = text.data() + text.size();
-        T value {};
-        const auto [ptr, ec] = std::from_chars(begin, end, value);
-        if (ec != std::errc {} || ptr != end)
-            return false;
+    parse_status parse_talker_mac_option(std::string_view value, kmx::aio::sample::avb::listener::config& cfg)    {
+        if (!kmx::aio::sample::common::parse_mac_bytes(value, cfg.talker_mac))
+        {
+            kmx::logger::log(
+                kmx::logger::level::error,
+                std::source_location::current(),
+                "Invalid --talker-mac value '{}'",
+                value
+            );
+            return parse_status::error;
+        }
 
-        out = value;
-        return true;
+        return parse_status::ok;
     }
 
-    auto parse_mac(std::string_view text, kmx::aio::avb::mac_address_t& out) -> bool
+    parse_status parse_stream_id_option(std::string_view value, kmx::aio::sample::avb::listener::config& cfg)    {
+        std::uint16_t parsed {};
+        if (!kmx::aio::sample::common::parse_unsigned_u16(value, parsed))
+        {
+            kmx::logger::log(
+                kmx::logger::level::error,
+                std::source_location::current(),
+                "Invalid --stream-id value '{}' (expected 0..65535)",
+                value
+            );
+            return parse_status::error;
+        }
+
+        cfg.stream_unique_id = parsed;
+        return parse_status::ok;
+    }
+
+    parse_status parse_max_frames_option(std::string_view value, kmx::aio::sample::avb::listener::config& cfg)    {
+        std::uint64_t parsed {};
+        if (!kmx::aio::sample::common::parse_unsigned_u64(value, parsed))
+        {
+            kmx::logger::log(
+                kmx::logger::level::error,
+                std::source_location::current(),
+                "Invalid --max-frames value '{}'",
+                value
+            );
+            return parse_status::error;
+        }
+
+        cfg.max_frames = parsed;
+        return parse_status::ok;
+    }
+
+    parse_status parse_period_us_option(
+        std::string_view value,
+        kmx::aio::sample::avb::listener::config& cfg,
+        std::uint64_t min_period_us,
+        std::uint64_t max_period_us
+    )
     {
-        unsigned int b0 {}, b1 {}, b2 {}, b3 {}, b4 {}, b5 {};
-        std::stringstream ss(std::string {text});
-        ss >> std::hex >> b0;
-        if (ss.fail() || ss.get() != ':')
-            return false;
-        ss >> std::hex >> b1;
-        if (ss.fail() || ss.get() != ':')
-            return false;
-        ss >> std::hex >> b2;
-        if (ss.fail() || ss.get() != ':')
-            return false;
-        ss >> std::hex >> b3;
-        if (ss.fail() || ss.get() != ':')
-            return false;
-        ss >> std::hex >> b4;
-        if (ss.fail() || ss.get() != ':')
-            return false;
-        ss >> std::hex >> b5;
-        if (ss.fail() || !ss.eof())
-            return false;
+        std::uint64_t parsed {};
+        if (!kmx::aio::sample::common::parse_unsigned_u64(value, parsed))
+        {
+            kmx::logger::log(
+                kmx::logger::level::error,
+                std::source_location::current(),
+                "Invalid --period-us value '{}'",
+                value
+            );
+            return parse_status::error;
+        }
 
-        if (b0 > 0xFFu || b1 > 0xFFu || b2 > 0xFFu || b3 > 0xFFu || b4 > 0xFFu || b5 > 0xFFu)
-            return false;
+        if (parsed < min_period_us || parsed > max_period_us)
+        {
+            kmx::logger::log(
+                kmx::logger::level::error,
+                std::source_location::current(),
+                "Out-of-range --period-us value '{}' (expected 1..1000000)",
+                value
+            );
+            return parse_status::error;
+        }
 
-        out = {
-            static_cast<std::uint8_t>(b0), static_cast<std::uint8_t>(b1), static_cast<std::uint8_t>(b2),
-            static_cast<std::uint8_t>(b3), static_cast<std::uint8_t>(b4), static_cast<std::uint8_t>(b5),
+        cfg.expected_period = std::chrono::microseconds {parsed};
+        return parse_status::ok;
+    }
+
+    parse_status parse_sync_timeout_s_option(
+        std::string_view value,
+        kmx::aio::sample::avb::listener::config& cfg,
+        std::uint64_t min_sync_timeout_s,
+        std::uint64_t max_sync_timeout_s
+    )
+    {
+        std::uint64_t parsed {};
+        if (!kmx::aio::sample::common::parse_unsigned_u64(value, parsed))
+        {
+            kmx::logger::log(
+                kmx::logger::level::error,
+                std::source_location::current(),
+                "Invalid --sync-timeout-s value '{}'",
+                value
+            );
+            return parse_status::error;
+        }
+
+        if (parsed < min_sync_timeout_s || parsed > max_sync_timeout_s)
+        {
+            kmx::logger::log(
+                kmx::logger::level::error,
+                std::source_location::current(),
+                "Out-of-range --sync-timeout-s value '{}' (expected 1..300)",
+                value
+            );
+            return parse_status::error;
+        }
+
+        cfg.sync_timeout = std::chrono::seconds {parsed};
+        cfg.srp_subscribe_timeout = std::chrono::seconds {parsed};
+        return parse_status::ok;
+    }
+
+    parse_status parse_args(int argc, const char** argv, kmx::aio::sample::avb::listener::config& cfg)    {
+        enum class option_kind
+        {
+            iface,
+            talker_mac,
+            stream_id,
+            max_frames,
+            period_us,
+            sync_timeout_s,
         };
-        return true;
-    }
 
-    auto parse_args(int argc, const char** argv, kmx::aio::sample::avb::listener::config& cfg) -> parse_status
-    {
+        static const std::unordered_map<std::string_view, option_kind> option_table {
+            {"--iface", option_kind::iface},
+            {"--talker-mac", option_kind::talker_mac},
+            {"--stream-id", option_kind::stream_id},
+            {"--max-frames", option_kind::max_frames},
+            {"--period-us", option_kind::period_us},
+            {"--sync-timeout-s", option_kind::sync_timeout_s},
+        };
+
         static constexpr std::uint64_t min_period_us = 1u;
         static constexpr std::uint64_t max_period_us = 1'000'000u;
         static constexpr std::uint64_t min_sync_timeout_s = 1u;
@@ -111,77 +199,54 @@ namespace
             }
 
             const std::string_view value {argv[++i]};
-            if (arg == "--iface")
-            {
-                cfg.iface = std::string {value};
-            }
-            else if (arg == "--talker-mac")
-            {
-                if (!parse_mac(value, cfg.talker_mac))
-                {
-                    kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Invalid --talker-mac value '{}'", value);
-                    return parse_status::error;
-                }
-            }
-            else if (arg == "--stream-id")
-            {
-                std::uint16_t parsed {};
-                if (!parse_unsigned(value, parsed))
-                {
-                    kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
-                                     "Invalid --stream-id value '{}' (expected 0..65535)", value);
-                    return parse_status::error;
-                }
-                cfg.stream_unique_id = parsed;
-            }
-            else if (arg == "--max-frames")
-            {
-                std::uint64_t parsed {};
-                if (!parse_unsigned(value, parsed))
-                {
-                    kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Invalid --max-frames value '{}'", value);
-                    return parse_status::error;
-                }
-                cfg.max_frames = parsed;
-            }
-            else if (arg == "--period-us")
-            {
-                std::uint64_t parsed {};
-                if (!parse_unsigned(value, parsed))
-                {
-                    kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Invalid --period-us value '{}'", value);
-                    return parse_status::error;
-                }
-                if (parsed < min_period_us || parsed > max_period_us)
-                {
-                    kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
-                                     "Out-of-range --period-us value '{}' (expected 1..1000000)", value);
-                    return parse_status::error;
-                }
-                cfg.expected_period = std::chrono::microseconds {parsed};
-            }
-            else if (arg == "--sync-timeout-s")
-            {
-                std::uint64_t parsed {};
-                if (!parse_unsigned(value, parsed))
-                {
-                    kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Invalid --sync-timeout-s value '{}'",
-                                     value);
-                    return parse_status::error;
-                }
-                if (parsed < min_sync_timeout_s || parsed > max_sync_timeout_s)
-                {
-                    kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
-                                     "Out-of-range --sync-timeout-s value '{}' (expected 1..300)", value);
-                    return parse_status::error;
-                }
-                cfg.sync_timeout = std::chrono::seconds {parsed};
-                cfg.srp_subscribe_timeout = std::chrono::seconds {parsed};
-            }
-            else
+            const auto it = option_table.find(arg);
+            if (it == option_table.end())
             {
                 kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Unknown argument '{}'", arg);
                 return parse_status::error;
+            }
+
+            switch (it->second)
+            {
+                case option_kind::iface:
+                {
+                    cfg.iface = std::string {value};
+                    break;
+                }
+                case option_kind::talker_mac:
+                {
+                    if (const auto status = parse_talker_mac_option(value, cfg); status != parse_status::ok)
+                        return status;
+                    break;
+                }
+                case option_kind::stream_id:
+                {
+                    if (const auto status = parse_stream_id_option(value, cfg); status != parse_status::ok)
+                        return status;
+                    break;
+                }
+                case option_kind::max_frames:
+                {
+                    if (const auto status = parse_max_frames_option(value, cfg); status != parse_status::ok)
+                        return status;
+                    break;
+                }
+                case option_kind::period_us:
+                {
+                    if (const auto status = parse_period_us_option(value, cfg, min_period_us, max_period_us);
+                        status != parse_status::ok)
+                        return status;
+                    break;
+                }
+                case option_kind::sync_timeout_s:
+                {
+                    if (const auto status =
+                            parse_sync_timeout_s_option(value, cfg, min_sync_timeout_s, max_sync_timeout_s);
+                        status != parse_status::ok)
+                        return status;
+                    break;
+                }
+                default:;
             }
         }
 
