@@ -9,7 +9,7 @@
 #include <thread>
 #include <vector>
 
-namespace
+namespace kmx::aio::buffer_pool_test_detail
 {
     inline int unstable_buffer_ctor_calls = 0;
 
@@ -22,7 +22,7 @@ namespace
                 throw std::runtime_error("constructor failed");
         }
     };
-}
+} // namespace kmx::aio::buffer_pool_test_detail
 
 TEST_CASE("buffer_pool initializes with full capacity", "[buffer_pool][initialization]")
 {
@@ -99,8 +99,8 @@ TEST_CASE("buffer_pool throws when exhausted", "[buffer_pool][exhaustion]")
 
 TEST_CASE("buffer_pool preserves free-list on constructor throw", "[buffer_pool][exception-safety]")
 {
-    unstable_buffer_ctor_calls = 0;
-    kmx::aio::buffer_pool<unstable_buffer, 2> pool;
+    kmx::aio::buffer_pool_test_detail::unstable_buffer_ctor_calls = 0;
+    kmx::aio::buffer_pool<kmx::aio::buffer_pool_test_detail::unstable_buffer, 2> pool;
 
     REQUIRE_THROWS_AS(pool.acquire(), std::runtime_error);
     REQUIRE(pool.allocated() == 0u);
