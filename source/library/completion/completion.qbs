@@ -5,6 +5,7 @@ StaticLibrary {
     Depends { name: "kmx-aio-core" }
 
     name: "kmx-aio-completion"
+    condition: project.enable_completion
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.enableRtti: false
@@ -63,6 +64,7 @@ StaticLibrary {
         "../api/kmx/aio/completion/v4l2/**.hpp",
         "../src/kmx/aio/completion/executor.cpp",
         "../src/kmx/aio/completion/quic/**.cpp",
+        "../src/kmx/aio/quic/base_engine.cpp",
         "../src/kmx/aio/completion/timer.cpp",
         "../src/kmx/aio/completion/avb/**.cpp",
         "../src/kmx/aio/completion/tcp/**.cpp",

@@ -24,6 +24,14 @@ qbs build -f source/source.qbs config:debug -j"$(nproc)"
 bash build/run-tests-bounded.sh
 ```
 
+If you want readiness or HTTP/3 tests included, enable those project sets explicitly during build first:
+
+```bash
+qbs build -f source/source.qbs config:debug -j"$(nproc)" \
+    project.enable_readiness:true \
+    project.enable_http3:true
+```
+
 Run a focused flake guard repeatedly:
 
 ```bash
@@ -51,6 +59,9 @@ TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
 "$TEST_BIN" "[quic][readiness][integration][smoke]"
 "$TEST_BIN" "[quic][http3][integration][smoke]"
 ```
+
+The readiness smoke requires `project.enable_readiness:true` at build time.
+The HTTP/3 smoke requires `project.enable_http3:true` in addition to `project.enable_quic:true`.
 
 Optional QUIC smoke tuning variables:
 

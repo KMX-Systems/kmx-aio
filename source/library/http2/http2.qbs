@@ -5,6 +5,7 @@ StaticLibrary {
     Depends { name: "kmx-aio-core" }
 
     name: "kmx-aio-http2"
+    condition: project.enable_http2
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.enableRtti: false

@@ -5,6 +5,7 @@ StaticLibrary {
     Depends { name: "kmx-aio-core" }
 
     name: "kmx-aio-readiness"
+    condition: project.enable_readiness
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.enableRtti: false
@@ -46,26 +47,39 @@ StaticLibrary {
     }
     cpp.includePaths: [
         "../api",
+        "../inc",
         "/usr/local/include",
+        project.enable_quic ? "../../../build/lsquic/include" : "",
     ]
     cpp.dynamicLibraries: [
         "pthread",
     ]
     install: true
-    files: [
-        "../api/kmx/aio/readiness/**.hpp",
-        "../api/kmx/aio/readiness/descriptor/**.hpp",
-        "../api/kmx/aio/readiness/tcp/**.hpp",
-        "../api/kmx/aio/readiness/udp/**.hpp",
-        "../api/kmx/aio/readiness/tls/**.hpp",
-        "../api/kmx/aio/readiness/v4l2/**.hpp",
-        "../src/kmx/aio/readiness/executor.cpp",
-        "../src/kmx/aio/readiness/descriptor/**.cpp",
-        "../src/kmx/aio/readiness/tcp/**.cpp",
-        "../src/kmx/aio/readiness/udp/**.cpp",
-        "../src/kmx/aio/readiness/tls/**.cpp",
-        "../src/kmx/aio/readiness/v4l2/**.cpp",
-    ]
+    files: {
+        var entries = [
+            "../api/kmx/aio/readiness/**.hpp",
+            "../api/kmx/aio/readiness/descriptor/**.hpp",
+            "../api/kmx/aio/readiness/tcp/**.hpp",
+            "../api/kmx/aio/readiness/udp/**.hpp",
+            "../api/kmx/aio/readiness/tls/**.hpp",
+            "../api/kmx/aio/readiness/v4l2/**.hpp",
+            "../src/kmx/aio/readiness/executor.cpp",
+            "../src/kmx/aio/readiness/descriptor/**.cpp",
+            "../src/kmx/aio/readiness/tcp/**.cpp",
+            "../src/kmx/aio/readiness/udp/**.cpp",
+            "../src/kmx/aio/readiness/tls/**.cpp",
+            "../src/kmx/aio/readiness/v4l2/**.cpp",
+        ];
+
+        if (project.enable_quic)
+        {
+            entries.push("../api/kmx/aio/readiness/quic/**.hpp");
+            entries.push("../src/kmx/aio/quic/engine.cpp");
+            entries.push("../src/kmx/aio/quic/base_engine.cpp");
+        }
+
+        return entries;
+    }
 
     Export {
         Depends { name: "cpp" }

@@ -4,6 +4,7 @@ StaticLibrary {
     Depends { name: "cpp" }
 
     name: "kmx-aio-sample-common"
+    condition: project.enable_completion || project.enable_readiness || project.enable_cuda
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.debugInformation: true

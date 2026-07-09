@@ -1,26 +1,123 @@
 # Build and Feature Gates
 
-## Baseline Build (Dependency-Light)
+## Default Build
 
-```bash
-qbs resolve -f source/source.qbs config:debug \
-    project.enable_openonload:false \
-    project.enable_af_xdp:false \
-    project.enable_spdk:false \
-    project.enable_quic:false
+Current default active graph:
 
-qbs build -f source/source.qbs config:debug \
-    project.enable_openonload:false \
-    project.enable_af_xdp:false \
-    project.enable_spdk:false \
-    project.enable_quic:false
-```
+- `kmx-aio-core`
+- `kmx-aio-completion`
+- `kmx-aio-quic`
 
-## Full Build
+Everything else is disabled by default unless explicitly enabled.
 
 ```bash
 qbs resolve -f source/source.qbs config:debug
 qbs build -f source/source.qbs config:debug
+```
+
+## Baseline Build Without QUIC
+
+```bash
+qbs resolve -f source/source.qbs config:debug \
+    project.enable_quic:false
+
+qbs build -f source/source.qbs config:debug \
+    project.enable_quic:false
+```
+
+## Enable Additional Project Sets
+
+Readiness model:
+
+```bash
+qbs build -f source/source.qbs config:debug \
+    project.enable_readiness:true
+```
+
+HTTP/2 stack:
+
+```bash
+qbs build -f source/source.qbs config:debug \
+    project.enable_http2:true
+```
+
+HTTP/3 demo stack on top of QUIC:
+
+```bash
+qbs build -f source/source.qbs config:debug \
+    project.enable_http3:true
+```
+
+Readiness + HTTP/3 together:
+
+```bash
+qbs resolve -f source/source.qbs config:debug \
+    project.enable_readiness:true \
+    project.enable_http3:true
+
+qbs build -f source/source.qbs config:debug \
+    project.enable_readiness:true \
+    project.enable_http3:true
+```
+
+## Build With All Features
+
+To enable every feature gate in this repository, resolve and build with the full set of switches:
+
+```bash
+qbs resolve -f source/source.qbs config:debug \
+    project.enable_readiness:true \
+    project.enable_http2:true \
+    project.enable_http3:true \
+    project.enable_openonload:true \
+    project.enable_af_xdp:true \
+    project.enable_spdk:true \
+    project.enable_avb:true \
+    project.enable_opc_ua:true \
+    project.enable_cuda:true
+
+qbs build -f source/source.qbs config:debug \
+    project.enable_readiness:true \
+    project.enable_http2:true \
+    project.enable_http3:true \
+    project.enable_openonload:true \
+    project.enable_af_xdp:true \
+    project.enable_spdk:true \
+    project.enable_avb:true \
+    project.enable_opc_ua:true \
+    project.enable_cuda:true
+```
+
+If you use a non-default SPDK or OPC UA install prefix, pass those as well:
+
+```bash
+qbs resolve -f source/source.qbs config:debug \
+    project.enable_readiness:true \
+    project.enable_http2:true \
+    project.enable_http3:true \
+    project.enable_openonload:true \
+    project.enable_af_xdp:true \
+    project.enable_spdk:true \
+    project.enable_avb:true \
+    project.enable_opc_ua:true \
+    project.enable_cuda:true \
+    project.spdk_prefix:"$PWD/build/spdk-local/install-local" \
+    project.opc_ua_vendored:true \
+    project.opc_ua_prefix:"$PWD/build/open62541/install-local"
+
+qbs build -f source/source.qbs config:debug \
+    project.enable_readiness:true \
+    project.enable_http2:true \
+    project.enable_http3:true \
+    project.enable_openonload:true \
+    project.enable_af_xdp:true \
+    project.enable_spdk:true \
+    project.enable_avb:true \
+    project.enable_opc_ua:true \
+    project.enable_cuda:true \
+    project.spdk_prefix:"$PWD/build/spdk-local/install-local" \
+    project.opc_ua_vendored:true \
+    project.opc_ua_prefix:"$PWD/build/open62541/install-local"
 ```
 
 ## Common Feature Gates
@@ -104,12 +201,16 @@ qbs config --unset profiles.kmx-spdk-local
 
 Default gate state in [source/source.qbs](source/source.qbs) (current project behavior):
 
-- `project.enable_openonload:true`
-- `project.enable_af_xdp:true`
-- `project.enable_spdk:true`
+- `project.enable_readiness:false`
+- `project.enable_completion:true`
+- `project.enable_http2:false`
+- `project.enable_http3:false`
+- `project.enable_openonload:false`
+- `project.enable_af_xdp:false`
+- `project.enable_spdk:false`
 - `project.enable_quic:true`
-- `project.enable_avb:true`
-- `project.enable_cuda:true`
+- `project.enable_avb:false`
+- `project.enable_cuda:false`
 - `project.enable_opc_ua:false`
 
 ## Exported Feature Defines

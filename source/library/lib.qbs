@@ -3,9 +3,10 @@ import qbs
 StaticLibrary {
     Depends { name: "cpp" }
     Depends { name: "kmx-aio-core" }
-    Depends { name: "kmx-aio-readiness" }
-    Depends { name: "kmx-aio-completion" }
-    Depends { name: "kmx-aio-http2" }
+    Depends { name: "kmx-aio-readiness"; condition: project.enable_readiness }
+    Depends { name: "kmx-aio-completion"; condition: project.enable_completion }
+    Depends { name: "kmx-aio-http2"; condition: project.enable_http2 }
+    Depends { name: "kmx-aio-http3"; condition: project.enable_http3 && project.enable_quic }
     Depends { name: "kmx-aio-gpu"; condition: project.enable_cuda }
     Depends { name: "kmx-aio-opcua"; condition: project.enable_opc_ua }
     Depends { name: "kmx-aio-quic"; condition: project.enable_quic }
@@ -170,9 +171,10 @@ StaticLibrary {
     Export {
         Depends { name: "cpp" }
         Depends { name: "kmx-aio-core" }
-        Depends { name: "kmx-aio-readiness" }
-        Depends { name: "kmx-aio-completion" }
-        Depends { name: "kmx-aio-http2" }
+        Depends { name: "kmx-aio-readiness"; condition: project.enable_readiness }
+        Depends { name: "kmx-aio-completion"; condition: project.enable_completion }
+        Depends { name: "kmx-aio-http2"; condition: project.enable_http2 }
+        Depends { name: "kmx-aio-http3"; condition: project.enable_http3 && project.enable_quic }
         Depends { name: "kmx-aio-gpu"; condition: project.enable_cuda }
         Depends { name: "kmx-aio-opcua"; condition: project.enable_opc_ua }
         Depends { name: "kmx-aio-quic"; condition: project.enable_quic }
