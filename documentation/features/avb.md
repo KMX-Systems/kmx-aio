@@ -14,6 +14,18 @@ AVB support includes shared generic components with readiness/completion aliases
 - NIC/driver support for hardware timestamping (PTP)
 - VLAN/SRP-capable network path for reservation workflows
 
+Install host-side AVB/PTP runtime tools on Ubuntu/Debian:
+
+```bash
+bash scripts/install_avb_deps.sh
+```
+
+Or via umbrella bootstrap:
+
+```bash
+bash scripts/bootstrap_optional_deps.sh --avb
+```
+
 ## Local CI/Smoke Entry
 
 Use the local CI-equivalent script for AVB build-and-test flow:

@@ -63,7 +63,7 @@ Use the library and tests below as the complete, buildable C++ references:
 Build with OPC UA enabled:
 
 ```bash
-bash build/install_open62541.sh
+bash scripts/install_open62541.sh
 
 qbs build -f source/source.qbs config:debug -j"$(nproc)" \
     project.enable_opc_ua:true \
