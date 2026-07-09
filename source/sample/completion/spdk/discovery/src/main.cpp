@@ -4,7 +4,7 @@
 #include <kmx/aio/sample/spdk/discovery/manager.hpp>
 #include <kmx/logger.hpp>
 
-int main(int argc, const char** argv) noexcept
+int main(int argc, const char* argv[]) noexcept
 {
     try
     {
