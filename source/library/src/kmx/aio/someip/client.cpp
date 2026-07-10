@@ -8,13 +8,13 @@
 
 namespace kmx::aio::someip
 {
-    namespace detail
+    namespace
     {
         [[nodiscard]] std::uint32_t service_key(const service_id_t service_id, const instance_id_t instance_id) noexcept
         {
             return (static_cast<std::uint32_t>(service_id) << 16u) | static_cast<std::uint32_t>(instance_id);
         }
-    } // namespace detail
+    } // anonymous namespace
 
     struct client::impl
     {
@@ -85,7 +85,7 @@ namespace kmx::aio::someip
         if (!impl_->runtime.request_service(service_id, instance_id))
             co_return std::unexpected(make_error_code(error::request_failed));
 
-        impl_->available_services.insert(detail::service_key(service_id, instance_id));
+        impl_->available_services.insert(service_key(service_id, instance_id));
         co_return std::expected<void, std::error_code> {};
     }
 
@@ -98,7 +98,7 @@ namespace kmx::aio::someip
         if (!impl_->runtime.release_service(service_id, instance_id))
             co_return std::unexpected(make_error_code(error::request_failed));
 
-        impl_->available_services.erase(detail::service_key(service_id, instance_id));
+        impl_->available_services.erase(service_key(service_id, instance_id));
         co_return std::expected<void, std::error_code> {};
     }
 
@@ -109,7 +109,7 @@ namespace kmx::aio::someip
         if (!impl_->started)
             co_return std::unexpected(make_error_code(error::not_initialized));
 
-        const std::uint32_t key = detail::service_key(service_id, instance_id);
+        const std::uint32_t key = service_key(service_id, instance_id);
         if (!impl_->available_services.contains(key))
             co_return std::unexpected(make_error_code(error::service_unavailable));
 
@@ -146,7 +146,7 @@ namespace kmx::aio::someip
             return false;
 
         return impl_->runtime.is_service_available(service_id, instance_id) ||
-               impl_->available_services.contains(detail::service_key(service_id, instance_id));
+               impl_->available_services.contains(service_key(service_id, instance_id));
     }
 
     const client_config& client::config() const noexcept
@@ -163,7 +163,7 @@ namespace kmx::aio::someip
 #if !defined(KMX_AIO_HAS_VSOMEIP_HEADER)
     void client::__kmx_test_inject_service_available(const service_id_t service_id, const instance_id_t instance_id) noexcept
     {
-        impl_->available_services.insert(detail::service_key(service_id, instance_id));
+        impl_->available_services.insert(service_key(service_id, instance_id));
     }
 
     void client::__kmx_test_set_next_call_status(const std::uint32_t status) noexcept

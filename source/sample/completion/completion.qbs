@@ -22,5 +22,8 @@ Project {
         "avb/listener/sample-avb-listener.qbs",
         "someip/echo-server/sample-someip-echo-server.qbs",
         "someip/echo-client/sample-someip-echo-client.qbs",
+        "someip/event-publisher/sample-someip-event-publisher.qbs",
+        "someip/event-subscriber/sample-someip-event-subscriber.qbs",
+        "someip/diagnostics/sample-someip-diagnostics.qbs",
     ]
 }

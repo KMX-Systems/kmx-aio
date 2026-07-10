@@ -21,6 +21,8 @@ CppApplication {
     Depends { name: "kmx-aio-someip"; condition: project.enable_someip }
 
     files: [
+        "inc/kmx/aio/sample/someip/echo_client/**.hpp",
+        "src/kmx/aio/sample/someip/echo_client/**.cpp",
         "src/main.cpp",
     ]
 }

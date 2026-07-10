@@ -24,6 +24,8 @@ kmx-aio/
 │   │   │   │   ├── eth_socket.hpp, gptp/, srp/
 │   │   │   ├── opc_ua/              # OPC UA facade (feature-gated)
 │   │   │   │   └── client.hpp, server.hpp, subscription.hpp, types.hpp, error.hpp
+│   │   │   ├── someip/               # SOME/IP facade (feature-gated)
+│   │   │   │   └── client.hpp, server.hpp, subscription.hpp, types.hpp, error.hpp
 │   │   │   └── quic/                # QUIC generic engine
 │   │   ├── inc/kmx/aio/             # Private headers (opc_ua/open62541_compat.hpp, quic/base_engine.hpp, ...)
 │   │   ├── src/                     # Implementation (.cpp) files
@@ -34,6 +36,7 @@ kmx-aio/
 │   │   ├── quic/quic.qbs            # kmx-aio-quic
 │   │   ├── avb/avb.qbs              # kmx-aio-avb
 │   │   ├── spdk/spdk.qbs            # kmx-aio-spdk
+│   │   ├── someip/someip.qbs        # kmx-aio-someip
 │   │   ├── xdp/xdp.qbs              # kmx-aio-xdp
 │   │   ├── opcua/opcua.qbs          # kmx-aio-opcua
 │   │   ├── gpu/gpu.qbs              # kmx-aio-gpu
@@ -55,18 +58,12 @@ kmx-aio/
 │   │       ├── v4l2/                # V4L2 frame capture (io_uring poll hybrid)
 │   │       ├── quic/                # QUIC echo server, HTTP/3 server/client
 │   │       ├── spdk/                # SPDK bdev discovery, minimal block I/O
+│   │       ├── someip/              # SOME/IP echo, pub/sub, diagnostics samples
 │   │       ├── xdp/                 # AF_XDP packet filter
 │   │       ├── hft/                 # High-frequency trading order router
 │   │       └── gpu/                 # GPU completion model samples
 │   │          └── image_processing/ # V4L2 + CUDA async image processing pipeline
 │   └── source.qbs                   # Root build definition
-├── build/
-│   ├── install_lsquic.sh            # Build BoringSSL + lsquic
-│   ├── install_open62541.sh         # Build open62541 for OPC UA
-│   ├── spdk-local/                  # Local SPDK checkout + install prefix (optional)
-│   ├── boringssl/                   # BoringSSL repo (cloned by install_lsquic.sh)
-│   ├── lsquic/                      # lsquic repo (cloned by install_lsquic.sh)
-│   └── open62541/                   # open62541 repo (cloned by install_open62541.sh)
 └── README.md, LICENSE, etc.
 ```
 
@@ -74,7 +71,8 @@ Project structure notes:
 
 - The repository stays as one monorepo; library split is at artifact level.
 - Feature-specific behavior and commands live under `documentation/features`.
-- CI-local workflows are centered around scripts in `script/ci`.
+- CI-local and feature bootstrap workflows are centered around scripts in `script/ci` and `script/feature`.
+- SomeIP sample applications are under `source/sample/completion/someip`.
 
 ## Artifact Graph
 
@@ -89,6 +87,7 @@ kmx-aio-core
 │   ├── kmx-aio-spdk
 │   └── kmx-aio-xdp
 ├── kmx-aio-avb
+├── kmx-aio-someip
 ├── kmx-aio-gpu
 ├── kmx-aio-opcua
 ```
@@ -97,6 +96,7 @@ Current implementation notes:
 
 - `kmx-aio-avb` depends on `kmx-aio-readiness` because readiness-specific AVB instantiations live there.
 - `kmx-aio-quic` depends on `kmx-aio-readiness`; completion-specific QUIC explicit instantiation now lives in `kmx-aio-completion`.
+- `kmx-aio-someip` is a standalone feature artifact under `source/library/someip`.
 - `kmx-aio-lib` is kept as a compatibility umbrella over all split artifacts.
 
 ## Ownership Rules
@@ -110,6 +110,7 @@ Public API ownership:
 - `source/library/api/kmx/aio/quic/**` belongs to `kmx-aio-quic`.
 - `source/library/api/kmx/aio/gpu/**` belongs to `kmx-aio-gpu`.
 - `source/library/api/kmx/aio/opc_ua/**` belongs to `kmx-aio-opcua`.
+- `source/library/api/kmx/aio/someip/**` belongs to `kmx-aio-someip`.
 - `source/library/api/kmx/aio/completion/spdk/**` belongs to `kmx-aio-spdk`.
 - `source/library/api/kmx/aio/completion/xdp/**` belongs to `kmx-aio-xdp`.
 
