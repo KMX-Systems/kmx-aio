@@ -2,6 +2,7 @@ import qbs
 
 StaticLibrary {
     Depends { name: "cpp" }
+    Depends { name: "kmx-aio-core" }
 
     name: "kmx-aio-sample-common"
     condition: project.enable_completion || project.enable_readiness || project.enable_cuda
