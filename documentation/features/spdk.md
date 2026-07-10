@@ -73,13 +73,13 @@ sudo apt install -y \
   Or run the repository bootstrap script:
 
   ```bash
-  bash scripts/install_spdk_local.sh
+  bash script/feature/spdk/install-dependencies.sh
   ```
 
   Or via umbrella bootstrap:
 
   ```bash
-  bash scripts/bootstrap_optional_deps.sh --spdk
+  bash script/bootstrap_optional_deps.sh --spdk
   ```
 
 Workspace-local SPDK build (recommended for this repository):

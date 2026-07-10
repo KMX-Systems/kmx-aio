@@ -215,7 +215,7 @@ If mTLS tests don't appear in filter results:
 Both test suites run automatically in:
 
 ```bash
-bash scripts/run-integration-tests.sh
+bash script/run-integration-tests.sh
 ```
 
 The full integration test script handles:

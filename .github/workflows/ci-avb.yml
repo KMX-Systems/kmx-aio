@@ -89,11 +89,11 @@ jobs:
 
       - name: Bootstrap QUIC dependencies
         run: |
-          bash scripts/install_lsquic.sh
+          bash script/feature/quic/install-dependencies.sh
 
       - name: Bootstrap local open62541 prefix
         run: |
-          bash scripts/install_open62541.sh
+          bash script/feature/opc_ua/install-dependencies.sh
 
       - name: Bootstrap local SPDK prefix
         run: |
@@ -108,7 +108,7 @@ jobs:
 
       - name: Enforce sample artifact boundaries
         run: |
-          bash scripts/ci/check-sample-artifact-boundaries.sh
+          bash script/ci/check-sample-artifact-boundaries.sh
 
       - name: Build explicit-dependency samples and tests
         run: |
@@ -159,7 +159,7 @@ jobs:
 
       - name: Bootstrap QUIC dependencies
         run: |
-          bash scripts/install_lsquic.sh
+          bash script/feature/quic/install-dependencies.sh
 
       - name: Configure and build QUIC smoke artifacts
         run: |

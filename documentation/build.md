@@ -38,14 +38,12 @@ qbs build -f source/source.qbs config:debug --products kmx-aio-test \
     project.enable_avb:true
 ```
 
-## Baseline Build Without QUIC
+## Baseline Build
 
 ```bash
-qbs resolve -f source/source.qbs config:debug \
-    project.enable_quic:false
+qbs resolve -f source/source.qbs config:debug
 
-qbs build -f source/source.qbs config:debug \
-    project.enable_quic:false
+qbs build -f source/source.qbs config:debug
 ```
 
 ## Enable Additional Project Sets
@@ -150,7 +148,7 @@ qbs build -f source/source.qbs \
 If you installed OPC-UA with:
 
 ```bash
-bash scripts/install_open62541.sh
+bash script/feature/opc_ua/install-dependencies.sh
 ```
 
 then open62541 is installed under `build/open62541/install-local`.
@@ -172,7 +170,7 @@ qbs build -f source/source.qbs config:debug \
 If you installed SPDK with:
 
 ```bash
-bash scripts/install_spdk_local.sh
+bash script/feature/spdk/install-dependencies.sh
 ```
 
 then SPDK is installed under `build/spdk-local/install-local`, not `/usr/local`.
@@ -203,7 +201,7 @@ qbs build -f source/source.qbs config:debug \
     project.spdk_prefix:"/usr/local"
 ```
 
-If your SPDK build is configured **without crypto** (for example via `scripts/install_spdk_local.sh`),
+If your SPDK build is configured **without crypto** (for example via `script/feature/spdk/install-dependencies.sh`),
 keep `project.spdk_enable_crypto:false` to avoid linker errors for `-lisal` / `-lisal_crypto`.
 If your SPDK installation includes ISA-L crypto support, you can enable it explicitly:
 
