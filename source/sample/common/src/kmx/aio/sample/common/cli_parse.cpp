@@ -1,11 +1,13 @@
 #include <kmx/aio/sample/common/cli_parse.hpp>
 
+#include <array>
 #include <charconv>
+#include <cstdint>
 #include <limits>
 
 namespace kmx::aio::sample::common
 {
-    namespace
+    namespace detail
     {
         template <typename T>
         bool parse_unsigned_sv(std::string_view text, T& out)
@@ -14,7 +16,7 @@ namespace kmx::aio::sample::common
             const char* end = text.data() + text.size();
             T value {};
             const auto [ptr, ec] = std::from_chars(begin, end, value);
-            if (ec != std::errc {} || ptr != end)
+            if ((ec != std::errc {}) || (ptr != end))
                 return false;
 
             out = value;
@@ -31,7 +33,7 @@ namespace kmx::aio::sample::common
             const char* begin = raw;
             const char* end = raw + std::char_traits<char>::length(raw);
             const auto [ptr, ec] = std::from_chars(begin, end, parsed);
-            if (ec != std::errc {} || ptr != end)
+            if ((ec != std::errc {}) || (ptr != end))
                 return false;
 
             if (parsed > static_cast<std::uint64_t>(std::numeric_limits<T>::max()))
@@ -41,44 +43,54 @@ namespace kmx::aio::sample::common
             return true;
         }
 
-        [[nodiscard]] constexpr int hex_to_val(char c) noexcept
+        constexpr std::array<std::int8_t, 256u> make_hex_table() noexcept
         {
-            if (c >= '0' && c <= '9')
-                return c - '0';
-            if (c >= 'a' && c <= 'f')
-                return c - 'a' + 10;
-            if (c >= 'A' && c <= 'F')
-                return c - 'A' + 10;
-            return -1;
+            std::array<std::int8_t, 256u> table {};
+            for (auto& entry: table)
+                entry = -1;
+            for (int c = '0'; c <= '9'; ++c)
+                table[static_cast<std::size_t>(c)] = static_cast<std::int8_t>(c - '0');
+            for (int c = 'a'; c <= 'f'; ++c)
+                table[static_cast<std::size_t>(c)] = static_cast<std::int8_t>(c - 'a' + 10);
+            for (int c = 'A'; c <= 'F'; ++c)
+                table[static_cast<std::size_t>(c)] = static_cast<std::int8_t>(c - 'A' + 10);
+            return table;
+        }
+
+        inline constexpr std::array<std::int8_t, 256u> hex_table = make_hex_table();
+
+        [[nodiscard]] constexpr int hex_to_val(const char c) noexcept
+        {
+            return hex_table[static_cast<std::uint8_t>(c)];
         }
     }
 
     bool parse_unsigned_u16(std::string_view text, std::uint16_t& out)
     {
-        return parse_unsigned_sv(text, out);
+        return detail::parse_unsigned_sv(text, out);
     }
 
     bool parse_unsigned_u64(std::string_view text, std::uint64_t& out)
     {
-        return parse_unsigned_sv(text, out);
+        return detail::parse_unsigned_sv(text, out);
     }
 
     bool parse_unsigned_u16_cstr(const char* raw, std::uint16_t& out)
     {
-        return parse_unsigned_cstr_impl(raw, out);
+        return detail::parse_unsigned_cstr_impl(raw, out);
     }
 
     bool parse_unsigned_u32_cstr(const char* raw, std::uint32_t& out)
     {
-        return parse_unsigned_cstr_impl(raw, out);
+        return detail::parse_unsigned_cstr_impl(raw, out);
     }
 
     bool parse_unsigned_u64_cstr(const char* raw, std::uint64_t& out)
     {
-        return parse_unsigned_cstr_impl(raw, out);
+        return detail::parse_unsigned_cstr_impl(raw, out);
     }
 
-    bool parse_mac_bytes(std::string_view text, std::array<std::uint8_t, 6u>& out)
+    bool parse_mac_bytes(std::string_view text, std::array<std::uint8_t, 6u>& out) noexcept
     {
         const char* p = text.data();
         const char* const end = p + text.size();
@@ -89,15 +101,15 @@ namespace kmx::aio::sample::common
             if (p >= end)
                 return false;
 
-            const int v0 = hex_to_val(*p);
+            const int v0 = detail::hex_to_val(*p);
             if (v0 < 0)
                 return false;
             ++p;
 
             int val = v0;
-            if (p < end && *p != ':')
+            if ((p < end) && (*p != ':'))
             {
-                const int v1 = hex_to_val(*p);
+                const int v1 = detail::hex_to_val(*p);
                 if (v1 < 0)
                     return false;
                 val = (val << 4) | v1;
@@ -105,10 +117,9 @@ namespace kmx::aio::sample::common
             }
 
             buf[i] = static_cast<std::uint8_t>(val);
-
             if (i < 5u)
             {
-                if (p >= end || *p != ':')
+                if ((p >= end) || (*p != ':'))
                     return false;
                 ++p;
             }
