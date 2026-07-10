@@ -9,6 +9,7 @@ StaticLibrary {
     Depends { name: "kmx-aio-http3"; condition: project.enable_http3 && project.enable_quic }
     Depends { name: "kmx-aio-gpu"; condition: project.enable_cuda }
     Depends { name: "kmx-aio-opcua"; condition: project.enable_opc_ua }
+    Depends { name: "kmx-aio-someip"; condition: project.enable_someip }
     Depends { name: "kmx-aio-quic"; condition: project.enable_quic }
     Depends { name: "kmx-aio-xdp"; condition: project.enable_af_xdp }
     Depends { name: "kmx-aio-spdk"; condition: project.enable_spdk }
@@ -44,6 +45,8 @@ StaticLibrary {
             defs.push("KMX_AIO_FEATURE_AVB=1");
         if (project.enable_opc_ua)
             defs.push("KMX_AIO_FEATURE_OPC_UA=1");
+        if (project.enable_someip)
+            defs.push("KMX_AIO_FEATURE_SOMEIP=1");
         if (project.enable_cuda)
             defs.push("KMX_AIO_FEATURE_CUDA=1");
         if (project.enable_asan)
@@ -61,12 +64,14 @@ StaticLibrary {
         project.enable_spdk && project.spdk_prefix ? project.spdk_prefix + "/include/dpdk" : "",
         "../../build/lsquic/include",
         project.enable_opc_ua && project.opc_ua_prefix ? project.opc_ua_prefix + "/include" : "",
+        project.enable_someip && project.someip_prefix ? project.someip_prefix + "/include" : "",
     ]
     cpp.libraryPaths: [
         "/usr/local/lib",
         project.enable_spdk && project.spdk_prefix ? project.spdk_prefix + "/lib" : "",
         project.enable_spdk && project.spdk_prefix ? project.spdk_prefix + "/lib64" : "",
         project.enable_opc_ua && project.opc_ua_prefix ? project.opc_ua_prefix + "/lib" : "",
+        project.enable_someip && project.someip_prefix ? project.someip_prefix + "/lib" : "",
     ]
     cpp.dynamicLibraries: {
         var libs = ["uring", "pthread"];
@@ -147,6 +152,11 @@ StaticLibrary {
             libs.push("crypto");
         }
 
+        if (project.enable_someip && project.someip_link_backend)
+        {
+            libs.push("vsomeip3");
+        }
+
         if (project.enable_cuda)
         {
             libs.push("cudart");
@@ -177,6 +187,7 @@ StaticLibrary {
         Depends { name: "kmx-aio-http3"; condition: project.enable_http3 && project.enable_quic }
         Depends { name: "kmx-aio-gpu"; condition: project.enable_cuda }
         Depends { name: "kmx-aio-opcua"; condition: project.enable_opc_ua }
+        Depends { name: "kmx-aio-someip"; condition: project.enable_someip }
         Depends { name: "kmx-aio-quic"; condition: project.enable_quic }
         Depends { name: "kmx-aio-xdp"; condition: project.enable_af_xdp }
         Depends { name: "kmx-aio-spdk"; condition: project.enable_spdk }
@@ -186,6 +197,7 @@ StaticLibrary {
             project.enable_spdk && project.spdk_prefix ? project.spdk_prefix + "/lib" : "",
             project.enable_spdk && project.spdk_prefix ? project.spdk_prefix + "/lib64" : "",
             project.enable_opc_ua && project.opc_ua_prefix ? project.opc_ua_prefix + "/lib" : "",
+            project.enable_someip && project.someip_prefix ? project.someip_prefix + "/lib" : "",
         ]
     }
 }
