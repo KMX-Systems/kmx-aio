@@ -56,22 +56,30 @@ StaticLibrary {
         "pthread",
     ]
     install: true
-    files: [
-        "../api/kmx/aio/completion/**.hpp",
-        "../api/kmx/aio/completion/tcp/**.hpp",
-        "../api/kmx/aio/completion/udp/**.hpp",
-        "../api/kmx/aio/completion/tls/**.hpp",
-        "../api/kmx/aio/completion/v4l2/**.hpp",
-        "../src/kmx/aio/completion/executor.cpp",
-        "../src/kmx/aio/completion/quic/**.cpp",
-        "../src/kmx/aio/quic/base_engine.cpp",
-        "../src/kmx/aio/completion/timer.cpp",
-        "../src/kmx/aio/completion/avb/**.cpp",
-        "../src/kmx/aio/completion/tcp/**.cpp",
-        "../src/kmx/aio/completion/udp/**.cpp",
-        "../src/kmx/aio/completion/tls/**.cpp",
-        "../src/kmx/aio/completion/v4l2/**.cpp",
-    ]
+    files: {
+        var entries = [
+            "../api/kmx/aio/completion/**.hpp",
+            "../api/kmx/aio/completion/tcp/**.hpp",
+            "../api/kmx/aio/completion/udp/**.hpp",
+            "../api/kmx/aio/completion/tls/**.hpp",
+            "../api/kmx/aio/completion/v4l2/**.hpp",
+            "../src/kmx/aio/completion/executor.cpp",
+            "../src/kmx/aio/completion/timer.cpp",
+            "../src/kmx/aio/completion/avb/**.cpp",
+            "../src/kmx/aio/completion/tcp/**.cpp",
+            "../src/kmx/aio/completion/udp/**.cpp",
+            "../src/kmx/aio/completion/tls/**.cpp",
+            "../src/kmx/aio/completion/v4l2/**.cpp",
+        ];
+
+        if (project.enable_quic)
+        {
+            entries.push("../src/kmx/aio/completion/quic/**.cpp");
+            entries.push("../src/kmx/aio/quic/base_engine.cpp");
+        }
+
+        return entries;
+    }
 
     Export {
         Depends { name: "cpp" }
