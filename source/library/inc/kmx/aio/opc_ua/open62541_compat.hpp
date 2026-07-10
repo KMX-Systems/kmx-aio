@@ -7,6 +7,14 @@
 
 extern "C"
 {
+    #if defined(__clang__)
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wunused-parameter"
+    #elif defined(__GNUC__)
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wunused-parameter"
+    #endif
+
     #include <open62541/client.h>
     #include <open62541/client_config_default.h>
     #include <open62541/client_highlevel.h>
@@ -14,6 +22,12 @@ extern "C"
     #include <open62541/server.h>
     #include <open62541/server_config_default.h>
     #include <open62541/types.h>
+
+    #if defined(__clang__)
+        #pragma clang diagnostic pop
+    #elif defined(__GNUC__)
+        #pragma GCC diagnostic pop
+    #endif
 }
 
 #else
