@@ -62,20 +62,21 @@ qbs build -f source/source.qbs config:debug \
 
 ## Build With All Features
 
-To enable every feature gate in this repository, resolve and build with the full set of switches:
+To enable every optional feature gate in this repository, use one aggregate switch:
 
 ```bash
 qbs resolve -f source/source.qbs config:debug \
-    project.enable_readiness:true \
-    project.enable_http2:true \
-    project.enable_http3:true \
-    project.enable_openonload:true \
-    project.enable_af_xdp:true \
-    project.enable_spdk:true \
-    project.enable_avb:true \
-    project.enable_opc_ua:true \
-    project.enable_cuda:true
+    project.full:true
 
+qbs build -f source/source.qbs config:debug \
+    project.full:true
+```
+
+`project.all:true` is accepted as an alias and behaves the same.
+
+If you prefer an explicit template that you can tweak per gate, use:
+
+```bash
 qbs build -f source/source.qbs config:debug \
     project.enable_readiness:true \
     project.enable_http2:true \
@@ -92,32 +93,24 @@ If you use a non-default SPDK or OPC UA install prefix, pass those as well:
 
 ```bash
 qbs resolve -f source/source.qbs config:debug \
-    project.enable_readiness:true \
-    project.enable_http2:true \
-    project.enable_http3:true \
-    project.enable_openonload:true \
-    project.enable_af_xdp:true \
-    project.enable_spdk:true \
-    project.enable_avb:true \
-    project.enable_opc_ua:true \
-    project.enable_cuda:true \
+    project.full:true \
     project.spdk_prefix:"$PWD/build/spdk-local/install-local" \
     project.opc_ua_vendored:true \
     project.opc_ua_prefix:"$PWD/build/open62541/install-local"
 
 qbs build -f source/source.qbs config:debug \
-    project.enable_readiness:true \
-    project.enable_http2:true \
-    project.enable_http3:true \
-    project.enable_openonload:true \
-    project.enable_af_xdp:true \
-    project.enable_spdk:true \
-    project.enable_avb:true \
-    project.enable_opc_ua:true \
-    project.enable_cuda:true \
+    project.full:true \
     project.spdk_prefix:"$PWD/build/spdk-local/install-local" \
     project.opc_ua_vendored:true \
     project.opc_ua_prefix:"$PWD/build/open62541/install-local"
+```
+
+You can still disable any specific gate explicitly even with `project.full:true`, for example:
+
+```bash
+qbs build -f source/source.qbs config:debug \
+    project.full:true \
+    project.enable_spdk:false
 ```
 
 ## Common Feature Gates
@@ -201,6 +194,8 @@ qbs config --unset profiles.kmx-spdk-local
 
 Default gate state in [source/source.qbs](source/source.qbs) (current project behavior):
 
+- `project.full:false`
+- `project.all:false`
 - `project.enable_readiness:false`
 - `project.enable_completion:true`
 - `project.enable_http2:false`
