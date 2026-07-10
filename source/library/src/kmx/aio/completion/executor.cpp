@@ -522,4 +522,18 @@ namespace kmx::aio::completion
             self->idle_cv_.notify_one();
     }
 
+    std::shared_ptr<executor> executor::get_default() noexcept(false)
+    {
+        thread_local std::shared_ptr<executor> instance;
+        if (!instance)
+            instance = std::make_shared<executor>();
+        return instance;
+    }
+
+    void executor::set_default(std::shared_ptr<executor> exec) noexcept
+    {
+        thread_local std::shared_ptr<executor> instance;
+        instance = std::move(exec);
+    }
+
 } // namespace kmx::aio::completion

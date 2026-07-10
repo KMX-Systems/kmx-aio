@@ -193,6 +193,22 @@ namespace kmx::aio::completion
         /// @details Returns an error if the I/O thread is not currently running.
         [[nodiscard]] std::expected<bool, std::error_code> is_io_thread_affined_to(int core_id) noexcept;
 
+        /// @brief Returns the thread-local default executor, creating it lazily on first call.
+        /// @details The instance is created with default `executor_config` on the first call
+        ///          within each thread and reused for all subsequent calls on that thread.
+        ///          Ownership remains with the thread-local storage; callers that need to
+        ///          keep the executor alive beyond the thread must retain their own `shared_ptr`.
+        /// @return A `shared_ptr` to the thread-local default executor.
+        /// @throws std::system_error if io_uring initialisation fails on first use.
+        [[nodiscard]] static std::shared_ptr<executor> get_default() noexcept(false);
+
+        /// @brief Replaces the thread-local default executor with an explicitly constructed one.
+        /// @details Useful when a specific `executor_config` (ring size, core pinning, …)
+        ///          is required before the first `get_default()` call on this thread.
+        ///          Pass `nullptr` to clear the current default.
+        /// @param exec The executor to install as the thread-local default.
+        static void set_default(std::shared_ptr<executor> exec) noexcept;
+
         /// @brief Per-operation context passed through io_uring user_data.
         struct io_context
         {
