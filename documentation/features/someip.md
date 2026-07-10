@@ -7,7 +7,7 @@ SOME/IP (Scalable service-Oriented MiddlewarE over IP, [AUTOSAR PRS_SOMEIP](http
 - Async coroutine facades: `client`, `server`, `subscription`
 - vsomeip compatibility boundary (`compat::client_runtime`, `compat::server_runtime`)
 - In-process stub backend for deterministic testing
-- Echo server and echo client samples
+- Echo server/client, event publisher/subscriber, diagnostics samples
 
 ## Architecture
 
@@ -164,6 +164,16 @@ co_await sub.close();
 
 `subscription` buffers notifications up to `notification_queue_capacity`; when the buffer is full the oldest entry is evicted and `dropped_events()` is incremented. Setting capacity to `0` discards all incoming notifications.
 
+## Full C++ Sample Projects
+
+Complete buildable SOME/IP samples available in the repository:
+
+- `source/sample/completion/someip/echo-server/sample-someip-echo-server.qbs`
+- `source/sample/completion/someip/echo-client/sample-someip-echo-client.qbs`
+- `source/sample/completion/someip/event-publisher/sample-someip-event-publisher.qbs`
+- `source/sample/completion/someip/event-subscriber/sample-someip-event-subscriber.qbs`
+- `source/sample/completion/someip/diagnostics/sample-someip-diagnostics.qbs`
+
 ## Behaviour Notes
 
 - `client`, `server`, and `subscription` each own an independent vsomeip application instance and dispatch thread; they must not be shared across threads without external synchronization.
@@ -216,6 +226,8 @@ Run integration smoke test (launches echo-server and echo-client):
 bash script/feature/someip/run-smoke.sh
 ```
 
+Note: with the default stub backend, the echo pair exercises request/response fully, while the pub/sub samples validate sample lifecycle only. Cross-process event delivery requires `project.someip_link_backend:true`.
+
 Run integration tests via Catch2 filter directly:
 
 ```bash
@@ -255,6 +267,9 @@ bash script/feature/someip/run-smoke.sh --skip-build
 | [source/library-test/src/kmx/aio/integration/someip_smoke_test.cpp](source/library-test/src/kmx/aio/integration/someip_smoke_test.cpp) | Echo server/client integration smoke test |
 | [source/sample/completion/someip/echo-server/src/main.cpp](source/sample/completion/someip/echo-server/src/main.cpp) | Echo server sample |
 | [source/sample/completion/someip/echo-client/src/main.cpp](source/sample/completion/someip/echo-client/src/main.cpp) | Echo client sample |
+| [source/sample/completion/someip/event-publisher/src/main.cpp](source/sample/completion/someip/event-publisher/src/main.cpp) | Event publisher sample |
+| [source/sample/completion/someip/event-subscriber/src/main.cpp](source/sample/completion/someip/event-subscriber/src/main.cpp) | Event subscriber sample |
+| [source/sample/completion/someip/diagnostics/src/main.cpp](source/sample/completion/someip/diagnostics/src/main.cpp) | Diagnostics sample |
 | [script/feature/someip/install-dependencies.sh](script/feature/someip/install-dependencies.sh) | vsomeip build and install script |
 | [script/feature/someip/run-unit-tests.sh](script/feature/someip/run-unit-tests.sh) | Unit test runner |
 | [script/feature/someip/run-integration-tests.sh](script/feature/someip/run-integration-tests.sh) | Integration test runner |

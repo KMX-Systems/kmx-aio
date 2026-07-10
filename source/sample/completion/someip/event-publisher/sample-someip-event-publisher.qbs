@@ -1,7 +1,7 @@
 import qbs
 
 CppApplication {
-    name: "sample-someip-echo-server"
+    name: "sample-someip-event-publisher"
     condition: project.enable_someip
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
@@ -21,8 +21,8 @@ CppApplication {
     Depends { name: "kmx-aio-someip"; condition: project.enable_someip }
 
     files: [
-        "inc/kmx/aio/sample/someip/echo_server/**.hpp",
-        "src/kmx/aio/sample/someip/echo_server/**.cpp",
+        "inc/kmx/aio/sample/someip/event_publisher/**.hpp",
+        "src/kmx/aio/sample/someip/event_publisher/**.cpp",
         "src/main.cpp",
     ]
 }

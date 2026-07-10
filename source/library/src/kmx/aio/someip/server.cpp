@@ -7,13 +7,13 @@
 
 namespace kmx::aio::someip
 {
-    namespace detail
+    namespace
     {
         [[nodiscard]] std::uint32_t service_key(const service_id_t service_id, const instance_id_t instance_id) noexcept
         {
             return (static_cast<std::uint32_t>(service_id) << 16u) | static_cast<std::uint32_t>(instance_id);
         }
-    } // namespace detail
+    } // anonymous namespace
 
     struct server::impl
     {
@@ -78,7 +78,7 @@ namespace kmx::aio::someip
         if (!impl_->runtime.offer_service(service_id, instance_id))
             co_return std::unexpected(make_error_code(error::request_failed));
 
-        impl_->offered_services.insert(detail::service_key(service_id, instance_id));
+        impl_->offered_services.insert(service_key(service_id, instance_id));
         co_return std::expected<void, std::error_code> {};
     }
 
@@ -91,7 +91,7 @@ namespace kmx::aio::someip
         if (!impl_->runtime.stop_offer_service(service_id, instance_id))
             co_return std::unexpected(make_error_code(error::request_failed));
 
-        impl_->offered_services.erase(detail::service_key(service_id, instance_id));
+        impl_->offered_services.erase(service_key(service_id, instance_id));
         co_return std::expected<void, std::error_code> {};
     }
 
@@ -137,7 +137,7 @@ namespace kmx::aio::someip
         if (!impl_->started)
             co_return std::unexpected(make_error_code(error::not_initialized));
 
-        if (!impl_->offered_services.contains(detail::service_key(service_id, instance_id)))
+        if (!impl_->offered_services.contains(service_key(service_id, instance_id)))
             co_return std::unexpected(make_error_code(error::service_unavailable));
 
         if (!impl_->runtime.notify(service_id, instance_id, event_id, std::move(payload)))
