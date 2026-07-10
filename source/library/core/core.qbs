@@ -57,6 +57,8 @@ StaticLibrary {
         "../api/kmx/aio/error_code.hpp",
         "../api/kmx/aio/executor_base.hpp",
         "../api/kmx/aio/file_descriptor.hpp",
+        "../api/kmx/aio/ipv4.hpp",
+        "../api/kmx/aio/ipv6.hpp",
         "../api/kmx/aio/scheduler.hpp",
         "../api/kmx/aio/stream_concepts.hpp",
         "../api/kmx/aio/task.hpp",

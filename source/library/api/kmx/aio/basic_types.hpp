@@ -3,59 +3,26 @@
 #pragma once
 #ifndef PCH
     #include <arpa/inet.h>
-    #include <array>
     #include <cerrno>
-    #include <cstdint>
     #include <cstring>
     #include <expected>
     #include <netinet/in.h>
-    #include <span>
     #include <string>
     #include <sys/socket.h>
     #include <system_error>
     #include <type_traits>
     #include <variant>
+
+    #include <kmx/aio/ipv4.hpp>
+    #include <kmx/aio/ipv6.hpp>
 #endif
 
 namespace kmx::aio
 {
-    /// @brief Owned IPv4 storage container.
-    using ipv4_storage_t = std::array<std::uint8_t, 4u>;
-    /// @brief Owned IPv6 storage container.
-    using ipv6_storage_t = std::array<std::uint8_t, 16u>;
-    /// @brief Owned IPv4 address alias.
-    using ipv4_address_owned_t = ipv4_storage_t;
-    /// @brief Owned IPv6 address alias.
-    using ipv6_address_owned_t = ipv6_storage_t;
     /// @brief Owned IP address variant covering IPv4 and IPv6.
     using ip_address_owned_t = std::variant<ipv4_address_owned_t, ipv6_address_owned_t>;
-    /// @brief Non-owning IPv4 address view.
-    using ipv4_address_t = std::span<const std::uint8_t, 4u>;
-    /// @brief Non-owning IPv6 address view.
-    using ipv6_address_t = std::span<const std::uint8_t, 16u>;
     /// @brief Non-owning IP address view variant.
     using ip_address_t = std::variant<ipv4_address_t, ipv6_address_t>;
-
-    /// @brief Loopback IPv4 address in network byte order.
-    inline constexpr ipv4_storage_t localhost_ipv4 {127u, 0u, 0u, 1u};
-    /// @brief Wildcard IPv4 address in network byte order.
-    inline constexpr ipv4_storage_t any_ipv4 {0u, 0u, 0u, 0u};
-
-    /// @brief Creates a non-owning IPv4 address view.
-    /// @param ip The owned IPv4 bytes.
-    /// @return A view over the IPv4 storage.
-    [[nodiscard]] constexpr ipv4_address_t make_ipv4_address(const ipv4_storage_t& ip) noexcept
-    {
-        return ipv4_address_t {ip};
-    }
-
-    /// @brief Creates a non-owning IPv6 address view.
-    /// @param ip The owned IPv6 bytes.
-    /// @return A view over the IPv6 storage.
-    [[nodiscard]] constexpr ipv6_address_t make_ipv6_address(const ipv6_storage_t& ip) noexcept
-    {
-        return ipv6_address_t {ip};
-    }
 
     /// @brief Creates a non-owning IP address view from IPv4 storage.
     /// @param ip The owned IPv4 bytes.
