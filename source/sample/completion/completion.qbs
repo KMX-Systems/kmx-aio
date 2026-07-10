@@ -20,5 +20,7 @@ Project {
         "v4l2/capture/v4l2-completion-capture.qbs",
         "avb/talker/sample-avb-talker.qbs",
         "avb/listener/sample-avb-listener.qbs",
+        "someip/echo-server/sample-someip-echo-server.qbs",
+        "someip/echo-client/sample-someip-echo-client.qbs",
     ]
 }
