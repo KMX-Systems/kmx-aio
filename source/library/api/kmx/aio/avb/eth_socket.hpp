@@ -49,7 +49,8 @@ namespace kmx::aio::avb
         /// @param ethertype EtherType to filter on receive (e.g. avb::ethertype::avtp).
         ///                  Use 0 or ETH_P_ALL to receive all frames.
         /// @return Success or an error code.
-        [[nodiscard]] task<std::expected<void, std::error_code>> open(const std::string_view iface, std::uint16_t ethertype) noexcept(false);
+        [[nodiscard]] task<std::expected<void, std::error_code>> open(const std::string_view iface,
+                                                                      std::uint16_t ethertype) noexcept(false);
 
         /// @brief Send a raw Layer 2 frame.
         /// @param dest_mac  Destination MAC address.

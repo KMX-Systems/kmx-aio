@@ -156,10 +156,10 @@ namespace kmx::aio
         void set_backpressure(const channel_backpressure_config& cfg) noexcept
         {
             const auto usable_slots = usable_capacity();
-
             std::size_t high = cfg.high_watermark;
             if (high == 0u)
                 high = 1u;
+
             if (high > usable_slots)
                 high = usable_slots;
 

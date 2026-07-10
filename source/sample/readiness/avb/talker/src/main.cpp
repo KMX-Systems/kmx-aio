@@ -1,6 +1,6 @@
+#include <kmx/aio/mac.hpp>
 #include <kmx/aio/sample/avb/talker/manager.hpp>
 #include <kmx/aio/sample/common/cli_parse.hpp>
-#include <kmx/aio/mac.hpp>
 
 #include <exception>
 #include <kmx/logger.hpp>
