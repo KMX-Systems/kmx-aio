@@ -2,8 +2,6 @@
 
 #include <charconv>
 #include <limits>
-#include <sstream>
-#include <string>
 
 namespace kmx::aio::sample::common
 {
@@ -42,6 +40,17 @@ namespace kmx::aio::sample::common
             out = static_cast<T>(parsed);
             return true;
         }
+
+        [[nodiscard]] constexpr int hex_to_val(char c) noexcept
+        {
+            if (c >= '0' && c <= '9')
+                return c - '0';
+            if (c >= 'a' && c <= 'f')
+                return c - 'a' + 10;
+            if (c >= 'A' && c <= 'F')
+                return c - 'A' + 10;
+            return -1;
+        }
     }
 
     bool parse_unsigned_u16(std::string_view text, std::uint16_t& out)
@@ -71,34 +80,44 @@ namespace kmx::aio::sample::common
 
     bool parse_mac_bytes(std::string_view text, std::array<std::uint8_t, 6u>& out)
     {
-        unsigned int b0 {}, b1 {}, b2 {}, b3 {}, b4 {}, b5 {};
-        std::stringstream ss(std::string {text});
-        ss >> std::hex >> b0;
-        if (ss.fail() || ss.get() != ':')
-            return false;
-        ss >> std::hex >> b1;
-        if (ss.fail() || ss.get() != ':')
-            return false;
-        ss >> std::hex >> b2;
-        if (ss.fail() || ss.get() != ':')
-            return false;
-        ss >> std::hex >> b3;
-        if (ss.fail() || ss.get() != ':')
-            return false;
-        ss >> std::hex >> b4;
-        if (ss.fail() || ss.get() != ':')
-            return false;
-        ss >> std::hex >> b5;
-        if (ss.fail() || !ss.eof())
+        const char* p = text.data();
+        const char* const end = p + text.size();
+        std::array<std::uint8_t, 6u> buf {};
+
+        for (std::size_t i = 0u; i < 6u; ++i)
+        {
+            if (p >= end)
+                return false;
+
+            const int v0 = hex_to_val(*p);
+            if (v0 < 0)
+                return false;
+            ++p;
+
+            int val = v0;
+            if (p < end && *p != ':')
+            {
+                const int v1 = hex_to_val(*p);
+                if (v1 < 0)
+                    return false;
+                val = (val << 4) | v1;
+                ++p;
+            }
+
+            buf[i] = static_cast<std::uint8_t>(val);
+
+            if (i < 5u)
+            {
+                if (p >= end || *p != ':')
+                    return false;
+                ++p;
+            }
+        }
+
+        if (p != end)
             return false;
 
-        if (b0 > 0xFFu || b1 > 0xFFu || b2 > 0xFFu || b3 > 0xFFu || b4 > 0xFFu || b5 > 0xFFu)
-            return false;
-
-        out = {
-            static_cast<std::uint8_t>(b0), static_cast<std::uint8_t>(b1), static_cast<std::uint8_t>(b2),
-            static_cast<std::uint8_t>(b3), static_cast<std::uint8_t>(b4), static_cast<std::uint8_t>(b5),
-        };
+        out = buf;
         return true;
     }
 }
