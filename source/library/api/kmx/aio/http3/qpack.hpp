@@ -37,12 +37,12 @@ namespace kmx::aio::http3::qpack
         /// @brief Finds a static table entry matching a header name.
         /// @param name The header name.
         /// @return The static index if present.
-        static std::optional<std::uint64_t> static_name_index(std::string_view name) noexcept;
+        static std::optional<std::uint64_t> static_name_index(const std::string_view name) noexcept;
         /// @brief Finds a static table entry matching a header name and value.
         /// @param name The header name.
         /// @param value The header value.
         /// @return The static index if present.
-        static std::optional<std::uint64_t> static_field_index(std::string_view name, std::string_view value) noexcept;
+        static std::optional<std::uint64_t> static_field_index(const std::string_view name, const std::string_view value) noexcept;
         /// @brief Encodes headers into the demo literal header block format.
         /// @param headers The header list to encode.
         /// @return Encoded header block bytes.

@@ -24,12 +24,12 @@ namespace kmx::aio::avb
     }
 
     template <typename Executor>
-    generic_eth_socket<Executor>::~generic_eth_socket() = default;
+    generic_eth_socket<Executor>::~generic_eth_socket() noexcept = default;
 
     // open
 
     template <typename Executor>
-    task<std::expected<void, std::error_code>> generic_eth_socket<Executor>::open(std::string_view iface,
+    task<std::expected<void, std::error_code>> generic_eth_socket<Executor>::open(const std::string_view iface,
                                                                                   std::uint16_t ethertype) noexcept(false)
     {
         co_return impl_->open_socket(iface, ethertype);

@@ -90,7 +90,7 @@ extern "C"
         if ((client == nullptr) || (endpointUrl == nullptr))
             return UA_STATUSCODE_BADCONFIGURATIONERROR;
 
-        if (std::string_view(endpointUrl).empty())
+        if (const std::string_view(endpointUrl).empty())
             return UA_STATUSCODE_BADCONFIGURATIONERROR;
 
         client->channel_state = UA_SECURECHANNELSTATE_CONNECTED;

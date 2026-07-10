@@ -62,7 +62,7 @@ namespace kmx::aio::avb
 
         // Setup
 
-        [[nodiscard]] std::expected<void, std::error_code> open_socket(std::string_view iface, std::uint16_t ethertype)
+        [[nodiscard]] std::expected<void, std::error_code> open_socket(const std::string_view iface, std::uint16_t ethertype)
         {
             ethertype_ = ethertype;
 
@@ -197,7 +197,7 @@ namespace kmx::aio::avb
         }
 
     private:
-        [[nodiscard]] std::expected<void, std::error_code> resolve_iface(std::string_view iface)
+        [[nodiscard]] std::expected<void, std::error_code> resolve_iface(const std::string_view iface)
         {
             // Get interface index
             ::ifreq ifr {};

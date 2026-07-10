@@ -10,7 +10,7 @@ namespace kmx::aio::sample::common
     namespace detail
     {
         template <typename T>
-        bool parse_unsigned_sv(std::string_view text, T& out)
+        bool parse_unsigned_sv(const std::string_view text, T& out) noexcept
         {
             const char* begin = text.data();
             const char* end = text.data() + text.size();
@@ -24,7 +24,7 @@ namespace kmx::aio::sample::common
         }
 
         template <typename T>
-        bool parse_unsigned_cstr_impl(const char* raw, T& out)
+        bool parse_unsigned_cstr_impl(const char* raw, T& out) noexcept
         {
             if (!raw)
                 return false;
@@ -65,32 +65,32 @@ namespace kmx::aio::sample::common
         }
     }
 
-    bool parse_unsigned_u16(std::string_view text, std::uint16_t& out)
+    bool parse_unsigned_u16(const std::string_view text, std::uint16_t& out) noexcept
     {
         return detail::parse_unsigned_sv(text, out);
     }
 
-    bool parse_unsigned_u64(std::string_view text, std::uint64_t& out)
+    bool parse_unsigned_u64(const std::string_view text, std::uint64_t& out) noexcept
     {
         return detail::parse_unsigned_sv(text, out);
     }
 
-    bool parse_unsigned_u16_cstr(const char* raw, std::uint16_t& out)
+    bool parse_unsigned_u16_cstr(const char* raw, std::uint16_t& out) noexcept
     {
         return detail::parse_unsigned_cstr_impl(raw, out);
     }
 
-    bool parse_unsigned_u32_cstr(const char* raw, std::uint32_t& out)
+    bool parse_unsigned_u32_cstr(const char* raw, std::uint32_t& out) noexcept
     {
         return detail::parse_unsigned_cstr_impl(raw, out);
     }
 
-    bool parse_unsigned_u64_cstr(const char* raw, std::uint64_t& out)
+    bool parse_unsigned_u64_cstr(const char* raw, std::uint64_t& out) noexcept
     {
         return detail::parse_unsigned_cstr_impl(raw, out);
     }
 
-    bool parse_mac_bytes(std::string_view text, std::array<std::uint8_t, 6u>& out) noexcept
+    bool parse_mac_bytes(const std::string_view text, std::array<std::uint8_t, 6u>& out) noexcept
     {
         const char* p = text.data();
         const char* const end = p + text.size();

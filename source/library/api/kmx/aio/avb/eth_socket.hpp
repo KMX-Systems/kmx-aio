@@ -37,19 +37,19 @@ namespace kmx::aio::avb
     {
     public:
         explicit generic_eth_socket(Executor& exec) noexcept;
-        ~generic_eth_socket();
+        ~generic_eth_socket() noexcept;
 
         generic_eth_socket(const generic_eth_socket&) = delete;
         generic_eth_socket& operator=(const generic_eth_socket&) = delete;
-        generic_eth_socket(generic_eth_socket&&) = default;
-        generic_eth_socket& operator=(generic_eth_socket&&) = default;
+        generic_eth_socket(generic_eth_socket&&) noexcept = default;
+        generic_eth_socket& operator=(generic_eth_socket&&) noexcept = default;
 
         /// @brief Open the socket, binding to a specific NIC and EtherType filter.
         /// @param iface     Network interface name (e.g. "eth0").
         /// @param ethertype EtherType to filter on receive (e.g. avb::ethertype::avtp).
         ///                  Use 0 or ETH_P_ALL to receive all frames.
         /// @return Success or an error code.
-        [[nodiscard]] task<std::expected<void, std::error_code>> open(std::string_view iface, std::uint16_t ethertype) noexcept(false);
+        [[nodiscard]] task<std::expected<void, std::error_code>> open(const std::string_view iface, std::uint16_t ethertype) noexcept(false);
 
         /// @brief Send a raw Layer 2 frame.
         /// @param dest_mac  Destination MAC address.
