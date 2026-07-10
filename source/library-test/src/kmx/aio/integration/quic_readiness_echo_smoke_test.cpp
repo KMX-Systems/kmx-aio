@@ -44,7 +44,16 @@ namespace kmx::aio::quic::test::integration
         quoted.push_back('\'');
         return quoted;
     }
-
+    [[nodiscard]] static bool ensure_quic_certificates()
+    {
+        const fs::path cert_path = "/tmp/quic_cert.pem";
+        const fs::path key_path = "/tmp/quic_key.pem";
+        if (fs::exists(cert_path) && fs::exists(key_path))
+            return true;
+        const int ret = std::system("openssl req -x509 -newkey rsa:2048 -keyout /tmp/quic_key.pem -out /tmp/quic_cert.pem "
+                                    "-days 1 -nodes -subj \"/CN=localhost\" >/dev/null 2>&1");
+        return ret == 0 && fs::exists(cert_path) && fs::exists(key_path);
+    }
     [[nodiscard]] static auto contains_markers_in_order(const std::string_view text,
                                                         const std::initializer_list<std::string_view> markers) -> bool
     {
@@ -109,10 +118,8 @@ namespace kmx::aio::quic::test::integration
         if (!server_bin_opt.has_value() || !client_bin_opt.has_value())
             SKIP("Readiness QUIC echo smoke skipped: build sample-quic-echo-readiness-server and sample-quic-echo-readiness-client first");
 
-        const fs::path cert_path = "/tmp/quic_cert.pem";
-        const fs::path key_path = "/tmp/quic_key.pem";
-        if (!fs::exists(cert_path) || !fs::exists(key_path))
-            SKIP("Readiness QUIC echo smoke skipped: missing /tmp/quic_cert.pem or /tmp/quic_key.pem");
+        if (!ensure_quic_certificates())
+            SKIP("Readiness QUIC echo smoke skipped: failed to generate /tmp/quic_cert.pem and /tmp/quic_key.pem");
 
         const auto now_ns = std::chrono::steady_clock::now().time_since_epoch().count();
         const std::uint16_t test_port = static_cast<std::uint16_t>(20000u + static_cast<std::uint16_t>(now_ns % 20000u));
