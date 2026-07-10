@@ -18,7 +18,7 @@ using namespace std::literals::chrono_literals;
 // Utility Functions
 // ============================================================================
 
-std::string shell_quote(const std::string& arg) {
+static inline std::string shell_quote(const std::string& arg) {
     if (arg.find_first_of(" \t\n\"'$`\\!*?&|;()[]{}") == std::string::npos) {
         return arg;
     }
@@ -34,7 +34,7 @@ std::string shell_quote(const std::string& arg) {
     return quoted;
 }
 
-std::string read_file_text(const std::filesystem::path& path) {
+static inline std::string read_file_text(const std::filesystem::path& path) {
     std::ifstream file(path);
     if (!file.is_open()) {
         return "";

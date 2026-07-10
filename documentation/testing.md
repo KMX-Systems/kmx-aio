@@ -136,6 +136,46 @@ Optional environment variables:
 - `KMX_QUIC_ECHO_PORT` (default `12345`)
 - `KMX_QUIC_HTTP3_PORT` (default `12345`)
 
+### Mutual TLS (mTLS) Tests
+
+Two complementary test suites validate mTLS certificate generation, validation, and handling:
+
+#### mTLS Smoke Test
+
+Basic validation of certificate generation and OpenSSL parsing:
+
+```bash
+TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+"$TEST_BIN" "[tls][mtls][smoke]"
+```
+
+Validates:
+- Self-signed server certificate and RSA key generation
+- Client certificate signed by server key
+- PEM format compliance
+- File size expectations (RSA 2048 keys >1000 bytes, certificates >300 bytes)
+- OpenSSL x509 and RSA key parsing success
+- Certificate content non-empty
+
+#### mTLS Integration Tests
+
+Comprehensive testing of certificate scenarios and edge cases:
+
+```bash
+TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+"$TEST_BIN" "[tls][mtls][integration]"
+```
+
+Covers:
+- **Certificate chain validation**: Validates file existence, PEM format, OpenSSL parsing
+- **Expired certificate handling**: Generates certificates with 1-day expiration and validates handling
+- **Certificate identity verification**: Extracts and verifies Common Name (CN) fields
+- **Multiple certificate sets**: Tests generation of independent certificate pairs without collision
+- **Certificate file operations**: Validates file I/O, size constraints, and format compliance
+- **Format validation**: Comprehensive PEM header presence and OpenSSL tool validation
+
+Both test suites automatically generate temporary mTLS artifacts in `/tmp/kmx_mtls_certs/` and clean up after validation.
+
 ### OPC UA Service Tests
 
 ```bash
