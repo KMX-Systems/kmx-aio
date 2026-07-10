@@ -168,11 +168,11 @@ namespace kmx::aio::http3::demo
         /// @brief Parses a demo request payload.
         /// @param payload The textual payload to parse.
         /// @return The decoded request or a parse error.
-        static std::expected<request_message, std::error_code> parse_request_payload(std::string_view payload) noexcept;
+        static std::expected<request_message, std::error_code> parse_request_payload(const std::string_view payload) noexcept;
         /// @brief Parses a demo response payload.
         /// @param payload The textual payload to parse.
         /// @return The decoded response or a parse error.
-        static std::expected<response_message, std::error_code> parse_response_payload(std::string_view payload) noexcept;
+        static std::expected<response_message, std::error_code> parse_response_payload(const std::string_view payload) noexcept;
         /// @brief Builds demo request frames for the QUIC HTTP/3 samples.
         /// @param request The request metadata.
         /// @param body The request body.

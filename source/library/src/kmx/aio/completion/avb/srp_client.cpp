@@ -230,10 +230,10 @@ namespace kmx::aio::avb::srp
     }
 
     template <typename Executor>
-    generic_client<Executor>::~generic_client() = default;
+    generic_client<Executor>::~generic_client() noexcept = default;
 
     template <typename Executor>
-    task<std::expected<void, std::error_code>> generic_client<Executor>::start(std::string_view iface) noexcept(false)
+    task<std::expected<void, std::error_code>> generic_client<Executor>::start(const std::string_view iface) noexcept(false)
     {
         const auto open_res = co_await state_->sock_.open(iface, ethertype::msrp);
         if (!open_res)

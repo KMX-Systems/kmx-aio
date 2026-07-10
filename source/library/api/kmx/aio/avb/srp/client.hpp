@@ -45,20 +45,20 @@ namespace kmx::aio::avb::srp
         /// @brief Creates an SRP client bound to an executor.
         explicit generic_client(Executor& exec) noexcept;
         /// @brief Releases SRP client resources.
-        ~generic_client();
+        ~generic_client() noexcept;
 
         /// @brief Non-copyable.
         generic_client(const generic_client&) = delete;
         /// @brief Non-copyable.
         generic_client& operator=(const generic_client&) = delete;
         /// @brief Movable.
-        generic_client(generic_client&&) = default;
+        generic_client(generic_client&&) noexcept = default;
         /// @brief Movable.
-        generic_client& operator=(generic_client&&) = default;
+        generic_client& operator=(generic_client&&) noexcept = default;
 
         /// @brief Bind to a NIC and start receiving MSRP frames.
         ///        Spawns the receive loop and domain advertisement.
-        [[nodiscard]] task<std::expected<void, std::error_code>> start(std::string_view iface) noexcept(false);
+        [[nodiscard]] task<std::expected<void, std::error_code>> start(const std::string_view iface) noexcept(false);
 
         /// @brief **Talker**: advertise a stream and periodically re-declare it.
         ///        Returns once the first declaration is sent.

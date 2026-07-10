@@ -277,10 +277,10 @@ namespace kmx::aio::avb::gptp
     }
 
     template <typename Executor>
-    generic_clock<Executor>::~generic_clock() = default;
+    generic_clock<Executor>::~generic_clock() noexcept = default;
 
     template <typename Executor>
-    task<std::expected<void, std::error_code>> generic_clock<Executor>::start(std::string_view iface) noexcept(false)
+    task<std::expected<void, std::error_code>> generic_clock<Executor>::start(const std::string_view iface) noexcept(false)
     {
         // Open raw Ethernet socket filtered to gPTP EtherType
         auto open_res = co_await state_->sock_.open(iface, ethertype::gptp);

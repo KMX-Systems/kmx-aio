@@ -39,7 +39,7 @@ namespace kmx::aio::http3::qpack
             {":status", "404"},
         }};
 
-        [[nodiscard]] std::optional<std::uint64_t> find_exact(std::string_view name, std::string_view value) noexcept
+        [[nodiscard]] std::optional<std::uint64_t> find_exact(const std::string_view name, std::string_view value) noexcept
         {
             for (std::size_t index = 0u; index < static_table.size(); ++index)
                 if (static_table[index].first == name && static_table[index].second == value)
@@ -47,7 +47,7 @@ namespace kmx::aio::http3::qpack
             return std::nullopt;
         }
 
-        [[nodiscard]] std::optional<std::uint64_t> find_name(std::string_view name) noexcept
+        [[nodiscard]] std::optional<std::uint64_t> find_name(const std::string_view name) noexcept
         {
             for (std::size_t index = 0u; index < static_table.size(); ++index)
                 if (static_table[index].first == name)
@@ -56,33 +56,60 @@ namespace kmx::aio::http3::qpack
         }
     } // namespace detail
 
-    std::optional<std::uint64_t> literal_codec::static_name_index(std::string_view name) noexcept
+    std::optional<std::uint64_t> literal_codec::static_name_index(const std::string_view name) noexcept
     {
         return detail::find_name(name);
     }
 
-    std::optional<std::uint64_t> literal_codec::static_field_index(std::string_view name, std::string_view value) noexcept
+    std::optional<std::uint64_t> literal_codec::static_field_index(const std::string_view name,
+                                                                   const std::string_view value) noexcept
     {
         return detail::find_exact(name, value);
     }
 
     std::vector<std::uint8_t> literal_codec::encode(const header_list& headers) noexcept(false)
     {
-        std::size_t estimated_capacity = 2u; // 2 bytes prefix
+        // Cache lookup results to avoid redundant static table searches
+        struct lookup_result {
+            std::optional<std::uint64_t> exact_index;
+            std::optional<std::uint64_t> name_index;
+        };
+        std::vector<lookup_result> lookups;
+        lookups.reserve(headers.size());
+
+        // Single pass: perform all table lookups
         for (const auto& [name, value]: headers)
         {
-            if (const auto exact_index = detail::find_exact(name, value); exact_index.has_value())
+            lookups.push_back({
+                detail::find_exact(name, value),
+                detail::find_name(name)
+            });
+        }
+
+        // Estimate capacity using cached lookup results
+        std::size_t estimated_capacity = 2u; // 2 bytes prefix
+        for (std::size_t i = 0u; i < headers.size(); ++i)
+        {
+            estimated_capacity += 1u; // 1 byte for field representation
+            const auto& [exact_index, name_index] = lookups[i];
+            const auto& [name, value] = headers[i];
+
+            if (exact_index.has_value())
             {
-                estimated_capacity += 1u + detail::varint_size(*exact_index);
-            }
-            else if (const auto name_index = detail::find_name(name); name_index.has_value())
-            {
-                estimated_capacity += 1u + detail::varint_size(*name_index) + detail::varint_size(value.size()) + value.size();
+                estimated_capacity += detail::varint_size(*exact_index);
             }
             else
             {
-                estimated_capacity +=
-                    1u + detail::varint_size(name.size()) + name.size() + detail::varint_size(value.size()) + value.size();
+                const auto value_encoded_size = detail::varint_size(value.size()) + value.size();
+                if (name_index.has_value())
+                {
+                    estimated_capacity += detail::varint_size(*name_index) + value_encoded_size;
+                }
+                else
+                {
+                    estimated_capacity +=
+                        detail::varint_size(name.size()) + name.size() + value_encoded_size;
+                }
             }
         }
 
@@ -93,16 +120,20 @@ namespace kmx::aio::http3::qpack
         block.push_back(0u);
         block.push_back(0u);
 
-        for (const auto& [name, value]: headers)
+        // Encode using cached lookup results
+        for (std::size_t i = 0u; i < headers.size(); ++i)
         {
-            if (const auto exact_index = detail::find_exact(name, value); exact_index.has_value())
+            const auto& [exact_index, name_index] = lookups[i];
+            const auto& [name, value] = headers[i];
+
+            if (exact_index.has_value())
             {
                 block.push_back(static_cast<std::uint8_t>(field_representation::indexed_field));
                 detail::encode_varint(block, *exact_index);
                 continue;
             }
 
-            if (const auto name_index = detail::find_name(name); name_index.has_value())
+            if (name_index.has_value())
             {
                 block.push_back(static_cast<std::uint8_t>(field_representation::literal_with_name_ref));
                 detail::encode_varint(block, *name_index);

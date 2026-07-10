@@ -37,22 +37,22 @@ namespace kmx::aio::avb::gptp
         /// @brief Creates a gPTP slave clock bound to an executor.
         explicit generic_clock(Executor& exec) noexcept;
         /// @brief Releases clock resources.
-        ~generic_clock();
+        ~generic_clock() noexcept;
 
         /// @brief Non-copyable.
         generic_clock(const generic_clock&) = delete;
         /// @brief Non-copyable.
         generic_clock& operator=(const generic_clock&) = delete;
         /// @brief Movable.
-        generic_clock(generic_clock&&) = default;
+        generic_clock(generic_clock&&) noexcept = default;
         /// @brief Movable.
-        generic_clock& operator=(generic_clock&&) = default;
+        generic_clock& operator=(generic_clock&&) noexcept = default;
 
         /// @brief Bind to a NIC and begin receiving gPTP frames.
         ///        Spawns internal coroutines for Sync, Pdelay, and Announce handling.
         /// @param iface Network interface name.
         /// @return Success or an error code.
-        [[nodiscard]] task<std::expected<void, std::error_code>> start(std::string_view iface) noexcept(false);
+        [[nodiscard]] task<std::expected<void, std::error_code>> start(const std::string_view iface) noexcept(false);
 
         /// @brief Return the current TAI time in nanoseconds.
         ///        Reads CLOCK_TAI directly — always available, even before sync.

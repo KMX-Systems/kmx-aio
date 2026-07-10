@@ -32,7 +32,7 @@ namespace kmx::aio::sample::avb::listener::detail
         std::println("  --help            Show this help");
     }
 
-    static parse_status parse_talker_mac_option(std::string_view value, kmx::aio::sample::avb::listener::config& cfg)
+    static parse_status parse_talker_mac_option(const std::string_view value, kmx::aio::sample::avb::listener::config& cfg)
     {
         if (!kmx::aio::sample::common::parse_mac_bytes(value, cfg.talker_mac))
         {
@@ -43,7 +43,7 @@ namespace kmx::aio::sample::avb::listener::detail
         return parse_status::ok;
     }
 
-    static parse_status parse_stream_id_option(std::string_view value, kmx::aio::sample::avb::listener::config& cfg)
+    static parse_status parse_stream_id_option(const std::string_view value, kmx::aio::sample::avb::listener::config& cfg)
     {
         std::uint16_t parsed {};
         if (!kmx::aio::sample::common::parse_unsigned_u16(value, parsed))
@@ -57,7 +57,7 @@ namespace kmx::aio::sample::avb::listener::detail
         return parse_status::ok;
     }
 
-    static parse_status parse_max_frames_option(std::string_view value, kmx::aio::sample::avb::listener::config& cfg)
+    static parse_status parse_max_frames_option(const std::string_view value, kmx::aio::sample::avb::listener::config& cfg)
     {
         std::uint64_t parsed {};
         if (!kmx::aio::sample::common::parse_unsigned_u64(value, parsed))
@@ -70,7 +70,7 @@ namespace kmx::aio::sample::avb::listener::detail
         return parse_status::ok;
     }
 
-    static parse_status parse_period_us_option(std::string_view value, kmx::aio::sample::avb::listener::config& cfg,
+    static parse_status parse_period_us_option(const std::string_view value, kmx::aio::sample::avb::listener::config& cfg,
                                                std::uint64_t min_period_us, std::uint64_t max_period_us)
     {
         std::uint64_t parsed {};
@@ -91,7 +91,7 @@ namespace kmx::aio::sample::avb::listener::detail
         return parse_status::ok;
     }
 
-    static parse_status parse_sync_timeout_s_option(std::string_view value, kmx::aio::sample::avb::listener::config& cfg,
+    static parse_status parse_sync_timeout_s_option(const std::string_view value, kmx::aio::sample::avb::listener::config& cfg,
                                                     std::uint64_t min_sync_timeout_s, std::uint64_t max_sync_timeout_s)
     {
         std::uint64_t parsed {};

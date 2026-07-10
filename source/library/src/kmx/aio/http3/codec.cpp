@@ -350,18 +350,60 @@ namespace kmx::aio::http3::demo
 {
     namespace detail
     {
-        [[nodiscard]] std::string_view pseudo_to_header_name(std::string_view pseudo_name)
+        [[nodiscard]] std::string_view pseudo_to_header_name(const std::string_view pseudo_name) noexcept
         {
-            if (pseudo_name == ":method")
-                return ":method";
-            if (pseudo_name == ":scheme")
-                return ":scheme";
-            if (pseudo_name == ":authority")
-                return ":authority";
-            if (pseudo_name == ":path")
-                return ":path";
-            if (pseudo_name == ":status")
-                return ":status";
+            if (pseudo_name.empty() || pseudo_name.front() != ':')
+                return pseudo_name;
+
+            const char* const p = pseudo_name.data();
+            switch (pseudo_name.size())
+            {
+                case 5u: // ":path"
+                    if ((p[1] == 'p') && (p[2] == 'a') && (p[3] == 't') && (p[4] == 'h'))
+                        return ":path";
+                    break;
+
+                case 7u: // ":method" / ":scheme"
+                    switch (p[1])
+                    {
+                        case 'm':
+                            if ((p[2] == 'e') && (p[3] == 't') && (p[4] == 'h') && (p[5] == 'o') && (p[6] == 'd'))
+                                return ":method";
+                            break;
+
+                        case 's':
+                            if ((p[2] == 'c') && (p[3] == 'h') && (p[4] == 'e') && (p[5] == 'm') && (p[6] == 'e'))
+                                return ":scheme";
+                            break;
+
+                        default:
+                            break;
+                    }
+                    break;
+
+                case 10u: // ":authority" / ":status"
+                    switch (p[1])
+                    {
+                        case 'a':
+                            if ((p[2] == 'u') && (p[3] == 't') && (p[4] == 'h') && (p[5] == 'o') && (p[6] == 'r') &&
+                                (p[7] == 'i') && (p[8] == 't') && (p[9] == 'y'))
+                                return ":authority";
+                            break;
+
+                        case 's':
+                            if ((p[2] == 't') && (p[3] == 'a') && (p[4] == 't') && (p[5] == 'u') && (p[6] == 's'))
+                                return ":status";
+                            break;
+
+                        default:
+                            break;
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+
             return pseudo_name;
         }
 
@@ -382,7 +424,7 @@ namespace kmx::aio::http3::demo
             }
         }
 
-        [[nodiscard]] bool has_header(const header_list& headers, std::string_view name)
+        [[nodiscard]] bool has_header(const header_list& headers, const std::string_view name) noexcept
         {
             for (const auto& [header_name, _]: headers)
             {
@@ -395,10 +437,21 @@ namespace kmx::aio::http3::demo
 
         [[nodiscard]] inline constexpr bool is_ascii_space(const char ch) noexcept
         {
-            return (ch == ' ') || (ch == '\t') || (ch == '\r') || (ch == '\n') || (ch == '\v') || (ch == '\f');
+            switch (ch)
+            {
+                case ' ':
+                case '\t':
+                case '\r':
+                case '\n':
+                case '\v':
+                case '\f':
+                    return true;
+                default:
+                    return false;
+            }
         }
 
-        [[nodiscard]] std::string_view trim(std::string_view text)
+        [[nodiscard]] std::string_view trim(std::string_view text) noexcept
         {
             while (!text.empty() && is_ascii_space(text.front()))
                 text.remove_prefix(1u);
@@ -433,7 +486,7 @@ namespace kmx::aio::http3::demo
             };
         }
 
-        std::vector<std::uint8_t> string_view_to_bytes(std::string_view text)
+        std::vector<std::uint8_t> string_view_to_bytes(const std::string_view text)
         {
             return std::vector<std::uint8_t>(text.begin(), text.end());
         }
@@ -527,7 +580,7 @@ namespace kmx::aio::http3::demo
         return payload;
     }
 
-    std::expected<request_message, std::error_code> message_builder::parse_request_payload(std::string_view payload) noexcept
+    std::expected<request_message, std::error_code> message_builder::parse_request_payload(const std::string_view payload) noexcept
     {
         auto head_and_body = detail::split_head_and_body(payload);
         if (!head_and_body)
@@ -574,7 +627,7 @@ namespace kmx::aio::http3::demo
         return message;
     }
 
-    std::expected<response_message, std::error_code> message_builder::parse_response_payload(std::string_view payload) noexcept
+    std::expected<response_message, std::error_code> message_builder::parse_response_payload(const std::string_view payload) noexcept
     {
         auto head_and_body = detail::split_head_and_body(payload);
         if (!head_and_body)

@@ -31,7 +31,7 @@ namespace kmx::aio
         executor_base& operator=(executor_base&&) = delete;
 
         /// @brief Releases base executor resources.
-        virtual ~executor_base() = default;
+        virtual ~executor_base() noexcept = default;
 
         /// @brief Returns a lifetime token that expires when the executor is destroyed.
         /// @return A weak token that becomes expired when the executor dies.
