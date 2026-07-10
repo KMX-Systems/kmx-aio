@@ -74,7 +74,7 @@ Project structure notes:
 
 - The repository stays as one monorepo; library split is at artifact level.
 - Feature-specific behavior and commands live under `documentation/features`.
-- CI-local workflows are centered around scripts in `scripts/ci`.
+- CI-local workflows are centered around scripts in `script/ci`.
 
 ## Artifact Graph
 

@@ -17,13 +17,13 @@ AVB support includes shared generic components with readiness/completion aliases
 Install host-side AVB/PTP runtime tools on Ubuntu/Debian:
 
 ```bash
-bash scripts/install_avb_deps.sh
+bash script/feature/avb/install-dependencies.sh
 ```
 
 Or via umbrella bootstrap:
 
 ```bash
-bash scripts/bootstrap_optional_deps.sh --avb
+bash script/bootstrap_optional_deps.sh --avb
 ```
 
 ## Local CI/Smoke Entry
@@ -31,7 +31,7 @@ bash scripts/bootstrap_optional_deps.sh --avb
 Use the local CI-equivalent script for AVB build-and-test flow:
 
 ```bash
-bash scripts/ci/run-ci-avb-local.sh --only all
+bash script/ci/run-ci-avb-local.sh --only all
 ```
 
 ## C++ Key Methods - Readiness model

@@ -20,7 +20,7 @@ fi
 ### Run All Integration Tests (CI-Equivalent)
 
 ```bash
-bash scripts/ci/run-ci-avb-local.sh --only all
+bash script/ci/run-ci-avb-local.sh --only all
 ```
 
 ### Run All Tests (Unit + Integration)
@@ -39,7 +39,7 @@ else
     "$TEST_BIN"
 fi
 
-bash scripts/ci/run-ci-avb-local.sh --only all
+bash script/ci/run-ci-avb-local.sh --only all
 ```
 
 ## Unit Tests
@@ -62,7 +62,7 @@ fi
 Or use the CI-equivalent:
 
 ```bash
-bash scripts/ci/run-ci-avb-local.sh --only build-and-test
+bash script/ci/run-ci-avb-local.sh --only build-and-test
 ```
 
 To include readiness and HTTP/3 tests, build with those flags first:
@@ -103,23 +103,23 @@ done
 Run all CI jobs locally:
 
 ```bash
-bash scripts/ci/run-ci-avb-local.sh --only all
+bash script/ci/run-ci-avb-local.sh --only all
 ```
 
 Run individual CI jobs:
 
 ```bash
-bash scripts/ci/run-ci-avb-local.sh --only build-and-test
-bash scripts/ci/run-ci-avb-local.sh --only artifact-split-smoke
-bash scripts/ci/run-ci-avb-local.sh --only quic-smoke
-bash scripts/ci/run-ci-avb-local.sh --only gpu-smoke
+bash script/ci/run-ci-avb-local.sh --only build-and-test
+bash script/ci/run-ci-avb-local.sh --only artifact-split-smoke
+bash script/ci/run-ci-avb-local.sh --only quic-smoke
+bash script/ci/run-ci-avb-local.sh --only gpu-smoke
 ```
 
 > **`artifact-split-smoke`** enforces that samples and `library-test` do not depend on `kmx-aio-lib`, that each sample gates optional artifacts with matching `project.enable_*` conditions, then bootstraps local `open62541` and SPDK prefixes and builds the expanded explicit-dependency set.
 
 ### QUIC Smoke Test
 
-Requires `project.enable_quic:true` (enabled by default):
+Requires `project.enable_quic:true`:
 
 ```bash
 TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"

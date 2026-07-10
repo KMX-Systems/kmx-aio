@@ -71,7 +71,7 @@ __NV_PRIME_RENDER_OFFLOAD=1 \
 __GLX_VENDOR_LIBRARY_NAME=nvidia \
 __VK_LAYER_NV_optimus=NVIDIA_only \
 LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} \
-    bash scripts/ci/run-ci-avb-local.sh --only gpu-smoke
+    bash script/ci/run-ci-avb-local.sh --only gpu-smoke
 ```
 
 Troubleshooting:

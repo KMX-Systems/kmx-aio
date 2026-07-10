@@ -22,7 +22,7 @@ sudo apt install -y liburing-dev build-essential pkg-config git python3
 Recommended:
 
 ```bash
-bash scripts/install_optional_accelerator_deps.sh
+bash script/feature/cuda/install-dependencies.sh
 ```
 
 Equivalent manual install:
@@ -39,7 +39,7 @@ sudo apt install -y \
 Run all optional dependency installers/checks from repository root:
 
 ```bash
-bash scripts/bootstrap_optional_deps.sh --all
+bash script/bootstrap_optional_deps.sh --all
 ```
 
 The script is additive and idempotent-friendly: rerunning it only refreshes state or verifies prerequisites.
@@ -48,7 +48,14 @@ If a step needs elevated privileges, you will be prompted by the underlying inst
 Use targeted flags when you only need specific features:
 
 ```bash
-bash scripts/bootstrap_optional_deps.sh --af-xdp --quic --opc-ua
+bash script/bootstrap_optional_deps.sh --af-xdp --quic --opc-ua
+```
+
+For V4L2, either run the dedicated installer or enable the feature and use the top-level installer:
+
+```bash
+bash script/feature/v4l2/install-dependencies.sh
+KMX_ENABLE_V4L2=true bash script/install-dependencies.sh
 ```
 
 Supported flags:
@@ -67,13 +74,13 @@ Common bootstrap flows:
 
 ```bash
 # Network acceleration and packet I/O
-bash scripts/bootstrap_optional_deps.sh --af-xdp --avb
+bash script/bootstrap_optional_deps.sh --af-xdp --avb
 
 # QUIC + OPC UA stack
-bash scripts/bootstrap_optional_deps.sh --quic --opc-ua
+bash script/bootstrap_optional_deps.sh --quic --opc-ua
 
 # Storage and media path
-bash scripts/bootstrap_optional_deps.sh --spdk --v4l2
+bash script/bootstrap_optional_deps.sh --spdk --v4l2
 ```
 
 ## Optional Feature Prerequisites
@@ -83,13 +90,13 @@ Note on defaults:
 - The default project graph enables `core + completion + quic`.
 - Readiness, HTTP/2, HTTP/3, AVB, AF_XDP, SPDK, OPC UA, CUDA, and OpenOnload remain off until explicitly enabled with `project.enable_*:true`.
 
-- QUIC / HTTP/3: BoringSSL + lsquic (run [scripts/install_lsquic.sh](scripts/install_lsquic.sh))
-- OPC UA: open62541 (run [scripts/install_open62541.sh](scripts/install_open62541.sh))
-- AF_XDP: libbpf/libxdp toolchain available (run [scripts/install_af_xdp_deps.sh](scripts/install_af_xdp_deps.sh))
-- SPDK: local workspace bootstrap available (run [scripts/install_spdk_local.sh](scripts/install_spdk_local.sh))
-- AVB: host runtime tools available (run [scripts/install_avb_deps.sh](scripts/install_avb_deps.sh)); still requires `CAP_NET_RAW` and PTP-capable NIC/driver
-- CUDA: validate environment with [scripts/check_cuda_env.sh](scripts/check_cuda_env.sh) (driver/toolkit install is distro-specific)
-- V4L2: optional host tooling available (run [scripts/install_v4l2_deps.sh](scripts/install_v4l2_deps.sh))
+- QUIC / HTTP/3: BoringSSL + lsquic (run [script/feature/quic/install-dependencies.sh](script/feature/quic/install-dependencies.sh))
+- OPC UA: open62541 (run [script/feature/opc_ua/install-dependencies.sh](script/feature/opc_ua/install-dependencies.sh))
+- AF_XDP: libbpf/libxdp toolchain available (run [script/feature/af_xdp/install-dependencies.sh](script/feature/af_xdp/install-dependencies.sh))
+- SPDK: local workspace bootstrap available (run [script/feature/spdk/install-dependencies.sh](script/feature/spdk/install-dependencies.sh))
+- AVB: host runtime tools available (run [script/feature/avb/install-dependencies.sh](script/feature/avb/install-dependencies.sh)); still requires `CAP_NET_RAW` and PTP-capable NIC/driver
+- CUDA: validate environment with [script/feature/cuda/check_env.sh](script/feature/cuda/check_env.sh) (driver/toolkit install is distro-specific)
+- V4L2: optional host tooling available (run [script/feature/v4l2/install-dependencies.sh](script/feature/v4l2/install-dependencies.sh))
 
 ## Verify Key Libraries
 
@@ -103,13 +110,13 @@ pkg-config --modversion spdk_nvme
 ## Build BoringSSL and lsquic (TLS/QUIC)
 
 ```bash
-bash scripts/install_lsquic.sh
+bash script/feature/quic/install-dependencies.sh
 ```
 
 ## Build open62541 (OPC UA)
 
 ```bash
-bash scripts/install_open62541.sh
+bash script/feature/opc_ua/install-dependencies.sh
 ```
 
 Then build with:

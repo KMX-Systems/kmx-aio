@@ -23,13 +23,13 @@ AF_XDP support is completion-model only and feature-gated.
 Install them on Ubuntu/Debian with:
 
 ```bash
-bash scripts/install_af_xdp_deps.sh
+bash script/feature/af_xdp/install-dependencies.sh
 ```
 
 Or via umbrella bootstrap:
 
 ```bash
-bash scripts/bootstrap_optional_deps.sh --af-xdp
+bash script/bootstrap_optional_deps.sh --af-xdp
 ```
 
 ## C++ Key Methods - Completion model
