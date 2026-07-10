@@ -53,8 +53,7 @@ namespace kmx::aio::tls::test::integration
         const fs::path client_csr = cert_dir / "client.csr";
 
         // Check if all files exist
-        if (fs::exists(server_cert) && fs::exists(server_key) &&
-            fs::exists(client_cert) && fs::exists(client_key))
+        if (fs::exists(server_cert) && fs::exists(server_key) && fs::exists(client_cert) && fs::exists(client_key))
         {
             return true;
         }
@@ -66,44 +65,35 @@ namespace kmx::aio::tls::test::integration
             return false;
 
         // Generate server key and self-signed certificate
-        std::string server_gen_cmd =
-            "openssl req -x509 -newkey rsa:2048 -keyout " + shell_quote(server_key.string()) +
-            " -out " + shell_quote(server_cert.string()) +
-            " -days 1 -nodes -subj \"/CN=localhost\" >/dev/null 2>&1";
+        std::string server_gen_cmd = "openssl req -x509 -newkey rsa:2048 -keyout " + shell_quote(server_key.string()) + " -out " +
+                                     shell_quote(server_cert.string()) + " -days 1 -nodes -subj \"/CN=localhost\" >/dev/null 2>&1";
 
         if (std::system(server_gen_cmd.c_str()) != 0)
             return false;
 
         // Generate client key
-        std::string client_key_cmd =
-            "openssl genrsa -out " + shell_quote(client_key.string()) +
-            " 2048 >/dev/null 2>&1";
+        std::string client_key_cmd = "openssl genrsa -out " + shell_quote(client_key.string()) + " 2048 >/dev/null 2>&1";
 
         if (std::system(client_key_cmd.c_str()) != 0)
             return false;
 
         // Generate client CSR
-        std::string client_csr_cmd =
-            "openssl req -new -key " + shell_quote(client_key.string()) +
-            " -out " + shell_quote(client_csr.string()) +
-            " -subj \"/CN=client\" >/dev/null 2>&1";
+        std::string client_csr_cmd = "openssl req -new -key " + shell_quote(client_key.string()) + " -out " +
+                                     shell_quote(client_csr.string()) + " -subj \"/CN=client\" >/dev/null 2>&1";
 
         if (std::system(client_csr_cmd.c_str()) != 0)
             return false;
 
         // Sign client certificate with server key
-        std::string client_sign_cmd =
-            "openssl x509 -req -in " + shell_quote(client_csr.string()) +
-            " -signkey " + shell_quote(server_key.string()) +
-            " -out " + shell_quote(client_cert.string()) +
-            " -days 1 >/dev/null 2>&1";
+        std::string client_sign_cmd = "openssl x509 -req -in " + shell_quote(client_csr.string()) + " -signkey " +
+                                      shell_quote(server_key.string()) + " -out " + shell_quote(client_cert.string()) +
+                                      " -days 1 >/dev/null 2>&1";
 
         if (std::system(client_sign_cmd.c_str()) != 0)
             return false;
 
         // Verify all certificates were created
-        return fs::exists(server_cert) && fs::exists(server_key) &&
-               fs::exists(client_cert) && fs::exists(client_key);
+        return fs::exists(server_cert) && fs::exists(server_key) && fs::exists(client_cert) && fs::exists(client_key);
     }
 
     TEST_CASE("mTLS smoke test with valid client and server certificates", "[tls][mtls][smoke][slow]")
@@ -124,8 +114,8 @@ namespace kmx::aio::tls::test::integration
         REQUIRE(fs::exists(client_key));
 
         // Test 2: Verify file sizes are reasonable
-        REQUIRE(fs::file_size(server_cert) > 300);   // PEM certs ~1500+ bytes
-        REQUIRE(fs::file_size(server_key) > 1000);   // RSA 2048 keys ~1700 bytes
+        REQUIRE(fs::file_size(server_cert) > 300); // PEM certs ~1500+ bytes
+        REQUIRE(fs::file_size(server_key) > 1000); // RSA 2048 keys ~1700 bytes
         REQUIRE(fs::file_size(client_cert) > 300);
         REQUIRE(fs::file_size(client_key) > 1000);
 
@@ -142,25 +132,17 @@ namespace kmx::aio::tls::test::integration
         REQUIRE(client_key_text.find("BEGIN") != std::string::npos);
 
         // Test 5: Verify certificates can be parsed by OpenSSL
-        const std::string verify_server_cmd =
-            "openssl x509 -in " + shell_quote(server_cert.string()) +
-            " -text -noout >/dev/null 2>&1";
+        const std::string verify_server_cmd = "openssl x509 -in " + shell_quote(server_cert.string()) + " -text -noout >/dev/null 2>&1";
         REQUIRE(std::system(verify_server_cmd.c_str()) == 0);
 
-        const std::string verify_client_cmd =
-            "openssl x509 -in " + shell_quote(client_cert.string()) +
-            " -text -noout >/dev/null 2>&1";
+        const std::string verify_client_cmd = "openssl x509 -in " + shell_quote(client_cert.string()) + " -text -noout >/dev/null 2>&1";
         REQUIRE(std::system(verify_client_cmd.c_str()) == 0);
 
         // Test 6: Verify server and client keys are valid RSA keys
-        const std::string verify_server_key_cmd =
-            "openssl rsa -in " + shell_quote(server_key.string()) +
-            " -check -noout >/dev/null 2>&1";
+        const std::string verify_server_key_cmd = "openssl rsa -in " + shell_quote(server_key.string()) + " -check -noout >/dev/null 2>&1";
         REQUIRE(std::system(verify_server_key_cmd.c_str()) == 0);
 
-        const std::string verify_client_key_cmd =
-            "openssl rsa -in " + shell_quote(client_key.string()) +
-            " -check -noout >/dev/null 2>&1";
+        const std::string verify_client_key_cmd = "openssl rsa -in " + shell_quote(client_key.string()) + " -check -noout >/dev/null 2>&1";
         REQUIRE(std::system(verify_client_key_cmd.c_str()) == 0);
 
         // Test 7: Verify mTLS setup is complete (all artifacts present and valid)
