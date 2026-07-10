@@ -25,4 +25,10 @@ namespace kmx::aio
         return ipv6_address_t {ip};
     }
 
+    /// @brief Parse an IPv6 address from standard notation (e.g., "2001:db8::1" or "::1").
+    /// @param text Input string in IPv6 notation.
+    /// @param out Output IPv6 address storage on success.
+    /// @return true if parsing succeeded, false otherwise.
+    [[nodiscard]] bool parse_ipv6_address(std::string_view text, ipv6_storage_t& out) noexcept;
+
 } // namespace kmx::aio
