@@ -30,4 +30,10 @@ namespace kmx::aio
         return ipv4_address_t {ip};
     }
 
+    /// @brief Parse an IPv4 address from dotted-decimal format (e.g., "192.168.1.1").
+    /// @param text Input string in dotted-decimal format.
+    /// @param out Output IPv4 address storage on success.
+    /// @return true if parsing succeeded, false otherwise.
+    [[nodiscard]] bool parse_ipv4_address(std::string_view text, ipv4_storage_t& out) noexcept;
+
 } // namespace kmx::aio

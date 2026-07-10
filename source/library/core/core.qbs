@@ -59,6 +59,7 @@ StaticLibrary {
         "../api/kmx/aio/file_descriptor.hpp",
         "../api/kmx/aio/ipv4.hpp",
         "../api/kmx/aio/ipv6.hpp",
+        "../api/kmx/aio/mac.hpp",
         "../api/kmx/aio/scheduler.hpp",
         "../api/kmx/aio/stream_concepts.hpp",
         "../api/kmx/aio/task.hpp",
@@ -66,6 +67,7 @@ StaticLibrary {
         "../src/kmx/aio/basic_types.cpp",
         "../src/kmx/aio/error_code.cpp",
         "../src/kmx/aio/file_descriptor.cpp",
+        "../src/kmx/aio/net_parse.cpp",
         "../src/kmx/aio/scheduler.cpp",
         "../src/kmx/aio/task.cpp",
     ]
