@@ -59,6 +59,8 @@ namespace kmx::aio::quic
                                    const unsigned lsquic_flags) noexcept;
 
         bool is_local_initiated_stream(const ::lsquic_stream_t* stream, const bool is_client) noexcept;
+
+        int send_packets_out_fd(const int fd, const ::lsquic_out_spec* specs, unsigned count) noexcept;
     } // namespace detail
 
     /// @brief Common QUIC engine implementation shared between readiness and completion models.
@@ -101,30 +103,10 @@ namespace kmx::aio::quic
 
         // lsquic C callbacks
 
-        static int send_packets_out(void* ctx, const struct ::lsquic_out_spec* specs, unsigned count)
+        static int send_packets_out(void* ctx, const ::lsquic_out_spec* specs, const unsigned count)
         {
             auto* const self = static_cast<base_impl*>(ctx);
-            unsigned sent {};
-            ::msghdr msg {};
-            ::iovec iov[1u] {};
-
-            for (; sent < count; ++sent)
-            {
-                msg = {};
-                msg.msg_name = const_cast<void*>(reinterpret_cast<const void*>(specs[sent].dest_sa));
-                msg.msg_namelen = (specs[sent].dest_sa->sa_family == AF_INET) ? sizeof(sockaddr_in) : sizeof(sockaddr_in6);
-
-                iov[0].iov_base = const_cast<void*>(specs[sent].iov[0].iov_base);
-                iov[0].iov_len = specs[sent].iov[0].iov_len;
-                msg.msg_iov = iov;
-                msg.msg_iovlen = 1;
-
-                const ssize_t res = ::sendmsg(self->socket_->get_fd(), &msg, 0);
-                if ((res < 0) && would_block(errno))
-                    break;
-            }
-
-            return static_cast<int>(sent);
+            return detail::send_packets_out_fd(self->socket_->get_fd(), specs, count);
         }
 
         static ::lsquic_conn_ctx_t* on_new_conn(void* stream_if_ctx, ::lsquic_conn_t* conn)
