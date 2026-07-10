@@ -1,5 +1,6 @@
 #include <kmx/aio/sample/avb/listener/manager.hpp>
 #include <kmx/aio/sample/common/cli_parse.hpp>
+#include <kmx/aio/mac.hpp>
 
 #include <exception>
 #include <kmx/logger.hpp>
@@ -34,7 +35,7 @@ namespace kmx::aio::sample::avb::listener::detail
 
     static parse_status parse_talker_mac_option(const std::string_view value, kmx::aio::sample::avb::listener::config& cfg)
     {
-        if (!kmx::aio::sample::common::parse_mac_bytes(value, cfg.talker_mac))
+        if (!kmx::aio::parse_mac_address(value, cfg.talker_mac))
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Invalid --talker-mac value '{}'", value);
             return parse_status::error;
