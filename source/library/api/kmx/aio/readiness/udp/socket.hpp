@@ -22,7 +22,7 @@ namespace kmx::aio::readiness::udp
         using result_task = task<std::expected<std::size_t, std::error_code>>;
         using create_result = std::expected<socket, std::error_code>;
 
-        [[nodiscard]] static create_result create(executor& exec, int domain = AF_INET,
+        [[nodiscard]] static create_result create(executor& exec, const int domain = AF_INET,
                                                   int type = SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, int protocol = 0) noexcept;
 
         socket(executor& exec, file_descriptor&& fd) noexcept: io_base(exec, std::move(fd)) {}

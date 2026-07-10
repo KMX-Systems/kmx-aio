@@ -32,7 +32,7 @@ namespace kmx::aio::completion::udp
         /// @param type     Socket type flags.
         /// @param protocol Protocol number.
         /// @return A socket on success, or an error code.
-        [[nodiscard]] static create_result create(std::shared_ptr<executor> exec, int domain = AF_INET,
+        [[nodiscard]] static create_result create(std::shared_ptr<executor> exec, const int domain = AF_INET,
                                                   int type = SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, int protocol = 0) noexcept;
 
         /// @brief Constructs a socket from an executor and file descriptor.
