@@ -15,6 +15,29 @@ qbs resolve -f source/source.qbs config:debug
 qbs build -f source/source.qbs config:debug
 ```
 
+This builds the test binary `kmx-aio-test` with only core, completion, and QUIC tests. Tests for readiness, AVB, OPC-UA, GPU, and other optional features are **not** included.
+
+## Build All Tests
+
+To build the complete test suite including tests for all optional features:
+
+```bash
+qbs resolve -f source/source.qbs config:debug project.full:true
+qbs build -f source/source.qbs config:debug --products kmx-aio-test project.full:true
+```
+
+Or selectively enable only the features you need:
+
+```bash
+qbs resolve -f source/source.qbs config:debug \
+    project.enable_readiness:true \
+    project.enable_avb:true
+
+qbs build -f source/source.qbs config:debug --products kmx-aio-test \
+    project.enable_readiness:true \
+    project.enable_avb:true
+```
+
 ## Baseline Build Without QUIC
 
 ```bash
@@ -120,6 +143,28 @@ qbs build -f source/source.qbs config:debug \
 qbs build -f source/source.qbs \
     project.enable_spdk:false \
     project.enable_af_xdp:false
+```
+
+## OPC-UA Local Install Build
+
+If you installed OPC-UA with:
+
+```bash
+bash scripts/install_open62541.sh
+```
+
+then open62541 is installed under `build/open62541/install-local`.
+The project default `project.opc_ua_prefix` now points to this local path.
+Pass the prefix explicitly during resolve/build so headers like `open62541.h` are found:
+
+```bash
+qbs resolve -f source/source.qbs config:debug \
+    project.enable_opc_ua:true \
+    project.opc_ua_prefix:"$PWD/build/open62541/install-local"
+
+qbs build -f source/source.qbs config:debug \
+    project.enable_opc_ua:true \
+    project.opc_ua_prefix:"$PWD/build/open62541/install-local"
 ```
 
 ## SPDK Local Install Build
