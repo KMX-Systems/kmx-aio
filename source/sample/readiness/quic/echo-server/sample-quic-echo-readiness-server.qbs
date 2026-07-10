@@ -16,7 +16,7 @@ CppApplication {
     cpp.defines: ["KMX_AIO_FEATURE_QUIC=1"]
 
     Depends { name: "kmx-aio-readiness" }
-    Depends { name: "kmx-aio-quic" }
+    Depends { name: "kmx-aio-quic"; condition: project.enable_quic }
 
     files: [
         "inc/kmx/aio/sample/quic/echo_server/**.hpp",
