@@ -17,7 +17,7 @@ CppApplication {
 
     cpp.defines: ["KMX_AIO_FEATURE_SOMEIP=1"]
 
-    Depends { name: "kmx-aio-lib" }
+    Depends { name: "kmx-aio-completion" }
     Depends { name: "kmx-aio-someip"; condition: project.enable_someip }
 
     files: [
