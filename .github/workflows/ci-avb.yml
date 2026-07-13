@@ -121,6 +121,7 @@ jobs:
             project.spdk_prefix:"/tmp/spdk/install-local" \
             project.spdk_enable_crypto:false \
             project.enable_quic:true \
+            project.enable_readiness:true \
             project.enable_avb:true \
             project.enable_opc_ua:true \
             project.opc_ua_vendored:true \
@@ -135,6 +136,7 @@ jobs:
             project.spdk_prefix:"/tmp/spdk/install-local" \
             project.spdk_enable_crypto:false \
             project.enable_quic:true \
+            project.enable_readiness:true \
             project.enable_avb:true \
             project.enable_opc_ua:true \
             project.opc_ua_vendored:true \
@@ -170,7 +172,8 @@ jobs:
             project.enable_openonload:false \
             project.enable_af_xdp:false \
             project.enable_spdk:false \
-            project.enable_quic:true
+            project.enable_quic:true \
+            project.enable_readiness:true
 
       - name: Generate temporary QUIC TLS certs
         run: |

@@ -6,6 +6,7 @@
     #include <array>
     #include <cstdint>
     #include <span>
+    #include <string_view>
 #endif
 
 namespace kmx::aio
