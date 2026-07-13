@@ -29,6 +29,58 @@
 
 > ⚙ — Feature-gated: requires `project.enable_*:true`; off by default.
 
+## Feature Domain Applicability Matrix
+
+Quick reference that groups features by domain and highlights only their applicability scope.
+
+### Networking Core
+
+| Feature | Applicability domain |
+| :--- | :--- |
+| [TCP](documentation/features/tcp.md) | Client-server applications requiring reliable byte-stream transport and long-lived connections |
+| [UDP Endpoint](documentation/features/udp.md) | High-level datagram API with automatic peer address management |
+| [UDP Socket](documentation/features/udp.md) | Low-level datagram transport for custom protocols or best-effort traffic |
+
+### Security and Web Protocols
+
+| Feature | Applicability domain |
+| :--- | :--- |
+| [HTTP/2](documentation/features/http2.md) | Multiplexed application-layer services over persistent connections |
+| [HTTP/3](documentation/features/quic-http3.md) | Modern web services over QUIC with reduced handshake/reconnect latency |
+| [QUIC Engine](documentation/features/quic-http3.md) | Secure user-space transport with stream multiplexing and modern congestion control |
+| [TLS Stream](documentation/features/tls-http2.md) | End-to-end encrypted channels for secure transport |
+
+### Time, Device IO, and Polling
+
+| Feature | Applicability domain |
+| :--- | :--- |
+| Completion async_poll(fd, mask) | Unified readiness waiting for arbitrary file descriptors in completion execution |
+| [Timers](documentation/features/timers.md) | Time-based scheduling, deadlines, retry/backoff, and periodic work |
+| [V4L2 Capture](documentation/features/v4l2.md) | Asynchronous video capture for Linux camera devices and multimedia pipelines |
+
+### Industrial and Automotive Integration
+
+| Feature | Applicability domain |
+| :--- | :--- |
+| [AVB/IEEE 802.1](documentation/features/avb.md) | Deterministic, synchronized audio/video streaming over real-time Ethernet networks |
+| [OPC UA](documentation/features/opc-ua.md) | Industrial interoperability for telemetry, control, and subscriptions in automation systems |
+| [SOME/IP](documentation/features/someip.md) | Service-oriented communication for AUTOSAR automotive systems |
+
+### Performance and Hardware Acceleration
+
+| Feature | Applicability domain |
+| :--- | :--- |
+| [AF_XDP Packets](documentation/features/af-xdp.md) | Kernel-bypass packet processing for low-latency, high-throughput networking |
+| [GPU / CUDA](documentation/features/gpu-cuda.md) | Asynchronous GPU offload for compute-bound and post-processing pipelines |
+| [OpenOnload](documentation/features/openonload.md) | Accelerated user-space networking for latency-sensitive workloads |
+| [SPDK Block I/O](documentation/features/spdk.md) | High-performance storage I/O for NVMe/bdev data-plane scenarios |
+
+### Concurrency and Reference Workloads
+
+| Feature | Applicability domain |
+| :--- | :--- |
+| [HFT Order Router](documentation/features/hft-order-router.md) | High-pressure producer-consumer flows with CPU pinning and controlled backpressure |
+
 ## Feature Availability Matrix
 
 Quick reference showing which APIs are available in each execution model:
