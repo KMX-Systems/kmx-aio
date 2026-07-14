@@ -18,11 +18,14 @@
 #if defined(KMX_AIO_FEATURE_AF_XDP)
     #if __has_include(<xdp/xsk.h>)
         #include <xdp/xsk.h>
+        #define KMX_AIO_AF_XDP_HEADERS_AVAILABLE 1
     #elif __has_include(<bpf/xsk.h>)
         #include <bpf/xsk.h>
-    #else
-        #error "AF_XDP enabled but xsk header was not found"
+        #define KMX_AIO_AF_XDP_HEADERS_AVAILABLE 1
     #endif
+#endif
+
+#if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
     #include <cstdlib>
     #include <linux/if_xdp.h>
     #include <sys/socket.h>
@@ -39,7 +42,7 @@ namespace kmx::aio::completion::xdp
         return (size & (size - 1u)) == 0u;
     }
 
-#if defined(KMX_AIO_FEATURE_AF_XDP)
+#if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
     [[nodiscard]] constexpr error_code map_xdp_error(const int ret) noexcept
     {
         const int err = ret < 0 ? -ret : ret;
@@ -65,7 +68,7 @@ namespace kmx::aio::completion::xdp
         std::mutex mutex {};
         bool af_xdp_backend_enabled = false;
 
-#if defined(KMX_AIO_FEATURE_AF_XDP)
+#if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
         xsk_socket* xsk = nullptr;
         xsk_umem* umem = nullptr;
         xsk_ring_cons rx {};
@@ -89,7 +92,7 @@ namespace kmx::aio::completion::xdp
 
     socket::socket(socket&&) noexcept = default;
 
-#if defined(KMX_AIO_FEATURE_AF_XDP)
+#if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
 
     template <typename state_t>
     void recycle_completion_frames(state_t& st) noexcept
@@ -134,7 +137,7 @@ namespace kmx::aio::completion::xdp
 
     socket::~socket() noexcept
     {
-#if defined(KMX_AIO_FEATURE_AF_XDP)
+#if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
         if (!state_ || !state_->af_xdp_backend_enabled)
             return;
 
@@ -181,7 +184,7 @@ namespace kmx::aio::completion::xdp
         out.state_->exec = &exec;
         out.state_->config = config;
 
-#if defined(KMX_AIO_FEATURE_AF_XDP)
+#if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
         return initialize_af_xdp_backend(*out.state_);
 #else
         return {};
@@ -199,7 +202,7 @@ namespace kmx::aio::completion::xdp
         return {};
     }
 
-#if defined(KMX_AIO_FEATURE_AF_XDP)
+#if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
     std::expected<void, std::error_code> socket::initialize_af_xdp_backend(state& state) noexcept
     {
         const std::string interface_name {state.config.interface_name};
@@ -346,7 +349,7 @@ namespace kmx::aio::completion::xdp
         if (auto initialized = initialize_state(exec, config, out); !initialized)
             return std::unexpected(initialized.error());
 
-#if !defined(KMX_AIO_FEATURE_AF_XDP)
+#if !defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
             // Graceful fallback keeps API behavior deterministic on hosts without AF_XDP support.
 #endif
         return out;
@@ -359,7 +362,7 @@ namespace kmx::aio::completion::xdp
 
         std::unique_lock lock(state_->mutex);
 
-#if defined(KMX_AIO_FEATURE_AF_XDP)
+#if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
         if (state_->af_xdp_backend_enabled)
         {
             recycle_completion_frames(*state_);
@@ -422,7 +425,7 @@ namespace kmx::aio::completion::xdp
         if (auto validation = validate_send_args(st, data); !validation)
             co_return std::unexpected(validation.error());
 
-#if defined(KMX_AIO_FEATURE_AF_XDP)
+#if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
         std::unique_lock lock(st.mutex);
         if (st.af_xdp_backend_enabled)
         {
@@ -432,7 +435,7 @@ namespace kmx::aio::completion::xdp
         co_return send_via_fallback(st, data);
 #endif
 
-#if !defined(KMX_AIO_FEATURE_AF_XDP)
+#if !defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
         std::unique_lock lock(st.mutex);
         co_return send_via_fallback(st, data);
 #endif
@@ -445,7 +448,7 @@ namespace kmx::aio::completion::xdp
 
         std::unique_lock lock(state_->mutex);
 
-#if defined(KMX_AIO_FEATURE_AF_XDP)
+#if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
         if (state_->af_xdp_backend_enabled)
         {
             if (state_->rx_inflight.erase(addr) > 0u)
@@ -465,7 +468,7 @@ namespace kmx::aio::completion::xdp
         if (!state_)
             return;
 
-#if defined(KMX_AIO_FEATURE_AF_XDP)
+#if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
         if (state_->af_xdp_backend_enabled)
         {
             if (xsk_ring_prod__needs_wakeup(&state_->fill))
@@ -483,7 +486,7 @@ namespace kmx::aio::completion::xdp
         if (!state_)
             return empty_stats;
 
-#if defined(KMX_AIO_FEATURE_AF_XDP)
+#if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
         if (state_->af_xdp_backend_enabled && state_->xsk)
         {
             xdp_statistics xdp_stat {};
