@@ -48,7 +48,7 @@ namespace kmx::aio::completion
     ///          performs the actual I/O and delivers completed buffers via the
     ///          completion queue. Coroutines are resumed when their specific
     ///          operation completes with a result code and byte count.
-    class executor: public executor_base, public std::enable_shared_from_this<executor>
+    class executor: public executor_base
     {
     public:
         /// @brief Constructs the executor and initializes the io_uring instance.
@@ -174,6 +174,9 @@ namespace kmx::aio::completion
         /// @brief Submits a root task to the system.
         /// @param t The top-level coroutine task.
         /// @throws std::bad_alloc if scheduling fails.
+        /// @warning The executor is not owned by the spawned task. The caller must keep this
+        ///          executor object alive until the task completes (or until run()/stop() has
+        ///          fully drained pending work); destroying it earlier is undefined behaviour.
         void spawn(task<void>&& t) noexcept(false);
 
         /// @brief Runs the completion event loop. Blocks until stop() is called.
@@ -196,18 +199,12 @@ namespace kmx::aio::completion
         /// @brief Returns the thread-local default executor, creating it lazily on first call.
         /// @details The instance is created with default `executor_config` on the first call
         ///          within each thread and reused for all subsequent calls on that thread.
-        ///          Ownership remains with the thread-local storage; callers that need to
-        ///          keep the executor alive beyond the thread must retain their own `shared_ptr`.
-        /// @return A `shared_ptr` to the thread-local default executor.
+        ///          The instance lives for the duration of the thread and must not be used
+        ///          from any other thread. Construct a local `executor` instead if a custom
+        ///          `executor_config` is required.
+        /// @return A reference to the thread-local default executor.
         /// @throws std::system_error if io_uring initialisation fails on first use.
-        [[nodiscard]] static std::shared_ptr<executor> get_default() noexcept(false);
-
-        /// @brief Replaces the thread-local default executor with an explicitly constructed one.
-        /// @details Useful when a specific `executor_config` (ring size, core pinning, …)
-        ///          is required before the first `get_default()` call on this thread.
-        ///          Pass `nullptr` to clear the current default.
-        /// @param exec The executor to install as the thread-local default.
-        static void set_default(std::shared_ptr<executor> exec) noexcept;
+        [[nodiscard]] static executor& get_default() noexcept(false);
 
         /// @brief Per-operation context passed through io_uring user_data.
         struct io_context
@@ -275,7 +272,12 @@ namespace kmx::aio::completion
             std::coroutine_handle<promise_type> handle;
         };
 
-        detached_task_wrapper execute_task(task<void> t, std::shared_ptr<executor> self) noexcept;
+        /// @brief Runs a spawned top-level task and updates lifetime-tracked statistics on completion.
+        /// @details Uses a `std::weak_ptr<void>` lifetime token (from `executor_base::get_lifetime_token()`)
+        ///          instead of shared ownership: if the executor was force-destroyed while this task was
+        ///          still suspended (e.g. cancelled during shutdown drain), the token is expired and the
+        ///          completion bookkeeping is skipped rather than touching a dangling `executor*`.
+        detached_task_wrapper execute_task(task<void> t, executor* self, std::weak_ptr<void> lifetime) noexcept;
 
         executor_config config_;
         ::io_uring ring_ {};

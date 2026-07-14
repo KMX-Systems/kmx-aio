@@ -19,7 +19,7 @@ namespace kmx::aio::sample::udp::echo_uring::server
                                                         .thread_count = config_.executor_threads,
                                                         .core_id = -1};
 
-        executor_ = std::make_shared<kmx::aio::completion::executor>(exec_cfg);
+        executor_ = std::make_unique<kmx::aio::completion::executor>(exec_cfg);
         g_executor_ptr.store(executor_.get(), std::memory_order_release);
 
         std::signal(SIGINT, signal_handler);
@@ -47,7 +47,7 @@ namespace kmx::aio::sample::udp::echo_uring::server
     {
         try
         {
-            auto sock_result = kmx::aio::completion::udp::socket::create(executor_, ip_family(config_.bind_address));
+            auto sock_result = kmx::aio::completion::udp::socket::create(*executor_, ip_family(config_.bind_address));
             if (!sock_result)
             {
                 logger::log(logger::level::error, std::source_location::current(), "Worker [{}]: Failed to create socket: {}", worker_id,

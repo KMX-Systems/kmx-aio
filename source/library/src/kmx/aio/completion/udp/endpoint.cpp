@@ -8,12 +8,9 @@
 
 namespace kmx::aio::completion::udp
 {
-    endpoint::create_result endpoint::create(std::shared_ptr<executor> exec, const int domain) noexcept
+    endpoint::create_result endpoint::create(executor& exec, const int domain) noexcept
     {
-        if (!exec)
-            return std::unexpected(error_from_errno(EINVAL));
-
-        auto sock = socket::create(std::move(exec), domain);
+        auto sock = socket::create(exec, domain);
         if (!sock)
             return std::unexpected(sock.error());
 

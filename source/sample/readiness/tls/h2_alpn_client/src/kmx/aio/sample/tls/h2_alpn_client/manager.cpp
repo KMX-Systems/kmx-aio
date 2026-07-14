@@ -25,6 +25,12 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
         static_cast<char>('o'),  static_cast<char>('s'),  static_cast<char>('t'),
     };
 
+    manager::~manager() noexcept
+    {
+        if (ssl_ctx_)
+            ::SSL_CTX_free(ssl_ctx_);
+    }
+
     bool manager::run() noexcept(false)
     {
         const auto server_ip = kmx::aio::ip_to_string(config_.server_addr);
@@ -51,9 +57,6 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
             executor_->spawn(worker(i));
 
         executor_->run();
-
-        ::SSL_CTX_free(ssl_ctx_);
-        ssl_ctx_ = nullptr;
 
         return metrics_.failures.load(mem_order) == 0u;
     }

@@ -46,13 +46,13 @@ namespace kmx::aio::kernel_bypass::test::integration
         std::error_code xdp_error {};
     };
 
-    [[nodiscard]] static task<void> run_spdk_cycle(std::shared_ptr<completion::executor> exec, std::shared_ptr<test_state> state)
+    [[nodiscard]] static task<void> run_spdk_cycle(completion::executor& exec, std::shared_ptr<test_state> state)
     {
         const auto init_res = completion::spdk::runtime::initialize();
         if (!init_res && init_res.error() != std::make_error_code(std::errc::function_not_supported))
         {
             state->spdk_error = init_res.error();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -69,11 +69,11 @@ namespace kmx::aio::kernel_bypass::test::integration
         if (!fini && fini.error() != std::make_error_code(std::errc::function_not_supported))
             state->spdk_error = fini.error();
 
-        exec->stop();
+        exec.stop();
         co_return;
     }
 
-    [[nodiscard]] static task<void> run_xdp_cycle(std::shared_ptr<completion::executor> exec, std::shared_ptr<test_state> state)
+    [[nodiscard]] static task<void> run_xdp_cycle(completion::executor& exec, std::shared_ptr<test_state> state)
     {
         completion::xdp::socket_config cfg {
             .interface_name = "lo", // Loopback fallback queue typically passes creation even if it won't zero-copy.
@@ -93,7 +93,7 @@ namespace kmx::aio::kernel_bypass::test::integration
             // If host lacks CAP_NET_ADMIN or driver support, fallback mock triggers.
             state->xdp_error = sock_res.error();
 
-        exec->stop();
+        exec.stop();
         co_return;
     }
 
@@ -113,20 +113,20 @@ namespace kmx::aio::kernel_bypass::test::integration
         (void) onload_stack;
 
         // Part 2: Completion Environment Pipeline (SPDK + XDP)
-        auto comp_exec = std::make_shared<completion::executor>();
+        completion::executor comp_exec;
         auto state = std::make_shared<test_state>();
 
         // Test XDP Fallback Matrix First
-        comp_exec->spawn(run_xdp_cycle(comp_exec, state));
-        comp_exec->run();
+        comp_exec.spawn(run_xdp_cycle(comp_exec, state));
+        comp_exec.run();
 
         // Test SPDK Storage Context Lifecycle Next (when host has hugepages)
         if (!hugepages_available())
             SKIP("pillar1 SPDK integration skipped: no hugepages available on this host");
         else
         {
-            comp_exec->spawn(run_spdk_cycle(comp_exec, state));
-            comp_exec->run();
+            comp_exec.spawn(run_spdk_cycle(comp_exec, state));
+            comp_exec.run();
         }
 
         // Ensure SPDK did not fail fatally (graceful unsupported is OK, initialization is OK)

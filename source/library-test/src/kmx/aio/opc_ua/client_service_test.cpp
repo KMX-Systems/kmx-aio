@@ -55,50 +55,50 @@ namespace kmx::aio::opc_ua
 
         task<void> run_read(client& c, std::string node_id,
                             std::shared_ptr<coroutine_result_state<std::expected<read_result, std::error_code>>> state,
-                            std::shared_ptr<completion::executor> exec)
+                            completion::executor& exec)
         {
             state->result.emplace(co_await c.read_node(std::move(node_id)));
             state->completed = true;
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
         task<void> run_write(client& c, std::string node_id, std::string value,
                              std::shared_ptr<coroutine_result_state<std::expected<void, std::error_code>>> state,
-                             std::shared_ptr<completion::executor> exec)
+                             completion::executor& exec)
         {
             state->result.emplace(co_await c.write_node(std::move(node_id), std::move(value)));
             state->completed = true;
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
         task<void> run_call(client& c, std::string object_id, std::string method_id, std::vector<std::string> args,
                             std::shared_ptr<coroutine_result_state<std::expected<method_call_result, std::error_code>>> state,
-                            std::shared_ptr<completion::executor> exec)
+                            completion::executor& exec)
         {
             state->result.emplace(co_await c.call_method(std::move(object_id), std::move(method_id), std::move(args)));
             state->completed = true;
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
         task<void> run_connect(client& c, std::shared_ptr<coroutine_result_state<std::expected<void, std::error_code>>> state,
-                               std::shared_ptr<completion::executor> exec)
+                               completion::executor& exec)
         {
             state->result.emplace(co_await c.connect());
             state->completed = true;
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
         task<void> run_iterate(client& c, const std::chrono::milliseconds timeout,
                                std::shared_ptr<coroutine_result_state<std::expected<bool, std::error_code>>> state,
-                               std::shared_ptr<completion::executor> exec)
+                               completion::executor& exec)
         {
             state->result.emplace(co_await c.iterate(timeout));
             state->completed = true;
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -170,39 +170,39 @@ namespace kmx::aio::opc_ua
         }
 
         task<void> run_server_start(server& s, std::shared_ptr<coroutine_result_state<std::expected<void, std::error_code>>> state,
-                                    std::shared_ptr<completion::executor> exec)
+                                    completion::executor& exec)
         {
             state->result.emplace(co_await s.start());
             state->completed = true;
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
         task<void> run_server_iterate(server& s, const std::chrono::milliseconds timeout,
                                       std::shared_ptr<coroutine_result_state<std::expected<std::uint16_t, std::error_code>>> state,
-                                      std::shared_ptr<completion::executor> exec)
+                                      completion::executor& exec)
         {
             state->result.emplace(co_await s.iterate(timeout));
             state->completed = true;
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
         task<void> run_server_stop(server& s, std::shared_ptr<coroutine_result_state<std::expected<void, std::error_code>>> state,
-                                   std::shared_ptr<completion::executor> exec)
+                                   completion::executor& exec)
         {
             state->result.emplace(co_await s.stop());
             state->completed = true;
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
         task<void> run_disconnect(client& c, std::shared_ptr<coroutine_result_state<std::expected<void, std::error_code>>> state,
-                                  std::shared_ptr<completion::executor> exec)
+                                  completion::executor& exec)
         {
             state->result.emplace(co_await c.disconnect());
             state->completed = true;
-            exec->stop();
+            exec.stop();
             co_return;
         }
 #endif
@@ -214,9 +214,9 @@ namespace kmx::aio::opc_ua
         server s {make_test_server_config()};
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            auto exec = std::make_shared<completion::executor>();
-            exec->spawn(run_server_start(s, state, exec));
-            exec->run();
+            completion::executor exec;
+            exec.spawn(run_server_start(s, state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             REQUIRE(state->result->has_value());
@@ -225,9 +225,9 @@ namespace kmx::aio::opc_ua
         client c {make_test_config()};
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            auto exec = std::make_shared<completion::executor>();
-            exec->spawn(run_connect(c, state, exec));
-            exec->run();
+            completion::executor exec;
+            exec.spawn(run_connect(c, state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             REQUIRE(state->result->has_value());
@@ -237,9 +237,9 @@ namespace kmx::aio::opc_ua
         const auto stop_server = [&s]()
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            auto exec = std::make_shared<completion::executor>();
-            exec->spawn(run_server_stop(s, state, exec));
-            exec->run();
+            completion::executor exec;
+            exec.spawn(run_server_stop(s, state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             REQUIRE(state->result->has_value());
@@ -248,17 +248,17 @@ namespace kmx::aio::opc_ua
         for (int attempt = 0; attempt < 50; ++attempt)
         {
             auto server_state = std::make_shared<coroutine_result_state<std::expected<std::uint16_t, std::error_code>>>();
-            auto server_exec = std::make_shared<completion::executor>();
-            server_exec->spawn(run_server_iterate(s, std::chrono::milliseconds(0), server_state, server_exec));
-            server_exec->run();
+            completion::executor server_exec;
+            server_exec.spawn(run_server_iterate(s, std::chrono::milliseconds(0), server_state, server_exec));
+            server_exec.run();
             REQUIRE(server_state->completed);
             REQUIRE(server_state->result.has_value());
             REQUIRE(server_state->result->has_value());
 
             auto client_state = std::make_shared<coroutine_result_state<std::expected<bool, std::error_code>>>();
-            auto client_exec = std::make_shared<completion::executor>();
-            client_exec->spawn(run_iterate(c, std::chrono::milliseconds(0), client_state, client_exec));
-            client_exec->run();
+            completion::executor client_exec;
+            client_exec.spawn(run_iterate(c, std::chrono::milliseconds(0), client_state, client_exec));
+            client_exec.run();
             REQUIRE(client_state->completed);
             REQUIRE(client_state->result.has_value());
             REQUIRE(client_state->result->has_value());
@@ -280,9 +280,9 @@ namespace kmx::aio::opc_ua
 
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            auto exec = std::make_shared<completion::executor>();
-            exec->spawn(run_disconnect(c, state, exec));
-            exec->run();
+            completion::executor exec;
+            exec.spawn(run_disconnect(c, state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             REQUIRE(state->result->has_value());
@@ -291,9 +291,9 @@ namespace kmx::aio::opc_ua
         for (int attempt = 0; attempt < 10; ++attempt)
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<bool, std::error_code>>>();
-            auto exec = std::make_shared<completion::executor>();
-            exec->spawn(run_iterate(c, std::chrono::milliseconds(0), state, exec));
-            exec->run();
+            completion::executor exec;
+            exec.spawn(run_iterate(c, std::chrono::milliseconds(0), state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             if (!state->result->has_value())
@@ -519,27 +519,27 @@ namespace kmx::aio::opc_ua
     {
         client c {make_test_config()};
 
-        auto connect_exec = std::make_shared<completion::executor>();
+        completion::executor connect_exec;
         auto connect_state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-        connect_exec->spawn(run_connect(c, connect_state, connect_exec));
-        connect_exec->run();
+        connect_exec.spawn(run_connect(c, connect_state, connect_exec));
+        connect_exec.run();
         REQUIRE(connect_state->completed);
         REQUIRE(connect_state->result.has_value());
         REQUIRE(connect_state->result->has_value());
 
-        auto iterate_exec = std::make_shared<completion::executor>();
+        completion::executor iterate_exec;
         auto iterate_state = std::make_shared<coroutine_result_state<std::expected<bool, std::error_code>>>();
-        iterate_exec->spawn(run_iterate(c, std::chrono::milliseconds(0), iterate_state, iterate_exec));
-        iterate_exec->run();
+        iterate_exec.spawn(run_iterate(c, std::chrono::milliseconds(0), iterate_state, iterate_exec));
+        iterate_exec.run();
         REQUIRE(iterate_state->completed);
         REQUIRE(iterate_state->result.has_value());
         REQUIRE(iterate_state->result->has_value());
 
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<read_result, std::error_code>>>();
-            auto exec = std::make_shared<completion::executor>();
-            exec->spawn(run_read(c, "ns=2;s=Demo.Static.Scalar.String", state, exec));
-            exec->run();
+            completion::executor exec;
+            exec.spawn(run_read(c, "ns=2;s=Demo.Static.Scalar.String", state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             auto& res = *state->result;
@@ -550,9 +550,9 @@ namespace kmx::aio::opc_ua
 
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            auto exec = std::make_shared<completion::executor>();
-            exec->spawn(run_write(c, "ns=2;s=Demo.Static.Scalar.String", "value", state, exec));
-            exec->run();
+            completion::executor exec;
+            exec.spawn(run_write(c, "ns=2;s=Demo.Static.Scalar.String", "value", state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             auto& res = *state->result;
@@ -562,9 +562,9 @@ namespace kmx::aio::opc_ua
 
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            auto exec = std::make_shared<completion::executor>();
-            exec->spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}, state, exec));
-            exec->run();
+            completion::executor exec;
+            exec.spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}, state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             auto& res = *state->result;
@@ -577,9 +577,9 @@ namespace kmx::aio::opc_ua
 
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            auto exec = std::make_shared<completion::executor>();
-            exec->spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {}, state, exec));
-            exec->run();
+            completion::executor exec;
+            exec.spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {}, state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             auto& res = *state->result;
@@ -590,9 +590,9 @@ namespace kmx::aio::opc_ua
 
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            auto exec = std::make_shared<completion::executor>();
-            exec->spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"", "42"}, state, exec));
-            exec->run();
+            completion::executor exec;
+            exec.spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"", "42"}, state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             auto& res = *state->result;
@@ -608,19 +608,19 @@ namespace kmx::aio::opc_ua
     {
         client c {make_test_config()};
 
-        auto connect_exec = std::make_shared<completion::executor>();
+        completion::executor connect_exec;
         auto connect_state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-        connect_exec->spawn(run_connect(c, connect_state, connect_exec));
-        connect_exec->run();
+        connect_exec.spawn(run_connect(c, connect_state, connect_exec));
+        connect_exec.run();
         REQUIRE(connect_state->completed);
         REQUIRE(connect_state->result.has_value());
         REQUIRE(connect_state->result->has_value());
 
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<read_result, std::error_code>>>();
-            auto exec = std::make_shared<completion::executor>();
-            exec->spawn(run_read(c, "ns=2;s=Demo.Static.Scalar.String", state, exec));
-            exec->run();
+            completion::executor exec;
+            exec.spawn(run_read(c, "ns=2;s=Demo.Static.Scalar.String", state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             REQUIRE(!state->result->has_value());
@@ -630,9 +630,9 @@ namespace kmx::aio::opc_ua
 
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            auto exec = std::make_shared<completion::executor>();
-            exec->spawn(run_write(c, "ns=2;s=Demo.Static.Scalar.String", "value", state, exec));
-            exec->run();
+            completion::executor exec;
+            exec.spawn(run_write(c, "ns=2;s=Demo.Static.Scalar.String", "value", state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             REQUIRE(!state->result->has_value());
@@ -642,9 +642,9 @@ namespace kmx::aio::opc_ua
 
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            auto exec = std::make_shared<completion::executor>();
-            exec->spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}, state, exec));
-            exec->run();
+            completion::executor exec;
+            exec.spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}, state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             REQUIRE(!state->result->has_value());
@@ -657,18 +657,18 @@ namespace kmx::aio::opc_ua
     {
         client c {make_test_config()};
 
-        auto connect_exec = std::make_shared<completion::executor>();
+        completion::executor connect_exec;
         auto connect_state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-        connect_exec->spawn(run_connect(c, connect_state, connect_exec));
-        connect_exec->run();
+        connect_exec.spawn(run_connect(c, connect_state, connect_exec));
+        connect_exec.run();
         REQUIRE(connect_state->completed);
         REQUIRE(connect_state->result.has_value());
         REQUIRE(connect_state->result->has_value());
 
-        auto iterate_exec = std::make_shared<completion::executor>();
+        completion::executor iterate_exec;
         auto iterate_state = std::make_shared<coroutine_result_state<std::expected<bool, std::error_code>>>();
-        iterate_exec->spawn(run_iterate(c, std::chrono::milliseconds(0), iterate_state, iterate_exec));
-        iterate_exec->run();
+        iterate_exec.spawn(run_iterate(c, std::chrono::milliseconds(0), iterate_state, iterate_exec));
+        iterate_exec.run();
         REQUIRE(iterate_state->completed);
         REQUIRE(iterate_state->result.has_value());
         REQUIRE(iterate_state->result->has_value());
@@ -676,9 +676,9 @@ namespace kmx::aio::opc_ua
         {
             c.__kmx_test_set_next_request_statuses(UA_STATUSCODE_BADTIMEOUT, UA_STATUSCODE_GOOD, UA_STATUSCODE_GOOD);
             auto state = std::make_shared<coroutine_result_state<std::expected<read_result, std::error_code>>>();
-            auto exec = std::make_shared<completion::executor>();
-            exec->spawn(run_read(c, "ns=2;s=Demo.Static.Scalar.String", state, exec));
-            exec->run();
+            completion::executor exec;
+            exec.spawn(run_read(c, "ns=2;s=Demo.Static.Scalar.String", state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             auto& res = *state->result;
@@ -690,9 +690,9 @@ namespace kmx::aio::opc_ua
         {
             c.__kmx_test_set_next_request_statuses(UA_STATUSCODE_GOOD, UA_STATUSCODE_BADINTERNALERROR, UA_STATUSCODE_GOOD);
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            auto exec = std::make_shared<completion::executor>();
-            exec->spawn(run_write(c, "ns=2;s=Demo.Static.Scalar.String", "value", state, exec));
-            exec->run();
+            completion::executor exec;
+            exec.spawn(run_write(c, "ns=2;s=Demo.Static.Scalar.String", "value", state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             auto& res = *state->result;
@@ -704,9 +704,9 @@ namespace kmx::aio::opc_ua
         {
             c.__kmx_test_set_next_request_statuses(UA_STATUSCODE_GOOD, UA_STATUSCODE_GOOD, UA_STATUSCODE_BADSECURECHANNELCLOSED);
             auto state = std::make_shared<coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            auto exec = std::make_shared<completion::executor>();
-            exec->spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}, state, exec));
-            exec->run();
+            completion::executor exec;
+            exec.spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}, state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             auto& res = *state->result;
@@ -720,12 +720,12 @@ namespace kmx::aio::opc_ua
     TEST_CASE("opc_ua client read validates arguments and session", "[opc_ua][client][service]")
     {
         client c {make_test_config()};
-        auto exec = std::make_shared<completion::executor>();
+        completion::executor exec;
 
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<read_result, std::error_code>>>();
-            exec->spawn(run_read(c, "", state, exec));
-            exec->run();
+            exec.spawn(run_read(c, "", state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             auto& res = *state->result;
@@ -736,8 +736,8 @@ namespace kmx::aio::opc_ua
 
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<read_result, std::error_code>>>();
-            exec->spawn(run_read(c, "ns=2;s=Demo.Static.Scalar.String", state, exec));
-            exec->run();
+            exec.spawn(run_read(c, "ns=2;s=Demo.Static.Scalar.String", state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             auto& res = *state->result;
@@ -750,12 +750,12 @@ namespace kmx::aio::opc_ua
     TEST_CASE("opc_ua client write validates arguments and session", "[opc_ua][client][service]")
     {
         client c {make_test_config()};
-        auto exec = std::make_shared<completion::executor>();
+        completion::executor exec;
 
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            exec->spawn(run_write(c, "", "value", state, exec));
-            exec->run();
+            exec.spawn(run_write(c, "", "value", state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             auto& res = *state->result;
@@ -766,8 +766,8 @@ namespace kmx::aio::opc_ua
 
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            exec->spawn(run_write(c, "ns=2;s=Demo.Static.Scalar.String", "", state, exec));
-            exec->run();
+            exec.spawn(run_write(c, "ns=2;s=Demo.Static.Scalar.String", "", state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             auto& res = *state->result;
@@ -778,8 +778,8 @@ namespace kmx::aio::opc_ua
 
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            exec->spawn(run_write(c, "ns=2;s=Demo.Static.Scalar.String", "abc", state, exec));
-            exec->run();
+            exec.spawn(run_write(c, "ns=2;s=Demo.Static.Scalar.String", "abc", state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             auto& res = *state->result;
@@ -792,12 +792,12 @@ namespace kmx::aio::opc_ua
     TEST_CASE("opc_ua client call validates arguments and session", "[opc_ua][client][service]")
     {
         client c {make_test_config()};
-        auto exec = std::make_shared<completion::executor>();
+        completion::executor exec;
 
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            exec->spawn(run_call(c, "", "ns=2;s=Demo.Method", {}, state, exec));
-            exec->run();
+            exec.spawn(run_call(c, "", "ns=2;s=Demo.Method", {}, state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             auto& res = *state->result;
@@ -808,8 +808,8 @@ namespace kmx::aio::opc_ua
 
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            exec->spawn(run_call(c, "ns=2;s=Demo.Object", "", {}, state, exec));
-            exec->run();
+            exec.spawn(run_call(c, "ns=2;s=Demo.Object", "", {}, state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             auto& res = *state->result;
@@ -820,8 +820,8 @@ namespace kmx::aio::opc_ua
 
         {
             auto state = std::make_shared<coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            exec->spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}, state, exec));
-            exec->run();
+            exec.spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}, state, exec));
+            exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             auto& res = *state->result;

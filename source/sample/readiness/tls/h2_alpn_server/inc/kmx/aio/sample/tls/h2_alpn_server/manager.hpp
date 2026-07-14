@@ -34,6 +34,18 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
     {
     public:
         explicit manager(config config = {}): config_(std::move(config)) {}
+
+        /// @brief Releases the owned SSL_CTX.
+        ~manager() noexcept;
+        /// @brief Non-copyable.
+        manager(const manager&) = delete;
+        /// @brief Non-copyable.
+        manager& operator=(const manager&) = delete;
+        /// @brief Non-movable.
+        manager(manager&&) = delete;
+        /// @brief Non-movable.
+        manager& operator=(manager&&) = delete;
+
         [[nodiscard]] bool run() noexcept(false);
 
     private:

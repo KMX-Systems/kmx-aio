@@ -26,7 +26,7 @@ namespace kmx::aio::sample::v4l2::completion_capture
             .thread_count = 1u,
         };
 
-        executor_ = std::make_shared<kmx::aio::completion::executor>(exec_cfg);
+        executor_ = std::make_unique<kmx::aio::completion::executor>(exec_cfg);
         g_executor_ptr.store(executor_.get(), std::memory_order_release);
 
         std::signal(SIGINT, signal_handler);
@@ -66,7 +66,7 @@ namespace kmx::aio::sample::v4l2::completion_capture
             .buffer_count = config_.buffer_count,
         };
 
-        auto cap_result = kmx::aio::completion::v4l2::capture::create(executor_, std::move(cfg));
+        auto cap_result = kmx::aio::completion::v4l2::capture::create(*executor_, std::move(cfg));
         if (!cap_result)
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Failed to open capture device: {}",
@@ -129,7 +129,7 @@ namespace kmx::aio::sample::v4l2::completion_capture
     {
         // Demonstrates that completion::timer coexists in the same executor as V4L2 capture.
         // Both use the io_uring ring: capture uses IORING_OP_POLL_ADD, timer uses IORING_OP_TIMEOUT.
-        kmx::aio::completion::timer tmr {executor_};
+        kmx::aio::completion::timer tmr {*executor_};
 
         while (true)
         {

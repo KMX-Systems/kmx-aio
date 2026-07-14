@@ -53,6 +53,17 @@ namespace kmx::aio::sample::tls::echo_completion_client
     public:
         explicit manager(config config = {}): config_(std::move(config)) {}
 
+        /// @brief Releases the owned SSL_CTX.
+        ~manager() noexcept;
+        /// @brief Non-copyable.
+        manager(const manager&) = delete;
+        /// @brief Non-copyable.
+        manager& operator=(const manager&) = delete;
+        /// @brief Non-movable (holds a mutex and a jthread).
+        manager(manager&&) = delete;
+        /// @brief Non-movable.
+        manager& operator=(manager&&) = delete;
+
         const metric_data& metrics() const noexcept { return metrics_; }
 
         /// @brief Run the stress test.
@@ -96,7 +107,7 @@ namespace kmx::aio::sample::tls::echo_completion_client
         void print_summary(const std::chrono::milliseconds elapsed) const;
 
         config config_;
-        std::shared_ptr<completion::executor> executor_;
+        std::unique_ptr<completion::executor> executor_;
         metric_data metrics_;
         ::SSL_CTX* ssl_ctx_ {};
 

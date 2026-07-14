@@ -26,7 +26,7 @@ namespace kmx::aio::sample::avb::listener
             .thread_count = 1u,
         };
 
-        executor_ = std::make_shared<kmx::aio::completion::executor>(exec_cfg);
+        executor_ = std::make_unique<kmx::aio::completion::executor>(exec_cfg);
         clock_ = std::make_unique<kmx::aio::completion::avb::gptp::clock>(*executor_);
         srp_ = std::make_unique<kmx::aio::completion::avb::srp::client>(*executor_);
         g_executor_ptr.store(executor_.get(), std::memory_order_release);
@@ -170,7 +170,7 @@ namespace kmx::aio::sample::avb::listener
 
     kmx::aio::task<void> manager::stats_loop() noexcept(false)
     {
-        kmx::aio::completion::timer tmr {executor_};
+        kmx::aio::completion::timer tmr {*executor_};
 
         while (true)
         {

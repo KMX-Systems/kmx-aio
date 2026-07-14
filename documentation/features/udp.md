@@ -36,7 +36,7 @@ auto sent = co_await sock.sendmsg(&msg);
 ```cpp
 #include <kmx/aio/completion/udp/socket.hpp>
 
-auto exec = std::make_shared<kmx::aio::completion::executor>();
+kmx::aio::completion::executor exec;
 auto sock_result = kmx::aio::completion::udp::socket::create(exec);
 auto& sock = *sock_result;
 
@@ -84,7 +84,7 @@ The completion endpoint API is identical to the readiness endpoint but is backed
 ```cpp
 #include <kmx/aio/completion/udp/socket.hpp>  // pulls in endpoint.hpp
 
-auto exec = std::make_shared<kmx::aio::completion::executor>();
+kmx::aio::completion::executor exec;
 auto ep_result = kmx::aio::completion::udp::endpoint::create(exec);
 auto& ep = *ep_result;
 

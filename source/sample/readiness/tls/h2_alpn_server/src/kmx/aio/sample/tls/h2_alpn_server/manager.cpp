@@ -17,6 +17,12 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
         return SSL_TLSEXT_ERR_OK;
     }
 
+    manager::~manager() noexcept
+    {
+        if (ssl_ctx_)
+            ::SSL_CTX_free(ssl_ctx_);
+    }
+
     bool manager::run() noexcept(false)
     {
         logger::log(logger::level::info, std::source_location::current(), "H2 Readiness Server Starting");
@@ -33,13 +39,11 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
 
         if (::SSL_CTX_use_certificate_chain_file(ssl_ctx_, config_.cert_file.c_str()) <= 0)
         {
-            ::SSL_CTX_free(ssl_ctx_);
             return false;
         }
 
         if (::SSL_CTX_use_PrivateKey_file(ssl_ctx_, config_.key_file.c_str(), SSL_FILETYPE_PEM) <= 0)
         {
-            ::SSL_CTX_free(ssl_ctx_);
             return false;
         }
 
@@ -54,9 +58,6 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
 
         executor_->spawn(listener_task());
         executor_->run();
-
-        ::SSL_CTX_free(ssl_ctx_);
-        ssl_ctx_ = nullptr;
 
         return metrics_.failures.load(std::memory_order_relaxed) == 0u;
     }

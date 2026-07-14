@@ -27,7 +27,7 @@ namespace kmx::aio::completion::tcp
         /// @brief Constructs a stream from an executor and an owned socket descriptor.
         /// @param exec The completion executor providing io_uring operations.
         /// @param fd   Connected socket descriptor (ownership transferred).
-        stream(std::shared_ptr<executor> exec, file_descriptor&& fd) noexcept: io_base(std::move(exec), std::move(fd)) {}
+        stream(executor& exec, file_descriptor&& fd) noexcept: io_base(exec, std::move(fd)) {}
 
         /// @brief Destructor. Closes the file descriptor.
         ~stream() noexcept = default;

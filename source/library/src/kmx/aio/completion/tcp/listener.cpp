@@ -8,7 +8,7 @@
 
 namespace kmx::aio::completion::tcp
 {
-    listener::listener(std::shared_ptr<executor> exec, const ip_address_t ip, const port_t port) noexcept(false): io_base(std::move(exec))
+    listener::listener(executor& exec, const ip_address_t ip, const port_t port) noexcept(false): io_base(exec)
     {
         auto sock_res = file_descriptor::create_socket(ip_family(ip), SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
         if (!sock_res)
@@ -41,7 +41,7 @@ namespace kmx::aio::completion::tcp
         sockaddr_storage addr {};
         socklen_t addrlen = sizeof(addr);
 
-        auto result = co_await exec_->async_accept(fd_.get(), addr, addrlen);
+        auto result = co_await exec_.async_accept(fd_.get(), addr, addrlen);
         if (!result)
             co_return std::unexpected(result.error());
 

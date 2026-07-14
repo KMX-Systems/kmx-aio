@@ -108,7 +108,7 @@ namespace kmx::aio::completion::v4l2
     ///
     /// ## Typical usage
     /// @code
-    ///   auto exec = std::make_shared<completion::executor>();
+    ///   completion::executor exec;
     ///   auto cap = completion::v4l2::capture::create(exec, {
     ///       .device = "/dev/video0",
     ///       .format = completion::v4l2::fourcc::yuyv,
@@ -146,7 +146,7 @@ namespace kmx::aio::completion::v4l2
         /// @param exec  Completion executor to drive io_uring poll events.
         /// @param cfg   Device configuration (device path, format, size, buffer count).
         /// @return A fully initialised `capture` ready for `next_frame()`, or an error.
-        [[nodiscard]] static create_result create(std::shared_ptr<executor> exec, capture_config cfg) noexcept;
+        [[nodiscard]] static create_result create(executor& exec, capture_config cfg) noexcept;
 
         capture(capture&&) noexcept;
         capture& operator=(capture&&) noexcept = delete;
@@ -179,7 +179,7 @@ namespace kmx::aio::completion::v4l2
         };
 
         /// @brief Creates an initialized capture object.
-        capture(std::shared_ptr<executor> exec, file_descriptor&& fd, capture_config cfg, std::vector<mmap_buffer> buffers) noexcept;
+        capture(executor& exec, file_descriptor&& fd, capture_config cfg, std::vector<mmap_buffer> buffers) noexcept;
 
         /// @brief Opens the V4L2 device described by the configuration.
         [[nodiscard]] static std::expected<file_descriptor, kmx::aio::error_code> open_device(const capture_config& cfg) noexcept;

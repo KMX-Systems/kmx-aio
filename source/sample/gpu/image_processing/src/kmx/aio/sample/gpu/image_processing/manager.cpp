@@ -65,7 +65,7 @@ namespace kmx::aio::sample::gpu::image_processing
             co_return;
         }
 
-        kmx::aio::task<void> capture_and_process(std::shared_ptr<kmx::aio::completion::executor> io_exec,
+        kmx::aio::task<void> capture_and_process(kmx::aio::completion::executor& io_exec,
                                                  std::shared_ptr<kmx::aio::gpu::executor> gpu_exec, const config& cfg) noexcept(false)
         {
             kmx::aio::completion::v4l2::capture_config cap_cfg {
@@ -82,7 +82,7 @@ namespace kmx::aio::sample::gpu::image_processing
                 std::cerr << "[GPU Image Processing] V4L2 unavailable, using synthetic frame fallback\n";
                 std::vector<std::uint8_t> synthetic(cfg.size.width * cfg.size.height, 0x2Au);
                 gpu_exec->spawn(gpu_process_frame(std::move(synthetic)));
-                io_exec->stop();
+                io_exec.stop();
                 co_return;
             }
 
@@ -100,7 +100,7 @@ namespace kmx::aio::sample::gpu::image_processing
                 gpu_exec->spawn(gpu_process_frame(std::move(host_frame)));
             }
 
-            io_exec->stop();
+            io_exec.stop();
             co_return;
         }
     }
@@ -109,7 +109,7 @@ namespace kmx::aio::sample::gpu::image_processing
     {
         try
         {
-            auto io_exec = std::make_shared<kmx::aio::completion::executor>();
+            kmx::aio::completion::executor io_exec;
             const kmx::aio::gpu::executor_config config {
                 .max_events = 64u,
                 .thread_count = 1u,
@@ -119,8 +119,8 @@ namespace kmx::aio::sample::gpu::image_processing
 
             auto gpu_exec = std::make_shared<kmx::aio::gpu::executor>(config);
 
-            io_exec->spawn(detail::capture_and_process(io_exec, gpu_exec, config_));
-            io_exec->run();
+            io_exec.spawn(detail::capture_and_process(io_exec, gpu_exec, config_));
+            io_exec.run();
 
             const auto& stats = gpu_exec->get_statistics();
             std::cout << "[GPU Image Processing] tasks_spawned=" << stats.total_tasks_spawned.load() << "\n";

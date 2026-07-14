@@ -19,11 +19,11 @@ int main(int argc, const char* argv[]) noexcept
         if (argc >= 2 && argv[1] && std::string_view(argv[1]).size() > 0u)
             bdev_name = argv[1];
 
-        auto exec = std::make_shared<kmx::aio::completion::executor>();
+        kmx::aio::completion::executor exec;
         auto ok = std::make_shared<std::atomic_bool>(false);
 
-        exec->spawn(kmx::aio::sample::spdk::minimal::run_spdk_probe(exec, ok, std::move(bdev_name)));
-        exec->run();
+        exec.spawn(kmx::aio::sample::spdk::minimal::run_spdk_probe(exec, ok, std::move(bdev_name)));
+        exec.run();
 
         // Release hardware resources cleanly via spdk lifecycle
         if (auto fini = kmx::aio::completion::spdk::runtime::finalize(); !fini)
