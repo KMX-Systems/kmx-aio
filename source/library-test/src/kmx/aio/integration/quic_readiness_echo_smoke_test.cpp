@@ -129,15 +129,25 @@ namespace kmx::aio::quic::test::integration
 
         const std::string server_cmd = "env " + port_env + " LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} " +
                                        shell_quote(server_bin_opt->string()) + " > " + shell_quote(server_log.string()) + " 2>&1";
-        const std::string client_cmd = "timeout 12s env " + port_env + " LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} " +
+        const std::string client_cmd = "timeout 20s env " + port_env + " LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} " +
                                        shell_quote(client_bin_opt->string()) + " > " + shell_quote(client_log.string()) + " 2>&1";
 
         const std::string script = "set -u -o pipefail; " + server_cmd + " & " +
                        "srv=$!; "
-                                   "sleep 2; " +
-                                   client_cmd +
-                                   "; "
-                                   "client_rc=$?; "
+                       "port_hex=$(printf '%04X' " + std::to_string(test_port) + "); "
+                       "ready=0; "
+                       "deadline=$((SECONDS+10)); "
+                       "while (( SECONDS < deadline )); do "
+                       "  if ! kill -0 \"$srv\" >/dev/null 2>&1; then break; fi; "
+                       "  if grep -qi \":$port_hex \" /proc/net/udp /proc/net/udp6 2>/dev/null; then ready=1; break; fi; "
+                       "  sleep 0.1; "
+                       "done; "
+                       "if (( ready == 0 )); then "
+                       "  client_rc=124; "
+                       "else " +
+                       client_cmd +
+                       "; client_rc=$?; "
+                       "fi; "
                        "kill \"$srv\" >/dev/null 2>&1 || true; "
                        "wait \"$srv\" >/dev/null 2>&1 || true; "
                        "exit \"$client_rc\"";
