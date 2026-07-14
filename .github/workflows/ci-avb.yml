@@ -106,6 +106,12 @@ jobs:
           make -j"$(nproc)"
           make install
 
+      - name: Bootstrap AF_XDP dependencies
+        run: |
+          bash script/feature/af_xdp/install-dependencies.sh
+          pkg-config --modversion libbpf
+          pkg-config --modversion libxdp
+
       - name: Enforce sample artifact boundaries
         run: |
           bash script/ci/check-sample-artifact-boundaries.sh

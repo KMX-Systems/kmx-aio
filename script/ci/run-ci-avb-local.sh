@@ -201,6 +201,7 @@ run_artifact_split_smoke() {
 
     (
         cd "$repo_root"
+        bash script/feature/af_xdp/install-dependencies.sh
         bash script/feature/quic/install-dependencies.sh
         bash script/feature/opc_ua/install-dependencies.sh
     )
