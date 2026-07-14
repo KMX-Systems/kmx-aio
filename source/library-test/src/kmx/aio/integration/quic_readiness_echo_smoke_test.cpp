@@ -134,17 +134,23 @@ namespace kmx::aio::quic::test::integration
 
         const std::string script = "set -u -o pipefail; " + server_cmd + " & " +
                        "srv=$!; "
+                   "port_dec=" + std::to_string(test_port) + "; "
                        "port_hex=$(printf '%04X' " + std::to_string(test_port) + "); "
                        "ready=0; "
-                       "deadline=$((SECONDS+10)); "
+                   "deadline=$((SECONDS+15)); "
                        "while (( SECONDS < deadline )); do "
                        "  if ! kill -0 \"$srv\" >/dev/null 2>&1; then break; fi; "
-                       "  if grep -qi \":$port_hex \" /proc/net/udp /proc/net/udp6 2>/dev/null; then ready=1; break; fi; "
+                   "  if command -v ss >/dev/null 2>&1; then "
+                       "    if ss -lunp 2>/dev/null | grep -F \":$port_dec\" | grep -Fq \"pid=$srv,\"; then ready=1; break; fi; "
+                   "  else "
+                       "    if grep -qi \":$port_hex \" /proc/net/udp /proc/net/udp6 2>/dev/null; then ready=1; break; fi; "
+                   "  fi; "
                        "  sleep 0.1; "
                        "done; "
                        "if (( ready == 0 )); then "
                        "  client_rc=124; "
-                       "else " +
+                   "else "
+                   "  sleep 0.2; " +
                        client_cmd +
                        "; client_rc=$?; "
                        "fi; "
