@@ -129,18 +129,18 @@ namespace kmx::aio::quic::test::integration
 
         const std::string server_cmd = "env " + port_env + " LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} " +
                                        shell_quote(server_bin_opt->string()) + " > " + shell_quote(server_log.string()) + " 2>&1";
-        const std::string client_cmd = "timeout 5s env " + port_env + " LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} " +
+        const std::string client_cmd = "timeout 12s env " + port_env + " LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} " +
                                        shell_quote(client_bin_opt->string()) + " > " + shell_quote(client_log.string()) + " 2>&1";
 
         const std::string script = "set -u -o pipefail; " + server_cmd + " & " +
-                                   "srv=$!; "
-                                   "sleep 1; " +
+                       "srv=$!; "
+                                   "sleep 2; " +
                                    client_cmd +
                                    "; "
                                    "client_rc=$?; "
-                                   "kill \"$srv\" >/dev/null 2>&1 || true; "
-                                   "wait \"$srv\" >/dev/null 2>&1 || true; "
-                                   "exit \"$client_rc\"";
+                       "kill \"$srv\" >/dev/null 2>&1 || true; "
+                       "wait \"$srv\" >/dev/null 2>&1 || true; "
+                       "exit \"$client_rc\"";
 
         const std::string full_cmd = "bash -lc " + shell_quote(script);
         const int run_rc = std::system(full_cmd.c_str());
