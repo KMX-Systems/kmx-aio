@@ -28,10 +28,12 @@ jobs:
         run: |
           cd source
           qbs build -f source.qbs config:debug -j 2 \
+            project.enable_readiness:true \
             project.enable_openonload:false \
             project.enable_af_xdp:false \
             project.enable_spdk:false \
-            project.enable_quic:false
+            project.enable_quic:false \
+            project.enable_avb:true
 
       - name: Run unit tests
         run: |

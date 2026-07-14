@@ -102,22 +102,22 @@ run_build_and_test() {
     (
         cd "$source_dir"
         qbs resolve -f source.qbs config:debug \
-            project.enable_readiness:false \
+            project.enable_readiness:true \
             project.enable_openonload:false \
             project.enable_af_xdp:false \
             project.enable_spdk:false \
             project.enable_quic:false \
-            project.enable_avb:false \
+            project.enable_avb:true \
             project.enable_opc_ua:false \
             project.enable_cuda:false
 
         qbs build -f source.qbs config:debug -j 2 \
-            project.enable_readiness:false \
+            project.enable_readiness:true \
             project.enable_openonload:false \
             project.enable_af_xdp:false \
             project.enable_spdk:false \
             project.enable_quic:false \
-            project.enable_avb:false \
+            project.enable_avb:true \
             project.enable_opc_ua:false \
             project.enable_cuda:false
     )
