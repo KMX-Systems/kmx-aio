@@ -59,7 +59,8 @@ namespace kmx::aio::completion::xdp
 
     struct socket::state
     {
-        std::shared_ptr<executor> exec {};
+        // Non-owning: the caller-supplied executor must outlive this socket.
+        executor* exec {};
         socket_config config {};
         std::mutex mutex {};
         bool af_xdp_backend_enabled = false;
@@ -151,12 +152,9 @@ namespace kmx::aio::completion::xdp
 #endif
     }
 
-    std::expected<void, std::error_code> socket::validate_create_args(const std::shared_ptr<executor>& exec,
+    std::expected<void, std::error_code> socket::validate_create_args([[maybe_unused]] const executor& exec,
                                                                       const socket_config& config) noexcept
     {
-        if (!exec)
-            return std::unexpected(to_std_error_code(error_code::invalid_argument));
-
         if (config.interface_name.empty())
             return std::unexpected(to_std_error_code(error_code::invalid_argument));
 
@@ -174,14 +172,13 @@ namespace kmx::aio::completion::xdp
         return {};
     }
 
-    std::expected<void, std::error_code> socket::initialize_state(std::shared_ptr<executor> exec, const socket_config& config,
-                                                                  socket& out) noexcept
+    std::expected<void, std::error_code> socket::initialize_state(executor& exec, const socket_config& config, socket& out) noexcept
     {
         out.state_.reset(new (std::nothrow) state {});
         if (!out.state_)
             return std::unexpected(std::make_error_code(std::errc::not_enough_memory));
 
-        out.state_->exec = std::move(exec);
+        out.state_->exec = &exec;
         out.state_->config = config;
 
 #if defined(KMX_AIO_FEATURE_AF_XDP)
@@ -340,13 +337,13 @@ namespace kmx::aio::completion::xdp
         return {};
     }
 
-    std::expected<socket, std::error_code> socket::create(std::shared_ptr<executor> exec, const socket_config& config) noexcept
+    std::expected<socket, std::error_code> socket::create(executor& exec, const socket_config& config) noexcept
     {
         if (auto validation = validate_create_args(exec, config); !validation)
             return std::unexpected(validation.error());
 
         socket out {};
-        if (auto initialized = initialize_state(std::move(exec), config, out); !initialized)
+        if (auto initialized = initialize_state(exec, config, out); !initialized)
             return std::unexpected(initialized.error());
 
 #if !defined(KMX_AIO_FEATURE_AF_XDP)

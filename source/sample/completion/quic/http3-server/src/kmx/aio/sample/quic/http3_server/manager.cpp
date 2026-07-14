@@ -136,7 +136,7 @@ namespace kmx::aio::sample::quic::http3_server
         co_return;
     }
 
-    task<void> async_main(std::shared_ptr<executor> exec)
+    task<void> async_main(executor& exec)
     {
         ::SSL_CTX* ssl_ctx = ::SSL_CTX_new(TLS_server_method());
         if (!ssl_ctx)
@@ -160,7 +160,7 @@ namespace kmx::aio::sample::quic::http3_server
 
         const std::uint16_t listen_port = detail::parse_listen_port_from_env();
 
-        kmx::aio::completion::quic::engine engine(*exec);
+        kmx::aio::completion::quic::engine engine(exec);
         engine.set_stream_handler(handle_stream);
         engine.set_alpn(std::string(kmx::aio::http3::alpn::id));
 

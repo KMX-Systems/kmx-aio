@@ -102,7 +102,7 @@ namespace kmx::aio::sample::quic::http3_client
         co_return; // No further action needed.
     }
 
-    task<void> async_main(std::shared_ptr<executor> exec)
+    task<void> async_main(executor& exec)
     {
         // Client SSL setup
         ::SSL_CTX* ssl_ctx = ::SSL_CTX_new(TLS_client_method());
@@ -121,7 +121,7 @@ namespace kmx::aio::sample::quic::http3_client
         // For testing purposes, we might not verify the cert directly.
         ::SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_NONE, nullptr);
 
-        kmx::aio::completion::quic::engine engine(*exec);
+        kmx::aio::completion::quic::engine engine(exec);
         // stream handler is used when server writes back to the stream we created
         engine.set_stream_handler(handle_stream);
         engine.set_alpn(std::string(kmx::aio::http3::alpn::id));

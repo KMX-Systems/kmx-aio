@@ -32,7 +32,7 @@ namespace kmx::aio::sample::xdp::packet_filter
                          "Hint: if XDP program attach is blocked, check driver/offload support and kernel logs via 'dmesg | tail -n 50'");
     }
 
-    kmx::aio::task<void> run_packet_filter(std::shared_ptr<kmx::aio::completion::executor> exec, std::shared_ptr<std::atomic_bool> ok,
+    kmx::aio::task<void> run_packet_filter(kmx::aio::completion::executor& exec, std::shared_ptr<std::atomic_bool> ok,
                                            std::string interface_name, std::uint32_t queue_id)
     {
         kmx::aio::completion::xdp::socket_config cfg {
@@ -46,7 +46,7 @@ namespace kmx::aio::sample::xdp::packet_filter
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "AF_XDP socket create failed: {}",
                              sock_result.error().message());
             log_xdp_setup_hints(interface_name, queue_id);
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -82,6 +82,6 @@ namespace kmx::aio::sample::xdp::packet_filter
                          stats.tx_frames_sent, stats.kernel_rx_dropped, stats.kernel_rx_ring_full, stats.wakeups_triggered);
 
         ok->store(true, std::memory_order_relaxed);
-        exec->stop();
+        exec.stop();
     }
 }

@@ -73,7 +73,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
         static void signal_handler(int signum) noexcept;
 
         config config_;
-        std::shared_ptr<kmx::aio::completion::executor> executor_;
+        std::unique_ptr<kmx::aio::completion::executor> executor_;
         metric_data metrics_;
 
         mutable std::mutex connections_mutex_;

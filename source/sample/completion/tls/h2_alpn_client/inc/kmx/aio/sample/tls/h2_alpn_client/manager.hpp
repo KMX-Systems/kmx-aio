@@ -53,6 +53,17 @@ namespace kmx::aio::sample::tls::h2_alpn_client
     public:
         explicit manager(config config = {}): config_(std::move(config)) {}
 
+        /// @brief Releases the owned SSL_CTX.
+        ~manager() noexcept;
+        /// @brief Non-copyable.
+        manager(const manager&) = delete;
+        /// @brief Non-copyable.
+        manager& operator=(const manager&) = delete;
+        /// @brief Non-movable (holds a mutex and a jthread).
+        manager(manager&&) = delete;
+        /// @brief Non-movable.
+        manager& operator=(manager&&) = delete;
+
         const metric_data& metrics() const noexcept { return metrics_; }
 
         /// @brief Run the stress test.
@@ -65,9 +76,9 @@ namespace kmx::aio::sample::tls::h2_alpn_client
             std::atomic_uint64_t bytes_received {};
             std::atomic_uint64_t bytes_sent {};
             std::atomic_uint64_t errors {};
-            std::atomic_bool rx_active {false};
-            std::atomic_bool tx_active {false};
-            std::atomic_bool closed {false};
+            std::atomic_bool rx_active {};
+            std::atomic_bool tx_active {};
+            std::atomic_bool closed {};
         };
 
         /// @brief Creates a non-blocking socket
@@ -96,7 +107,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
         void print_summary(const std::chrono::milliseconds elapsed) const;
 
         config config_;
-        std::shared_ptr<completion::executor> executor_;
+        std::unique_ptr<completion::executor> executor_;
         metric_data metrics_;
         ::SSL_CTX* ssl_ctx_ {};
 

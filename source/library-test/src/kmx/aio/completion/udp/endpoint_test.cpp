@@ -29,13 +29,13 @@ namespace kmx::aio::completion::udp
         port_t peer_port {};
     };
 
-    static auto run_endpoint_roundtrip(std::shared_ptr<executor> exec, std::shared_ptr<endpoint_roundtrip_state> state) -> task<void>
+    static auto run_endpoint_roundtrip(executor& exec, std::shared_ptr<endpoint_roundtrip_state> state) -> task<void>
     {
         auto recv_endpoint = endpoint::create(exec, AF_INET);
         if (!recv_endpoint)
         {
             state->error = recv_endpoint.error();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -43,14 +43,14 @@ namespace kmx::aio::completion::udp
         if (!send_endpoint)
         {
             state->error = send_endpoint.error();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
         if (const auto bind_res = recv_endpoint->raw().bind(make_ipv4_address(any_ipv4), 0u); !bind_res)
         {
             state->error = bind_res.error();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -59,7 +59,7 @@ namespace kmx::aio::completion::udp
         if (::getsockname(recv_endpoint->raw().get_fd(), reinterpret_cast<sockaddr*>(&bound_addr), &bound_len) != 0)
         {
             state->error = error_from_errno();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -75,7 +75,7 @@ namespace kmx::aio::completion::udp
         if (!send_res)
         {
             state->error = send_res.error();
-            exec->stop();
+            exec.stop();
             co_return;
         }
         state->bytes_sent = *send_res;
@@ -90,7 +90,7 @@ namespace kmx::aio::completion::udp
         if (!recv_res)
         {
             state->error = recv_res.error();
-            exec->stop();
+            exec.stop();
             co_return;
         }
         state->bytes_recv = *recv_res;
@@ -98,38 +98,34 @@ namespace kmx::aio::completion::udp
         if (state->bytes_recv != payload.size())
         {
             state->error = std::make_error_code(std::errc::io_error);
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
         if (std::memcmp(recv_buffer.data(), payload.data(), payload.size()) != 0)
         {
             state->error = std::make_error_code(std::errc::bad_message);
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
         state->peer_ip = ip_to_string(peer_ip);
         state->peer_port = peer_port;
         state->ok = true;
-        exec->stop();
+        exec.stop();
     }
 
-    TEST_CASE("completion udp endpoint create validates null executor", "[completion][udp][endpoint]")
-    {
-        auto null_exec = std::shared_ptr<executor> {};
-        const auto created = endpoint::create(std::move(null_exec), AF_INET);
-        REQUIRE_FALSE(created);
-        REQUIRE(created.error() == std::make_error_code(std::errc::invalid_argument));
-    }
+    // Note: a dedicated "null executor" validation test previously existed here. It is no
+    // longer representable now that endpoint::create() takes `executor&` instead of
+    // `std::shared_ptr<executor>` — a reference cannot be null by construction.
 
     TEST_CASE("completion udp endpoint loopback roundtrip", "[completion][udp][endpoint]")
     {
-        auto exec = std::make_shared<executor>();
+        executor exec;
         auto state = std::make_shared<endpoint_roundtrip_state>();
 
-        exec->spawn(run_endpoint_roundtrip(exec, state));
-        exec->run();
+        exec.spawn(run_endpoint_roundtrip(exec, state));
+        exec.run();
 
         REQUIRE(state->ok);
         REQUIRE(state->error.value() == 0);

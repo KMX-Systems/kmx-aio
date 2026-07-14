@@ -6,7 +6,6 @@
     #include <chrono>
     #include <cstdint>
     #include <expected>
-    #include <memory>
     #include <system_error>
 
     #include <kmx/aio/completion/executor.hpp>
@@ -23,8 +22,8 @@ namespace kmx::aio::completion
     {
     public:
         /// @brief Constructs a timer bound to a completion executor.
-        /// @param exec The completion executor that owns the io_uring instance.
-        explicit timer(std::shared_ptr<executor> exec) noexcept: exec_(std::move(exec)) {}
+        /// @param exec The completion executor that owns the io_uring instance. Must outlive this timer.
+        explicit timer(executor& exec) noexcept: exec_(exec) {}
 
         /// @brief Non-copyable.
         timer(const timer&) = delete;
@@ -55,7 +54,7 @@ namespace kmx::aio::completion
         /// @return A task yielding success or an error.
         [[nodiscard]] task<std::expected<void, std::error_code>> wait_ns(std::uint64_t ns) noexcept(false);
 
-        std::shared_ptr<executor> exec_;
+        executor& exec_;
     };
 
 } // namespace kmx::aio::completion

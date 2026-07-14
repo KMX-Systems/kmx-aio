@@ -96,8 +96,7 @@ namespace kmx::aio::completion::xdp
         /// @param exec   The completion executor.
         /// @param config AF_XDP configuration.
         /// @return A configured socket, or an error code.
-        [[nodiscard]] static std::expected<socket, std::error_code> create(std::shared_ptr<executor> exec,
-                                                                           const socket_config& config) noexcept;
+        [[nodiscard]] static std::expected<socket, std::error_code> create(executor& exec, const socket_config& config) noexcept;
 
         /// @brief Default constructor creates an uninitialized socket.
         socket() noexcept = default;
@@ -141,12 +140,12 @@ namespace kmx::aio::completion::xdp
         struct state;
 
         /// @brief Validates create arguments before initialization.
-        [[nodiscard]] static std::expected<void, std::error_code> validate_create_args(const std::shared_ptr<executor>& exec,
+        [[nodiscard]] static std::expected<void, std::error_code> validate_create_args(const executor& exec,
                                                                                        const socket_config& config) noexcept;
 
         /// @brief Initializes the socket state and selects the backend.
-        [[nodiscard]] static std::expected<void, std::error_code> initialize_state(std::shared_ptr<executor> exec,
-                                                                                   const socket_config& config, socket& out) noexcept;
+        [[nodiscard]] static std::expected<void, std::error_code> initialize_state(executor& exec, const socket_config& config,
+                                                                                   socket& out) noexcept;
 
         /// @brief Validates send arguments against the current socket state.
         [[nodiscard]] static std::expected<void, std::error_code> validate_send_args(const state& state,

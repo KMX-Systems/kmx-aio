@@ -20,7 +20,7 @@ namespace kmx::aio::sample::someip::event_publisher
     {
     }
 
-    kmx::aio::task<void> manager::run(std::shared_ptr<kmx::aio::completion::executor> exec,
+    kmx::aio::task<void> manager::run(kmx::aio::completion::executor& exec,
                                       std::shared_ptr<std::atomic_bool> ok) noexcept(false)
     {
         const auto& cfg = server_.config();
@@ -32,7 +32,7 @@ namespace kmx::aio::sample::someip::event_publisher
                              std::source_location::current(),
                              "SOME/IP publisher start failed: {}",
                              start_result.error().message());
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -44,7 +44,7 @@ namespace kmx::aio::sample::someip::event_publisher
                              "SOME/IP publisher offer_service failed: {}",
                              offer_result.error().message());
             (void) co_await server_.stop();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -119,6 +119,6 @@ namespace kmx::aio::sample::someip::event_publisher
 
         std::cout << "SOMEIP_EVENT_PUBLISHER_STOP" << std::endl;
         ok->store(all_sent, std::memory_order_relaxed);
-        exec->stop();
+        exec.stop();
     }
 }

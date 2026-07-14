@@ -24,7 +24,7 @@ SPDK integration is completion-model only and feature-gated.
 Minimal API flow used by the SPDK discovery/minimal samples:
 
 ```cpp
-auto exec = std::make_shared<kmx::aio::completion::executor>();
+kmx::aio::completion::executor exec;
 
 // Runtime-level discovery
 auto bdevs = kmx::aio::completion::spdk::runtime::enumerate_bdevs();

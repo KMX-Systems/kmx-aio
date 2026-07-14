@@ -12,9 +12,9 @@ int main()
 {
     try
     {
-        auto exec = std::make_shared<executor>();
-        exec->spawn(kmx::aio::sample::quic::http3_client::async_main(exec));
-        exec->run();
+        executor exec;
+        exec.spawn(kmx::aio::sample::quic::http3_client::async_main(exec));
+        exec.run();
     }
     catch (const std::exception& e)
     {
