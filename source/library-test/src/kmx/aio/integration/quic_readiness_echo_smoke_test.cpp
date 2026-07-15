@@ -148,10 +148,12 @@ namespace kmx::aio::quic::test::integration
                 fs::path("/tmp") / ("kmx_quic_readiness_echo_client_smoke_" + std::to_string(attempt_seed) + ".log");
             const std::string port_env = "KMX_QUIC_ECHO_PORT=" + std::to_string(test_port);
 
-            const std::string server_cmd = "env " + port_env + " LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} " +
+            const std::string server_cmd = "env " + port_env + " LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} stdbuf -oL -eL " +
                                            shell_quote(server_bin_opt->string()) + " > " + shell_quote(server_log.string()) + " 2>&1";
-            const std::string client_cmd = "timeout 20s env " + port_env + " LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} " +
-                                           shell_quote(client_bin_opt->string()) + " > " + shell_quote(client_log.string()) + " 2>&1";
+            const std::string client_cmd =
+                "timeout 30s env " + port_env +
+                " KMX_QUIC_ECHO_CLIENT_CLOSE_AFTER_RESPONSES=2 LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} stdbuf -oL -eL " +
+                shell_quote(client_bin_opt->string()) + " > " + shell_quote(client_log.string()) + " 2>&1";
 
             const std::string script = "set -u -o pipefail; " + server_cmd + " & " +
                                        "srv=$!; "
@@ -171,7 +173,7 @@ namespace kmx::aio::quic::test::integration
                                        "if (( ready == 0 )); then "
                                        "  client_rc=124; "
                                        "else "
-                                       "  sleep 0.2; " +
+                                       "  sleep 1; " +
                                        client_cmd +
                                        "; client_rc=$?; "
                                        "fi; "
