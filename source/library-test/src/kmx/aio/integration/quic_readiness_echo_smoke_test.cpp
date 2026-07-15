@@ -141,7 +141,7 @@ namespace kmx::aio::quic::test::integration
         {
             const auto attempt_seed = now_ns + attempt;
             const std::uint16_t test_port =
-                static_cast<std::uint16_t>(20000u + static_cast<std::uint16_t>(attempt_seed % 20000u));
+                static_cast<std::uint16_t>(20000u + static_cast<std::uint16_t>(attempt_seed % 10000u));
             const fs::path server_log =
                 fs::path("/tmp") / ("kmx_quic_readiness_echo_server_smoke_" + std::to_string(attempt_seed) + ".log");
             const fs::path client_log =
