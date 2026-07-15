@@ -156,8 +156,8 @@ namespace kmx::aio::quic::test::integration
             SKIP("QUIC smoke skipped: failed to generate /tmp/quic_cert.pem and /tmp/quic_key.pem");
 
         const auto now_ns = std::chrono::steady_clock::now().time_since_epoch().count();
-        const std::uint16_t test_port = is_completion ? static_cast<std::uint16_t>(30000u + static_cast<std::uint16_t>(now_ns % 10000u)) :
-                                                        static_cast<std::uint16_t>(20000u + static_cast<std::uint16_t>(now_ns % 20000u));
+        const std::uint16_t test_port = is_completion ? static_cast<std::uint16_t>(28000u + static_cast<std::uint16_t>(now_ns % 2000u)) :
+                                static_cast<std::uint16_t>(20000u + static_cast<std::uint16_t>(now_ns % 2000u));
         const fs::path server_log =
             fs::path("/tmp") /
             ((is_completion ? "kmx_http3_server_smoke_" : "kmx_quic_readiness_echo_server_smoke_") + std::to_string(now_ns) + ".log");
