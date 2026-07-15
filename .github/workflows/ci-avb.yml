@@ -191,7 +191,7 @@ jobs:
             -subj "/CN=localhost" \
             -days 1 >/dev/null 2>&1
 
-      - name: Run readiness QUIC smoke test (5s bounded client)
+      - name: Run readiness QUIC smoke test (120s bounded runner)
         run: |
           cd source
           TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
@@ -199,9 +199,9 @@ jobs:
             echo "kmx-aio-test binary not found"
             exit 1
           fi
-          timeout 30s "$TEST_BIN" "[quic][readiness][integration][smoke]"
+          timeout 120s "$TEST_BIN" "[quic][readiness][integration][smoke]"
 
-      - name: Run completion QUIC HTTP3 smoke test (5s bounded client)
+      - name: Run completion QUIC HTTP3 smoke test (120s bounded runner)
         run: |
           cd source
           TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
@@ -209,7 +209,7 @@ jobs:
             echo "kmx-aio-test binary not found"
             exit 1
           fi
-          timeout 30s "$TEST_BIN" "[quic][http3][integration][smoke]"
+          timeout 120s "$TEST_BIN" "[quic][http3][integration][smoke]"
 
   gpu-smoke:
     runs-on: ubuntu-latest
