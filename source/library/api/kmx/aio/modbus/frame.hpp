@@ -41,6 +41,26 @@ namespace kmx::aio::modbus::frame
     inline constexpr std::uint16_t max_write_coils = 1968u;
     /// @brief Exception PDU function code flag — high bit set on the request fc.
     inline constexpr std::uint8_t exception_fc_flag = 0x80u;
+    /// @brief Number of bits in one octet (used for coil bit-packing arithmetic).
+    inline constexpr std::size_t bits_per_byte = 8u;
+    /// @brief Low-byte mask for big-endian 16-bit extraction.
+    inline constexpr std::uint8_t byte_mask = 0xFFu;
+    /// @brief Wire encoding of coil ON for Write Single Coil (Modbus spec §6.5).
+    inline constexpr std::uint16_t coil_on_value = 0xFF00u;
+    /// @brief Byte offset of the length field within the MBAP header.
+    inline constexpr std::size_t mbap_length_offset = 4u;
+    /// @brief Byte offset of the unit identifier within the MBAP header.
+    inline constexpr std::size_t mbap_unit_id_offset = 6u;
+    /// @brief Size in bytes of a single-item request PDU or echo-response PDU
+    ///        (function code[1] + address[2] + value[2]).
+    inline constexpr std::size_t single_pdu_size = 5u;
+    /// @brief Byte offset of the count/value field within a 5-byte request PDU.
+    inline constexpr std::size_t pdu_value_offset = 3u;
+    /// @brief Byte offset of the byte-count field within a write-multiple PDU.
+    inline constexpr std::size_t write_multi_byte_count_offset = 5u;
+    /// @brief Byte offset of the data payload within a write-multiple PDU
+    ///        (function code[1] + address[2] + count[2] + byte_count[1]).
+    inline constexpr std::size_t pdu_data_offset = 6u;
 
     // =========================================================================
     // MBAP header encode / decode
@@ -72,7 +92,7 @@ namespace kmx::aio::modbus::frame
     /// @param count Number of items to read.
     /// @return 5-byte PDU [fc, addr_hi, addr_lo, count_hi, count_lo], or error when
     ///         @p count exceeds the protocol maximum for that function code.
-    [[nodiscard]] std::expected<std::array<std::uint8_t, 5>, std::error_code>
+    [[nodiscard]] std::expected<std::array<std::uint8_t, single_pdu_size>, std::error_code>
     encode_read_request(function_code fc, std::uint16_t address,
                         std::uint16_t count) noexcept;
 
@@ -82,13 +102,13 @@ namespace kmx::aio::modbus::frame
 
     /// @brief Build a Write Single Register request PDU (function code 0x06).
     /// @return 5-byte PDU.
-    [[nodiscard]] std::array<std::uint8_t, 5>
+    [[nodiscard]] std::array<std::uint8_t, single_pdu_size>
     encode_write_single_register(std::uint16_t address, std::uint16_t value) noexcept;
 
     /// @brief Build a Write Single Coil request PDU (function code 0x05).
     /// @details Encodes @p on as 0xFF00 (ON) or 0x0000 (OFF) per spec §6.5.
     /// @return 5-byte PDU.
-    [[nodiscard]] std::array<std::uint8_t, 5>
+    [[nodiscard]] std::array<std::uint8_t, single_pdu_size>
     encode_write_single_coil(std::uint16_t address, bool on) noexcept;
 
     /// @brief Build a Write Multiple Registers request PDU (function code 0x10).

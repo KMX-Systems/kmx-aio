@@ -11,6 +11,11 @@
 
 namespace kmx::aio::modbus
 {
+    /// @brief Standard Modbus TCP port (IANA assigned).
+    inline constexpr std::uint16_t default_port = 502u;
+    /// @brief Unit identifier that matches any device (broadcast / accept-all).
+    inline constexpr std::uint8_t broadcast_unit_id = 0xFFu;
+
     /// @brief Modbus function codes (Modbus Application Protocol Specification V1.1b3, §6).
     enum class function_code : std::uint8_t
     {
@@ -83,7 +88,7 @@ namespace kmx::aio::modbus
         /// @brief Target host name or dotted-decimal IPv4 address.
         std::string host;
         /// @brief TCP port of the Modbus server (default: 502).
-        std::uint16_t port = 502u;
+        std::uint16_t port = default_port;
         /// @brief Unit identifier sent with every request.
         std::uint8_t unit_id = 1u;
         /// @brief Connect and request timeout.
@@ -96,7 +101,7 @@ namespace kmx::aio::modbus
         /// @brief Bind address (empty = all interfaces).
         std::string bind_address;
         /// @brief TCP listen port (default: 502).
-        std::uint16_t port = 502u;
+        std::uint16_t port = default_port;
         /// @brief Unit identifier this server responds to (0xFF = all).
         std::uint8_t unit_id = 1u;
     };

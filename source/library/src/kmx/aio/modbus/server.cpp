@@ -66,7 +66,7 @@ namespace kmx::aio::modbus
                     co_return;
 
                 // unit_id check: accept if configured to accept all (0xFF) or matching
-                if (config.unit_id != 0xFFu && hdr->unit_id != config.unit_id)
+                if (config.unit_id != broadcast_unit_id && hdr->unit_id != config.unit_id)
                     co_return;
 
                 // Read PDU: length field = unit_id(1) + PDU, so PDU = length - 1
