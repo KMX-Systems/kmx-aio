@@ -23,11 +23,11 @@ int main(int argc, const char* argv[]) noexcept
         if (argc >= 3)
             queue_id = static_cast<std::uint32_t>(std::stoul(argv[2]));
 
-        auto exec = std::make_shared<kmx::aio::completion::executor>();
+        kmx::aio::completion::executor exec;
         auto ok = std::make_shared<std::atomic_bool>(false);
 
-        exec->spawn(kmx::aio::sample::xdp::packet_filter::run_packet_filter(exec, ok, std::string(argv[1]), queue_id));
-        exec->run();
+        exec.spawn(kmx::aio::sample::xdp::packet_filter::run_packet_filter(exec, ok, std::string(argv[1]), queue_id));
+        exec.run();
 
         return ok->load(std::memory_order_relaxed) ? 0 : 1;
     }

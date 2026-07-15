@@ -65,8 +65,8 @@ namespace kmx::aio::completion::v4l2
 
     // capture — private constructor
 
-    capture::capture(std::shared_ptr<executor> exec, file_descriptor&& fd, capture_config cfg, std::vector<mmap_buffer> buffers) noexcept:
-        io_base(std::move(exec), std::move(fd)),
+    capture::capture(executor& exec, file_descriptor&& fd, capture_config cfg, std::vector<mmap_buffer> buffers) noexcept:
+        io_base(exec, std::move(fd)),
         config_(std::move(cfg)),
         buffers_(std::move(buffers))
     {
@@ -211,11 +211,8 @@ namespace kmx::aio::completion::v4l2
 
     // capture::create()
 
-    capture::create_result capture::create(std::shared_ptr<executor> exec, capture_config cfg) noexcept
+    capture::create_result capture::create(executor& exec, capture_config cfg) noexcept
     {
-        if (!exec)
-            return std::unexpected(kmx::aio::error_code::invalid_argument);
-
         auto fd = open_device(cfg);
         if (!fd)
             return std::unexpected(fd.error());
@@ -245,7 +242,7 @@ namespace kmx::aio::completion::v4l2
             return std::unexpected(stream.error());
         }
 
-        capture result {std::move(exec), std::move(*fd), std::move(cfg), std::move(*buffers)};
+        capture result {exec, std::move(*fd), std::move(cfg), std::move(*buffers)};
         result.streaming_ = true;
         return result;
     }
@@ -316,7 +313,7 @@ namespace kmx::aio::completion::v4l2
             // Suspend the coroutine until the V4L2 fd signals readiness via io_uring poll.
             // IORING_OP_POLL_ADD shares the same completion ring as sockets and timers,
             // so camera capture and networking coexist in one executor without epoll.
-            const auto poll_res = co_await exec_->async_poll(fd_.get(), POLLIN | POLLERR | POLLHUP | POLLPRI);
+            const auto poll_res = co_await exec_.async_poll(fd_.get(), POLLIN | POLLERR | POLLHUP | POLLPRI);
             if (!poll_res)
                 co_return std::unexpected(kmx::aio::from_errno(poll_res.error().value()));
 

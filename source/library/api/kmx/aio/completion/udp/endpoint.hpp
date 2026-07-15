@@ -27,7 +27,7 @@ namespace kmx::aio::completion::udp
         /// @param exec Completion executor used for I/O scheduling.
         /// @param domain Socket domain, such as AF_INET or AF_INET6.
         /// @return A constructed endpoint or an error code.
-        [[nodiscard]] static create_result create(std::shared_ptr<executor> exec, const int domain = AF_INET) noexcept;
+        [[nodiscard]] static create_result create(executor& exec, const int domain = AF_INET) noexcept;
 
         /// @brief Wraps an already-opened socket.
         explicit endpoint(socket&& sock) noexcept: socket_(std::move(sock)) {}

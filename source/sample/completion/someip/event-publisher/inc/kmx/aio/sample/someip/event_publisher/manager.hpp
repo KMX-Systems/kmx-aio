@@ -15,7 +15,7 @@ namespace kmx::aio::sample::someip::event_publisher
     public:
         manager(kmx::aio::someip::server_config config, kmx::aio::someip::event_id_t event_id, std::size_t event_count) noexcept;
 
-        kmx::aio::task<void> run(std::shared_ptr<kmx::aio::completion::executor> exec,
+        kmx::aio::task<void> run(kmx::aio::completion::executor& exec,
                                  std::shared_ptr<std::atomic_bool> ok) noexcept(false);
 
     private:

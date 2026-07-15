@@ -13,6 +13,12 @@ namespace kmx::aio::sample::tls::h2_alpn_client
 {
     static constexpr auto mem_order = std::memory_order_relaxed;
 
+    manager::~manager() noexcept
+    {
+        if (ssl_ctx_)
+            ::SSL_CTX_free(ssl_ctx_);
+    }
+
     bool manager::run() noexcept(false)
     {
         const auto server_ip = kmx::aio::ip_to_string(config_.server_addr);
@@ -23,7 +29,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
         ::SSL_CTX_set_verify(ssl_ctx_, SSL_VERIFY_NONE, nullptr);
 
         const completion::executor_config exec_config {.thread_count = config_.scheduler_threads};
-        executor_ = std::make_shared<completion::executor>(exec_config);
+        executor_ = std::make_unique<completion::executor>(exec_config);
 
         for (std::uint32_t i = 0u; i < config_.num_workers; ++i)
             executor_->spawn(worker(i, nullptr));
@@ -66,7 +72,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
         if (!r)
             co_return std::unexpected(r.error());
 
-        co_return kmx::aio::completion::tls::stream(kmx::aio::completion::tcp::stream(executor_, std::move(fd_owner)), ssl_ctx_);
+        co_return kmx::aio::completion::tls::stream(kmx::aio::completion::tcp::stream(*executor_, std::move(fd_owner)), ssl_ctx_);
     }
 
     task<void> manager::worker(const std::uint32_t worker_id, std::shared_ptr<connection_stats> stats) noexcept(false)

@@ -58,7 +58,7 @@ co_await conn.write_all(std::span{msg.data(), msg.size()});
 ```cpp
 #include <kmx/aio/completion/tcp/listener.hpp>
 
-auto exec = std::make_shared<kmx::aio::completion::executor>();
+kmx::aio::completion::executor exec;
 kmx::aio::completion::tcp::listener srv {exec, "0.0.0.0", 8080};
 srv.listen(128);
 

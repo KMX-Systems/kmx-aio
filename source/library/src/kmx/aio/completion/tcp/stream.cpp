@@ -6,12 +6,12 @@ namespace kmx::aio::completion::tcp
 {
     stream::result_task stream::read(std::span<char> buffer) noexcept(false)
     {
-        co_return co_await exec_->async_read(fd_.get(), buffer);
+        co_return co_await exec_.async_read(fd_.get(), buffer);
     }
 
     stream::result_task stream::write(std::span<const char> buffer) noexcept(false)
     {
-        co_return co_await exec_->async_write(fd_.get(), buffer);
+        co_return co_await exec_.async_write(fd_.get(), buffer);
     }
 
     task<std::expected<void, std::error_code>> stream::write_all(std::span<const char> buffer) noexcept(false)
@@ -34,12 +34,12 @@ namespace kmx::aio::completion::tcp
 
     stream::result_task stream::read_fixed(std::span<char> buffer, const int buf_index) noexcept(false)
     {
-        co_return co_await exec_->async_read_fixed(fd_.get(), buffer, 0, buf_index);
+        co_return co_await exec_.async_read_fixed(fd_.get(), buffer, 0, buf_index);
     }
 
     stream::result_task stream::write_fixed(std::span<const char> buffer, const int buf_index) noexcept(false)
     {
-        co_return co_await exec_->async_write_fixed(fd_.get(), buffer, 0, buf_index);
+        co_return co_await exec_.async_write_fixed(fd_.get(), buffer, 0, buf_index);
     }
 
     task<std::expected<void, std::error_code>> stream::write_all_fixed(std::span<const char> buffer, const int buf_index) noexcept(false)

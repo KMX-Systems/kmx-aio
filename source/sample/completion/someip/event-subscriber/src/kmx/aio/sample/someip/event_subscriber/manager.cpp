@@ -20,7 +20,7 @@ namespace kmx::aio::sample::someip::event_subscriber
     {
     }
 
-    kmx::aio::task<void> manager::run(std::shared_ptr<kmx::aio::completion::executor> exec,
+    kmx::aio::task<void> manager::run(kmx::aio::completion::executor& exec,
                                       std::shared_ptr<std::atomic_bool> ok) noexcept(false)
     {
         const auto& cfg = client_.config();
@@ -33,7 +33,7 @@ namespace kmx::aio::sample::someip::event_subscriber
                              std::source_location::current(),
                              "SOME/IP subscriber client start failed: {}",
                              start_result.error().message());
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -45,7 +45,7 @@ namespace kmx::aio::sample::someip::event_subscriber
                              "SOME/IP subscriber request_service failed: {}",
                              request_result.error().message());
             (void) co_await client_.stop();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -58,7 +58,7 @@ namespace kmx::aio::sample::someip::event_subscriber
                              bind_result.error().message());
             (void) co_await client_.release_service(cfg.service_id, cfg.instance_id);
             (void) co_await client_.stop();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -71,7 +71,7 @@ namespace kmx::aio::sample::someip::event_subscriber
                              open_result.error().message());
             (void) co_await client_.release_service(cfg.service_id, cfg.instance_id);
             (void) co_await client_.stop();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -147,6 +147,6 @@ namespace kmx::aio::sample::someip::event_subscriber
 
         std::cout << "SOMEIP_EVENT_SUBSCRIBER_DONE" << std::endl;
         ok->store(success, std::memory_order_relaxed);
-        exec->stop();
+        exec.stop();
     }
 }

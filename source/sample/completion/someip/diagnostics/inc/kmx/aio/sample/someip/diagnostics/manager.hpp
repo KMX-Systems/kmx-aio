@@ -16,7 +16,7 @@ namespace kmx::aio::sample::someip::diagnostics
         manager(kmx::aio::someip::client_config client_config,
                 kmx::aio::someip::subscription_config subscription_config) noexcept;
 
-        kmx::aio::task<void> run(std::shared_ptr<kmx::aio::completion::executor> exec,
+        kmx::aio::task<void> run(kmx::aio::completion::executor& exec,
                                  std::shared_ptr<std::atomic_bool> ok) noexcept(false);
 
     private:

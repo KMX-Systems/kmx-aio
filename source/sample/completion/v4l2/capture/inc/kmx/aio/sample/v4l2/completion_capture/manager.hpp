@@ -52,7 +52,7 @@ namespace kmx::aio::sample::v4l2::completion_capture
         config config_;
         metrics metrics_;
 
-        std::shared_ptr<kmx::aio::completion::executor> executor_;
+        std::unique_ptr<kmx::aio::completion::executor> executor_;
         static inline std::atomic<kmx::aio::completion::executor*> g_executor_ptr {};
     };
 

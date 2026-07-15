@@ -34,9 +34,9 @@ namespace kmx::aio::completion::test::integration
         return std::unexpected(std::make_error_code(std::errc::no_such_device));
     }
 
-    [[nodiscard]] static task<void> hold_executor(std::shared_ptr<executor> exec)
+    [[nodiscard]] static task<void> hold_executor(executor& exec)
     {
-        timer tmr {std::move(exec)};
+        timer tmr {exec};
         auto wait_res = co_await tmr.wait(std::chrono::milliseconds(500));
         (void) wait_res;
         co_return;
@@ -54,16 +54,21 @@ namespace kmx::aio::completion::test::integration
             .core_id = static_cast<decltype(executor_config::core_id)>(*core_res),
         };
 
-        auto exec = std::make_shared<executor>(cfg);
-        REQUIRE(exec != nullptr);
+        // Heap-allocated (not a local value) so that if the test times out below and the
+        // runner thread is detached, the executor can be intentionally leaked instead of being
+        // destroyed while still driven by the detached thread. The normal (non-timeout) path
+        // destroys it via exec_holder's own destructor at scope exit, same as before.
+        auto exec_holder = std::make_unique<executor>(cfg);
+        executor* const exec_ptr = exec_holder.get();
+        executor& exec = *exec_ptr;
 
-        exec->spawn(hold_executor(exec));
+        exec.spawn(hold_executor(exec));
 
         std::atomic_bool runner_done {false};
         std::thread runner(
-            [exec, &runner_done]()
+            [exec_ptr, &runner_done]()
             {
-                exec->run();
+                exec_ptr->run();
                 runner_done.store(true, std::memory_order_release);
             });
 
@@ -75,11 +80,14 @@ namespace kmx::aio::completion::test::integration
             {
                 SKIP("completion pinning test timeout: executor I/O thread did not confirm affinity");
                 if (runner.joinable())
+                {
                     runner.detach();
+                    (void) exec_holder.release(); // Leak intentionally: the thread is still running.
+                }
                 return;
             }
 
-            const auto affined = exec->is_io_thread_affined_to(*core_res);
+            const auto affined = exec.is_io_thread_affined_to(*core_res);
             if (affined.has_value())
             {
                 REQUIRE(*affined);
@@ -98,9 +106,12 @@ namespace kmx::aio::completion::test::integration
 
         if (!runner_done.load(std::memory_order_acquire))
         {
-            exec->stop();
+            exec.stop();
             if (runner.joinable())
+            {
                 runner.detach();
+                (void) exec_holder.release(); // Leak intentionally: the thread is still running.
+            }
             FAIL("completion pinning test timeout: executor did not stop after affinity confirmation");
         }
 

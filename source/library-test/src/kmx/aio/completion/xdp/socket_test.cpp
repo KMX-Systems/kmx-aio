@@ -22,7 +22,7 @@ namespace kmx::aio::completion::xdp
         std::error_code recv_empty_error {};
     };
 
-    auto run_roundtrip(std::shared_ptr<executor> exec, std::shared_ptr<xdp_roundtrip_state> state) -> task<void>
+    auto run_roundtrip(executor& exec, std::shared_ptr<xdp_roundtrip_state> state) -> task<void>
     {
         socket_config cfg {
             .interface_name = "lo",
@@ -39,7 +39,7 @@ namespace kmx::aio::completion::xdp
         if (!sock_result)
         {
             state->create_error = sock_result.error();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -60,7 +60,7 @@ namespace kmx::aio::completion::xdp
         if (!send_a)
         {
             state->send_overflow_error = send_a.error();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -68,7 +68,7 @@ namespace kmx::aio::completion::xdp
         if (!send_b)
         {
             state->send_overflow_error = send_b.error();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -79,7 +79,7 @@ namespace kmx::aio::completion::xdp
         const auto send_c = co_await sock.send(std::span<const std::byte>(payload_c));
         if (send_c)
         {
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -87,19 +87,19 @@ namespace kmx::aio::completion::xdp
         const auto recv_a = co_await sock.recv();
         if (!recv_a)
         {
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
         if (recv_a->length != payload_a.size())
         {
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
         if (std::memcmp(recv_a->data.data(), payload_a.data(), payload_a.size()) != 0)
         {
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -107,19 +107,19 @@ namespace kmx::aio::completion::xdp
         const auto recv_b = co_await sock.recv();
         if (!recv_b)
         {
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
         if (recv_b->length != payload_b.size())
         {
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
         if (std::memcmp(recv_b->data.data(), payload_b.data(), payload_b.size()) != 0)
         {
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -127,13 +127,13 @@ namespace kmx::aio::completion::xdp
         const auto recv_empty = co_await sock.recv();
         if (recv_empty)
         {
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
         state->recv_empty_error = recv_empty.error();
         state->ok = true;
-        exec->stop();
+        exec.stop();
     }
 
     TEST_CASE("xdp socket config validation", "[completion][xdp]")
@@ -143,12 +143,10 @@ namespace kmx::aio::completion::xdp
             .queue_id = 0u,
         };
 
-        auto null_exec = std::shared_ptr<executor> {};
-        const auto with_null_exec = socket::create(null_exec, cfg);
-        REQUIRE_FALSE(with_null_exec);
-        REQUIRE(with_null_exec.error() == std::make_error_code(std::errc::invalid_argument));
-
-        auto exec = std::make_shared<executor>();
+        // Note: a "null executor" validation case previously existed here. It is no longer
+        // representable now that socket::create() takes `executor&` instead of
+        // `std::shared_ptr<executor>` — a reference cannot be null by construction.
+        executor exec;
 
         cfg.interface_name = "";
         const auto with_empty_iface = socket::create(exec, cfg);
@@ -169,11 +167,11 @@ namespace kmx::aio::completion::xdp
 
     TEST_CASE("xdp fallback roundtrip and queue behavior", "[completion][xdp]")
     {
-        auto exec = std::make_shared<executor>();
+        executor exec;
         auto state = std::make_shared<xdp_roundtrip_state>();
 
-        exec->spawn(run_roundtrip(exec, state));
-        exec->run();
+        exec.spawn(run_roundtrip(exec, state));
+        exec.run();
 
         REQUIRE((state->ok || state->create_error.value() != 0));
         REQUIRE((state->ok || state->create_error.value() != 0));

@@ -19,7 +19,7 @@ namespace kmx::aio::sample::someip::diagnostics
     {
     }
 
-    kmx::aio::task<void> manager::run(std::shared_ptr<kmx::aio::completion::executor> exec,
+    kmx::aio::task<void> manager::run(kmx::aio::completion::executor& exec,
                                       std::shared_ptr<std::atomic_bool> ok) noexcept(false)
     {
         const auto& client_cfg = client_.config();
@@ -31,7 +31,7 @@ namespace kmx::aio::sample::someip::diagnostics
                              std::source_location::current(),
                              "SOME/IP diagnostics client start failed: {}",
                              client_start.error().message());
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -43,7 +43,7 @@ namespace kmx::aio::sample::someip::diagnostics
                              "SOME/IP diagnostics request_service failed: {}",
                              request.error().message());
             (void) co_await client_.stop();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -56,7 +56,7 @@ namespace kmx::aio::sample::someip::diagnostics
                              bind.error().message());
             (void) co_await client_.release_service(client_cfg.service_id, client_cfg.instance_id);
             (void) co_await client_.stop();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -69,7 +69,7 @@ namespace kmx::aio::sample::someip::diagnostics
                              open.error().message());
             (void) co_await client_.release_service(client_cfg.service_id, client_cfg.instance_id);
             (void) co_await client_.stop();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -135,6 +135,6 @@ namespace kmx::aio::sample::someip::diagnostics
 
         std::cout << "SOMEIP_DIAGNOSTICS_DONE" << std::endl;
         ok->store(true, std::memory_order_relaxed);
-        exec->stop();
+        exec.stop();
     }
 }

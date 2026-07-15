@@ -6,7 +6,7 @@ namespace kmx::aio::completion
 {
     task<std::expected<void, std::error_code>> timer::wait_ns(const std::uint64_t ns) noexcept(false)
     {
-        const auto result = co_await exec_->async_timeout(ns);
+        const auto result = co_await exec_.async_timeout(ns);
         if (!result)
             co_return std::unexpected(result.error());
 

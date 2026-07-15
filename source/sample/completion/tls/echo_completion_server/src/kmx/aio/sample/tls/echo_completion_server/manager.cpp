@@ -11,6 +11,23 @@ namespace kmx::aio::sample::tls::echo_completion_server
 {
     static constexpr std::size_t transfer_limit_bytes = 200u * 1024u;
 
+    void manager::cleanup_run_state() noexcept
+    {
+        g_executor_ptr.store(nullptr, std::memory_order_release);
+
+        if (ui_thread_.joinable())
+        {
+            ui_thread_.request_stop();
+            ui_thread_.join();
+        }
+
+        if (ssl_ctx_)
+        {
+            ::SSL_CTX_free(ssl_ctx_);
+            ssl_ctx_ = nullptr;
+        }
+    }
+
     bool manager::run() noexcept(false)
     {
         logger::log(logger::level::info, std::source_location::current(), "TLS Completion Server Starting");
@@ -18,6 +35,12 @@ namespace kmx::aio::sample::tls::echo_completion_server
         std::signal(SIGPIPE, SIG_IGN);
         std::signal(SIGINT, signal_handler);
         std::signal(SIGTERM, signal_handler);
+
+        if (ssl_ctx_)
+        {
+            ::SSL_CTX_free(ssl_ctx_);
+            ssl_ctx_ = nullptr;
+        }
 
         // Intialize OpenSSL Context
         ssl_ctx_ = ::SSL_CTX_new(TLS_server_method());
@@ -27,47 +50,56 @@ namespace kmx::aio::sample::tls::echo_completion_server
             return false;
         }
 
-        if (::SSL_CTX_use_certificate_chain_file(ssl_ctx_, config_.cert_file.c_str()) <= 0)
+        try
         {
-            logger::log(logger::level::error, std::source_location::current(), "Failed to load cert");
-            ::SSL_CTX_free(ssl_ctx_);
-            return false;
-        }
+            if (::SSL_CTX_use_certificate_chain_file(ssl_ctx_, config_.cert_file.c_str()) <= 0)
+            {
+                logger::log(logger::level::error, std::source_location::current(), "Failed to load cert");
+                cleanup_run_state();
+                return false;
+            }
 
-        if (::SSL_CTX_use_PrivateKey_file(ssl_ctx_, config_.key_file.c_str(), SSL_FILETYPE_PEM) <= 0)
+            if (::SSL_CTX_use_PrivateKey_file(ssl_ctx_, config_.key_file.c_str(), SSL_FILETYPE_PEM) <= 0)
+            {
+                logger::log(logger::level::error, std::source_location::current(), "Failed to load key");
+                cleanup_run_state();
+                return false;
+            }
+
+            kmx::aio::completion::executor_config exec_config {.ring_entries = config_.max_events,
+                                                               .max_completions = config_.max_events,
+                                                               .thread_count = config_.executor_threads,
+                                                               .core_id = -1};
+
+            executor_ = std::make_unique<kmx::aio::completion::executor>(exec_config);
+            g_executor_ptr.store(executor_.get(), std::memory_order_release);
+
+            executor_->spawn(listener_task());
+
+            ui_thread_ = std::jthread([this](std::stop_token stop_token) { ui_loop(stop_token); });
+            executor_->run();
+
+            if (ui_thread_.joinable())
+            {
+                ui_thread_.request_stop();
+                ui_thread_.join();
+            }
+
+            print_metrics();
+            const bool ok = metrics_.errors == 0u;
+            cleanup_run_state();
+            return ok;
+        }
+        catch (...)
         {
-            logger::log(logger::level::error, std::source_location::current(), "Failed to load key");
-            ::SSL_CTX_free(ssl_ctx_);
-            return false;
+            cleanup_run_state();
+            throw;
         }
-
-        kmx::aio::completion::executor_config exec_config {.ring_entries = config_.max_events,
-                                                           .max_completions = config_.max_events,
-                                                           .thread_count = config_.executor_threads,
-                                                           .core_id = -1};
-
-        executor_ = std::make_shared<kmx::aio::completion::executor>(exec_config);
-        g_executor_ptr.store(executor_.get(), std::memory_order_release);
-
-        executor_->spawn(listener_task());
-
-        ui_thread_ = std::jthread([this](std::stop_token stop_token) { ui_loop(stop_token); });
-        executor_->run();
-
-        if (ui_thread_.joinable())
-        {
-            ui_thread_.request_stop();
-            ui_thread_.join();
-        }
-
-        ::SSL_CTX_free(ssl_ctx_);
-        print_metrics();
-        return metrics_.errors == 0u;
     }
 
     kmx::aio::task<void> manager::listener_task() noexcept(false)
     {
-        auto listener = kmx::aio::completion::tcp::listener(executor_, config_.bind_address, config_.bind_port);
+        auto listener = kmx::aio::completion::tcp::listener(*executor_, config_.bind_address, config_.bind_port);
         if (!listener.listen(128))
             co_return;
 
@@ -82,7 +114,7 @@ namespace kmx::aio::sample::tls::echo_completion_server
 
             metrics_.total_connections.fetch_add(1u, std::memory_order_relaxed);
 
-            auto tcp_stream = kmx::aio::completion::tcp::stream(executor_, std::move(*accept_result));
+            auto tcp_stream = kmx::aio::completion::tcp::stream(*executor_, std::move(*accept_result));
             auto tls_stream = kmx::aio::completion::tls::stream(std::move(tcp_stream), ssl_ctx_);
 
             executor_->spawn(handle_client(std::move(tls_stream)));
@@ -109,7 +141,7 @@ namespace kmx::aio::sample::tls::echo_completion_server
 
             while (true)
             {
-                auto read_result = co_await stream.read(std::span<char>(buffer));
+                auto read_result = co_await stream.read(std::span<char>(buffer.data(), buffer.size()));
                 if (!read_result)
                 {
                     if (read_result.error().value() != 0)

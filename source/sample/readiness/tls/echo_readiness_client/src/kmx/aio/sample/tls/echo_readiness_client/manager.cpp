@@ -13,6 +13,12 @@ namespace kmx::aio::sample::tls::echo_readiness_client
     static constexpr auto mem_order = std::memory_order_relaxed;
     static constexpr std::size_t transfer_limit_bytes = 200u * 1024u;
 
+    manager::~manager() noexcept
+    {
+        if (ssl_ctx_)
+            ::SSL_CTX_free(ssl_ctx_);
+    }
+
     bool manager::run() noexcept(false)
     {
         const auto start_time = std::chrono::high_resolution_clock::now();

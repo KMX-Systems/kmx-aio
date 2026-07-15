@@ -17,7 +17,7 @@ Feature-gated through `project.enable_cuda`. Requires the NVIDIA driver and CUDA
 Minimal API flow used by the GPU image-processing sample:
 
 ```cpp
-auto io_exec = std::make_shared<kmx::aio::completion::executor>();
+kmx::aio::completion::executor io_exec;
 
 kmx::aio::gpu::executor_config gpu_cfg {
     .max_events = 64u,

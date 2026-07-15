@@ -22,7 +22,7 @@ namespace kmx::aio::completion
         std::chrono::steady_clock::time_point end {};
     };
 
-    auto run_timer_wait(std::shared_ptr<executor> exec, std::shared_ptr<timer_state> state) -> task<void>
+    auto run_timer_wait(executor& exec, std::shared_ptr<timer_state> state) -> task<void>
     {
         timer tmr {exec};
         state->start = std::chrono::steady_clock::now();
@@ -35,16 +35,16 @@ namespace kmx::aio::completion
         else
             state->error = result.error();
 
-        exec->stop();
+        exec.stop();
     }
 
     TEST_CASE("completion timer waits for the requested duration", "[completion][timer]")
     {
-        auto exec = std::make_shared<executor>();
+        executor exec;
         auto state = std::make_shared<timer_state>();
 
-        exec->spawn(run_timer_wait(exec, state));
-        exec->run();
+        exec.spawn(run_timer_wait(exec, state));
+        exec.run();
 
         REQUIRE(state->completed);
         REQUIRE(state->ok);

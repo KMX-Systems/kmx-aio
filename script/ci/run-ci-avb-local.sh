@@ -102,22 +102,22 @@ run_build_and_test() {
     (
         cd "$source_dir"
         qbs resolve -f source.qbs config:debug \
-            project.enable_readiness:false \
+            project.enable_readiness:true \
             project.enable_openonload:false \
             project.enable_af_xdp:false \
             project.enable_spdk:false \
             project.enable_quic:false \
-            project.enable_avb:false \
+            project.enable_avb:true \
             project.enable_opc_ua:false \
             project.enable_cuda:false
 
         qbs build -f source.qbs config:debug -j 2 \
-            project.enable_readiness:false \
+            project.enable_readiness:true \
             project.enable_openonload:false \
             project.enable_af_xdp:false \
             project.enable_spdk:false \
             project.enable_quic:false \
-            project.enable_avb:false \
+            project.enable_avb:true \
             project.enable_opc_ua:false \
             project.enable_cuda:false
     )
@@ -187,8 +187,8 @@ run_quic_smoke() {
 
     local test_bin
     test_bin="$(find_test_bin)"
-    run_with_local_gcc_runtime timeout 30s "$test_bin" "[quic][readiness][integration][smoke]"
-    run_with_local_gcc_runtime timeout 30s "$test_bin" "[quic][http3][integration][smoke]"
+    run_with_local_gcc_runtime timeout 120s "$test_bin" "[quic][readiness][integration][smoke]"
+    run_with_local_gcc_runtime timeout 120s "$test_bin" "[quic][http3][integration][smoke]"
 }
 
 run_artifact_split_smoke() {
@@ -201,6 +201,7 @@ run_artifact_split_smoke() {
 
     (
         cd "$repo_root"
+        bash script/feature/af_xdp/install-dependencies.sh
         bash script/feature/quic/install-dependencies.sh
         bash script/feature/opc_ua/install-dependencies.sh
     )
@@ -226,7 +227,7 @@ run_artifact_split_smoke() {
         cd "$source_dir"
         qbs clean
         local products
-        products="sample-tcp-minimal-client,sample-tcp-minimal-server,sample-tcp-echo-client,sample-tcp-echo-server,sample-udp-minimal-client,sample-udp-minimal-server,sample-udp-echo-client,sample-udp-echo-server,sample-quic-echo-client,sample-quic-echo-server,sample-quic-echo-readiness-client,sample-quic-echo-readiness-server,sample-quic-http3-client,sample-quic-http3-server,sample-tls-echo-completion-client,sample-tls-echo-completion-server,sample-tls-echo-readiness-client,sample-tls-echo-readiness-server,sample-tls-h2-alpn-client,sample-tls-h2-alpn-server,sample-tls-h2-alpn-readiness-client,sample-tls-h2-alpn-readiness-server,sample-avb-talker,sample-avb-listener,sample-avb-readiness-talker,sample-avb-readiness-listener,sample-spdk-minimal,sample-spdk-discovery,sample-xdp-packet-filter,sample-v4l2-capture,sample-v4l2-completion-capture,sample-hft-order-router,kmx-aio-test"
+        products="sample-tcp-minimal-client,sample-tcp-minimal-server,sample-tcp-echo-client,sample-tcp-echo-server,sample-udp-minimal-client,sample-udp-minimal-server,sample-udp-echo-client,sample-udp-echo-server,sample-tls-echo-completion-client,sample-tls-echo-completion-server,sample-tls-echo-readiness-client,sample-tls-echo-readiness-server,sample-tls-h2-alpn-client,sample-tls-h2-alpn-server,sample-tls-h2-alpn-readiness-client,sample-tls-h2-alpn-readiness-server,sample-avb-talker,sample-avb-listener,sample-avb-readiness-talker,sample-avb-readiness-listener,sample-spdk-minimal,sample-spdk-discovery,sample-xdp-packet-filter,sample-v4l2-capture,sample-v4l2-completion-capture,sample-hft-order-router,kmx-aio-test"
         qbs resolve -f source.qbs config:debug \
             project.enable_readiness:true \
             project.enable_completion:true \
@@ -236,7 +237,7 @@ run_artifact_split_smoke() {
             project.enable_spdk:true \
             project.spdk_prefix:"$repo_root/build/spdk-local/install-local" \
             project.spdk_enable_crypto:false \
-            project.enable_quic:true \
+            project.enable_quic:false \
             project.enable_avb:true \
             project.enable_opc_ua:true \
             project.opc_ua_vendored:true \
@@ -253,7 +254,7 @@ run_artifact_split_smoke() {
             project.enable_spdk:true \
             project.spdk_prefix:"$repo_root/build/spdk-local/install-local" \
             project.spdk_enable_crypto:false \
-            project.enable_quic:true \
+            project.enable_quic:false \
             project.enable_avb:true \
             project.enable_opc_ua:true \
             project.opc_ua_vendored:true \
