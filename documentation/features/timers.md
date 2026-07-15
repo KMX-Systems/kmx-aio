@@ -53,7 +53,7 @@ for (;;)
 ```cpp
 #include <kmx/aio/completion/timer.hpp>
 
-auto exec = std::make_shared<kmx::aio::completion::executor>();
+kmx::aio::completion::executor exec;
 kmx::aio::completion::timer t {exec};
 
 // One-shot sleep

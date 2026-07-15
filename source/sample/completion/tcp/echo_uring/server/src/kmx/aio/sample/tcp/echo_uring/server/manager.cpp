@@ -46,7 +46,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
                                                                  .thread_count = config_.scheduler_threads,
                                                                  .core_id = -1};
 
-        executor_ = std::make_shared<kmx::aio::completion::executor>(exec_config);
+        executor_ = std::make_unique<kmx::aio::completion::executor>(exec_config);
         g_executor_ptr.store(executor_.get(), std::memory_order_release);
 
         // Pre-allocate and register buffers
@@ -211,7 +211,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
 
     kmx::aio::task<void> manager::connection_acceptor() noexcept(false)
     {
-        auto listener = kmx::aio::completion::tcp::listener(executor_, config_.bind_address, config_.bind_port);
+        auto listener = kmx::aio::completion::tcp::listener(*executor_, config_.bind_address, config_.bind_port);
 
         if (const auto listen_result = listener.listen(128); !listen_result)
             co_return;
@@ -239,7 +239,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
                 auto stats = create_connection_stats(client_id);
 
                 auto client_fd = std::move(*accept_result);
-                auto client_stream = kmx::aio::completion::tcp::stream(executor_, std::move(client_fd));
+                auto client_stream = kmx::aio::completion::tcp::stream(*executor_, std::move(client_fd));
 
                 auto handler_task = handle_client(std::move(client_stream), client_id, std::move(stats));
                 executor_->spawn(std::move(handler_task));

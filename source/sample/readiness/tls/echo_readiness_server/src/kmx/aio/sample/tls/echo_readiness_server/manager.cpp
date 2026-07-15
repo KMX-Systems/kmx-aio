@@ -11,6 +11,12 @@ namespace kmx::aio::sample::tls::echo_readiness_server
 {
     static constexpr std::size_t transfer_limit_bytes = 200u * 1024u;
 
+    manager::~manager() noexcept
+    {
+        if (ssl_ctx_)
+            ::SSL_CTX_free(ssl_ctx_);
+    }
+
     bool manager::run() noexcept(false)
     {
         logger::log(logger::level::info, std::source_location::current(), "TLS Readiness Server Starting");
@@ -30,14 +36,12 @@ namespace kmx::aio::sample::tls::echo_readiness_server
         if (::SSL_CTX_use_certificate_chain_file(ssl_ctx_, config_.cert_file.c_str()) <= 0)
         {
             logger::log(logger::level::error, std::source_location::current(), "Failed to load cert");
-            ::SSL_CTX_free(ssl_ctx_);
             return false;
         }
 
         if (::SSL_CTX_use_PrivateKey_file(ssl_ctx_, config_.key_file.c_str(), SSL_FILETYPE_PEM) <= 0)
         {
             logger::log(logger::level::error, std::source_location::current(), "Failed to load key");
-            ::SSL_CTX_free(ssl_ctx_);
             return false;
         }
 
@@ -58,7 +62,6 @@ namespace kmx::aio::sample::tls::echo_readiness_server
             ui_thread_.join();
         }
 
-        ::SSL_CTX_free(ssl_ctx_);
         print_metrics();
         return metrics_.errors == 0u;
     }

@@ -38,8 +38,7 @@ namespace kmx::aio::completion::spdk
         /// @param exec Completion executor used for I/O scheduling context.
         /// @param config Device configuration.
         /// @return Configured device or an error code.
-        [[nodiscard]] static std::expected<device, std::error_code> create(std::shared_ptr<executor> exec,
-                                                                           const device_config& config) noexcept;
+        [[nodiscard]] static std::expected<device, std::error_code> create(executor& exec, const device_config& config) noexcept;
 
         /// @brief Creates an empty device handle.
         device() noexcept = default;
@@ -76,14 +75,14 @@ namespace kmx::aio::completion::spdk
         /// @param exec Completion executor used by the device.
         /// @param config Device configuration.
         /// @return The total byte count on success.
-        [[nodiscard]] static std::expected<std::uint64_t, std::error_code> validate_create_config(const std::shared_ptr<executor>& exec,
+        [[nodiscard]] static std::expected<std::uint64_t, std::error_code> validate_create_config(const executor& exec,
                                                                                                   const device_config& config) noexcept;
         /// @brief Allocates and initializes the device state.
         /// @param out Device object receiving the initialized state.
         /// @param exec Completion executor used by the device.
         /// @param config Device configuration.
         /// @return Success or an error code.
-        [[nodiscard]] static std::expected<void, std::error_code> initialize_state(device& out, std::shared_ptr<executor> exec,
+        [[nodiscard]] static std::expected<void, std::error_code> initialize_state(device& out, executor& exec,
                                                                                    const device_config& config) noexcept;
         /// @brief Initializes the fallback in-memory storage backend.
         /// @param state Device state being initialized.

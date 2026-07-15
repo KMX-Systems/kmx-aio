@@ -6,6 +6,7 @@
 #include "kmx/logger.hpp"
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cstring>
 #include <pthread.h>
 #include <sched.h>
@@ -304,9 +305,8 @@ namespace kmx::aio::completion
     {
         active_work_.fetch_add(1u, mem_order);
         metrics_.total_tasks_spawned.fetch_add(1u, mem_order);
-        auto self = shared_from_this();
 
-        const auto dt = execute_task(std::move(t), std::move(self));
+        const auto dt = execute_task(std::move(t), this, get_lifetime_token());
         dt.handle.resume();
     }
 
@@ -464,8 +464,44 @@ namespace kmx::aio::completion
         slab_allocator coro_allocator {1024u, std::max(1024u, config_.ring_entries * 4u)};
         set_thread_allocator(&coro_allocator);
 
-        while (!st.stop_requested())
+        // Once stop() has been requested, spawned tasks may still be suspended
+        // waiting on in-flight io_uring operations. Exiting the loop immediately
+        // would abandon their coroutine frames without resuming them (leak) and
+        // tear down the ring while operations referencing it are still pending.
+        // Instead: ask the kernel to cancel every outstanding request (so
+        // suspended coroutines resume with an error and unwind normally), then
+        // keep draining completions until active_work_ reaches zero, bounded by
+        // a timeout to avoid hanging shutdown forever on a stuck operation.
+        bool cancel_issued = false;
+        std::chrono::steady_clock::time_point drain_deadline {};
+
+        while (!st.stop_requested() || (active_work_.load(mem_order) > 0u))
         {
+            if (st.stop_requested())
+            {
+                if (!cancel_issued)
+                {
+                    if (auto* const cancel_sqe = ::io_uring_get_sqe(&ring_))
+                    {
+                        ::io_uring_prep_cancel(cancel_sqe, nullptr, IORING_ASYNC_CANCEL_ANY | IORING_ASYNC_CANCEL_ALL);
+                        ::io_uring_sqe_set_data(cancel_sqe, nullptr);
+                        if (const auto sub = submit(); !sub)
+                            logger::log(logger::level::error, std::source_location::current(),
+                                        "Failed to submit shutdown cancel-all request: {}", sub.error().message());
+                    }
+
+                    cancel_issued = true;
+                    drain_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+                }
+                else if (std::chrono::steady_clock::now() >= drain_deadline)
+                {
+                    logger::log(logger::level::error, std::source_location::current(),
+                                "Forced shutdown with {} task(s) still active after cancellation drain timeout",
+                                active_work_.load(mem_order));
+                    break;
+                }
+            }
+
             ::io_uring_cqe* cqe {};
             __kernel_timespec ts {};
             ts.tv_sec = {};
@@ -505,7 +541,7 @@ namespace kmx::aio::completion
             logger::log(logger::level::info, std::source_location::current(), "io_uring executor pinned to CPU core {}", config_.core_id);
     }
 
-    executor::detached_task_wrapper executor::execute_task(task<void> tsk, std::shared_ptr<executor> self) noexcept
+    executor::detached_task_wrapper executor::execute_task(task<void> tsk, executor* self, std::weak_ptr<void> lifetime) noexcept
     {
         try
         {
@@ -517,23 +553,21 @@ namespace kmx::aio::completion
                         e.what());
         }
 
+        // The executor may already be gone if it was force-destroyed while this task was
+        // still suspended (e.g. cancelled during the shutdown drain in event_loop()). Skip
+        // touching its state in that case: nothing is waiting on it anymore.
+        if (lifetime.expired())
+            co_return;
+
         self->metrics_.total_tasks_completed.fetch_add(1u, mem_order);
         if (self->active_work_.fetch_sub(1u, std::memory_order_acq_rel) == 1u)
             self->idle_cv_.notify_one();
     }
 
-    std::shared_ptr<executor> executor::get_default() noexcept(false)
+    executor& executor::get_default() noexcept(false)
     {
-        thread_local std::shared_ptr<executor> instance;
-        if (!instance)
-            instance = std::make_shared<executor>();
+        thread_local executor instance;
         return instance;
-    }
-
-    void executor::set_default(std::shared_ptr<executor> exec) noexcept
-    {
-        thread_local std::shared_ptr<executor> instance;
-        instance = std::move(exec);
     }
 
 } // namespace kmx::aio::completion

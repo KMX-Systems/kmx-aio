@@ -27,9 +27,9 @@ namespace kmx::aio::completion
         std::error_code error {};
     };
 
-    auto run_poll_ready(std::shared_ptr<executor> exec, std::shared_ptr<poll_ready_state> state, const int read_fd) -> task<void>
+    auto run_poll_ready(executor& exec, std::shared_ptr<poll_ready_state> state, const int read_fd) -> task<void>
     {
-        const auto result = co_await exec->async_poll(read_fd, POLLIN);
+        const auto result = co_await exec.async_poll(read_fd, POLLIN);
         state->completed = true;
         if (result)
         {
@@ -39,7 +39,7 @@ namespace kmx::aio::completion
         else
             state->error = result.error();
 
-        exec->stop();
+        exec.stop();
     }
 
     TEST_CASE("async_poll resumes when fd is already readable", "[completion][executor][async_poll]")
@@ -54,11 +54,11 @@ namespace kmx::aio::completion
         const std::byte sentinel {0x42u};
         REQUIRE(::write(write_fd, &sentinel, 1u) == 1);
 
-        auto exec = std::make_shared<executor>();
+        executor exec;
         auto state = std::make_shared<poll_ready_state>();
 
-        exec->spawn(run_poll_ready(exec, state, read_fd));
-        exec->run();
+        exec.spawn(run_poll_ready(exec, state, read_fd));
+        exec.run();
 
         ::close(write_fd);
         ::close(read_fd);
@@ -79,10 +79,10 @@ namespace kmx::aio::completion
         std::error_code error {};
     };
 
-    auto run_poll_bad_fd(std::shared_ptr<executor> exec, std::shared_ptr<poll_error_state> state) -> task<void>
+    auto run_poll_bad_fd(executor& exec, std::shared_ptr<poll_error_state> state) -> task<void>
     {
         // fd -1 is always invalid; the kernel rejects it and io_uring returns EBADF.
-        const auto result = co_await exec->async_poll(-1, POLLIN);
+        const auto result = co_await exec.async_poll(-1, POLLIN);
         state->completed = true;
         if (!result)
         {
@@ -90,16 +90,16 @@ namespace kmx::aio::completion
             state->error = result.error();
         }
 
-        exec->stop();
+        exec.stop();
     }
 
     TEST_CASE("async_poll returns error for invalid fd", "[completion][executor][async_poll]")
     {
-        auto exec = std::make_shared<executor>();
+        executor exec;
         auto state = std::make_shared<poll_error_state>();
 
-        exec->spawn(run_poll_bad_fd(exec, state));
-        exec->run();
+        exec.spawn(run_poll_bad_fd(exec, state));
+        exec.run();
 
         REQUIRE(state->completed);
         REQUIRE(state->is_error);

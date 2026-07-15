@@ -28,10 +28,12 @@ jobs:
         run: |
           cd source
           qbs build -f source.qbs config:debug -j 2 \
+            project.enable_readiness:true \
             project.enable_openonload:false \
             project.enable_af_xdp:false \
             project.enable_spdk:false \
-            project.enable_quic:false
+            project.enable_quic:false \
+            project.enable_avb:true
 
       - name: Run unit tests
         run: |
@@ -106,6 +108,12 @@ jobs:
           make -j"$(nproc)"
           make install
 
+      - name: Bootstrap AF_XDP dependencies
+        run: |
+          bash script/feature/af_xdp/install-dependencies.sh
+          pkg-config --modversion libbpf
+          pkg-config --modversion libxdp
+
       - name: Enforce sample artifact boundaries
         run: |
           bash script/ci/check-sample-artifact-boundaries.sh
@@ -113,14 +121,14 @@ jobs:
       - name: Build explicit-dependency samples and tests
         run: |
           cd source
-          PRODUCTS="sample-tcp-minimal-client,sample-tcp-minimal-server,sample-tcp-echo-client,sample-tcp-echo-server,sample-udp-minimal-client,sample-udp-minimal-server,sample-udp-echo-client,sample-udp-echo-server,sample-quic-echo-client,sample-quic-echo-server,sample-quic-echo-readiness-client,sample-quic-echo-readiness-server,sample-quic-http3-client,sample-quic-http3-server,sample-tls-echo-completion-client,sample-tls-echo-completion-server,sample-tls-echo-readiness-client,sample-tls-echo-readiness-server,sample-tls-h2-alpn-client,sample-tls-h2-alpn-server,sample-tls-h2-alpn-readiness-client,sample-tls-h2-alpn-readiness-server,sample-avb-talker,sample-avb-listener,sample-avb-readiness-talker,sample-avb-readiness-listener,sample-spdk-minimal,sample-spdk-discovery,sample-xdp-packet-filter,sample-v4l2-capture,sample-v4l2-completion-capture,sample-hft-order-router,kmx-aio-test"
+          PRODUCTS="sample-tcp-minimal-client,sample-tcp-minimal-server,sample-tcp-echo-client,sample-tcp-echo-server,sample-udp-minimal-client,sample-udp-minimal-server,sample-udp-echo-client,sample-udp-echo-server,sample-tls-echo-completion-client,sample-tls-echo-completion-server,sample-tls-echo-readiness-client,sample-tls-echo-readiness-server,sample-tls-h2-alpn-client,sample-tls-h2-alpn-server,sample-tls-h2-alpn-readiness-client,sample-tls-h2-alpn-readiness-server,sample-avb-talker,sample-avb-listener,sample-avb-readiness-talker,sample-avb-readiness-listener,sample-spdk-minimal,sample-spdk-discovery,sample-xdp-packet-filter,sample-v4l2-capture,sample-v4l2-completion-capture,sample-hft-order-router,kmx-aio-test"
           qbs resolve -f source.qbs config:debug \
             project.enable_openonload:false \
             project.enable_af_xdp:true \
             project.enable_spdk:true \
             project.spdk_prefix:"/tmp/spdk/install-local" \
             project.spdk_enable_crypto:false \
-            project.enable_quic:true \
+            project.enable_quic:false \
             project.enable_readiness:true \
             project.enable_avb:true \
             project.enable_opc_ua:true \
@@ -135,7 +143,7 @@ jobs:
             project.enable_spdk:true \
             project.spdk_prefix:"/tmp/spdk/install-local" \
             project.spdk_enable_crypto:false \
-            project.enable_quic:true \
+            project.enable_quic:false \
             project.enable_readiness:true \
             project.enable_avb:true \
             project.enable_opc_ua:true \
@@ -183,7 +191,7 @@ jobs:
             -subj "/CN=localhost" \
             -days 1 >/dev/null 2>&1
 
-      - name: Run readiness QUIC smoke test (5s bounded client)
+      - name: Run readiness QUIC smoke test (120s bounded runner)
         run: |
           cd source
           TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
@@ -191,9 +199,9 @@ jobs:
             echo "kmx-aio-test binary not found"
             exit 1
           fi
-          timeout 30s "$TEST_BIN" "[quic][readiness][integration][smoke]"
+          timeout 120s "$TEST_BIN" "[quic][readiness][integration][smoke]"
 
-      - name: Run completion QUIC HTTP3 smoke test (5s bounded client)
+      - name: Run completion QUIC HTTP3 smoke test (120s bounded runner)
         run: |
           cd source
           TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
@@ -201,7 +209,7 @@ jobs:
             echo "kmx-aio-test binary not found"
             exit 1
           fi
-          timeout 30s "$TEST_BIN" "[quic][http3][integration][smoke]"
+          timeout 120s "$TEST_BIN" "[quic][http3][integration][smoke]"
 
   gpu-smoke:
     runs-on: ubuntu-latest

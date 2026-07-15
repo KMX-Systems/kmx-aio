@@ -13,6 +13,12 @@ namespace kmx::aio::sample::tls::echo_completion_client
     static constexpr auto mem_order = std::memory_order_relaxed;
     static constexpr std::size_t transfer_limit_bytes = 200u * 1024u;
 
+    manager::~manager() noexcept
+    {
+        if (ssl_ctx_)
+            ::SSL_CTX_free(ssl_ctx_);
+    }
+
     bool manager::run() noexcept(false)
     {
         const auto start_time = std::chrono::high_resolution_clock::now();
@@ -23,44 +29,76 @@ namespace kmx::aio::sample::tls::echo_completion_client
 
         // Prevent SIGPIPE from terminating the process on broken pipe writes.
         std::signal(SIGPIPE, SIG_IGN);
+
+        if (ssl_ctx_)
+        {
+            ::SSL_CTX_free(ssl_ctx_);
+            ssl_ctx_ = nullptr;
+        }
+
         ssl_ctx_ = ::SSL_CTX_new(TLS_client_method());
-        // Disable cert verification for sample client
-        ::SSL_CTX_set_verify(ssl_ctx_, SSL_VERIFY_NONE, nullptr);
-
-        // Create executor with thread pool
-        const completion::executor_config exec_config {.thread_count = config_.scheduler_threads};
-
-        executor_ = std::make_shared<completion::executor>(exec_config);
-
-        // Spawn all worker coroutines into the executor
-        for (std::uint32_t i {}; i < config_.num_workers; ++i)
+        if (!ssl_ctx_)
         {
-            auto stats = create_connection_stats(i);
-            executor_->spawn(worker(i, std::move(stats)));
+            logger::log(logger::level::error, std::source_location::current(), "Failed to create SSL_CTX");
+            return false;
         }
 
-        ui_thread_ = std::jthread([this](std::stop_token stop_token) { ui_loop(stop_token); });
-
-        // Run executor (blocks until all tasks complete)
-        executor_->run();
-
-        if (ui_thread_.joinable())
+        const auto cleanup = [this]() noexcept
         {
-            ui_thread_.request_stop();
-            ui_thread_.join();
+            if (ui_thread_.joinable())
+            {
+                ui_thread_.request_stop();
+                ui_thread_.join();
+            }
+
+            if (ssl_ctx_)
+            {
+                ::SSL_CTX_free(ssl_ctx_);
+                ssl_ctx_ = nullptr;
+            }
+        };
+
+        try
+        {
+            // Disable cert verification for sample client
+            ::SSL_CTX_set_verify(ssl_ctx_, SSL_VERIFY_NONE, nullptr);
+
+            // Create executor with thread pool
+            const completion::executor_config exec_config {.thread_count = config_.scheduler_threads};
+
+            executor_ = std::make_unique<completion::executor>(exec_config);
+
+            // Spawn all worker coroutines into the executor
+            for (std::uint32_t i {}; i < config_.num_workers; ++i)
+            {
+                auto stats = create_connection_stats(i);
+                executor_->spawn(worker(i, std::move(stats)));
+            }
+
+            ui_thread_ = std::jthread([this](std::stop_token stop_token) { ui_loop(stop_token); });
+
+            // Run executor (blocks until all tasks complete)
+            executor_->run();
+
+            const auto end_time = std::chrono::high_resolution_clock::now();
+            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+            print_summary(elapsed);
+
+            const auto failures = metrics_.failures.load(mem_order);
+            logger::log(logger::level::info, std::source_location::current(),
+                        "Stress test completed in {} ms with {} successes and {} failures", elapsed.count(), metrics_.successes.load(mem_order),
+                        failures);
+
+            const bool ok = failures == 0u;
+            cleanup();
+            return ok;
         }
-
-        const auto end_time = std::chrono::high_resolution_clock::now();
-        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-
-        print_summary(elapsed);
-
-        const auto failures = metrics_.failures.load(mem_order);
-        logger::log(logger::level::info, std::source_location::current(),
-                    "Stress test completed in {} ms with {} successes and {} failures", elapsed.count(), metrics_.successes.load(mem_order),
-                    failures);
-
-        return failures == 0u;
+        catch (...)
+        {
+            cleanup();
+            throw;
+        }
     }
 
     std::expected<file_descriptor, std::error_code> manager::create_nonblocking_socket() noexcept
@@ -102,7 +140,7 @@ namespace kmx::aio::sample::tls::echo_completion_client
             co_return std::unexpected(r.error());
 
         // On success, transfer ownership of the fd to the stream
-        co_return kmx::aio::completion::tls::stream(kmx::aio::completion::tcp::stream(executor_, std::move(fd_owner)), ssl_ctx_);
+        co_return kmx::aio::completion::tls::stream(kmx::aio::completion::tcp::stream(*executor_, std::move(fd_owner)), ssl_ctx_);
     }
 
     task<void> manager::worker(const std::uint32_t worker_id, std::shared_ptr<connection_stats> stats) noexcept(false)
@@ -159,7 +197,7 @@ namespace kmx::aio::sample::tls::echo_completion_client
             std::size_t received_bytes {};
             while (true)
             {
-                auto recv_result = co_await stream_ptr->read(buffer);
+                auto recv_result = co_await stream_ptr->read(std::span<char>(buffer.data(), buffer.size()));
                 if (!recv_result)
                 {
                     metrics_.errors.fetch_add(1u, mem_order);

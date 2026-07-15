@@ -73,7 +73,8 @@ namespace kmx::aio::completion::spdk
 
     struct device::state
     {
-        std::shared_ptr<executor> exec {};
+        // Non-owning: the caller-supplied executor must outlive this device.
+        executor* exec {};
         device_config config {};
         std::mutex mutex {};
 
@@ -92,12 +93,9 @@ namespace kmx::aio::completion::spdk
 
     device::device(device&&) noexcept = default;
 
-    std::expected<std::uint64_t, std::error_code> device::validate_create_config(const std::shared_ptr<executor>& exec,
+    std::expected<std::uint64_t, std::error_code> device::validate_create_config([[maybe_unused]] const executor& exec,
                                                                                  const device_config& config) noexcept
     {
-        if (!exec)
-            return std::unexpected(to_std_error_code(error_code::invalid_argument));
-
         if (config.bdev_name.empty() || config.block_size == 0u || config.block_count == 0u)
             return std::unexpected(to_std_error_code(error_code::invalid_argument));
 
@@ -112,14 +110,13 @@ namespace kmx::aio::completion::spdk
         return total_bytes_u64;
     }
 
-    std::expected<void, std::error_code> device::initialize_state(device& out, std::shared_ptr<executor> exec,
-                                                                  const device_config& config) noexcept
+    std::expected<void, std::error_code> device::initialize_state(device& out, executor& exec, const device_config& config) noexcept
     {
         out.state_.reset(new (std::nothrow) state {});
         if (!out.state_)
             return std::unexpected(std::make_error_code(std::errc::not_enough_memory));
 
-        out.state_->exec = std::move(exec);
+        out.state_->exec = &exec;
         out.state_->config = config;
         return {};
     }
@@ -213,14 +210,14 @@ namespace kmx::aio::completion::spdk
     }
 #endif
 
-    std::expected<device, std::error_code> device::create(std::shared_ptr<executor> exec, const device_config& config) noexcept
+    std::expected<device, std::error_code> device::create(executor& exec, const device_config& config) noexcept
     {
         const auto total_bytes_u64 = validate_create_config(exec, config);
         if (!total_bytes_u64)
             return std::unexpected(total_bytes_u64.error());
 
         device out {};
-        if (const auto init_state = initialize_state(out, std::move(exec), config); !init_state)
+        if (const auto init_state = initialize_state(out, exec, config); !init_state)
             return std::unexpected(init_state.error());
 
 #if !defined(KMX_AIO_FEATURE_SPDK)

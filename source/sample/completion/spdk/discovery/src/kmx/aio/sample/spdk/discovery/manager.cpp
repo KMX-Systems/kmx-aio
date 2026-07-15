@@ -38,7 +38,7 @@ namespace kmx::aio::sample::spdk::discovery
 
     int run_discovery(int argc, const char* argv[])
     {
-        auto exec = std::make_shared<kmx::aio::completion::executor>();
+        kmx::aio::completion::executor exec;
         const auto requested = collect_requested(argc, argv);
 
         const auto enumerate_result = kmx::aio::completion::spdk::runtime::enumerate_bdevs();

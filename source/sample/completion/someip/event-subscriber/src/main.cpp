@@ -12,7 +12,7 @@ int main() noexcept
 {
     try
     {
-        auto exec = std::make_shared<kmx::aio::completion::executor>();
+        kmx::aio::completion::executor exec;
         auto ok = std::make_shared<std::atomic_bool>(false);
 
         kmx::aio::sample::someip::event_subscriber::manager mgr(
@@ -37,8 +37,8 @@ int main() noexcept
             5u
         );
 
-        exec->spawn(mgr.run(exec, ok));
-        exec->run();
+        exec.spawn(mgr.run(exec, ok));
+        exec.run();
         return ok->load(std::memory_order_relaxed) ? 0 : 1;
     }
     catch (const std::exception& e)

@@ -18,7 +18,7 @@ namespace kmx::aio::sample::someip::event_subscriber
                 kmx::aio::someip::subscription_config subscription_config,
                 std::size_t expected_events) noexcept;
 
-        kmx::aio::task<void> run(std::shared_ptr<kmx::aio::completion::executor> exec,
+        kmx::aio::task<void> run(kmx::aio::completion::executor& exec,
                                  std::shared_ptr<std::atomic_bool> ok) noexcept(false);
 
     private:

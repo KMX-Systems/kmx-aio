@@ -39,6 +39,18 @@ namespace kmx::aio::sample::tls::h2_alpn_server
     {
     public:
         explicit manager(config config = {}): config_(std::move(config)) {}
+
+        /// @brief Releases the owned SSL_CTX.
+        ~manager() noexcept;
+        /// @brief Non-copyable.
+        manager(const manager&) = delete;
+        /// @brief Non-copyable.
+        manager& operator=(const manager&) = delete;
+        /// @brief Non-movable (holds a jthread).
+        manager(manager&&) = delete;
+        /// @brief Non-movable.
+        manager& operator=(manager&&) = delete;
+
         [[nodiscard]] bool run() noexcept(false);
 
     private:
@@ -50,7 +62,7 @@ namespace kmx::aio::sample::tls::h2_alpn_server
         static void signal_handler(int signum) noexcept;
 
         config config_;
-        std::shared_ptr<kmx::aio::completion::executor> executor_;
+        std::unique_ptr<kmx::aio::completion::executor> executor_;
         ::SSL_CTX* ssl_ctx_ {};
         metric_data metrics_;
         std::jthread ui_thread_;

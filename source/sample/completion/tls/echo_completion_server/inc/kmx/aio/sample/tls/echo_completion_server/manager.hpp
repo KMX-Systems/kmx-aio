@@ -42,6 +42,8 @@ namespace kmx::aio::sample::tls::echo_completion_server
         [[nodiscard]] bool run() noexcept(false);
 
     private:
+        void cleanup_run_state() noexcept;
+
         [[nodiscard]] task<void> listener_task() noexcept(false);
         [[nodiscard]] task<void> handle_client(kmx::aio::completion::tls::stream client_stream) noexcept(false);
 
@@ -50,7 +52,7 @@ namespace kmx::aio::sample::tls::echo_completion_server
         static void signal_handler(int signum) noexcept;
 
         config config_;
-        std::shared_ptr<kmx::aio::completion::executor> executor_;
+        std::unique_ptr<kmx::aio::completion::executor> executor_;
         ::SSL_CTX* ssl_ctx_ {};
         metric_data metrics_;
         std::jthread ui_thread_;

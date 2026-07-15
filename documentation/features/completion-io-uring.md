@@ -30,16 +30,16 @@ The completion model submits operations to `io_uring` and resumes coroutines on 
 Create an executor, spawn a coroutine, and run the completion loop:
 
 ```cpp
-auto exec = std::make_shared<kmx::aio::completion::executor>();
-exec->spawn(my_task(exec));
-exec->run();
+kmx::aio::completion::executor exec;
+exec.spawn(my_task(exec));
+exec.run();
 ```
 
 Use `async_poll` to await one-shot readiness of any file descriptor inside the same io_uring ring:
 
 ```cpp
 // Suspend until fd becomes readable. Re-arm by calling again after each wake-up.
-auto result = co_await exec->async_poll(fd, POLLIN);
+auto result = co_await exec.async_poll(fd, POLLIN);
 if (!result)
     co_return;
 ```

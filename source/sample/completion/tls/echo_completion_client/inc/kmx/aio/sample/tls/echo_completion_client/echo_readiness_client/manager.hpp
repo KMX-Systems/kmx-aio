@@ -96,7 +96,7 @@ namespace kmx::aio::sample::tls::echo_completion_client
         void print_summary(const std::chrono::milliseconds elapsed) const;
 
         config config_;
-        std::shared_ptr<completion::executor> executor_;
+        std::unique_ptr<completion::executor> executor_;
         metric_data metrics_;
         ::SSL_CTX* ssl_ctx_ {};
 

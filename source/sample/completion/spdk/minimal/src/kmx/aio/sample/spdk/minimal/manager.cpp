@@ -45,7 +45,7 @@ namespace kmx::aio::sample::spdk::minimal
                          "`LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH`.");
     }
 
-    kmx::aio::task<void> run_spdk_probe(std::shared_ptr<kmx::aio::completion::executor> exec, std::shared_ptr<std::atomic_bool> ok,
+    kmx::aio::task<void> run_spdk_probe(kmx::aio::completion::executor& exec, std::shared_ptr<std::atomic_bool> ok,
                                         std::string bdev_name)
     {
         kmx::aio::completion::spdk::device_config config {
@@ -60,7 +60,7 @@ namespace kmx::aio::sample::spdk::minimal
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK device create failed: {}",
                              device_result.error().message());
             log_spdk_runtime_hints(bdev_name);
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -77,7 +77,7 @@ namespace kmx::aio::sample::spdk::minimal
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK write failed: {}",
                              write_result.error().message());
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -86,7 +86,7 @@ namespace kmx::aio::sample::spdk::minimal
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK read failed: {}",
                              read_result.error().message());
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -95,7 +95,7 @@ namespace kmx::aio::sample::spdk::minimal
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK flush failed: {}",
                              flush_result.error().message());
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -109,6 +109,6 @@ namespace kmx::aio::sample::spdk::minimal
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK round-trip mismatch");
         }
 
-        exec->stop();
+        exec.stop();
     }
 }

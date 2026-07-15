@@ -55,7 +55,7 @@ namespace kmx::aio::sample::quic::echo_client
         co_return;
     }
 
-    task<void> async_main(std::shared_ptr<executor> exec)
+    task<void> async_main(executor& exec)
     {
         responses_received.store(0u);
         close_after_responses.store(parse_response_target_from_env());
@@ -77,7 +77,7 @@ namespace kmx::aio::sample::quic::echo_client
 
         ::SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_NONE, nullptr);
 
-        kmx::aio::completion::quic::engine engine(*exec);
+        kmx::aio::completion::quic::engine engine(exec);
         engine.set_stream_handler(handle_stream);
 
         static constexpr std::array<unsigned char, 4u> peer_ip = {127u, 0u, 0u, 1u};

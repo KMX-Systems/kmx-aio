@@ -52,7 +52,7 @@ namespace kmx::aio::sample::avb::listener
         config config_ {};
         metrics metrics_ {};
 
-        std::shared_ptr<kmx::aio::completion::executor> executor_ {};
+        std::unique_ptr<kmx::aio::completion::executor> executor_ {};
         std::unique_ptr<kmx::aio::completion::avb::gptp::clock> clock_ {};
         std::unique_ptr<kmx::aio::completion::avb::srp::client> srp_ {};
         static inline std::atomic<kmx::aio::completion::executor*> g_executor_ptr {};

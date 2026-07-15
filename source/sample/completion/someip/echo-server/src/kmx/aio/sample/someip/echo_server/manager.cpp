@@ -17,7 +17,7 @@ namespace kmx::aio::sample::someip::echo_server
     {
     }
 
-    kmx::aio::task<void> manager::run(std::shared_ptr<kmx::aio::completion::executor> exec,
+    kmx::aio::task<void> manager::run(kmx::aio::completion::executor& exec,
                                       std::shared_ptr<std::atomic_bool> ok) noexcept(false)
     {
         const auto& cfg = server_.config();
@@ -29,7 +29,7 @@ namespace kmx::aio::sample::someip::echo_server
                              std::source_location::current(),
                              "SOME/IP server start failed: {}",
                              start_result.error().message());
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -41,7 +41,7 @@ namespace kmx::aio::sample::someip::echo_server
                              "SOME/IP offer_service failed: {}",
                              offer_result.error().message());
             (void) co_await server_.stop();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -118,6 +118,6 @@ namespace kmx::aio::sample::someip::echo_server
 
         std::cout << "SOMEIP_ECHO_SERVER_STOP" << std::endl;
         ok->store(replied, std::memory_order_relaxed);
-        exec->stop();
+        exec.stop();
     }
 }

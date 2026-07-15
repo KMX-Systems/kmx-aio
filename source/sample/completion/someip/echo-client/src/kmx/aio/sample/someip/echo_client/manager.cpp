@@ -16,7 +16,7 @@ namespace kmx::aio::sample::someip::echo_client
     {
     }
 
-    kmx::aio::task<void> manager::run(std::shared_ptr<kmx::aio::completion::executor> exec,
+    kmx::aio::task<void> manager::run(kmx::aio::completion::executor& exec,
                                       std::shared_ptr<std::atomic_bool> ok) noexcept(false)
     {
         const auto& cfg = client_.config();
@@ -35,7 +35,7 @@ namespace kmx::aio::sample::someip::echo_client
                              std::source_location::current(),
                              "SOME/IP client start failed: {}",
                              start_result.error().message());
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -47,7 +47,7 @@ namespace kmx::aio::sample::someip::echo_client
                              "SOME/IP request_service failed: {}",
                              request_result.error().message());
             (void) co_await client_.stop();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -78,7 +78,7 @@ namespace kmx::aio::sample::someip::echo_client
                              "SOME/IP service did not become available");
             (void) co_await client_.release_service(cfg.service_id, cfg.instance_id);
             (void) co_await client_.stop();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -92,7 +92,7 @@ namespace kmx::aio::sample::someip::echo_client
                              call_result.error().message());
             (void) co_await client_.release_service(cfg.service_id, cfg.instance_id);
             (void) co_await client_.stop();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -103,7 +103,7 @@ namespace kmx::aio::sample::someip::echo_client
                              "SOME/IP payload mismatch in echo response");
             (void) co_await client_.release_service(cfg.service_id, cfg.instance_id);
             (void) co_await client_.stop();
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -121,7 +121,7 @@ namespace kmx::aio::sample::someip::echo_client
                              std::source_location::current(),
                              "SOME/IP client stop failed: {}",
                              stop_result.error().message());
-            exec->stop();
+            exec.stop();
             co_return;
         }
 
@@ -135,6 +135,6 @@ namespace kmx::aio::sample::someip::echo_client
 
         std::cout << "SOMEIP_ECHO_CLIENT_DONE" << std::endl;
         ok->store(true, std::memory_order_relaxed);
-        exec->stop();
+        exec.stop();
     }
 }

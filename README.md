@@ -27,8 +27,6 @@
 * **[AF_XDP Packet Socket](https://www.kernel.org/doc/html/latest/networking/af_xdp.html)**: Kernel-bypass packet filtering with [eBPF](https://ebpf.io/) support and [UMEM](https://www.kernel.org/doc/html/latest/networking/af_xdp.html#umem) ring management.
 * **[SPDK Block I/O](https://spdk.io/)**: [NVMe](https://nvmexpress.org/), generic [bdev](https://spdk.io/doc/bdev.html), and storage acceleration via [DPDK](https://www.dpdk.org/).
 
-> ⚙ — Feature-gated: requires `project.enable_*:true`; off by default.
-
 ## Feature Domain Applicability Matrix
 
 Quick reference that groups features by domain and highlights only their applicability scope.
@@ -85,6 +83,8 @@ Quick reference that groups features by domain and highlights only their applica
 
 Quick reference showing which APIs are available in each execution model:
 
+⚙ — Feature-gated (requires `project.enable_*:true`; off by default)
+
 | Feature | Readiness (epoll) | Completion (io_uring) | ⚙ | Notes |
 | :--- | :---: | :---: | :---: | :--- |
 | [**TCP**](documentation/features/tcp.md) | ✅ | ✅ | | Listener, stream, accept, read, write |
@@ -104,12 +104,6 @@ Quick reference showing which APIs are available in each execution model:
 | [**SOME/IP**](documentation/features/someip.md) | ✅ | ✅ | ⚙ | Backend-neutral facade; vsomeip or stub backend; echo server/client samples |
 | [**SPDK Block I/O**](documentation/features/spdk.md) | ❌ | ✅ | ⚙ | NVMe, generic bdev; DPDK-backed |
 | [**V4L2 Capture**](documentation/features/v4l2.md) | ✅ | ✅ | ⚙ | Readiness: zero-copy mmap + epoll; Completion: `IORING_OP_POLL_ADD` + `VIDIOC_DQBUF` |
-
-**Legend:**
-
-* ✅ — Available
-* ❌ — Not available in this execution model
-* ⚙ — Feature-gated (requires `project.enable_*:true`; off by default)
 
 ## Documentation
 

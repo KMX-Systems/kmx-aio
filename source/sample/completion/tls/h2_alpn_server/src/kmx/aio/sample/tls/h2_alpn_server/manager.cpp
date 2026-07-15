@@ -18,6 +18,12 @@ namespace kmx::aio::sample::tls::h2_alpn_server
         return SSL_TLSEXT_ERR_OK;
     }
 
+    manager::~manager() noexcept
+    {
+        if (ssl_ctx_)
+            ::SSL_CTX_free(ssl_ctx_);
+    }
+
     bool manager::run() noexcept(false)
     {
         logger::log(logger::level::info, std::source_location::current(), "H2 Server Starting");
@@ -38,18 +44,17 @@ namespace kmx::aio::sample::tls::h2_alpn_server
                                                            .thread_count = config_.executor_threads,
                                                            .core_id = -1};
 
-        executor_ = std::make_shared<kmx::aio::completion::executor>(exec_config);
+        executor_ = std::make_unique<kmx::aio::completion::executor>(exec_config);
         g_executor_ptr.store(executor_.get(), std::memory_order_release);
 
         executor_->spawn(listener_task());
         executor_->run();
-        ::SSL_CTX_free(ssl_ctx_);
         return true;
     }
 
     kmx::aio::task<void> manager::listener_task() noexcept(false)
     {
-        auto listener = kmx::aio::completion::tcp::listener(executor_, config_.bind_address, config_.bind_port);
+        auto listener = kmx::aio::completion::tcp::listener(*executor_, config_.bind_address, config_.bind_port);
         if (!listener.listen(128))
             co_return;
 
@@ -58,7 +63,7 @@ namespace kmx::aio::sample::tls::h2_alpn_server
             auto accept_result = co_await listener.accept();
             if (!accept_result)
                 continue;
-            auto tcp_stream = kmx::aio::completion::tcp::stream(executor_, std::move(*accept_result));
+            auto tcp_stream = kmx::aio::completion::tcp::stream(*executor_, std::move(*accept_result));
             auto tls_stream = kmx::aio::completion::tls::stream(std::move(tcp_stream), ssl_ctx_);
             executor_->spawn(handle_client(std::move(tls_stream)));
         }
