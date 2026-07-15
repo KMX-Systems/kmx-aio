@@ -19,6 +19,7 @@ Project {
     property bool enable_avb: full || all || false
     property bool enable_opc_ua: full || all || false
     property bool opc_ua_vendored: true
+    property bool enable_modbus: false
     property string opc_ua_prefix: sourceDirectory + "/../build/open62541/install-local"
     property bool enable_someip: full || all || false
     property bool someip_vendored: true
