@@ -16,7 +16,7 @@
 
 namespace kmx::aio::modbus
 {
-    namespace
+    namespace detail
     {
         [[nodiscard]] std::vector<std::uint8_t>
         make_exception_response_tls(const std::uint8_t request_fc, const exception_code ec) noexcept
@@ -24,7 +24,7 @@ namespace kmx::aio::modbus
             return {static_cast<std::uint8_t>(request_fc | frame::exception_fc_flag),
                     static_cast<std::uint8_t>(ec)};
         }
-    }
+    } // namespace detail
 
     // =========================================================================
     // pimpl

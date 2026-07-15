@@ -19,7 +19,7 @@ namespace kmx::aio::modbus
     // Exception response builder
     // =========================================================================
 
-    namespace
+    namespace detail
     {
         [[nodiscard]] std::vector<std::uint8_t>
         make_exception_response(const std::uint8_t request_fc, const exception_code ec) noexcept
@@ -27,7 +27,7 @@ namespace kmx::aio::modbus
             return {static_cast<std::uint8_t>(request_fc | frame::exception_fc_flag),
                     static_cast<std::uint8_t>(ec)};
         }
-    }
+    } // namespace detail
 
     // =========================================================================
     // pimpl
@@ -97,9 +97,7 @@ namespace kmx::aio::modbus
                     response_pdu = co_await it->second(std::move(req));
                 }
                 else
-                {
-                    response_pdu = make_exception_response(request_fc, exception_code::illegal_function);
-                }
+                    response_pdu = detail::make_exception_response(request_fc, exception_code::illegal_function);
 
                 // Build and send response ADU
                 const auto resp_pdu_len = static_cast<std::uint16_t>(response_pdu.size());

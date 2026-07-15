@@ -79,17 +79,15 @@ namespace kmx::aio::modbus
 
             // Wait for socket to become writable (connect completed)
             if (in_progress)
-            {
                 if (auto r = co_await exec_.wait_io(fd.get(), readiness::event_type::write); !r)
                 {
                     exec_.unregister_fd(fd.get());
                     co_return std::unexpected(make_error_code(error::connection_failed));
                 }
-            }
 
             // Verify connection succeeded via SO_ERROR
-            int so_error = 0;
-            ::socklen_t so_len = sizeof(so_error);
+            int so_error {};
+            ::socklen_t so_len {sizeof(so_error)};
             if (::getsockopt(fd.get(), SOL_SOCKET, SO_ERROR, &so_error, &so_len) != 0 || so_error != 0)
             {
                 exec_.unregister_fd(fd.get());
