@@ -124,7 +124,7 @@ namespace kmx::aio::modbus
                 if (!hdr)
                     co_return;
 
-                if (config.unit_id != 0xFFu && hdr->unit_id != config.unit_id)
+                if (config.unit_id != broadcast_unit_id && hdr->unit_id != config.unit_id)
                     co_return;
 
                 if (hdr->length < 1u)
