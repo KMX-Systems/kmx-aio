@@ -15,44 +15,44 @@ namespace kmx::aio::modbus
     enum class function_code : std::uint8_t
     {
         /// @brief Read 1–2000 contiguous coil output statuses.
-        read_coils = 0x01,
+        read_coils = 0x01u,
         /// @brief Read 1–2000 contiguous discrete input statuses.
-        read_discrete_inputs = 0x02,
+        read_discrete_inputs = 0x02u,
         /// @brief Read 1–125 contiguous holding register values.
-        read_holding_registers = 0x03,
+        read_holding_registers = 0x03u,
         /// @brief Read 1–125 contiguous input register values.
-        read_input_registers = 0x04,
+        read_input_registers = 0x04u,
         /// @brief Write a single coil output (force ON or OFF).
-        write_single_coil = 0x05,
+        write_single_coil = 0x05u,
         /// @brief Write a single holding register.
-        write_single_register = 0x06,
+        write_single_register = 0x06u,
         /// @brief Write 1–1968 contiguous coil outputs.
-        write_multiple_coils = 0x0F,
+        write_multiple_coils = 0x0Fu,
         /// @brief Write 1–123 contiguous holding registers.
-        write_multiple_registers = 0x10,
+        write_multiple_registers = 0x10u,
     };
 
     /// @brief Modbus exception codes returned in exception PDUs (§7).
     enum class exception_code : std::uint8_t
     {
         /// @brief Function code not supported by the server.
-        illegal_function = 0x01,
+        illegal_function = 0x01u,
         /// @brief Data address not allowed.
-        illegal_data_address = 0x02,
+        illegal_data_address = 0x02u,
         /// @brief Value in request data field is not valid.
-        illegal_data_value = 0x03,
+        illegal_data_value = 0x03u,
         /// @brief Unrecoverable server failure.
-        server_device_failure = 0x04,
+        server_device_failure = 0x04u,
         /// @brief Request accepted but processing will take time.
-        acknowledge = 0x05,
+        acknowledge = 0x05u,
         /// @brief Server is busy and cannot process the request.
-        server_device_busy = 0x06,
+        server_device_busy = 0x06u,
         /// @brief Memory parity error during read.
-        memory_parity_error = 0x08,
+        memory_parity_error = 0x08u,
         /// @brief Gateway unavailable or misconfigured.
-        gateway_path_unavailable = 0x0A,
+        gateway_path_unavailable = 0x0Au,
         /// @brief Target device failed to respond.
-        gateway_target_no_response = 0x0B,
+        gateway_target_no_response = 0x0Bu,
     };
 
     /// @brief Modbus TCP application data unit header (6 bytes, big-endian).

@@ -257,7 +257,7 @@ namespace kmx::aio::modbus::frame
             0x03u, 0x06u,             // fc + byte_count
             0x00u, 0x0Au,             // reg[0] = 10
             0x01u, 0xF4u,             // reg[1] = 500
-            0xFF, 0xFFu               // reg[2] = 65535
+            0xFFu, 0xFFu              // reg[2] = 65535
         };
         const auto result = decode_read_registers_response(pdu, function_code::read_holding_registers, 3u);
         REQUIRE(result.has_value());
