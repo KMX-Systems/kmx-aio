@@ -5,7 +5,7 @@
 
 namespace kmx::aio::modbus
 {
-    namespace
+    namespace detail
     {
         class modbus_error_category final: public std::error_category
         {
@@ -51,11 +51,11 @@ namespace kmx::aio::modbus
         };
 
         const modbus_error_category modbus_error_category_instance {};
-    }
+    } // namespace detail
 
     const std::error_category& error_category() noexcept
     {
-        return modbus_error_category_instance;
+        return detail::modbus_error_category_instance;
     }
 
     std::error_code make_error_code(const error code) noexcept

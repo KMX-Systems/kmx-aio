@@ -6,7 +6,7 @@
 
 namespace kmx::aio::modbus::frame
 {
-    namespace
+    namespace detail
     {
         /// @brief Write a 16-bit value in big-endian byte order into @p dest at @p offset.
         void write_be16(std::span<std::uint8_t> dest, const std::size_t offset,
@@ -40,7 +40,7 @@ namespace kmx::aio::modbus::frame
                     return 0u;
             }
         }
-    }
+    } // namespace detail
 
     // =========================================================================
     // MBAP header
@@ -51,9 +51,9 @@ namespace kmx::aio::modbus::frame
     {
         // Length field = unit_id byte (1) + PDU
         const std::uint16_t length_field = static_cast<std::uint16_t>(1u + pdu_length);
-        write_be16(dest, 0u, tid);                       // bytes 0–1: transaction id
-        write_be16(dest, 2u, 0u);                        // bytes 2–3: protocol id = 0
-        write_be16(dest, mbap_length_offset, length_field); // bytes 4–5: length
+        detail::write_be16(dest, 0u, tid);                          // bytes 0–1: transaction id
+        detail::write_be16(dest, 2u, 0u);                           // bytes 2–3: protocol id = 0
+        detail::write_be16(dest, mbap_length_offset, length_field); // bytes 4–5: length
         dest[mbap_unit_id_offset] = unit_id;             // byte  6:   unit id
     }
 
@@ -63,14 +63,14 @@ namespace kmx::aio::modbus::frame
         if (src.size() < mbap_size)
             return std::unexpected(make_error_code(error::malformed_frame));
 
-        const std::uint16_t protocol_id = read_be16(src, 2u);
+        const std::uint16_t protocol_id = detail::read_be16(src, 2u);
         if (protocol_id != 0u)
             return std::unexpected(make_error_code(error::malformed_frame));
 
         mbap_header hdr;
-        hdr.transaction_id = read_be16(src, 0u);
+        hdr.transaction_id = detail::read_be16(src, 0u);
         hdr.protocol_id    = protocol_id;
-        hdr.length         = read_be16(src, mbap_length_offset);
+        hdr.length         = detail::read_be16(src, mbap_length_offset);
         hdr.unit_id        = src[mbap_unit_id_offset];
         return hdr;
     }
@@ -79,18 +79,18 @@ namespace kmx::aio::modbus::frame
     // Read request PDU builders
     // =========================================================================
 
-    std::expected<std::array<std::uint8_t, 5>, std::error_code> encode_read_request(
+    std::expected<std::array<std::uint8_t, single_pdu_size>, std::error_code> encode_read_request(
         const function_code fc, const std::uint16_t address,
         const std::uint16_t count) noexcept
     {
-        const std::uint16_t limit = max_read_count(fc);
+        const std::uint16_t limit = detail::max_read_count(fc);
         if (limit == 0u || count == 0u || count > limit)
             return std::unexpected(make_error_code(error::frame_too_large));
 
         std::array<std::uint8_t, single_pdu_size> pdu {};
         pdu[0] = static_cast<std::uint8_t>(fc);
-        write_be16(pdu, 1u, address);
-        write_be16(pdu, pdu_value_offset, count);
+        detail::write_be16(pdu, 1u, address);
+        detail::write_be16(pdu, pdu_value_offset, count);
         return pdu;
     }
 
@@ -98,24 +98,24 @@ namespace kmx::aio::modbus::frame
     // Write request PDU builders
     // =========================================================================
 
-    std::array<std::uint8_t, 5> encode_write_single_register(
+    std::array<std::uint8_t, single_pdu_size> encode_write_single_register(
         const std::uint16_t address, const std::uint16_t value) noexcept
     {
         std::array<std::uint8_t, single_pdu_size> pdu {};
         pdu[0] = static_cast<std::uint8_t>(function_code::write_single_register);
-        write_be16(pdu, 1u, address);
-        write_be16(pdu, pdu_value_offset, value);
+        detail::write_be16(pdu, 1u, address);
+        detail::write_be16(pdu, pdu_value_offset, value);
         return pdu;
     }
 
-    std::array<std::uint8_t, 5> encode_write_single_coil(const std::uint16_t address,
+    std::array<std::uint8_t, single_pdu_size> encode_write_single_coil(const std::uint16_t address,
                                                           const bool on) noexcept
     {
         std::array<std::uint8_t, single_pdu_size> pdu {};
         pdu[0] = static_cast<std::uint8_t>(function_code::write_single_coil);
-        write_be16(pdu, 1u, address);
+        detail::write_be16(pdu, 1u, address);
         // ON = 0xFF00, OFF = 0x0000 (Modbus spec §6.5)
-        write_be16(pdu, pdu_value_offset, on ? coil_on_value : std::uint16_t {0x0000u});
+        detail::write_be16(pdu, pdu_value_offset, on ? coil_on_value : std::uint16_t {0x0000u});
         return pdu;
     }
 
@@ -131,11 +131,11 @@ namespace kmx::aio::modbus::frame
         // PDU: fc(1) + addr(2) + count(2) + byte_count(1) + data(n*2)
         std::vector<std::uint8_t> pdu(pdu_data_offset + static_cast<std::size_t>(byte_count));
         pdu[0] = static_cast<std::uint8_t>(function_code::write_multiple_registers);
-        write_be16(pdu, 1u, address);
-        write_be16(pdu, pdu_value_offset, n);
+        detail::write_be16(pdu, 1u, address);
+        detail::write_be16(pdu, pdu_value_offset, n);
         pdu[write_multi_byte_count_offset] = byte_count;
         for (std::size_t i = 0u; i < values.size(); ++i)
-            write_be16(pdu, pdu_data_offset + i * 2u, values[i]);
+            detail::write_be16(pdu, pdu_data_offset + i * 2u, values[i]);
 
         return pdu;
     }
@@ -152,15 +152,13 @@ namespace kmx::aio::modbus::frame
         // PDU: fc(1) + addr(2) + count(2) + byte_count(1) + packed_bits(byte_count)
         std::vector<std::uint8_t> pdu(pdu_data_offset + static_cast<std::size_t>(byte_count), 0u);
         pdu[0] = static_cast<std::uint8_t>(function_code::write_multiple_coils);
-        write_be16(pdu, 1u, address);
-        write_be16(pdu, pdu_value_offset, n);
+        detail::write_be16(pdu, 1u, address);
+        detail::write_be16(pdu, pdu_value_offset, n);
         pdu[write_multi_byte_count_offset] = byte_count;
 
         for (std::size_t i = 0u; i < values.size(); ++i)
-        {
             if (values[i] != 0u)
                 pdu[pdu_data_offset + i / bits_per_byte] |= static_cast<std::uint8_t>(1u << (i % bits_per_byte));
-        }
 
         return pdu;
     }
@@ -212,7 +210,7 @@ namespace kmx::aio::modbus::frame
         register_values result;
         result.reserve(count);
         for (std::size_t i = 0u; i < count; ++i)
-            result.push_back(read_be16(pdu, 2u + i * 2u));
+            result.push_back(detail::read_be16(pdu, 2u + i * 2u));
 
         return result;
     }

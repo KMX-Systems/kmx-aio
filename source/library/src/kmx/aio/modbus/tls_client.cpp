@@ -29,7 +29,7 @@ namespace kmx::aio::modbus
         client_config config_;
         tls_config tls_config_;
         std::optional<readiness::tls::stream> stream_;
-        ::SSL_CTX* ssl_ctx_ = nullptr;
+        ::SSL_CTX* ssl_ctx_ {};
         std::uint16_t next_tid_ = 0u;
 
         explicit impl(client_config config, tls_config tls, readiness::executor& exec) noexcept
@@ -152,16 +152,14 @@ namespace kmx::aio::modbus
             }
 
             if (in_progress)
-            {
                 if (auto r = co_await exec_.wait_io(fd.get(), readiness::event_type::write); !r)
                 {
                     exec_.unregister_fd(fd.get());
                     co_return std::unexpected(make_error_code(error::connection_failed));
                 }
-            }
 
-            int so_error = 0;
-            ::socklen_t so_len = sizeof(so_error);
+            int so_error {};
+            ::socklen_t so_len {sizeof(so_error)};
             if (::getsockopt(fd.get(), SOL_SOCKET, SO_ERROR, &so_error, &so_len) != 0 ||
                 so_error != 0)
             {
