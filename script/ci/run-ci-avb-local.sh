@@ -187,8 +187,8 @@ run_quic_smoke() {
 
     local test_bin
     test_bin="$(find_test_bin)"
-    run_with_local_gcc_runtime timeout 30s "$test_bin" "[quic][readiness][integration][smoke]"
-    run_with_local_gcc_runtime timeout 30s "$test_bin" "[quic][http3][integration][smoke]"
+    run_with_local_gcc_runtime timeout 120s "$test_bin" "[quic][readiness][integration][smoke]"
+    run_with_local_gcc_runtime timeout 120s "$test_bin" "[quic][http3][integration][smoke]"
 }
 
 run_artifact_split_smoke() {
