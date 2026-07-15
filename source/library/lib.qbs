@@ -9,6 +9,7 @@ StaticLibrary {
     Depends { name: "kmx-aio-http3"; condition: project.enable_http3 && project.enable_quic }
     Depends { name: "kmx-aio-gpu"; condition: project.enable_cuda }
     Depends { name: "kmx-aio-opcua"; condition: project.enable_opc_ua }
+    Depends { name: "kmx-aio-modbus"; condition: project.enable_modbus }
     Depends { name: "kmx-aio-someip"; condition: project.enable_someip }
     Depends { name: "kmx-aio-quic"; condition: project.enable_quic }
     Depends { name: "kmx-aio-xdp"; condition: project.enable_af_xdp }
@@ -45,6 +46,8 @@ StaticLibrary {
             defs.push("KMX_AIO_FEATURE_AVB=1");
         if (project.enable_opc_ua)
             defs.push("KMX_AIO_FEATURE_OPC_UA=1");
+        if (project.enable_modbus)
+            defs.push("KMX_AIO_FEATURE_MODBUS=1");
         if (project.enable_someip)
             defs.push("KMX_AIO_FEATURE_SOMEIP=1");
         if (project.enable_cuda)

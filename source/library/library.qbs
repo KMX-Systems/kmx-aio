@@ -9,6 +9,7 @@ Project {
         "http3/http3.qbs",
         "gpu/gpu.qbs",
         "opcua/opcua.qbs",
+        "modbus/modbus.qbs",
         "someip/someip.qbs",
         "quic/quic.qbs",
         "xdp/xdp.qbs",
