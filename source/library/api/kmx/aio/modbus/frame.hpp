@@ -21,10 +21,6 @@
 
 namespace kmx::aio::modbus::frame
 {
-    // =========================================================================
-    // Constants
-    // =========================================================================
-
     /// @brief MBAP header size in bytes.
     inline constexpr std::size_t mbap_size = 7u;
     /// @brief Maximum PDU payload size in bytes (Modbus spec §4.1).
@@ -62,9 +58,8 @@ namespace kmx::aio::modbus::frame
     ///        (function code[1] + address[2] + count[2] + byte_count[1]).
     inline constexpr std::size_t pdu_data_offset = 6u;
 
-    // =========================================================================
+
     // MBAP header encode / decode
-    // =========================================================================
 
     /// @brief Encode a Modbus MBAP header into the first 7 bytes of @p dest.
     /// @param dest Buffer of at least 7 bytes.
@@ -81,9 +76,8 @@ namespace kmx::aio::modbus::frame
     [[nodiscard]] std::expected<mbap_header, std::error_code>
     decode_mbap(std::span<const std::uint8_t> src) noexcept;
 
-    // =========================================================================
+
     // Read request PDU builders (client → server)
-    // =========================================================================
 
     /// @brief Build a Read Coils / Read Discrete Inputs / Read Holding Registers /
     ///        Read Input Registers request PDU.
@@ -96,9 +90,8 @@ namespace kmx::aio::modbus::frame
     encode_read_request(function_code fc, std::uint16_t address,
                         std::uint16_t count) noexcept;
 
-    // =========================================================================
+
     // Write request PDU builders
-    // =========================================================================
 
     /// @brief Build a Write Single Register request PDU (function code 0x06).
     /// @return 5-byte PDU.
@@ -129,9 +122,8 @@ namespace kmx::aio::modbus::frame
     encode_write_multiple_coils(std::uint16_t address,
                                 std::span<const std::uint8_t> values) noexcept;
 
-    // =========================================================================
+
     // Response PDU decoders (server → client)
-    // =========================================================================
 
     /// @brief Check whether a response PDU carries an exception.
     /// @param pdu Raw PDU bytes starting with the function code byte.
