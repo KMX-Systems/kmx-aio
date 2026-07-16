@@ -26,13 +26,13 @@ namespace kmx::aio::sample::quic::echo_client
         {
             constexpr std::uint16_t default_port = 12345u;
             const char* const env = std::getenv("KMX_QUIC_ECHO_PORT");
-            if (!env || env[0] == '\0')
+            if (!env || (env[0] == '\0'))
                 return default_port;
 
             std::uint32_t parsed {};
             const char* const end = env + std::char_traits<char>::length(env);
             const auto [ptr, ec] = std::from_chars(env, end, parsed);
-            if (ec != std::errc() || ptr != end || parsed == 0u || parsed > 65535u)
+            if ((ec != std::errc()) || (ptr != end) || (parsed == 0u) || (parsed > 65535u))
                 return default_port;
 
             return static_cast<std::uint16_t>(parsed);
@@ -42,13 +42,13 @@ namespace kmx::aio::sample::quic::echo_client
         {
             constexpr std::uint32_t default_target = 2u;
             const char* const env = std::getenv("KMX_QUIC_ECHO_CLIENT_CLOSE_AFTER_RESPONSES");
-            if (!env || env[0] == '\0')
+            if (!env || (env[0] == '\0'))
                 return default_target;
 
             std::uint32_t parsed {};
             const char* const end = env + std::char_traits<char>::length(env);
             const auto [ptr, ec] = std::from_chars(env, end, parsed);
-            if (ec != std::errc() || ptr != end)
+            if ((ec != std::errc()) || (ptr != end))
                 return default_target;
 
             return parsed;

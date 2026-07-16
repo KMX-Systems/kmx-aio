@@ -100,17 +100,29 @@ namespace kmx::aio::quic::test::integration
             repo_root / "source" / "debug",
         };
 
+        std::optional<fs::path> newest_path;
+        fs::file_time_type newest_mtime {};
+
         for (const auto& debug_dir: debug_dirs)
         {
             if (!fs::exists(debug_dir) || !fs::is_directory(debug_dir))
                 continue;
 
             for (const auto& entry: fs::recursive_directory_iterator(debug_dir))
-                if (entry.is_regular_file() && entry.path().filename() == binary_name)
-                    return entry.path();
+            {
+                if (!entry.is_regular_file() || entry.path().filename() != binary_name)
+                    continue;
+
+                const auto mtime = entry.last_write_time();
+                if (!newest_path.has_value() || mtime > newest_mtime)
+                {
+                    newest_path = entry.path();
+                    newest_mtime = mtime;
+                }
+            }
         }
 
-        return std::nullopt;
+        return newest_path;
     }
 
     [[nodiscard]] static auto find_spdk_runtime_dir(const fs::path& repo_root) -> std::optional<fs::path>
@@ -169,15 +181,33 @@ namespace kmx::aio::quic::test::integration
 
         const std::string server_cmd = "env " + port_env + " " + ld_library_path + " stdbuf -oL -eL " +
                                        shell_quote(server_bin_opt->string()) + " > " + shell_quote(server_log.string()) + " 2>&1";
-        const std::string client_cmd = "timeout 5s env " + port_env + " " + ld_library_path + " stdbuf -oL -eL " +
-                                       shell_quote(client_bin_opt->string()) + " > " + shell_quote(client_log.string()) + " 2>&1";
+        const std::string readiness_client_env = is_completion ? "" : " KMX_QUIC_ECHO_CLIENT_CLOSE_AFTER_RESPONSES=2";
+        const std::string client_cmd = "timeout 30s env " + port_env + readiness_client_env + " " +
+                                       ld_library_path + " stdbuf -oL -eL " + shell_quote(client_bin_opt->string()) + " > " +
+                                       shell_quote(client_log.string()) + " 2>&1";
 
         const std::string script = "set -u -o pipefail; " + server_cmd + " & " +
                                    "srv=$!; "
-                                   "sleep 1; " +
+                                   "port_dec=" + std::to_string(test_port) + "; "
+                                   "port_hex=$(printf '%04X' " + std::to_string(test_port) + "); "
+                                   "ready=0; "
+                                   "deadline=$((SECONDS+15)); "
+                                   "while (( SECONDS < deadline )); do "
+                                   "  if ! kill -0 \"$srv\" >/dev/null 2>&1; then break; fi; "
+                                   "  if command -v ss >/dev/null 2>&1; then "
+                                   "    if ss -lunp 2>/dev/null | grep -F \":$port_dec\" | grep -Fq \"pid=$srv,\"; then ready=1; break; fi; "
+                                   "  else "
+                                   "    if grep -qi \":$port_hex \" /proc/net/udp /proc/net/udp6 2>/dev/null; then ready=1; break; fi; "
+                                   "  fi; "
+                                   "  sleep 0.1; "
+                                   "done; "
+                                   "if (( ready == 0 )); then "
+                                   "  client_rc=124; "
+                                   "else "
+                                   "  sleep 1; " +
                                    client_cmd +
-                                   "; "
-                                   "client_rc=$?; "
+                                   "; client_rc=$?; "
+                                   "fi; "
                                    "kill \"$srv\" >/dev/null 2>&1 || true; "
                                    "wait \"$srv\" >/dev/null 2>&1 || true; "
                                    "exit \"$client_rc\"";
