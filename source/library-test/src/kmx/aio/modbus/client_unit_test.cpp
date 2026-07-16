@@ -46,28 +46,11 @@ namespace kmx::aio::modbus::test
             [&result, exec](task<std::expected<T, std::error_code>> t) -> task<void>
             {
                 result.emplace(co_await t);
-                exec->stop();
             }(std::move(coro)));
         exec->run();
         if (result && result->has_value())
             return result->value();
         return std::nullopt;
-    }
-
-    // Specialisation for void result
-    [[nodiscard]] static bool run_void_task(
-        std::shared_ptr<readiness::executor>& exec,
-        task<std::expected<void, std::error_code>> coro)
-    {
-        bool ok = false;
-        exec->spawn(
-            [&ok, exec](task<std::expected<void, std::error_code>> t) -> task<void>
-            {
-                ok = (co_await t).has_value();
-                exec->stop();
-            }(std::move(coro)));
-        exec->run();
-        return ok;
     }
 
     // =========================================================================
@@ -108,7 +91,6 @@ namespace kmx::aio::modbus::test
                 auto r = co_await detail::exchange(ms, req_adu, tid, unit_id);
                 if (r)
                     raw_response = *r;
-                exec->stop();
             }());
         exec->run();
 
@@ -148,7 +130,6 @@ namespace kmx::aio::modbus::test
                 auto r = co_await detail::exchange(ms, req_adu, tid, unit_id);
                 if (r)
                     raw_response = *r;
-                exec->stop();
             }());
         exec->run();
 
@@ -183,7 +164,6 @@ namespace kmx::aio::modbus::test
                 auto r = co_await detail::exchange(ms, req_adu, tid, unit_id);
                 if (r)
                     raw_response = *r;
-                exec->stop();
             }());
         exec->run();
 
@@ -225,7 +205,6 @@ namespace kmx::aio::modbus::test
                 auto r = co_await detail::exchange(ms, req_adu, tid, unit_id);
                 if (r)
                     raw_response = *r;
-                exec->stop();
             }());
         exec->run();
 
@@ -262,7 +241,6 @@ namespace kmx::aio::modbus::test
                 auto r = co_await detail::exchange(ms, req_adu, req_tid, unit_id);
                 if (!r && r.error() == make_error_code(error::unexpected_transaction_id))
                     got_tid_error = true;
-                exec->stop();
             }());
         exec->run();
 
@@ -294,7 +272,6 @@ namespace kmx::aio::modbus::test
                 auto r = co_await detail::exchange(ms, req_adu, tid, req_unit_id);
                 if (!r && r.error() == make_error_code(error::invalid_unit_id))
                     got_unit_error = true;
-                exec->stop();
             }());
         exec->run();
 
@@ -320,7 +297,6 @@ namespace kmx::aio::modbus::test
                 auto r = co_await detail::exchange(ms, req_adu, 1u, 1u);
                 if (!r && r.error() == make_error_code(error::disconnected))
                     got_disconnect = true;
-                exec->stop();
             }());
         exec->run();
 
@@ -355,7 +331,6 @@ namespace kmx::aio::modbus::test
                 auto r = co_await detail::exchange(ms, req_adu, tid, unit_id);
                 if (r)
                     raw_response = *r;
-                exec->stop();
             }());
         exec->run();
 

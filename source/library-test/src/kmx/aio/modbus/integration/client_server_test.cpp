@@ -3,6 +3,7 @@
 
 #if defined(KMX_AIO_FEATURE_MODBUS)
     #include <kmx/aio/modbus/client.hpp>
+    #include <kmx/aio/modbus/error.hpp>
     #include <kmx/aio/modbus/server.hpp>
     #include <kmx/aio/readiness/executor.hpp>
     #include <kmx/aio/task.hpp>
@@ -184,9 +185,12 @@ namespace kmx::aio::modbus::test::integration
 
         auto exec = std::make_shared<readiness::executor>();
         test_state state {};
+        const server_config config {.bind_address = "127.0.0.1",
+                                    .port         = test_port,
+                                    .unit_id      = test_unit_id};
 
         exec->spawn(
-            [exec, srv, &config = server_config {.bind_address = "127.0.0.1", .port = test_port, .unit_id = test_unit_id}]()
+            [exec, srv, config]()
                 -> task<void> { co_await srv->serve(*exec, config); }());
 
         exec->spawn(
