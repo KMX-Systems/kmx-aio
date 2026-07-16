@@ -4,8 +4,34 @@
 
 #include <kmx/aio/quic/base_engine.hpp>
 
+#include <cstdio>
+
 namespace kmx::aio::quic::detail
 {
+    namespace
+    {
+        int lsquic_log_to_stderr(void* /*logger_ctx*/, const char* buf, const std::size_t len) noexcept
+        {
+            return static_cast<int>(std::fwrite(buf, 1u, len, stderr));
+        }
+    }
+
+    void maybe_enable_lsquic_debug_logging() noexcept
+    {
+        static bool initialized = false;
+        if (initialized)
+            return;
+        initialized = true;
+
+        const char* const level = std::getenv("KMX_AIO_QUIC_DEBUG_LOG");
+        if (!level || level[0] == '\0')
+            return;
+
+        static const ::lsquic_logger_if logger_if {.log_buf = lsquic_log_to_stderr};
+        ::lsquic_logger_init(&logger_if, nullptr, LLTS_HHMMSSUS);
+        ::lsquic_set_log_level(level);
+    }
+
     [[nodiscard]] auto readiness_watchdog_tick_ns_from_env() noexcept -> long
     {
         static constexpr long default_tick_ns = 10'000'000L; // 10 ms
@@ -95,7 +121,6 @@ namespace kmx::aio::quic::detail
     {
         unsigned sent {};
         ::msghdr msg {};
-        ::iovec iov[1u] {};
 
         for (; sent < count; ++sent)
         {
@@ -103,14 +128,25 @@ namespace kmx::aio::quic::detail
             msg.msg_name = const_cast<void*>(reinterpret_cast<const void*>(specs[sent].dest_sa));
             msg.msg_namelen = (specs[sent].dest_sa->sa_family == AF_INET) ? sizeof(sockaddr_in) : sizeof(sockaddr_in6);
 
-            iov[0].iov_base = const_cast<void*>(specs[sent].iov[0].iov_base);
-            iov[0].iov_len = specs[sent].iov[0].iov_len;
-            msg.msg_iov = iov;
-            msg.msg_iovlen = 1;
+            std::vector<::iovec> iov;
+            iov.reserve(specs[sent].iovlen);
+            for (unsigned i = 0; i < specs[sent].iovlen; ++i)
+                iov.push_back(::iovec {
+                    .iov_base = const_cast<void*>(specs[sent].iov[i].iov_base),
+                    .iov_len = specs[sent].iov[i].iov_len,
+                });
+
+            msg.msg_iov = iov.data();
+            msg.msg_iovlen = iov.size();
 
             const ssize_t res = ::sendmsg(fd, &msg, 0);
-            if ((res < 0) && would_block(errno))
-                break;
+            if (res < 0)
+            {
+                if (would_block(errno))
+                    return sent > 0 ? static_cast<int>(sent) : -1;
+
+                return sent > 0 ? static_cast<int>(sent) : -1;
+            }
         }
 
         return static_cast<int>(sent);

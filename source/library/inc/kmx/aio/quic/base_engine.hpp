@@ -45,6 +45,8 @@ namespace kmx::aio::quic
     {
         long readiness_watchdog_tick_ns_from_env() noexcept;
 
+        void maybe_enable_lsquic_debug_logging() noexcept;
+
         std::string_view conn_status_to_string(const ::LSQUIC_CONN_STATUS status) noexcept;
 
         void configure_stream_if(::lsquic_stream_if& stream_if, ::lsquic_conn_ctx_t* (*on_new_conn)(void*, ::lsquic_conn_t*),
@@ -313,6 +315,8 @@ namespace kmx::aio::quic
         /// @return Success or an error code.
         [[nodiscard]] std::expected<void, std::error_code> init_lsquic(const kmx::aio::quic::settings& config, unsigned lsquic_flags)
         {
+            detail::maybe_enable_lsquic_debug_logging();
+
             if (::lsquic_global_init(lsquic_flags & LSENG_SERVER ? LSQUIC_GLOBAL_SERVER : LSQUIC_GLOBAL_CLIENT) != 0)
                 return std::unexpected(error_from_errno(EINVAL));
 
