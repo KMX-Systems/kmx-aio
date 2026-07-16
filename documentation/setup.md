@@ -91,6 +91,7 @@ Note on defaults:
 - Readiness, HTTP/2, HTTP/3, AVB, AF_XDP, SPDK, OPC UA, CUDA, and OpenOnload remain off until explicitly enabled with `project.enable_*:true`.
 
 - QUIC / HTTP/3: BoringSSL + lsquic (run [script/feature/quic/install-dependencies.sh](script/feature/quic/install-dependencies.sh))
+- Modbus: no extra system packages currently required (run [script/feature/modbus/install-dependencies.sh](script/feature/modbus/install-dependencies.sh) for consistency with feature workflows)
 - OPC UA: open62541 (run [script/feature/opc_ua/install-dependencies.sh](script/feature/opc_ua/install-dependencies.sh))
 - AF_XDP: libbpf/libxdp toolchain available (run [script/feature/af_xdp/install-dependencies.sh](script/feature/af_xdp/install-dependencies.sh))
 - SPDK: local workspace bootstrap available (run [script/feature/spdk/install-dependencies.sh](script/feature/spdk/install-dependencies.sh))
@@ -129,3 +130,5 @@ qbs build -f source/source.qbs config:debug -j"$(nproc)" \
 ```
 
 For in-depth SPDK and environment troubleshooting, see [SPDK feature docs](features/spdk.md).
+
+For full script behavior across all features and top-level orchestrators, see [Script Reference](scripts.md).

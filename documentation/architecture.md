@@ -24,6 +24,8 @@ kmx-aio/
 │   │   │   │   ├── eth_socket.hpp, gptp/, srp/
 │   │   │   ├── opc_ua/              # OPC UA facade (feature-gated)
 │   │   │   │   └── client.hpp, server.hpp, subscription.hpp, types.hpp, error.hpp
+│   │   │   ├── modbus/              # Modbus TCP/TLS facade (feature-gated)
+│   │   │   │   └── client.hpp, server.hpp, tls_client.hpp, tls_server.hpp, types.hpp, error.hpp
 │   │   │   ├── someip/               # SOME/IP facade (feature-gated)
 │   │   │   │   └── client.hpp, server.hpp, subscription.hpp, types.hpp, error.hpp
 │   │   │   └── quic/                # QUIC generic engine
@@ -39,6 +41,7 @@ kmx-aio/
 │   │   ├── someip/someip.qbs        # kmx-aio-someip
 │   │   ├── xdp/xdp.qbs              # kmx-aio-xdp
 │   │   ├── opcua/opcua.qbs          # kmx-aio-opcua
+│   │   ├── modbus/modbus.qbs        # kmx-aio-modbus
 │   │   ├── gpu/gpu.qbs              # kmx-aio-gpu
 │   │   ├── library.qbs              # Aggregates split sub-libraries
 │   │   └── lib.qbs                  # Umbrella compatibility artifact (kmx-aio-lib)
@@ -87,6 +90,7 @@ kmx-aio-core
 │   ├── kmx-aio-spdk
 │   └── kmx-aio-xdp
 ├── kmx-aio-avb
+├── kmx-aio-modbus
 ├── kmx-aio-someip
 ├── kmx-aio-gpu
 ├── kmx-aio-opcua
@@ -110,6 +114,7 @@ Public API ownership:
 - `source/library/api/kmx/aio/quic/**` belongs to `kmx-aio-quic`.
 - `source/library/api/kmx/aio/gpu/**` belongs to `kmx-aio-gpu`.
 - `source/library/api/kmx/aio/opc_ua/**` belongs to `kmx-aio-opcua`.
+- `source/library/api/kmx/aio/modbus/**` belongs to `kmx-aio-modbus`.
 - `source/library/api/kmx/aio/someip/**` belongs to `kmx-aio-someip`.
 - `source/library/api/kmx/aio/completion/spdk/**` belongs to `kmx-aio-spdk`.
 - `source/library/api/kmx/aio/completion/xdp/**` belongs to `kmx-aio-xdp`.

@@ -95,18 +95,43 @@ qbs build -f source/source.qbs config:debug \
 
 `project.all:true` is accepted as an alias and behaves the same.
 
+Note: aggregate flags are strict. With `project.full:true` (or `project.all:true`),
+all optional gates are activated. During resolve/build, QBS runs
+`script/bootstrap_optional_deps.sh` with the required feature flags so missing
+third-party dependencies are downloaded/built/installed automatically.
+
+### CI / Non-Interactive Environments
+
+Automatic bootstrap may need package-manager access (`apt`, `dnf`, etc.) and
+root privileges. In CI, use one of these patterns:
+
+- Pre-provision a build image with required system packages.
+- Provide passwordless sudo for the CI user.
+
+Recommended preflight in CI:
+
+```bash
+sudo -n true
+```
+
+If this fails, dependency bootstrap cannot install missing system packages
+non-interactively, and the resolve/build step will fail.
+
 If you prefer an explicit template that you can tweak per gate, use:
 
 ```bash
 qbs build -f source/source.qbs config:debug \
     project.enable_readiness:true \
     project.enable_http2:true \
+    project.enable_quic:true \
     project.enable_http3:true \
+    project.enable_modbus:true \
     project.enable_openonload:true \
     project.enable_af_xdp:true \
     project.enable_spdk:true \
     project.enable_avb:true \
     project.enable_opc_ua:true \
+    project.enable_someip:true \
     project.enable_cuda:true
 ```
 
@@ -201,15 +226,8 @@ qbs build -f source/source.qbs config:debug \
     project.spdk_prefix:"/usr/local"
 ```
 
-If your SPDK build is configured **without crypto** (for example via `script/feature/spdk/install-dependencies.sh`),
-keep `project.spdk_enable_crypto:false` to avoid linker errors for `-lisal` / `-lisal_crypto`.
-If your SPDK installation includes ISA-L crypto support, you can enable it explicitly:
-
-```bash
-qbs build -f source/source.qbs config:debug \
-    project.enable_spdk:true \
-    project.spdk_enable_crypto:true
-```
+SPDK links ISA-L (`-lisal`, `-lisal_crypto`) when the SPDK feature is enabled,
+which matches current runtime and link requirements on supported environments.
 
 ## Persistent QBS Profile For Local SPDK
 
@@ -248,8 +266,10 @@ Default gate state in [source/source.qbs](source/source.qbs) (current project be
 - `project.enable_spdk:false`
 - `project.enable_quic:true`
 - `project.enable_avb:false`
-- `project.enable_cuda:false`
 - `project.enable_opc_ua:false`
+- `project.enable_modbus:false`
+- `project.enable_someip:false`
+- `project.enable_cuda:false`
 
 ## Exported Feature Defines
 
@@ -260,8 +280,10 @@ When enabled, `kmx-aio-lib` exports these compile-time defines:
 - `KMX_AIO_FEATURE_SPDK=1`
 - `KMX_AIO_FEATURE_QUIC=1`
 - `KMX_AIO_FEATURE_AVB=1`
-- `KMX_AIO_FEATURE_CUDA=1`
 - `KMX_AIO_FEATURE_OPC_UA=1` (only if OPC UA is enabled)
+- `KMX_AIO_FEATURE_MODBUS=1`
+- `KMX_AIO_FEATURE_SOMEIP=1`
+- `KMX_AIO_FEATURE_CUDA=1`
 
 If QBS reports profile/config mismatch, run `qbs resolve` first with the same file/profile/config values.
 
