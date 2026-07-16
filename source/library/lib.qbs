@@ -127,12 +127,8 @@ StaticLibrary {
 
             libs.push("ssl");
             libs.push("crypto");
-
-            if (project.spdk_enable_crypto)
-            {
-                libs.push("isal");
-                libs.push("isal_crypto");
-            }
+            libs.push("isal");
+            libs.push("isal_crypto");
         }
 
         if (project.enable_quic)

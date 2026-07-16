@@ -88,13 +88,9 @@ StaticLibrary {
             "rte_rcu",
             "ssl",
             "crypto",
+            "isal",
+            "isal_crypto",
         ];
-
-        if (project.spdk_enable_crypto)
-        {
-            libs.push("isal");
-            libs.push("isal_crypto");
-        }
 
         return libs;
     }
