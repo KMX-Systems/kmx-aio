@@ -42,9 +42,7 @@ namespace kmx::aio::modbus::frame
         }
     } // namespace detail
 
-    // =========================================================================
     // MBAP header
-    // =========================================================================
 
     void encode_mbap(std::span<std::uint8_t> dest, const std::uint16_t tid,
                      const std::uint16_t pdu_length, const std::uint8_t unit_id) noexcept
@@ -75,16 +73,14 @@ namespace kmx::aio::modbus::frame
         return hdr;
     }
 
-    // =========================================================================
     // Read request PDU builders
-    // =========================================================================
 
     std::expected<std::array<std::uint8_t, single_pdu_size>, std::error_code> encode_read_request(
         const function_code fc, const std::uint16_t address,
         const std::uint16_t count) noexcept
     {
         const std::uint16_t limit = detail::max_read_count(fc);
-        if (limit == 0u || count == 0u || count > limit)
+        if ((limit == 0u) || (count == 0u) || (count > limit))
             return std::unexpected(make_error_code(error::frame_too_large));
 
         std::array<std::uint8_t, single_pdu_size> pdu {};
@@ -94,9 +90,7 @@ namespace kmx::aio::modbus::frame
         return pdu;
     }
 
-    // =========================================================================
     // Write request PDU builders
-    // =========================================================================
 
     std::array<std::uint8_t, single_pdu_size> encode_write_single_register(
         const std::uint16_t address, const std::uint16_t value) noexcept
@@ -163,9 +157,7 @@ namespace kmx::aio::modbus::frame
         return pdu;
     }
 
-    // =========================================================================
     // Exception PDU
-    // =========================================================================
 
     bool is_exception_pdu(const std::span<const std::uint8_t> pdu) noexcept
     {
@@ -180,9 +172,7 @@ namespace kmx::aio::modbus::frame
         return static_cast<exception_code>(pdu[1]);
     }
 
-    // =========================================================================
     // Response PDU decoders
-    // =========================================================================
 
     std::expected<register_values, std::error_code> decode_read_registers_response(
         const std::span<const std::uint8_t> pdu, const function_code expected_fc,
