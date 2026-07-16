@@ -97,7 +97,7 @@ namespace kmx::aio::modbus::test
         {
             for (const char c: buffer)
                 written_.push_back(static_cast<std::uint8_t>(c));
-            co_return {};
+            co_return std::expected<void, std::error_code>();
         }
 
     private:
