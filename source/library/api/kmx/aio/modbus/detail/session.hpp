@@ -44,7 +44,7 @@ namespace kmx::aio::modbus::detail
                 co_return std::unexpected(make_error_code(error::disconnected));
             total += *result;
         }
-        co_return {};
+        co_return std::expected<void, std::error_code>();
     }
 
     /// @brief Send a Modbus ADU and receive the response PDU.

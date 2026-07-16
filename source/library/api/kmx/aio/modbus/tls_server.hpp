@@ -13,6 +13,7 @@
     #endif
 
     #include <kmx/aio/modbus/types.hpp>
+    #include <kmx/aio/modbus/server.hpp>
     #include <kmx/aio/task.hpp>
 
 namespace kmx::aio::readiness
