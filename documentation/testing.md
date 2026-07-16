@@ -150,6 +150,7 @@ TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
 ```
 
 Validates:
+
 - Self-signed server certificate and RSA key generation
 - Client certificate signed by server key
 - PEM format compliance
@@ -167,6 +168,7 @@ TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
 ```
 
 Covers:
+
 - **Certificate chain validation**: Validates file existence, PEM format, OpenSSL parsing
 - **Expired certificate handling**: Generates certificates with 1-day expiration and validates handling
 - **Certificate identity verification**: Extracts and verifies Common Name (CN) fields
@@ -182,6 +184,51 @@ Both test suites automatically generate temporary mTLS artifacts in `/tmp/kmx_mt
 TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
 "$TEST_BIN" "[opc_ua][client][service]~[slow]"
 ```
+
+### Modbus Tests
+
+Build with Modbus enabled:
+
+```bash
+qbs resolve -f source/source.qbs config:debug \
+    project.enable_modbus:true
+
+qbs build -f source/source.qbs config:debug -j"$(nproc)" \
+    project.enable_modbus:true
+```
+
+Run unit tests:
+
+```bash
+TEST_BIN="$(find source/debug -type f -name kmx-aio-test | head -n 1)"
+"$TEST_BIN" "[modbus]~[integration]"
+```
+
+Run integration tests:
+
+```bash
+"$TEST_BIN" "[modbus][integration]"
+```
+
+Or use the scripted feature flow:
+
+```bash
+bash script/feature/modbus/run-unit-tests.sh
+bash script/feature/modbus/run-integration-tests.sh
+```
+
+`run-integration-tests.sh` also prepares temporary TLS cert sets under `/tmp/kmx_modbus_certs_exchange` and `/tmp/kmx_modbus_certs_reject` and runs TLS-tagged cases in isolated invocations.
+
+## Scripted Test Orchestration
+
+Repository-level test scripts orchestrate feature scripts based on `KMX_ENABLE_*` flags:
+
+```bash
+bash script/run-unit-tests.sh
+bash script/run-integration-tests.sh
+```
+
+For complete per-feature script behavior and filters, see [Script Reference](scripts.md).
 
 ### GPU Smoke Test
 
