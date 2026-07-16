@@ -4,6 +4,8 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/feature/common.sh"
 
+auto_enable_features_from_test_binary_tags false
+
 echo "==> Building unit tests with active features"
 mapfile -t qbs_feature_args < <(build_qbs_feature_args)
 (
