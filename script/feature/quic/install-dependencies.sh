@@ -9,7 +9,13 @@ LSQUIC_DIR="${BUILD_DIR}/lsquic"
 LSQUIC_BUILD_DIR="${LSQUIC_DIR}/build"
 
 JOBS="${JOBS:-$(nproc)}"
-BORINGSSL_REF="${BORINGSSL_REF:-}"
+# NOTE: BoringSSL has no ABI/API stability guarantee between commits. lsquic's
+# own README pins a specific known-good BoringSSL tag; floating to "master" here
+# can silently drift ahead of what lsquic was validated against and causes QUIC
+# Initial/Handshake AEAD key derivation mismatches (symptom: handshake never
+# completes, "BAD_DECRYPT" in lsquic debug logs). Default to that pinned tag;
+# override via BORINGSSL_REF only if you know what you're doing.
+BORINGSSL_REF="${BORINGSSL_REF:-0.20250807.0}"
 LSQUIC_REF="${LSQUIC_REF:-}"
 
 ensure_tool() {
