@@ -187,8 +187,7 @@ run_quic_smoke() {
 
     local test_bin
     test_bin="$(find_test_bin)"
-    run_with_local_gcc_runtime timeout 120s "$test_bin" "[quic][readiness][integration][smoke]"
-    run_with_local_gcc_runtime timeout 120s "$test_bin" "[quic][http3][integration][smoke]"
+    run_with_local_gcc_runtime timeout 120s "$test_bin" "[quic][http3][readiness][integration][smoke]"
 }
 
 run_artifact_split_smoke() {
@@ -217,7 +216,7 @@ run_artifact_split_smoke() {
             cd build/spdk-local/src
             ./configure --prefix="$PWD/../install-local" --with-shared --disable-tests --disable-unit-tests --disable-apps --disable-examples \
                 --without-fio --without-vhost --without-iscsi-initiator --without-rbd --without-xnvme --without-fc --without-rdma \
-                --without-crypto --without-vfio-user --without-virtio --without-nvme-cuse
+                --with-crypto --without-vfio-user --without-virtio --without-nvme-cuse
             make -j"$(nproc)"
             make install
         )
@@ -236,7 +235,7 @@ run_artifact_split_smoke() {
             project.enable_af_xdp:true \
             project.enable_spdk:true \
             project.spdk_prefix:"$repo_root/build/spdk-local/install-local" \
-            project.spdk_enable_crypto:false \
+            project.spdk_enable_crypto:true \
             project.enable_quic:false \
             project.enable_avb:true \
             project.enable_opc_ua:true \
@@ -253,7 +252,7 @@ run_artifact_split_smoke() {
             project.enable_af_xdp:true \
             project.enable_spdk:true \
             project.spdk_prefix:"$repo_root/build/spdk-local/install-local" \
-            project.spdk_enable_crypto:false \
+            project.spdk_enable_crypto:true \
             project.enable_quic:false \
             project.enable_avb:true \
             project.enable_opc_ua:true \
