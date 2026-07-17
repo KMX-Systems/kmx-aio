@@ -10,8 +10,8 @@ echo "==> Building unit tests with active features"
 mapfile -t qbs_feature_args < <(build_qbs_feature_args)
 (
     cd "$source_dir"
-    qbs resolve -f source.qbs config:debug "${qbs_feature_args[@]}"
-    qbs build -f source.qbs config:debug -j"$(nproc)" "${qbs_feature_args[@]}"
+    qbs resolve -f source.qbs "${qbs_build_dir_args[@]}" config:debug "${qbs_feature_args[@]}"
+    qbs build -f source.qbs "${qbs_build_dir_args[@]}" config:debug -j"$(nproc)" "${qbs_feature_args[@]}"
 )
 
 echo "==> Running feature-scoped unit tests"

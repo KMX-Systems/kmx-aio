@@ -48,12 +48,12 @@ if [[ "$run_build" == "true" ]]; then
     echo "==> Resolving/building SOME/IP targets"
     (
         cd "$source_dir"
-        qbs resolve -f source.qbs config:debug project.enable_someip:true
-        qbs build -f source.qbs config:debug project.enable_someip:true -j"$(nproc)"
+        qbs resolve -f source.qbs "${qbs_build_dir_args[@]}" config:debug project.enable_someip:true
+        qbs build -f source.qbs "${qbs_build_dir_args[@]}" config:debug project.enable_someip:true -j"$(nproc)"
     )
 fi
 
-test_bin="$(find "$source_dir/debug" -type f -name kmx-aio-test | head -n 1 || true)"
+test_bin="$(find "$qbs_build_root/debug" -type f -name kmx-aio-test | head -n 1 || true)"
 if [[ -z "$test_bin" ]]; then
     echo "kmx-aio-test binary not found" >&2
     exit 1
@@ -68,11 +68,11 @@ LD_LIBRARY_PATH="$libstdcpp_dir:${LD_LIBRARY_PATH:-}" "$test_bin" "[someip]"
 if [[ "$run_samples" == "true" ]]; then
     echo "==> Running SOME/IP sample smoke"
 
-    sample_server="$(find "$source_dir/debug" -type f -name sample-someip-echo-server | head -n 1 || true)"
-    sample_client="$(find "$source_dir/debug" -type f -name sample-someip-echo-client | head -n 1 || true)"
-    sample_publisher="$(find "$source_dir/debug" -type f -name sample-someip-event-publisher | head -n 1 || true)"
-    sample_subscriber="$(find "$source_dir/debug" -type f -name sample-someip-event-subscriber | head -n 1 || true)"
-    sample_diagnostics="$(find "$source_dir/debug" -type f -name sample-someip-diagnostics | head -n 1 || true)"
+    sample_server="$(find "$qbs_build_root/debug" -type f -name sample-someip-echo-server | head -n 1 || true)"
+    sample_client="$(find "$qbs_build_root/debug" -type f -name sample-someip-echo-client | head -n 1 || true)"
+    sample_publisher="$(find "$qbs_build_root/debug" -type f -name sample-someip-event-publisher | head -n 1 || true)"
+    sample_subscriber="$(find "$qbs_build_root/debug" -type f -name sample-someip-event-subscriber | head -n 1 || true)"
+    sample_diagnostics="$(find "$qbs_build_root/debug" -type f -name sample-someip-diagnostics | head -n 1 || true)"
 
     if [[ -z "$sample_server" || -z "$sample_client" || -z "$sample_publisher" || -z "$sample_subscriber" || -z "$sample_diagnostics" ]]; then
         echo "SOME/IP sample binaries not found (echo/pubsub/diagnostics)" >&2
