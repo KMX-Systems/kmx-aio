@@ -83,7 +83,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y qbs liburing-dev libssl-dev catch2 gcc-14 g++-14 git cmake meson ninja-build \
-            python3 python3-jinja2 python3-pyelftools python3-tabulate libaio-dev libnuma-dev uuid-dev libelf-dev
+            python3 python3-jinja2 python3-pyelftools python3-tabulate libaio-dev libnuma-dev uuid-dev libelf-dev \
+            nasm autoconf automake libtool
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
           sudo update-alternatives --set g++ /usr/bin/g++-14
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
@@ -104,7 +105,7 @@ jobs:
           cd /tmp/spdk
           ./configure --prefix="$PWD/install-local" --with-shared --disable-tests --disable-unit-tests --disable-apps --disable-examples \
             --without-fio --without-vhost --without-iscsi-initiator --without-rbd --without-xnvme --without-fc --without-rdma \
-            --without-crypto --without-vfio-user --without-virtio --without-nvme-cuse
+            --with-crypto --without-vfio-user --without-virtio --without-nvme-cuse
           make -j"$(nproc)"
           make install
 
@@ -127,7 +128,7 @@ jobs:
             project.enable_af_xdp:true \
             project.enable_spdk:true \
             project.spdk_prefix:"/tmp/spdk/install-local" \
-            project.spdk_enable_crypto:false \
+            project.spdk_enable_crypto:true \
             project.enable_quic:false \
             project.enable_readiness:true \
             project.enable_avb:true \
@@ -142,7 +143,7 @@ jobs:
             project.enable_af_xdp:true \
             project.enable_spdk:true \
             project.spdk_prefix:"/tmp/spdk/install-local" \
-            project.spdk_enable_crypto:false \
+            project.spdk_enable_crypto:true \
             project.enable_quic:false \
             project.enable_readiness:true \
             project.enable_avb:true \
@@ -181,6 +182,7 @@ jobs:
             project.enable_af_xdp:false \
             project.enable_spdk:false \
             project.enable_quic:true \
+            project.enable_http3:true \
             project.enable_readiness:true
 
       - name: Generate temporary QUIC TLS certs
@@ -191,7 +193,7 @@ jobs:
             -subj "/CN=localhost" \
             -days 1 >/dev/null 2>&1
 
-      - name: Run readiness QUIC smoke test (120s bounded runner)
+      - name: Run parametrized QUIC smoke tests (120s bounded runner)
         run: |
           cd source
           TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
@@ -199,17 +201,7 @@ jobs:
             echo "kmx-aio-test binary not found"
             exit 1
           fi
-          timeout 120s "$TEST_BIN" "[quic][readiness][integration][smoke]"
-
-      - name: Run completion QUIC HTTP3 smoke test (120s bounded runner)
-        run: |
-          cd source
-          TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
-          if [[ -z "$TEST_BIN" ]]; then
-            echo "kmx-aio-test binary not found"
-            exit 1
-          fi
-          timeout 120s "$TEST_BIN" "[quic][http3][integration][smoke]"
+          timeout 120s "$TEST_BIN" "[quic][http3][readiness][integration][smoke]"
 
   gpu-smoke:
     runs-on: ubuntu-latest
