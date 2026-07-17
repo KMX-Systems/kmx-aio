@@ -4,13 +4,20 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 source_dir="$repo_root/source"
+qbs_build_root="$repo_root/build"
+qbs_build_dir_args=(-d "$qbs_build_root")
 
 find_test_bin_path() {
     local -a search_roots=(
+        "$qbs_build_root/debug"
+        "$qbs_build_root/default"
+        "$qbs_build_root/tsan"
         "$repo_root/debug"
         "$repo_root/default"
+        "$repo_root/tsan"
         "$source_dir/debug"
         "$source_dir/default"
+        "$source_dir/tsan"
     )
 
     local root bin
@@ -200,7 +207,7 @@ find_test_bin() {
     local bin
     bin="$(find_test_bin_path || true)"
     if [[ -z "$bin" ]]; then
-        echo "ERROR: kmx-aio-test binary not found in debug/default build outputs" >&2
+        echo "ERROR: kmx-aio-test binary not found in build/debug, build/default, or build/tsan outputs" >&2
         exit 1
     fi
     echo "$bin"

@@ -8,8 +8,8 @@ source "$script_dir/../common.sh"
 echo "==> Building SOME/IP-enabled integration tests"
 (
 	cd "$repo_root/source"
-	qbs resolve -f source.qbs config:debug project.enable_someip:true
-	qbs build -f source.qbs config:debug project.enable_someip:true -j"$(nproc)"
+	qbs resolve -f source.qbs "${qbs_build_dir_args[@]}" config:debug project.enable_someip:true
+	qbs build -f source.qbs "${qbs_build_dir_args[@]}" config:debug project.enable_someip:true -j"$(nproc)"
 )
 
 test_bin="$(find_test_bin)"

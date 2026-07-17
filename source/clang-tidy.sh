@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BUILD_DIR="${BUILD_DIR:-default}"
+BUILD_DIR="${BUILD_DIR:-build/clangdb}"
 PROJECT_FILE="${PROJECT_FILE:-source.qbs}"
 PROFILE="${PROFILE:-}"
 JOBS="${JOBS:-$(nproc)}"
