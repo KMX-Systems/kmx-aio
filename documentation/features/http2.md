@@ -146,7 +146,7 @@ qbs build -f source/source.qbs config:debug \
 
 | File | Purpose |
 | :--- | :--- |
-| [source/library/api/kmx/aio/http2/frame.hpp](source/library/api/kmx/aio/http2/frame.hpp) | `frame_type`, `frame_header`, `make_goaway` |
-| [source/library/api/kmx/aio/http2/hpack.hpp](source/library/api/kmx/aio/http2/hpack.hpp) | `hpack_encoder`, `header_list`, `header_field` |
-| [source/library/api/kmx/aio/http2/stream.hpp](source/library/api/kmx/aio/http2/stream.hpp) | `stream`, `stream_state` |
-| [source/library/api/kmx/aio/http2/codec.hpp](source/library/api/kmx/aio/http2/codec.hpp) | `frame_builder` (SETTINGS, HEADERS, DATA) |
+| [source/library/api/kmx/aio/http2/frame.hpp](../../source/library/api/kmx/aio/http2/frame.hpp) | `frame_type`, `frame_header`, `make_goaway` |
+| [source/library/api/kmx/aio/http2/hpack.hpp](../../source/library/api/kmx/aio/http2/hpack.hpp) | `hpack_encoder`, `header_list`, `header_field` |
+| [source/library/api/kmx/aio/http2/stream.hpp](../../source/library/api/kmx/aio/http2/stream.hpp) | `stream`, `stream_state` |
+| [source/library/api/kmx/aio/http2/codec.hpp](../../source/library/api/kmx/aio/http2/codec.hpp) | `frame_builder` (SETTINGS, HEADERS, DATA) |

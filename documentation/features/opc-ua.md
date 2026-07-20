@@ -50,13 +50,13 @@ co_await sub.close();
 There is currently no dedicated OPC UA sample project under `source/sample`.
 Use the library and tests below as the complete, buildable C++ references:
 
-- [source/library/api/kmx/aio/opc_ua/client.hpp](source/library/api/kmx/aio/opc_ua/client.hpp)
-- [source/library/api/kmx/aio/opc_ua/server.hpp](source/library/api/kmx/aio/opc_ua/server.hpp)
-- [source/library/api/kmx/aio/opc_ua/subscription.hpp](source/library/api/kmx/aio/opc_ua/subscription.hpp)
-- [source/library/src/kmx/aio/opc_ua/client.cpp](source/library/src/kmx/aio/opc_ua/client.cpp)
-- [source/library/src/kmx/aio/opc_ua/server.cpp](source/library/src/kmx/aio/opc_ua/server.cpp)
-- [source/library/src/kmx/aio/opc_ua/subscription.cpp](source/library/src/kmx/aio/opc_ua/subscription.cpp)
-- [source/library-test/src/kmx/aio/opc_ua/client_service_test.cpp](source/library-test/src/kmx/aio/opc_ua/client_service_test.cpp)
+- [source/library/api/kmx/aio/opc_ua/client.hpp](../../source/library/api/kmx/aio/opc_ua/client.hpp)
+- [source/library/api/kmx/aio/opc_ua/server.hpp](../../source/library/api/kmx/aio/opc_ua/server.hpp)
+- [source/library/api/kmx/aio/opc_ua/subscription.hpp](../../source/library/api/kmx/aio/opc_ua/subscription.hpp)
+- [source/library/src/kmx/aio/opc_ua/client.cpp](../../source/library/src/kmx/aio/opc_ua/client.cpp)
+- [source/library/src/kmx/aio/opc_ua/server.cpp](../../source/library/src/kmx/aio/opc_ua/server.cpp)
+- [source/library/src/kmx/aio/opc_ua/subscription.cpp](../../source/library/src/kmx/aio/opc_ua/subscription.cpp)
+- [source/library-test/src/kmx/aio/opc_ua/client_service_test.cpp](../../source/library-test/src/kmx/aio/opc_ua/client_service_test.cpp)
 
 ## Build and Test
 

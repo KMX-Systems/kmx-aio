@@ -92,14 +92,14 @@ auto view = avb::avtp::parse_am824_frame(std::span<const std::byte>(recv_frame))
 
 Complete buildable samples are already available in the repository:
 
-- [source/sample/readiness/avb/talker/sample-avb-readiness-talker.qbs](source/sample/readiness/avb/talker/sample-avb-readiness-talker.qbs)
-- [source/sample/readiness/avb/talker/src/main.cpp](source/sample/readiness/avb/talker/src/main.cpp)
-- [source/sample/readiness/avb/talker/src/kmx/aio/sample/avb/talker/manager.cpp](source/sample/readiness/avb/talker/src/kmx/aio/sample/avb/talker/manager.cpp)
-- [source/sample/readiness/avb/listener/sample-avb-readiness-listener.qbs](source/sample/readiness/avb/listener/sample-avb-readiness-listener.qbs)
-- [source/sample/readiness/avb/listener/src/main.cpp](source/sample/readiness/avb/listener/src/main.cpp)
-- [source/sample/readiness/avb/listener/src/kmx/aio/sample/avb/listener/manager.cpp](source/sample/readiness/avb/listener/src/kmx/aio/sample/avb/listener/manager.cpp)
-- [source/sample/completion/avb/talker/sample-avb-talker.qbs](source/sample/completion/avb/talker/sample-avb-talker.qbs)
-- [source/sample/completion/avb/listener/sample-avb-listener.qbs](source/sample/completion/avb/listener/sample-avb-listener.qbs)
+- [source/sample/readiness/avb/talker/sample-avb-readiness-talker.qbs](../../source/sample/readiness/avb/talker/sample-avb-readiness-talker.qbs)
+- [source/sample/readiness/avb/talker/src/main.cpp](../../source/sample/readiness/avb/talker/src/main.cpp)
+- [source/sample/readiness/avb/talker/src/kmx/aio/sample/avb/talker/manager.cpp](../../source/sample/readiness/avb/talker/src/kmx/aio/sample/avb/talker/manager.cpp)
+- [source/sample/readiness/avb/listener/sample-avb-readiness-listener.qbs](../../source/sample/readiness/avb/listener/sample-avb-readiness-listener.qbs)
+- [source/sample/readiness/avb/listener/src/main.cpp](../../source/sample/readiness/avb/listener/src/main.cpp)
+- [source/sample/readiness/avb/listener/src/kmx/aio/sample/avb/listener/manager.cpp](../../source/sample/readiness/avb/listener/src/kmx/aio/sample/avb/listener/manager.cpp)
+- [source/sample/completion/avb/talker/sample-avb-talker.qbs](../../source/sample/completion/avb/talker/sample-avb-talker.qbs)
+- [source/sample/completion/avb/listener/sample-avb-listener.qbs](../../source/sample/completion/avb/listener/sample-avb-listener.qbs)
 
 ## Quick Validation
 
