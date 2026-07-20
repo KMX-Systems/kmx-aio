@@ -179,11 +179,11 @@ EF_TCP_SERVER_LOOPBACK=2 onload ./my_readiness_server
 
 | File | Purpose |
 | :--- | :--- |
-| [source/library/api/kmx/aio/readiness/openonload/extensions.hpp](source/library/api/kmx/aio/readiness/openonload/extensions.hpp) | Zero-copy send/receive and fd-check inline functions |
-| [source/library/api/kmx/aio/readiness/executor.hpp](source/library/api/kmx/aio/readiness/executor.hpp) | `backend_mode`, `active_backend`, `executor_config`, `get_active_backend()` |
-| [source/library/src/kmx/aio/readiness/executor.cpp](source/library/src/kmx/aio/readiness/executor.cpp) | Runtime detection, backend selection, stack initialization |
-| [source/library/src/kmx/aio/readiness/tcp/stream.cpp](source/library/src/kmx/aio/readiness/tcp/stream.cpp) | Zero-copy `read()` hot path with epoll fallback |
-| [source/library/api/kmx/aio/error_code.hpp](source/library/api/kmx/aio/error_code.hpp) | `openonload_not_available`, `openonload_init_failed` error codes |
-| [script/feature/openonload/install-dependencies.sh](script/feature/openonload/install-dependencies.sh) | Dependency install stub |
-| [script/feature/openonload/run-unit-tests.sh](script/feature/openonload/run-unit-tests.sh) | Unit test runner (`[openonload]~[integration]`) |
-| [script/feature/openonload/run-integration-tests.sh](script/feature/openonload/run-integration-tests.sh) | Integration test runner (`[openonload][integration]`) |
+| [source/library/api/kmx/aio/readiness/openonload/extensions.hpp](../../source/library/api/kmx/aio/readiness/openonload/extensions.hpp) | Zero-copy send/receive and fd-check inline functions |
+| [source/library/api/kmx/aio/readiness/executor.hpp](../../source/library/api/kmx/aio/readiness/executor.hpp) | `backend_mode`, `active_backend`, `executor_config`, `get_active_backend()` |
+| [source/library/src/kmx/aio/readiness/executor.cpp](../../source/library/src/kmx/aio/readiness/executor.cpp) | Runtime detection, backend selection, stack initialization |
+| [source/library/src/kmx/aio/readiness/tcp/stream.cpp](../../source/library/src/kmx/aio/readiness/tcp/stream.cpp) | Zero-copy `read()` hot path with epoll fallback |
+| [source/library/api/kmx/aio/error_code.hpp](../../source/library/api/kmx/aio/error_code.hpp) | `openonload_not_available`, `openonload_init_failed` error codes |
+| [script/feature/openonload/install-dependencies.sh](../../script/feature/openonload/install-dependencies.sh) | Dependency install stub |
+| [script/feature/openonload/run-unit-tests.sh](../../script/feature/openonload/run-unit-tests.sh) | Unit test runner (`[openonload]~[integration]`) |
+| [script/feature/openonload/run-integration-tests.sh](../../script/feature/openonload/run-integration-tests.sh) | Integration test runner (`[openonload][integration]`) |

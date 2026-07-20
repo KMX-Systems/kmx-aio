@@ -90,14 +90,14 @@ Note on defaults:
 - The default project graph enables `core + completion + quic`.
 - Readiness, HTTP/2, HTTP/3, AVB, AF_XDP, SPDK, OPC UA, CUDA, and OpenOnload remain off until explicitly enabled with `project.enable_*:true`.
 
-- QUIC / HTTP/3: BoringSSL + lsquic (run [script/feature/quic/install-dependencies.sh](script/feature/quic/install-dependencies.sh))
-- Modbus: no extra system packages currently required (run [script/feature/modbus/install-dependencies.sh](script/feature/modbus/install-dependencies.sh) for consistency with feature workflows)
-- OPC UA: open62541 (run [script/feature/opc_ua/install-dependencies.sh](script/feature/opc_ua/install-dependencies.sh))
-- AF_XDP: libbpf/libxdp toolchain available (run [script/feature/af_xdp/install-dependencies.sh](script/feature/af_xdp/install-dependencies.sh))
-- SPDK: local workspace bootstrap available (run [script/feature/spdk/install-dependencies.sh](script/feature/spdk/install-dependencies.sh))
-- AVB: host runtime tools available (run [script/feature/avb/install-dependencies.sh](script/feature/avb/install-dependencies.sh)); still requires `CAP_NET_RAW` and PTP-capable NIC/driver
-- CUDA: validate environment with [script/feature/cuda/check_env.sh](script/feature/cuda/check_env.sh) (driver/toolkit install is distro-specific)
-- V4L2: optional host tooling available (run [script/feature/v4l2/install-dependencies.sh](script/feature/v4l2/install-dependencies.sh))
+- QUIC / HTTP/3: BoringSSL + lsquic (run [script/feature/quic/install-dependencies.sh](../script/feature/quic/install-dependencies.sh))
+- Modbus: no extra system packages currently required (run [script/feature/modbus/install-dependencies.sh](../script/feature/modbus/install-dependencies.sh) for consistency with feature workflows)
+- OPC UA: open62541 (run [script/feature/opc_ua/install-dependencies.sh](../script/feature/opc_ua/install-dependencies.sh))
+- AF_XDP: libbpf/libxdp toolchain available (run [script/feature/af_xdp/install-dependencies.sh](../script/feature/af_xdp/install-dependencies.sh))
+- SPDK: local workspace bootstrap available (run [script/feature/spdk/install-dependencies.sh](../script/feature/spdk/install-dependencies.sh))
+- AVB: host runtime tools available (run [script/feature/avb/install-dependencies.sh](../script/feature/avb/install-dependencies.sh)); still requires `CAP_NET_RAW` and PTP-capable NIC/driver
+- CUDA: validate environment with [script/feature/cuda/check_env.sh](../script/feature/cuda/check_env.sh) (driver/toolkit install is distro-specific)
+- V4L2: optional host tooling available (run [script/feature/v4l2/install-dependencies.sh](../script/feature/v4l2/install-dependencies.sh))
 
 ## Verify Key Libraries
 

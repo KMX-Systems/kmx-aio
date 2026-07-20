@@ -253,7 +253,7 @@ qbs config --list profiles.kmx-spdk-local
 qbs config --unset profiles.kmx-spdk-local
 ```
 
-Default gate state in [source/source.qbs](source/source.qbs) (current project behavior):
+Default gate state in [source/source.qbs](../source/source.qbs) (current project behavior):
 
 - `project.full:false`
 - `project.all:false`

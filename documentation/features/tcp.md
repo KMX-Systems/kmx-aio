@@ -110,8 +110,8 @@ co_await conn.write_all_fixed(std::span{fixed_buf, *n}, 0);
 
 | File | Purpose |
 | :--- | :--- |
-| [source/library/api/kmx/aio/readiness/tcp/listener.hpp](source/library/api/kmx/aio/readiness/tcp/listener.hpp) | Readiness listener |
-| [source/library/api/kmx/aio/readiness/tcp/stream.hpp](source/library/api/kmx/aio/readiness/tcp/stream.hpp) | Readiness stream |
-| [source/library/api/kmx/aio/completion/tcp/listener.hpp](source/library/api/kmx/aio/completion/tcp/listener.hpp) | Completion listener |
-| [source/library/api/kmx/aio/completion/tcp/stream.hpp](source/library/api/kmx/aio/completion/tcp/stream.hpp) | Completion stream (incl. fixed-buffer ops) |
-| [source/library/src/kmx/aio/readiness/tcp/stream.cpp](source/library/src/kmx/aio/readiness/tcp/stream.cpp) | Readiness stream impl (incl. OpenOnload ZC path) |
+| [source/library/api/kmx/aio/readiness/tcp/listener.hpp](../../source/library/api/kmx/aio/readiness/tcp/listener.hpp) | Readiness listener |
+| [source/library/api/kmx/aio/readiness/tcp/stream.hpp](../../source/library/api/kmx/aio/readiness/tcp/stream.hpp) | Readiness stream |
+| [source/library/api/kmx/aio/completion/tcp/listener.hpp](../../source/library/api/kmx/aio/completion/tcp/listener.hpp) | Completion listener |
+| [source/library/api/kmx/aio/completion/tcp/stream.hpp](../../source/library/api/kmx/aio/completion/tcp/stream.hpp) | Completion stream (incl. fixed-buffer ops) |
+| [source/library/src/kmx/aio/readiness/tcp/stream.cpp](../../source/library/src/kmx/aio/readiness/tcp/stream.cpp) | Readiness stream impl (incl. OpenOnload ZC path) |

@@ -250,27 +250,27 @@ bash script/feature/someip/run-smoke.sh --skip-build
 
 | File | Purpose |
 | :--- | :--- |
-| [source/library/api/kmx/aio/someip/types.hpp](source/library/api/kmx/aio/someip/types.hpp) | All public types and configuration structs |
-| [source/library/api/kmx/aio/someip/error.hpp](source/library/api/kmx/aio/someip/error.hpp) | Error domain and `make_error_code` |
-| [source/library/api/kmx/aio/someip/client.hpp](source/library/api/kmx/aio/someip/client.hpp) | Client facade |
-| [source/library/api/kmx/aio/someip/server.hpp](source/library/api/kmx/aio/someip/server.hpp) | Server facade |
-| [source/library/api/kmx/aio/someip/subscription.hpp](source/library/api/kmx/aio/someip/subscription.hpp) | Subscription facade |
-| [source/library/inc/kmx/aio/someip/vsomeip_compat.hpp](source/library/inc/kmx/aio/someip/vsomeip_compat.hpp) | Internal compat layer (stub + vsomeip) |
-| [source/library/src/kmx/aio/someip/vsomeip_compat.cpp](source/library/src/kmx/aio/someip/vsomeip_compat.cpp) | Stub and vsomeip backend implementations |
-| [source/library/src/kmx/aio/someip/client.cpp](source/library/src/kmx/aio/someip/client.cpp) | Client facade implementation |
-| [source/library/src/kmx/aio/someip/server.cpp](source/library/src/kmx/aio/someip/server.cpp) | Server facade implementation |
-| [source/library/src/kmx/aio/someip/subscription.cpp](source/library/src/kmx/aio/someip/subscription.cpp) | Subscription facade implementation |
-| [source/library-test/src/kmx/aio/someip/client_service_test.cpp](source/library-test/src/kmx/aio/someip/client_service_test.cpp) | Client start/stop/call unit tests |
-| [source/library-test/src/kmx/aio/someip/subscription_test.cpp](source/library-test/src/kmx/aio/someip/subscription_test.cpp) | Subscription queue and lifecycle unit tests |
-| [source/library-test/src/kmx/aio/someip/compat_queue_test.cpp](source/library-test/src/kmx/aio/someip/compat_queue_test.cpp) | Compat-layer queue overflow/capacity unit tests |
-| [source/library-test/src/kmx/aio/someip/error_test.cpp](source/library-test/src/kmx/aio/someip/error_test.cpp) | Error category and message tests |
-| [source/library-test/src/kmx/aio/integration/someip_smoke_test.cpp](source/library-test/src/kmx/aio/integration/someip_smoke_test.cpp) | Echo server/client integration smoke test |
-| [source/sample/completion/someip/echo-server/src/main.cpp](source/sample/completion/someip/echo-server/src/main.cpp) | Echo server sample |
-| [source/sample/completion/someip/echo-client/src/main.cpp](source/sample/completion/someip/echo-client/src/main.cpp) | Echo client sample |
-| [source/sample/completion/someip/event-publisher/src/main.cpp](source/sample/completion/someip/event-publisher/src/main.cpp) | Event publisher sample |
-| [source/sample/completion/someip/event-subscriber/src/main.cpp](source/sample/completion/someip/event-subscriber/src/main.cpp) | Event subscriber sample |
-| [source/sample/completion/someip/diagnostics/src/main.cpp](source/sample/completion/someip/diagnostics/src/main.cpp) | Diagnostics sample |
-| [script/feature/someip/install-dependencies.sh](script/feature/someip/install-dependencies.sh) | vsomeip build and install script |
-| [script/feature/someip/run-unit-tests.sh](script/feature/someip/run-unit-tests.sh) | Unit test runner |
-| [script/feature/someip/run-integration-tests.sh](script/feature/someip/run-integration-tests.sh) | Integration test runner |
-| [script/feature/someip/run-smoke.sh](script/feature/someip/run-smoke.sh) | Full smoke: build + tests + sample echo |
+| [source/library/api/kmx/aio/someip/types.hpp](../../source/library/api/kmx/aio/someip/types.hpp) | All public types and configuration structs |
+| [source/library/api/kmx/aio/someip/error.hpp](../../source/library/api/kmx/aio/someip/error.hpp) | Error domain and `make_error_code` |
+| [source/library/api/kmx/aio/someip/client.hpp](../../source/library/api/kmx/aio/someip/client.hpp) | Client facade |
+| [source/library/api/kmx/aio/someip/server.hpp](../../source/library/api/kmx/aio/someip/server.hpp) | Server facade |
+| [source/library/api/kmx/aio/someip/subscription.hpp](../../source/library/api/kmx/aio/someip/subscription.hpp) | Subscription facade |
+| [source/library/inc/kmx/aio/someip/vsomeip_compat.hpp](../../source/library/inc/kmx/aio/someip/vsomeip_compat.hpp) | Internal compat layer (stub + vsomeip) |
+| [source/library/src/kmx/aio/someip/vsomeip_compat.cpp](../../source/library/src/kmx/aio/someip/vsomeip_compat.cpp) | Stub and vsomeip backend implementations |
+| [source/library/src/kmx/aio/someip/client.cpp](../../source/library/src/kmx/aio/someip/client.cpp) | Client facade implementation |
+| [source/library/src/kmx/aio/someip/server.cpp](../../source/library/src/kmx/aio/someip/server.cpp) | Server facade implementation |
+| [source/library/src/kmx/aio/someip/subscription.cpp](../../source/library/src/kmx/aio/someip/subscription.cpp) | Subscription facade implementation |
+| [source/library-test/src/kmx/aio/someip/client_service_test.cpp](../../source/library-test/src/kmx/aio/someip/client_service_test.cpp) | Client start/stop/call unit tests |
+| [source/library-test/src/kmx/aio/someip/subscription_test.cpp](../../source/library-test/src/kmx/aio/someip/subscription_test.cpp) | Subscription queue and lifecycle unit tests |
+| [source/library-test/src/kmx/aio/someip/compat_queue_test.cpp](../../source/library-test/src/kmx/aio/someip/compat_queue_test.cpp) | Compat-layer queue overflow/capacity unit tests |
+| [source/library-test/src/kmx/aio/someip/error_test.cpp](../../source/library-test/src/kmx/aio/someip/error_test.cpp) | Error category and message tests |
+| [source/library-test/src/kmx/aio/integration/someip_smoke_test.cpp](../../source/library-test/src/kmx/aio/integration/someip_smoke_test.cpp) | Echo server/client integration smoke test |
+| [source/sample/completion/someip/echo-server/src/main.cpp](../../source/sample/completion/someip/echo-server/src/main.cpp) | Echo server sample |
+| [source/sample/completion/someip/echo-client/src/main.cpp](../../source/sample/completion/someip/echo-client/src/main.cpp) | Echo client sample |
+| [source/sample/completion/someip/event-publisher/src/main.cpp](../../source/sample/completion/someip/event-publisher/src/main.cpp) | Event publisher sample |
+| [source/sample/completion/someip/event-subscriber/src/main.cpp](../../source/sample/completion/someip/event-subscriber/src/main.cpp) | Event subscriber sample |
+| [source/sample/completion/someip/diagnostics/src/main.cpp](../../source/sample/completion/someip/diagnostics/src/main.cpp) | Diagnostics sample |
+| [script/feature/someip/install-dependencies.sh](../../script/feature/someip/install-dependencies.sh) | vsomeip build and install script |
+| [script/feature/someip/run-unit-tests.sh](../../script/feature/someip/run-unit-tests.sh) | Unit test runner |
+| [script/feature/someip/run-integration-tests.sh](../../script/feature/someip/run-integration-tests.sh) | Integration test runner |
+| [script/feature/someip/run-smoke.sh](../../script/feature/someip/run-smoke.sh) | Full smoke: build + tests + sample echo |

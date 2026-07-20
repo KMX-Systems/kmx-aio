@@ -42,11 +42,11 @@ const auto& stats = gpu_exec->get_statistics();
 
 The complete buildable sample is already available in the repository:
 
-- [source/sample/gpu/gpu.qbs](source/sample/gpu/gpu.qbs)
-- [source/sample/gpu/image_processing/sample-gpu-image-processing.qbs](source/sample/gpu/image_processing/sample-gpu-image-processing.qbs)
-- [source/sample/gpu/image_processing/src/main.cpp](source/sample/gpu/image_processing/src/main.cpp)
-- [source/sample/gpu/image_processing/inc/kmx/aio/sample/gpu/image_processing/manager.hpp](source/sample/gpu/image_processing/inc/kmx/aio/sample/gpu/image_processing/manager.hpp)
-- [source/sample/gpu/image_processing/src/kmx/aio/sample/gpu/image_processing/manager.cpp](source/sample/gpu/image_processing/src/kmx/aio/sample/gpu/image_processing/manager.cpp)
+- [source/sample/gpu/gpu.qbs](../../source/sample/gpu/gpu.qbs)
+- [source/sample/gpu/image_processing/sample-gpu-image-processing.qbs](../../source/sample/gpu/image_processing/sample-gpu-image-processing.qbs)
+- [source/sample/gpu/image_processing/src/main.cpp](../../source/sample/gpu/image_processing/src/main.cpp)
+- [source/sample/gpu/image_processing/inc/kmx/aio/sample/gpu/image_processing/manager.hpp](../../source/sample/gpu/image_processing/inc/kmx/aio/sample/gpu/image_processing/manager.hpp)
+- [source/sample/gpu/image_processing/src/kmx/aio/sample/gpu/image_processing/manager.cpp](../../source/sample/gpu/image_processing/src/kmx/aio/sample/gpu/image_processing/manager.cpp)
 
 ## Build and Run
 

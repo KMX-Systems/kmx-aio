@@ -66,9 +66,9 @@ HFT_BIN="$(find debug -type f -name sample-hft-order-router | head -n 1)"
 
 The sample implementation lives here:
 
-- [source/sample/completion/hft/order_router/sample-hft-order-router.qbs](source/sample/completion/hft/order_router/sample-hft-order-router.qbs)
-- [source/sample/completion/hft/order_router/src/main.cpp](source/sample/completion/hft/order_router/src/main.cpp)
-- [source/sample/completion/hft/order_router/src/kmx/aio/sample/hft/order_router/manager.cpp](source/sample/completion/hft/order_router/src/kmx/aio/sample/hft/order_router/manager.cpp)
+- [source/sample/completion/hft/order_router/sample-hft-order-router.qbs](../../source/sample/completion/hft/order_router/sample-hft-order-router.qbs)
+- [source/sample/completion/hft/order_router/src/main.cpp](../../source/sample/completion/hft/order_router/src/main.cpp)
+- [source/sample/completion/hft/order_router/src/kmx/aio/sample/hft/order_router/manager.cpp](../../source/sample/completion/hft/order_router/src/kmx/aio/sample/hft/order_router/manager.cpp)
 
 ## Notes
 

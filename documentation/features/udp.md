@@ -119,7 +119,7 @@ co_await ep.send(std::span{buf.data(), *n},
 
 | File | Purpose |
 | :--- | :--- |
-| [source/library/api/kmx/aio/readiness/udp/socket.hpp](source/library/api/kmx/aio/readiness/udp/socket.hpp) | Readiness socket |
-| [source/library/api/kmx/aio/readiness/udp/endpoint.hpp](source/library/api/kmx/aio/readiness/udp/endpoint.hpp) | Readiness endpoint |
-| [source/library/api/kmx/aio/completion/udp/socket.hpp](source/library/api/kmx/aio/completion/udp/socket.hpp) | Completion socket |
-| [source/library/api/kmx/aio/completion/udp/endpoint.hpp](source/library/api/kmx/aio/completion/udp/endpoint.hpp) | Completion endpoint |
+| [source/library/api/kmx/aio/readiness/udp/socket.hpp](../../source/library/api/kmx/aio/readiness/udp/socket.hpp) | Readiness socket |
+| [source/library/api/kmx/aio/readiness/udp/endpoint.hpp](../../source/library/api/kmx/aio/readiness/udp/endpoint.hpp) | Readiness endpoint |
+| [source/library/api/kmx/aio/completion/udp/socket.hpp](../../source/library/api/kmx/aio/completion/udp/socket.hpp) | Completion socket |
+| [source/library/api/kmx/aio/completion/udp/endpoint.hpp](../../source/library/api/kmx/aio/completion/udp/endpoint.hpp) | Completion endpoint |

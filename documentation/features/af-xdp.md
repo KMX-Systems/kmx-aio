@@ -83,9 +83,9 @@ const auto& stats = sock.get_stats();
 
 The full implementation is already available in the QBS sample:
 
-- [source/sample/completion/xdp/packet_filter/xdp-packet-filter.qbs](source/sample/completion/xdp/packet_filter/xdp-packet-filter.qbs)
-- [source/sample/completion/xdp/packet_filter/src/main.cpp](source/sample/completion/xdp/packet_filter/src/main.cpp)
-- [source/sample/completion/xdp/packet_filter/src/kmx/aio/sample/xdp/packet_filter/manager.cpp](source/sample/completion/xdp/packet_filter/src/kmx/aio/sample/xdp/packet_filter/manager.cpp)
+- [source/sample/completion/xdp/packet_filter/xdp-packet-filter.qbs](../../source/sample/completion/xdp/packet_filter/xdp-packet-filter.qbs)
+- [source/sample/completion/xdp/packet_filter/src/main.cpp](../../source/sample/completion/xdp/packet_filter/src/main.cpp)
+- [source/sample/completion/xdp/packet_filter/src/kmx/aio/sample/xdp/packet_filter/manager.cpp](../../source/sample/completion/xdp/packet_filter/src/kmx/aio/sample/xdp/packet_filter/manager.cpp)
 
 ## Build and Run
 

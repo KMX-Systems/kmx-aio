@@ -81,6 +81,6 @@ for (;;)
 
 | File | Purpose |
 | :--- | :--- |
-| [source/library/api/kmx/aio/readiness/timer.hpp](source/library/api/kmx/aio/readiness/timer.hpp) | `readiness::timer` type alias |
-| [source/library/api/kmx/aio/readiness/descriptor/timer.hpp](source/library/api/kmx/aio/readiness/descriptor/timer.hpp) | `descriptor::timer` — timerfd RAII wrapper + `wait()` |
-| [source/library/api/kmx/aio/completion/timer.hpp](source/library/api/kmx/aio/completion/timer.hpp) | `completion::timer` — io_uring timeout |
+| [source/library/api/kmx/aio/readiness/timer.hpp](../../source/library/api/kmx/aio/readiness/timer.hpp) | `readiness::timer` type alias |
+| [source/library/api/kmx/aio/readiness/descriptor/timer.hpp](../../source/library/api/kmx/aio/readiness/descriptor/timer.hpp) | `descriptor::timer` — timerfd RAII wrapper + `wait()` |
+| [source/library/api/kmx/aio/completion/timer.hpp](../../source/library/api/kmx/aio/completion/timer.hpp) | `completion::timer` — io_uring timeout |

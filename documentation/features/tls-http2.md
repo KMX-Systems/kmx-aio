@@ -81,25 +81,25 @@ Complete buildable samples are already available in the repository:
 
 **TLS echo (plain, no HTTP/2):**
 
-- [source/sample/completion/tls/echo_completion_server/tls-echo-completion-server.qbs](source/sample/completion/tls/echo_completion_server/tls-echo-completion-server.qbs)
-- [source/sample/completion/tls/echo_completion_client/tls-echo-completion-client.qbs](source/sample/completion/tls/echo_completion_client/tls-echo-completion-client.qbs)
-- [source/sample/readiness/tls/echo_readiness_server/tls-echo-readiness-server.qbs](source/sample/readiness/tls/echo_readiness_server/tls-echo-readiness-server.qbs)
-- [source/sample/readiness/tls/echo_readiness_client/tls-echo-readiness-client.qbs](source/sample/readiness/tls/echo_readiness_client/tls-echo-readiness-client.qbs)
+- [source/sample/completion/tls/echo_completion_server/tls-echo-completion-server.qbs](../../source/sample/completion/tls/echo_completion_server/tls-echo-completion-server.qbs)
+- [source/sample/completion/tls/echo_completion_client/tls-echo-completion-client.qbs](../../source/sample/completion/tls/echo_completion_client/tls-echo-completion-client.qbs)
+- [source/sample/readiness/tls/echo_readiness_server/tls-echo-readiness-server.qbs](../../source/sample/readiness/tls/echo_readiness_server/tls-echo-readiness-server.qbs)
+- [source/sample/readiness/tls/echo_readiness_client/tls-echo-readiness-client.qbs](../../source/sample/readiness/tls/echo_readiness_client/tls-echo-readiness-client.qbs)
 
 **TLS + HTTP/2 ALPN negotiation:**
 
-- [source/sample/completion/tls/h2_alpn_server/tls-h2-alpn-server.qbs](source/sample/completion/tls/h2_alpn_server/tls-h2-alpn-server.qbs)
-- [source/sample/completion/tls/h2_alpn_server/src/main.cpp](source/sample/completion/tls/h2_alpn_server/src/main.cpp)
-- [source/sample/completion/tls/h2_alpn_server/src/kmx/aio/sample/tls/h2_alpn_server/manager.cpp](source/sample/completion/tls/h2_alpn_server/src/kmx/aio/sample/tls/h2_alpn_server/manager.cpp)
-- [source/sample/completion/tls/h2_alpn_client/tls-h2-alpn-client.qbs](source/sample/completion/tls/h2_alpn_client/tls-h2-alpn-client.qbs)
-- [source/sample/completion/tls/h2_alpn_client/src/main.cpp](source/sample/completion/tls/h2_alpn_client/src/main.cpp)
-- [source/sample/completion/tls/h2_alpn_client/src/kmx/aio/sample/tls/h2_alpn_client/manager.cpp](source/sample/completion/tls/h2_alpn_client/src/kmx/aio/sample/tls/h2_alpn_client/manager.cpp)
-- [source/sample/readiness/tls/h2_alpn_server/tls-h2-alpn-readiness-server.qbs](source/sample/readiness/tls/h2_alpn_server/tls-h2-alpn-readiness-server.qbs)
-- [source/sample/readiness/tls/h2_alpn_server/src/main.cpp](source/sample/readiness/tls/h2_alpn_server/src/main.cpp)
-- [source/sample/readiness/tls/h2_alpn_server/src/kmx/aio/sample/tls/h2_alpn_server/manager.cpp](source/sample/readiness/tls/h2_alpn_server/src/kmx/aio/sample/tls/h2_alpn_server/manager.cpp)
-- [source/sample/readiness/tls/h2_alpn_client/tls-h2-alpn-readiness-client.qbs](source/sample/readiness/tls/h2_alpn_client/tls-h2-alpn-readiness-client.qbs)
-- [source/sample/readiness/tls/h2_alpn_client/src/main.cpp](source/sample/readiness/tls/h2_alpn_client/src/main.cpp)
-- [source/sample/readiness/tls/h2_alpn_client/src/kmx/aio/sample/tls/h2_alpn_client/manager.cpp](source/sample/readiness/tls/h2_alpn_client/src/kmx/aio/sample/tls/h2_alpn_client/manager.cpp)
+- [source/sample/completion/tls/h2_alpn_server/tls-h2-alpn-server.qbs](../../source/sample/completion/tls/h2_alpn_server/tls-h2-alpn-server.qbs)
+- [source/sample/completion/tls/h2_alpn_server/src/main.cpp](../../source/sample/completion/tls/h2_alpn_server/src/main.cpp)
+- [source/sample/completion/tls/h2_alpn_server/src/kmx/aio/sample/tls/h2_alpn_server/manager.cpp](../../source/sample/completion/tls/h2_alpn_server/src/kmx/aio/sample/tls/h2_alpn_server/manager.cpp)
+- [source/sample/completion/tls/h2_alpn_client/tls-h2-alpn-client.qbs](../../source/sample/completion/tls/h2_alpn_client/tls-h2-alpn-client.qbs)
+- [source/sample/completion/tls/h2_alpn_client/src/main.cpp](../../source/sample/completion/tls/h2_alpn_client/src/main.cpp)
+- [source/sample/completion/tls/h2_alpn_client/src/kmx/aio/sample/tls/h2_alpn_client/manager.cpp](../../source/sample/completion/tls/h2_alpn_client/src/kmx/aio/sample/tls/h2_alpn_client/manager.cpp)
+- [source/sample/readiness/tls/h2_alpn_server/tls-h2-alpn-readiness-server.qbs](../../source/sample/readiness/tls/h2_alpn_server/tls-h2-alpn-readiness-server.qbs)
+- [source/sample/readiness/tls/h2_alpn_server/src/main.cpp](../../source/sample/readiness/tls/h2_alpn_server/src/main.cpp)
+- [source/sample/readiness/tls/h2_alpn_server/src/kmx/aio/sample/tls/h2_alpn_server/manager.cpp](../../source/sample/readiness/tls/h2_alpn_server/src/kmx/aio/sample/tls/h2_alpn_server/manager.cpp)
+- [source/sample/readiness/tls/h2_alpn_client/tls-h2-alpn-readiness-client.qbs](../../source/sample/readiness/tls/h2_alpn_client/tls-h2-alpn-readiness-client.qbs)
+- [source/sample/readiness/tls/h2_alpn_client/src/main.cpp](../../source/sample/readiness/tls/h2_alpn_client/src/main.cpp)
+- [source/sample/readiness/tls/h2_alpn_client/src/kmx/aio/sample/tls/h2_alpn_client/manager.cpp](../../source/sample/readiness/tls/h2_alpn_client/src/kmx/aio/sample/tls/h2_alpn_client/manager.cpp)
 
 ## Example
 
