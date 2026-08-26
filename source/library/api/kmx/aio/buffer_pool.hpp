@@ -9,6 +9,7 @@
     #include <cstdint>
     #include <memory>
     #include <mutex>
+    #include <optional>
     #include <new>
     #include <stdexcept>
     #include <string>
@@ -72,6 +73,16 @@ namespace kmx::aio
         /// the buffer is automatically returned to the free list. This ensures deterministic
         /// resource cleanup without explicit deallocation.
         [[nodiscard]] buffer_handle<T> acquire() noexcept(false);
+
+        /// @brief Leases a buffer, or reports that none is free.
+        /// @return A handle to the leased buffer, or an empty optional when the pool is exhausted.
+        /// @note The non-throwing counterpart of acquire(), for callers on an event loop. There, exhaustion is
+        ///       not an error but backpressure: the correct response is to stop taking on new work until a
+        ///       buffer comes back, which is a decision the caller has to make and cannot make from a catch
+        ///       block on a hot path. Throwing also forces every such caller into a try/catch that is easy to
+        ///       get wrong - the QUIC read path currently catches, logs and then silently drops the bytes it
+        ///       had already read, which on a reliable stream is a protocol violation the peer cannot detect.
+        [[nodiscard]] std::optional<buffer_handle<T>> try_acquire() noexcept;
 
         /// @brief Number of buffers currently available (not yet leased).
         [[nodiscard]] std::size_t available() const noexcept;
@@ -242,6 +253,27 @@ namespace kmx::aio
 
         // Set head to first slot
         free_list_head_ = &slots_[0];
+    }
+
+    template <typename T, std::size_t Capacity>
+    std::optional<buffer_handle<T>> buffer_pool<T, Capacity>::try_acquire() noexcept
+    {
+        {
+            std::lock_guard<std::mutex> lock(free_list_mutex_);
+            if (free_list_head_ == nullptr)
+                return {};
+        }
+
+        // T's constructor may throw, which acquire() propagates; here it is reported the same way exhaustion
+        // is, so that a caller on an event loop has exactly one failure path to handle rather than two.
+        try
+        {
+            return acquire();
+        }
+        catch (...)
+        {
+            return {};
+        }
     }
 
     template <typename T, std::size_t Capacity>
