@@ -258,7 +258,15 @@ namespace kmx::aio::completion
             .tv_nsec = static_cast<decltype(__kernel_timespec::tv_nsec)>(duration_ns % 1'000'000'000ULL),
         };
 
-        ::io_uring_prep_timeout(sqe, &ts, 1u, 0u);
+        // **Count zero, not one, and the third argument is a completion count rather than a repeat count.**
+        // IORING_OP_TIMEOUT with a non-zero `off` completes when that many CQEs have been posted *or* the
+        // duration expires, whichever comes first - so a count of one made this return on the next completion
+        // of any unrelated operation instead of sleeping. On an idle ring the difference is invisible; under
+        // load the timer fires immediately and repeatedly, which is the opposite of what every caller here
+        // asks for. `completion/timer.cpp`, `quic::transport`'s retransmit delay and the AVB samples all want
+        // a sleep, and the readiness executor's implementation of this same interface uses a timerfd and
+        // provides one. Zero makes the two agree.
+        ::io_uring_prep_timeout(sqe, &ts, 0u, 0u);
         ::io_uring_sqe_set_data(sqe, &ctx);
 
         if (const auto sub = submit(); !sub)

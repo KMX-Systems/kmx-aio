@@ -52,6 +52,12 @@ namespace kmx::aio
             std::exception_ptr exception_;
             /// @brief Stop source associated with the coroutine instance.
             std::stop_source stop_source_;
+            /// @brief Stop token handed down from whoever started or awaited this coroutine.
+            /// @note Without this the per-coroutine stop_source_ above is unreachable from outside, so
+            ///       co_await get_stop_token yields a token nothing can ever signal - cancellation that
+            ///       compiles, type-checks and silently never fires. A token set here takes precedence, and is
+            ///       inherited by every task this one awaits, so a single stop_source cancels a whole chain.
+            std::stop_token stop_token_;
 
             /// @brief Allocates coroutine frame storage.
             /// @param size The frame size requested by the compiler.
@@ -117,7 +123,12 @@ namespace kmx::aio
                     /// @return The coroutine stop token.
                     std::stop_token await_resume() const noexcept { return token; }
                 };
-                return awaiter {stop_source_.get_token()};
+                // Whatever was handed down, and nothing if nothing was. Falling back to this coroutine's own
+                // stop_source_ would be worse than useless: no one outside can reach it, so the token would
+                // report stop_possible() == true and stop_requested() == false forever. Code that checks
+                // whether cancellation is available would conclude that it is, and then wait for a signal that
+                // cannot arrive. An empty token says plainly that nobody wired one up.
+                return awaiter {stop_token_};
             }
         };
 
@@ -231,11 +242,33 @@ namespace kmx::aio
         /// @return `true` if the task is complete or empty.
         bool await_ready() const noexcept { return !handle_ || handle_.done(); }
 
+        /// @brief Gives this task a stop token before it starts.
+        /// @param token The token to observe; inherited by every task this one awaits.
+        /// @return This task, so it can be passed straight to spawn().
+        /// @note Set it before the task runs. A task already suspended keeps whatever it inherited.
+        task&& with_stop_token(std::stop_token token) && noexcept
+        {
+            if (handle_)
+                handle_.promise().stop_token_ = std::move(token);
+
+            return std::move(*this);
+        }
+
         /// @brief Registers the awaiting coroutine as the continuation.
         /// @param continuation The coroutine that will resume after this task finishes.
         /// @return The coroutine handle to resume for symmetric transfer.
-        std::coroutine_handle<> await_suspend(std::coroutine_handle<> continuation) noexcept
+        template <typename P>
+        std::coroutine_handle<> await_suspend(std::coroutine_handle<P> continuation) noexcept
         {
+            // Inherit the awaiting coroutine's stop token, so cancelling the outermost task reaches every task
+            // it is waiting on. An explicit token already set on this task wins, so a sub-task can be given a
+            // narrower scope than its parent.
+            if constexpr (requires { continuation.promise().stop_token_; })
+            {
+                if (!handle_.promise().stop_token_.stop_possible())
+                    handle_.promise().stop_token_ = continuation.promise().stop_token_;
+            }
+
             handle_.promise().continuation_ = continuation;
             return handle_;
         }

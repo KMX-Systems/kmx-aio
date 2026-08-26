@@ -59,6 +59,23 @@ namespace kmx::aio::tls
                 ::SSL_free(ssl_); // This automatically frees the attached BIOs
         }
 
+        /// @brief The stream underneath the TLS layer, or nullptr on a default-constructed stream.
+        ///
+        /// @note **Without this a TLS connection cannot be aborted from outside its own coroutines.** A read
+        ///       parked in @c read() resumes only when bytes arrive or the socket ends, so a peer that stops
+        ///       sending holds that coroutine, its buffers and its descriptor for as long as the process
+        ///       lives. Closing the socket is what unblocks it, and the descriptor is reachable only through
+        ///       the inner stream - so a caller that wants an idle timeout, a shutdown deadline or a
+        ///       cancellation needs this handle. The name follows Asio's @c ssl::stream::next_layer(), which
+        ///       is the same accessor for the same reason.
+        ///
+        /// @note A pointer rather than a reference because @c inner_ is optional: a default-constructed
+        ///       stream has no socket, and a reference would have to pretend otherwise.
+        [[nodiscard]] InnerStream* next_layer() noexcept { return inner_ ? &*inner_ : nullptr; }
+
+        /// @brief The stream underneath the TLS layer, for a const holder.
+        [[nodiscard]] const InnerStream* next_layer() const noexcept { return inner_ ? &*inner_ : nullptr; }
+
         stream(const stream&) = delete;
         stream& operator=(const stream&) = delete;
 
