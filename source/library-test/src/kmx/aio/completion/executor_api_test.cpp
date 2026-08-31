@@ -626,7 +626,7 @@ namespace kmx::aio::test::completion::executor_api_test
         /// @brief The first CPU this thread is allowed to run on.
         /// @details Pinning to a core outside the process's own affinity mask fails, and on a machine
         ///          under cgroup or taskset restrictions core 0 need not be in it.
-        [[nodiscard]] std::expected<int, std::error_code> first_allowed_cpu() noexcept
+        [[nodiscard]] expected_int_t first_allowed_cpu() noexcept
         {
             cpu_set_t allowed {};
             CPU_ZERO(&allowed);
@@ -676,7 +676,7 @@ namespace kmx::aio::test::completion::executor_api_test
         kmx::aio::test::scoped_completion_runner runner {exec};
 
         // The I/O thread is created inside run(), so the query has to be retried until it exists.
-        std::expected<bool, std::error_code> affined = std::unexpected(std::make_error_code(std::errc::operation_not_permitted));
+        expected_bool_t affined = std::unexpected(std::make_error_code(std::errc::operation_not_permitted));
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
         while (std::chrono::steady_clock::now() < deadline)
         {

@@ -92,11 +92,14 @@ namespace kmx::aio::completion::xdp
     class socket
     {
     public:
+        /// @brief Result type returned by socket creation.
+        using expected_t = std::expected<socket, std::error_code>;
+
         /// @brief Creates and configures an AF_XDP socket.
         /// @param exec   The completion executor.
         /// @param config AF_XDP configuration.
         /// @return A configured socket, or an error code.
-        [[nodiscard]] static std::expected<socket, std::error_code> create(executor& exec, const socket_config& config) noexcept;
+        [[nodiscard]] static expected_t create(executor& exec, const socket_config& config) noexcept;
 
         /// @brief Default constructor creates an uninitialized socket.
         socket() noexcept = default;

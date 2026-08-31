@@ -207,7 +207,7 @@ namespace kmx::aio::readiness
 
         /// @brief Checks whether the I/O thread is affined to the requested CPU core.
         /// @details Returns an error if the I/O thread is not currently running.
-        [[nodiscard]] std::expected<bool, std::error_code> is_io_thread_affined_to(int core_id) noexcept;
+        [[nodiscard]] expected_bool_t is_io_thread_affined_to(int core_id) noexcept;
 
         /// @brief Reset all executor statistics.
         void reset_stats() noexcept { metrics_.reset(); }

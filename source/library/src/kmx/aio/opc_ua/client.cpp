@@ -318,7 +318,7 @@ namespace kmx::aio::opc_ua
         co_return expected_void_t {};
     }
 
-    task<std::expected<bool, std::error_code>> client::iterate(const std::chrono::milliseconds timeout) noexcept(false)
+    task_returning_expected_bool_t client::iterate(const std::chrono::milliseconds timeout) noexcept(false)
     {
         if (impl_->native_client == nullptr)
             co_return std::unexpected(make_error_code(error::not_initialized));

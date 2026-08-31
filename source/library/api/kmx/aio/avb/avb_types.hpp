@@ -5,12 +5,13 @@
 #ifndef PCH
     #include <array>
     #include <cstdint>
+    #include <kmx/aio/mac.hpp>
 #endif
 
 namespace kmx::aio::avb
 {
     /// @brief MAC address (6 bytes).
-    using mac_address_t = std::array<std::uint8_t, 6u>;
+    using mac_address_t = aio::mac::storage_t;
 
     /// @brief AVB Stream ID = source MAC + 2-byte unique identifier (IEEE 1722).
     struct stream_id_t

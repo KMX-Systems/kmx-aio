@@ -39,10 +39,10 @@ namespace kmx::aio::test::task_internals_test
             co_return expected_size_t {0u};
         }
 
-        task<std::expected<int, std::error_code>> throwing_int_result_task()
+        task<expected_int_t> throwing_int_result_task()
         {
             throw task_error {};
-            co_return std::expected<int, std::error_code> {0};
+            co_return expected_int_t {0};
         }
 
         task_returning_expected_void_t throwing_void_result_task()

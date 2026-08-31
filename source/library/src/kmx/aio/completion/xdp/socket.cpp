@@ -33,7 +33,6 @@
 
 namespace kmx::aio::completion::xdp
 {
-
     [[nodiscard]] constexpr bool is_valid_ring_size(const std::uint32_t size) noexcept
     {
         if (size == 0u)
@@ -66,7 +65,7 @@ namespace kmx::aio::completion::xdp
         executor* exec {};
         socket_config config {};
         std::mutex mutex {};
-        bool af_xdp_backend_enabled = false;
+        bool af_xdp_backend_enabled {};
 
 #if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
         xsk_socket* xsk = nullptr;
@@ -228,7 +227,7 @@ namespace kmx::aio::completion::xdp
 
     expected_void_t socket::allocate_umem(state& state) noexcept
     {
-        void* umem_raw = nullptr;
+        void* umem_raw {};
         if (::posix_memalign(&umem_raw, 4096u, static_cast<std::size_t>(state.umem_size)) != 0 || !umem_raw)
             return std::unexpected(to_std_error_code(error_code::xdp_umem_registration_failed));
 
@@ -236,9 +235,10 @@ namespace kmx::aio::completion::xdp
         std::memset(state.umem_area.get(), 0, static_cast<std::size_t>(state.umem_size));
 
         xsk_umem_config umem_cfg {};
-        umem_cfg.fill_size = state.config.fill_ring_size;
-        umem_cfg.comp_size = state.config.comp_ring_size;
-        umem_cfg.frame_size = state.config.frame_size;
+        const auto& state_config = state.config;
+        umem_cfg.fill_size = state_config.fill_ring_size;
+        umem_cfg.comp_size = state_config.comp_ring_size;
+        umem_cfg.frame_size = state_config.frame_size;
         umem_cfg.frame_headroom = 0u;
         umem_cfg.flags = 0u;
 
@@ -254,19 +254,20 @@ namespace kmx::aio::completion::xdp
         const std::string interface_name {state.config.interface_name};
 
         xsk_socket_config sock_cfg {};
-        sock_cfg.rx_size = state.config.rx_ring_size;
-        sock_cfg.tx_size = state.config.tx_ring_size;
+        const auto& state_config = state.config;
+        sock_cfg.rx_size = state_config.rx_ring_size;
+        sock_cfg.tx_size = state_config.tx_ring_size;
         sock_cfg.libbpf_flags = 0u;
         sock_cfg.xdp_flags = 0u;
 
         sock_cfg.bind_flags = {};
-        if (state.config.need_wakeup)
+        if (state_config.need_wakeup)
             sock_cfg.bind_flags |= XDP_USE_NEED_WAKEUP;
-        if (state.config.force_zero_copy)
+        if (state_config.force_zero_copy)
             sock_cfg.bind_flags |= XDP_ZEROCOPY;
 
         const int xsk_rc =
-            xsk_socket__create(&state.xsk, interface_name.c_str(), state.config.queue_id, state.umem, &state.rx, &state.tx, &sock_cfg);
+            xsk_socket__create(&state.xsk, interface_name.c_str(), state_config.queue_id, state.umem, &state.rx, &state.tx, &sock_cfg);
         if (xsk_rc != 0)
             return std::unexpected(to_std_error_code(map_xdp_error(xsk_rc)));
 
@@ -305,7 +306,7 @@ namespace kmx::aio::completion::xdp
             return std::unexpected(to_std_error_code(error_code::ring_full));
         }
 
-        xdp_desc* tx_desc = xsk_ring_prod__tx_desc(&state.tx, idx);
+        xdp_desc* const tx_desc = xsk_ring_prod__tx_desc(&state.tx, idx);
         tx_desc->addr = addr;
         tx_desc->len = static_cast<std::uint32_t>(data.size());
         xsk_ring_prod__submit(&state.tx, 1u);

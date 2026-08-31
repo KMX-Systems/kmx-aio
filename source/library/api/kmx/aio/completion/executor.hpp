@@ -167,7 +167,7 @@ namespace kmx::aio::completion
         /// @param poll_mask POSIX poll events mask (POLLIN, POLLOUT, POLLERR, POLLHUP, etc.).
         /// @return A task yielding the triggered revents mask, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task<std::expected<int, std::error_code>> async_poll(fd_t fd, unsigned poll_mask) noexcept(false);
+        [[nodiscard]] task_returning_expected_int_t async_poll(const fd_t fd, unsigned poll_mask) noexcept(false);
 
         /// @brief Submits a root task to the system.
         /// @param t The top-level coroutine task.
@@ -202,7 +202,7 @@ namespace kmx::aio::completion
 
         /// @brief Checks whether the I/O thread is affined to the requested CPU core.
         /// @details Returns an error if the I/O thread is not currently running.
-        [[nodiscard]] std::expected<bool, std::error_code> is_io_thread_affined_to(int core_id) noexcept;
+        [[nodiscard]] expected_bool_t is_io_thread_affined_to(int core_id) noexcept;
 
         /// @brief Returns the thread-local default executor, creating it lazily on first call.
         /// @details The instance is created with default `executor_config` on the first call
@@ -244,7 +244,7 @@ namespace kmx::aio::completion
     private:
         /// @brief Submits a prepared SQE, waits for completion, and returns the CQE result.
         template <typename Prepare>
-        [[nodiscard]] task<std::expected<int, std::error_code>> await_uring_result(Prepare&& prepare) noexcept(false);
+        [[nodiscard]] task<expected_int_t> await_uring_result(Prepare&& prepare) noexcept(false);
 
         /// @brief Hands the prepared SQEs to the kernel, now or with the next wait.
         /// @details A submission from the event loop's own thread is left in the ring: the loop waits

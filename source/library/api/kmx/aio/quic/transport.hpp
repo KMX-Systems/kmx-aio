@@ -338,7 +338,7 @@ namespace kmx::aio::quic
         [[nodiscard]] virtual task_returning_expected_void_t io_timeout(std::uint64_t duration_ns) noexcept(false) = 0;
 
         /// @brief Waits on the executor for @p poll_mask on @p fd.
-        [[nodiscard]] virtual task<std::expected<int, std::error_code>> io_poll(fd_t fd, unsigned poll_mask) noexcept(false) = 0;
+        [[nodiscard]] virtual task<expected_int_t> io_poll(fd_t fd, unsigned poll_mask) noexcept(false) = 0;
 
     private:
         /// @brief Suspends the packet loop until the socket or the timer wakes it.
@@ -500,7 +500,7 @@ namespace kmx::aio::quic
             return exec_->async_timeout(duration_ns);
         }
 
-        [[nodiscard]] task<std::expected<int, std::error_code>> io_poll(const fd_t fd, const unsigned poll_mask) noexcept(false) override
+        [[nodiscard]] task<expected_int_t> io_poll(const fd_t fd, const unsigned poll_mask) noexcept(false) override
         {
             return exec_->async_poll(fd, poll_mask);
         }
