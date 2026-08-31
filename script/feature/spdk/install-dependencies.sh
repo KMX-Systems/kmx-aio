@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-SPDK_BASE="${ROOT_DIR}/build/spdk-local"
+SPDK_BASE="${ROOT_DIR}/output/spdk-local"
 SPDK_SRC_DIR="${SPDK_BASE}/src"
 SPDK_INSTALL_DIR="${SPDK_BASE}/install-local"
 SPDK_REF="${SPDK_REF:-v24.09}"

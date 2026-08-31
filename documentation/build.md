@@ -140,15 +140,15 @@ If you use a non-default SPDK or OPC UA install prefix, pass those as well:
 ```bash
 qbs resolve -f source/source.qbs config:debug \
     project.full:true \
-    project.spdk_prefix:"$PWD/build/spdk-local/install-local" \
+    project.spdk_prefix:"$PWD/output/spdk-local/install-local" \
     project.opc_ua_vendored:true \
-    project.opc_ua_prefix:"$PWD/build/open62541/install-local"
+    project.opc_ua_prefix:"$PWD/output/open62541/install-local"
 
 qbs build -f source/source.qbs config:debug \
     project.full:true \
-    project.spdk_prefix:"$PWD/build/spdk-local/install-local" \
+    project.spdk_prefix:"$PWD/output/spdk-local/install-local" \
     project.opc_ua_vendored:true \
-    project.opc_ua_prefix:"$PWD/build/open62541/install-local"
+    project.opc_ua_prefix:"$PWD/output/open62541/install-local"
 ```
 
 You can still disable any specific gate explicitly even with `project.full:true`, for example:
@@ -176,18 +176,18 @@ If you installed OPC-UA with:
 bash script/feature/opc_ua/install-dependencies.sh
 ```
 
-then open62541 is installed under `build/open62541/install-local`.
+then open62541 is installed under `output/open62541/install-local`.
 The project default `project.opc_ua_prefix` now points to this local path.
 Pass the prefix explicitly during resolve/build so headers like `open62541.h` are found:
 
 ```bash
 qbs resolve -f source/source.qbs config:debug \
     project.enable_opc_ua:true \
-    project.opc_ua_prefix:"$PWD/build/open62541/install-local"
+    project.opc_ua_prefix:"$PWD/output/open62541/install-local"
 
 qbs build -f source/source.qbs config:debug \
     project.enable_opc_ua:true \
-    project.opc_ua_prefix:"$PWD/build/open62541/install-local"
+    project.opc_ua_prefix:"$PWD/output/open62541/install-local"
 ```
 
 ## SPDK Local Install Build
@@ -198,18 +198,18 @@ If you installed SPDK with:
 bash script/feature/spdk/install-dependencies.sh
 ```
 
-then SPDK is installed under `build/spdk-local/install-local`, not `/usr/local`.
+then SPDK is installed under `output/spdk-local/install-local`, not `/usr/local`.
 The project default `project.spdk_prefix` now points to this local path.
 Pass the prefix explicitly during resolve/build so headers like `spdk/bdev.h` are found:
 
 ```bash
 qbs resolve -f source/source.qbs config:debug \
     project.enable_spdk:true \
-    project.spdk_prefix:"$PWD/build/spdk-local/install-local"
+    project.spdk_prefix:"$PWD/output/spdk-local/install-local"
 
 qbs build -f source/source.qbs config:debug \
     project.enable_spdk:true \
-    project.spdk_prefix:"$PWD/build/spdk-local/install-local"
+    project.spdk_prefix:"$PWD/output/spdk-local/install-local"
 ```
 
 If you do not need SPDK for a build, disable it:
@@ -229,6 +229,34 @@ qbs build -f source/source.qbs config:debug \
 SPDK links ISA-L (`-lisal`, `-lisal_crypto`) when the SPDK feature is enabled,
 which matches current runtime and link requirements on supported environments.
 
+## Toolchain Profile Used By The Scripts
+
+A `qbs` command that names no profile uses the machine-wide `defaultProfile`, and a stale entry there
+fails every build with `Could not find selected C++ compiler`, naming neither the profile nor the
+project. The scripts under [script/](../script/) therefore choose the profile themselves, in
+[script/qbs-profile.sh](../script/qbs-profile.sh):
+
+1. `QBS_PROFILE=<name>` when set;
+2. otherwise the first of `gcc16`, `gcc-16` whose C++ compiler is actually installed - the test runners
+   put `/opt/gcc-16/lib64` on `LD_LIBRARY_PATH`, so GCC 16 is the toolchain they already assume;
+3. otherwise the machine default, which is what CI images want - but it is validated first, so a broken
+   default is reported with the list of profiles that would work instead.
+
+Each run prints the profile it settled on. To build with a different toolchain:
+
+```bash
+QBS_PROFILE=clang20 script/run-unit-tests.sh
+```
+
+Profiles themselves are inspected and repaired with `qbs config`:
+
+```bash
+qbs config --list profiles                       # everything configured
+qbs config --list profiles.<name>                # one profile
+qbs config profiles.<name>.cpp.cxxCompilerName clang++-20
+qbs config defaultProfile <name>
+```
+
 ## Persistent QBS Profile For Local SPDK
 
 To avoid repeating `project.spdk_prefix` on every command, create a dedicated profile once:
@@ -236,7 +264,7 @@ To avoid repeating `project.spdk_prefix` on every command, create a dedicated pr
 ```bash
 qbs config --add-profile kmx-spdk-local \
     project.enable_spdk true \
-    project.spdk_prefix "$PWD/build/spdk-local/install-local"
+    project.spdk_prefix "$PWD/output/spdk-local/install-local"
 ```
 
 Then use that profile for resolve/build:
@@ -271,6 +299,29 @@ Default gate state in [source/source.qbs](../source/source.qbs) (current project
 - `project.enable_someip:false`
 - `project.enable_cuda:false`
 
+## Instrumentation Gates
+
+Sanitizers and coverage are project properties like the feature gates, and apply to every product -
+libraries, samples and the test binary alike:
+
+- `project.enable_asan:true` — AddressSanitizer
+- `project.enable_ubsan:true` — UndefinedBehaviorSanitizer
+- `project.enable_tsan:true` — ThreadSanitizer
+- `project.enable_coverage:true` — gcov instrumentation (`--coverage`)
+
+ASan and TSan are mutually exclusive and the build says so rather than producing a binary that half
+works; UBSan and coverage combine with anything.
+
+The flags behind these switches live in the `kmx_instrumentation` QBS module under
+`source/qbs/modules/`, found through the `qbsSearchPaths` set in `source/source.qbs`. Every product
+depends on it and every library re-exports the dependency, which is what keeps a whole binary
+consistent: a static library compiled with `-fsanitize=address` needs the executable that links it to
+pull in the ASan runtime, and a coverage build that instruments only part of the tree leaves the rest
+out of the report rather than showing it as uncovered.
+
+`script/run-sanitizer-tests.sh` and `script/run-coverage.sh` drive these builds and set the runtime
+environment the resulting binaries need. See [Testing](testing.md) for both.
+
 ## Exported Feature Defines
 
 When enabled, `kmx-aio-lib` exports these compile-time defines:
@@ -284,6 +335,13 @@ When enabled, `kmx-aio-lib` exports these compile-time defines:
 - `KMX_AIO_FEATURE_MODBUS=1`
 - `KMX_AIO_FEATURE_SOMEIP=1`
 - `KMX_AIO_FEATURE_CUDA=1`
+
+The instrumentation gates export defines of their own, so code can tell how it was built:
+
+- `KMX_AIO_SANITIZER_ASAN=1`
+- `KMX_AIO_SANITIZER_UBSAN=1`
+- `KMX_AIO_SANITIZER_TSAN=1`
+- `KMX_AIO_COVERAGE=1`
 
 If QBS reports profile/config mismatch, run `qbs resolve` first with the same file/profile/config values.
 

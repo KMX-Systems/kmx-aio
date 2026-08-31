@@ -5,6 +5,8 @@
 #include <kmx/aio/readiness/tls/stream.hpp>
 #include <kmx/logger.hpp>
 
+#include <openssl/ssl.h>
+
 #include <atomic>
 #include <csignal>
 #include <memory>

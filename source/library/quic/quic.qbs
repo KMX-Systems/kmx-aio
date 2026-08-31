@@ -3,26 +3,13 @@ import qbs
 StaticLibrary {
     Depends { name: "cpp" }
     Depends { name: "kmx-aio-core" }
+    Depends { name: "kmx_instrumentation" }
 
     name: "kmx-aio-quic"
     condition: project.enable_quic
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.enableRtti: false
-    cpp.driverFlags: {
-        var flags = [];
-        if (project.enable_asan)
-        {
-            flags.push("-fsanitize=address");
-            flags.push("-fno-omit-frame-pointer");
-        }
-        if (project.enable_tsan)
-        {
-            flags.push("-fsanitize=thread");
-            flags.push("-fno-omit-frame-pointer");
-        }
-        return flags;
-    }
     cpp.defines: {
         var defs = [];
         if (project.enable_openonload)
@@ -39,30 +26,24 @@ StaticLibrary {
             defs.push("KMX_AIO_FEATURE_OPC_UA=1");
         if (project.enable_cuda)
             defs.push("KMX_AIO_FEATURE_CUDA=1");
-        if (project.enable_asan)
-            defs.push("KMX_AIO_SANITIZER_ASAN=1");
-        if (project.enable_tsan)
-            defs.push("KMX_AIO_SANITIZER_TSAN=1");
         return defs;
     }
     cpp.includePaths: [
         "../api",
         "../inc",
         "/usr/local/include",
-        "../../../build/lsquic/include",
-    ]
-    cpp.dynamicLibraries: [
-        product.sourceDirectory + "/../../../build/lsquic/build/src/liblsquic/liblsquic.a",
-        product.sourceDirectory + "/../../../build/boringssl/build/libssl.a",
-        product.sourceDirectory + "/../../../build/boringssl/build/libcrypto.a",
-        "z",
-    ]
+    ].concat(project.quic_include_paths).concat(project.tls_include_paths)
+    cpp.dynamicLibraries: project.quic_libraries
     install: true
     files: {
         var entries = [
             "../api/kmx/aio/quic/**.hpp",
             "../api/kmx/aio/completion/quic/**.hpp",
             "../inc/kmx/aio/quic/**.hpp",
+            // The transport's only translation unit: the stream read/write bodies, plus server ALPN
+            // selection, which is BoringSSL's job rather than lsquic's and which a server handshake
+            // fails without.
+            "../src/kmx/aio/quic/transport.cpp",
         ];
 
         if (project.enable_readiness)
@@ -74,6 +55,8 @@ StaticLibrary {
     Export {
         Depends { name: "cpp" }
         Depends { name: "kmx-aio-core" }
+        Depends { name: "kmx_instrumentation" }
         cpp.includePaths: [ product.sourceDirectory + "/../api" ]
+                .concat(project.quic_include_paths).concat(project.tls_include_paths)
     }
 }

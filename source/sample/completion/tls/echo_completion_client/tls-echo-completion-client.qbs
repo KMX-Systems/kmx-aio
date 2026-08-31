@@ -15,7 +15,7 @@ CppApplication {
         "api",
         "../../../../library/inc_dep"
     ]
-    cpp.dynamicLibraries: ["ssl", "crypto", "uring"]
+    cpp.dynamicLibraries: ["uring"].concat(project.tls_libraries)
     files: [
         "inc/kmx/aio/sample/tls/echo_completion_client/**.hpp",
         "src/kmx/aio/sample/tls/echo_completion_client/**.cpp",

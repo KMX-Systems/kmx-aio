@@ -69,7 +69,10 @@ namespace kmx::aio
     [[nodiscard]] inline constexpr bool would_block(const std::error_code& ec) noexcept
     {
         const auto value = ec.value();
-        return (value == EAGAIN) || (value == EWOULDBLOCK);
+        // LCOV_EXCL_BR_LINE: EAGAIN and EWOULDBLOCK are the same number on Linux, so the second
+        // comparison can never be the one that decides. Both are named because they are not the same
+        // number everywhere.
+        return (value == EAGAIN) || (value == EWOULDBLOCK); // LCOV_EXCL_BR_LINE
     }
 
     /// @brief Helper to check if an error code represents a non-blocking operation that would block.
@@ -77,7 +80,8 @@ namespace kmx::aio
     /// @return `true` if the errno represents a would-block condition.
     [[nodiscard]] inline constexpr bool would_block(const int err) noexcept
     {
-        return (err == EAGAIN) || (err == EWOULDBLOCK);
+        // LCOV_EXCL_BR_LINE: as above - one value, two names, on this platform.
+        return (err == EAGAIN) || (err == EWOULDBLOCK); // LCOV_EXCL_BR_LINE
     }
 
     /// @brief Helper to create a std::error_code from the current errno.

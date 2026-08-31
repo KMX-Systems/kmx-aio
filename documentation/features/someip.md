@@ -202,11 +202,11 @@ qbs build -f source/source.qbs config:debug \
     project.enable_someip:true \
     project.someip_link_backend:true \
     project.someip_vendored:true \
-    project.someip_prefix:"$PWD/build/someip/install-local" \
+    project.someip_prefix:"$PWD/output/someip/install-local" \
     -j"$(nproc)"
 ```
 
-Install vsomeip from source (builds and installs into `build/someip/install-local`):
+Install vsomeip from source (builds and installs into `output/someip/install-local`):
 
 ```bash
 bash script/feature/someip/install-dependencies.sh

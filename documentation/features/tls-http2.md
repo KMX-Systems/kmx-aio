@@ -7,6 +7,40 @@ TLS streams are exposed through `kmx::aio::tls::stream<InnerStream>` and availab
 - BoringSSL-backed
 - Memory BIO state machine design
 - Supports ALPN for protocol negotiation (for example HTTP/2)
+- The state machine itself lives in the non-template base `kmx::aio::tls::basic_stream`: SSL and BIO
+  ownership, the handshake, the record read and write loops and the ALPN configuration name no
+  transport, so they are compiled once rather than per instantiation. `tls::stream<InnerStream>` adds
+  the transport it holds and the two forwarding calls that move bytes to and from it.
+
+### Threading
+
+One reader and one writer may run concurrently on the same stream, from different threads — `read()` in
+one coroutine while `write()` or `write_all()` runs in another. That is what a full-duplex protocol
+needs, and what a raw `SSL` cannot give: OpenSSL forbids two threads touching one `SSL` at a time, and
+its memory BIOs are no safer.
+
+Three locks inside `basic_stream` are what make it hold:
+
+| Lock | Covers | Held across a suspension |
+| :--- | :--- | :--- |
+| `engine_mutex_` | every `SSL_*` and `BIO_*` call | no — crypto only, never I/O |
+| `read_pump_mutex_` | a transport read *and* the BIO write that files it | yes |
+| `write_pump_mutex_` | taking a record out of the write BIO *and* putting it on the wire | yes |
+
+The two pump locks are the ones that matter for correctness rather than for crashes. Without the read
+pump lock, two coroutines each take a slice of the byte stream and hand them to OpenSSL in whatever
+order they finished, which decrypts as garbage. Without the write pump lock, records interleave on the
+wire and the peer's session breaks instead of this one.
+
+Not supported:
+
+- **Two concurrent readers, or two concurrent writers.** They will not corrupt the session, but they
+  will split the byte stream between them. The supported shape is one of each.
+- **`handshake()` alongside `read()` or `write()`.** It drives both directions and has to finish first.
+- **`native_handle()` while another coroutine is reading or writing.** The raw `SSL` is outside all of
+  the above.
+
+Serialization costs two uncontended mutex acquisitions per record on the half-duplex path.
 
 ## HTTP/2
 

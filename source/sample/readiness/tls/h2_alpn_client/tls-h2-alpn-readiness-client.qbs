@@ -13,10 +13,7 @@ CppApplication {
         "api",
         "../../../../library/inc_dep",
     ]
-    cpp.dynamicLibraries: [
-        "ssl",
-        "crypto",
-    ]
+    cpp.dynamicLibraries: project.tls_libraries
     files: [
         "inc/kmx/aio/sample/tls/h2_alpn_client/**.hpp",
         "src/kmx/aio/sample/tls/h2_alpn_client/**.cpp",

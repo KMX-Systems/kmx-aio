@@ -74,8 +74,16 @@ namespace kmx::aio
             const bool current_throttled = throttled_.load(std::memory_order_acquire);
 
             const bool throttled_before_push = compute_throttled(occ, low, high, current_throttled);
+            // LCOV_EXCL_START
+            // A repair for a race, and reachable only through one. try_push, try_pop and
+            // set_backpressure each leave the flag agreeing with the occupancy they just observed, so a
+            // single-threaded caller never finds them apart on entry. They can only disagree when a
+            // consumer pops, or a watermark moves, between the occupancy read above and the flag read
+            // beside it - and then the flag is stale and this store is what corrects it before the
+            // decision below is taken on it.
             if (throttled_before_push != current_throttled)
                 throttled_.store(throttled_before_push, std::memory_order_release);
+            // LCOV_EXCL_STOP
 
             if (throttled_before_push)
                 return false;
@@ -108,7 +116,13 @@ namespace kmx::aio
 
             const auto occ_after_pop = (head - next_tail) & mask_;
             const auto low = low_watermark_.load(std::memory_order_acquire);
-            if (occ_after_pop <= low)
+            // Read before the exchange, and only exchange when the flag is actually set. The exchange
+            // is a locked read-modify-write the processor pays for whether or not it changes anything,
+            // and the common case on this path - a consumer keeping up, so the ring sits well below the
+            // low watermark - is clearing a flag that was never raised. The plain load costs nothing on
+            // the same cache line the pop has already touched, and the exchange still settles any race
+            // with a producer raising the flag, because it is what publishes the clear.
+            if ((occ_after_pop <= low) && throttled_.load(std::memory_order_acquire))
             {
                 const bool was_throttled = throttled_.exchange(false, std::memory_order_acq_rel);
                 if (was_throttled)

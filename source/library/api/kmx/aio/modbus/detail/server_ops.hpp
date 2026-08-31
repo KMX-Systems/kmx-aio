@@ -27,8 +27,15 @@ namespace kmx::aio::modbus::detail
     class server_ops
     {
     protected:
+        /// @brief Serves one request from @p stream.
+        /// @return True when the exchange completed and the connection can carry another request;
+        ///         false when it cannot - the peer closed, an I/O error occurred, or the frame was
+        ///         malformed, which leaves the stream positioned mid-frame and unusable. The caller
+        ///         must stop reading from the connection when this returns false: looping on it
+        ///         instead spins on a closed socket, or waits forever on one that will never speak
+        ///         again, and either way the task never finishes.
         template <typename StreamT>
-        [[nodiscard]] task<void>
+        [[nodiscard]] task<bool>
         process_request(StreamT& stream, const server_config& config) noexcept(false)
         {
             auto* self = static_cast<ImplT*>(this);
@@ -39,19 +46,21 @@ namespace kmx::aio::modbus::detail
                 auto span = std::span<char>(reinterpret_cast<char*>(hdr_buf.data()), hdr_buf.size());
                 const auto r = co_await detail::read_exactly(stream, span);
                 if (!r)
-                    co_return;
+                    co_return false;
             }
 
             const auto hdr = frame::decode_mbap(hdr_buf);
             if (!hdr)
-                co_return;
+                co_return false;
 
+            // The PDU that follows this header has not been read, so the stream is left mid-frame and
+            // there is no way to resynchronise: the connection ends here.
             if ((config.unit_id != broadcast_unit_id) && (hdr->unit_id != config.unit_id))
-                co_return;
+                co_return false;
 
             // Phase 2: Read PDU
             if (hdr->length < 1u)
-                co_return;
+                co_return false;
 
             const std::size_t pdu_len = static_cast<std::size_t>(hdr->length) - 1u;
             std::vector<std::uint8_t> pdu(pdu_len);
@@ -60,11 +69,11 @@ namespace kmx::aio::modbus::detail
             {
                 auto span = std::span<char>(reinterpret_cast<char*>(pdu.data()), pdu.size());
                 if (const auto r = co_await detail::read_exactly(stream, span); !r)
-                    co_return;
+                    co_return false;
             }
 
             if (pdu.empty())
-                co_return;
+                co_return false;
 
             // Phase 3: Dispatch to handler
             const std::uint8_t request_fc = pdu[0];
@@ -89,7 +98,9 @@ namespace kmx::aio::modbus::detail
             const auto send_view = std::span<const char>(
                 reinterpret_cast<const char*>(response_adu.data()), response_adu.size());
             if (const auto r = co_await stream.write_all(send_view); !r)
-                co_return;
+                co_return false;
+
+            co_return true;
         }
     };
 

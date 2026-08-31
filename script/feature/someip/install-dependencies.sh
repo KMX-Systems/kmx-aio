@@ -401,7 +401,7 @@ ensure_dependencies() {
 }
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
-BUILD_DIR="$ROOT_DIR/build/someip"
+BUILD_DIR="$ROOT_DIR/output/someip"
 SRC_DIR="$BUILD_DIR/src"
 INSTALL_DIR="$BUILD_DIR/install-local"
 VSOMEIP_REF="${VSOMEIP_REF:-3.4.10}"

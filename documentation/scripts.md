@@ -11,6 +11,9 @@ These are the top-level scripts requested for full documentation.
 | `script/install-dependencies.sh` | Global dependency orchestrator | Sources `script/feature/common.sh`, iterates `feature_list`, and runs each feature `install-dependencies.sh` only when the feature is enabled via `KMX_ENABLE_<FEATURE>` or default state. |
 | `script/run-unit-tests.sh` | Global unit-test orchestrator | Resolves/builds `source/source.qbs` in `config:debug` using feature args from `build_qbs_feature_args`, then runs enabled feature `run-unit-tests.sh` scripts. |
 | `script/run-integration-tests.sh` | Global integration-test orchestrator | Runs enabled feature `run-integration-tests.sh` scripts against pre-built binaries. It auto-detects active features from `kmx-aio-test --list-tags` when `KMX_ENABLE_*` vars are not explicitly set. |
+| `script/run-sanitizer-tests.sh` | Sanitizer runner | Takes `asan`, `ubsan`, `asan+ubsan` (the default), `tsan` or `tsan+ubsan`. Builds into a tree of its own (`output/asan-ubsan`, ...) with the matching `project.enable_*` properties, sets `ASAN_OPTIONS`/`UBSAN_OPTIONS`/`TSAN_OPTIONS`/`LSAN_OPTIONS`, then delegates to `script/run-unit-tests.sh`. |
+| `script/run-benchmarks.sh` | Benchmark runner | Builds `kmx-aio-benchmark` in `config:release` with readiness and completion enabled, pins the process to one CPU per physical core, reports the CPU governor, and passes its arguments (`--filter`, `--scale`, `--repeats`) through to the binary. See [Benchmarking](benchmarking.md). |
+| `script/run-coverage.sh` | Coverage runner | Builds with `project.enable_coverage:true` into `output/coverage`, runs the unit tests (`--integration` adds the integration suites), and writes an lcov tracefile, HTML report and per-file summary to `output/coverage-report`. Falls back to plain `gcov` listings when lcov is absent, or on `--gcov-only`. |
 
 ## Feature Enablement Model
 
@@ -27,6 +30,10 @@ These are the top-level scripts requested for full documentation.
   - Explicitly provided `KMX_ENABLE_*` values always override auto-detected values.
 - Dependency propagation:
   - Enabling `modbus` or `v4l2` forces `project.enable_readiness:true` in generated QBS args.
+- Build tree location:
+  - `KMX_BUILD_ROOT` overrides the `output/` build root that `qbs_build_dir_args` points at, and restricts the `kmx-aio-test` search to that tree so an instrumented run cannot pick up a plain binary from `output/debug`. The sanitizer and coverage runners set it.
+- Instrumentation propagation:
+  - `KMX_SANITIZERS` (`asan`, `ubsan`, `tsan`, or a `+` combination) and `KMX_COVERAGE` become `qbs_instrumentation_args`, which every script that drives qbs passes along. Without that, a feature script rebuilding the tree for its own feature would resolve the project uninstrumented and replace the binary under test.
 
 ## Per-Feature Script Matrix
 
@@ -41,12 +48,12 @@ All current feature script directories and behavior:
 | `http2` | `script/feature/http2/install-dependencies.sh` | `script/feature/http2/run-unit-tests.sh` (`[http2]~[integration]`) | `script/feature/http2/run-integration-tests.sh` (`[http2][integration]`) | No additional dependency install step required. |
 | `http3` | `script/feature/http3/install-dependencies.sh` | `script/feature/http3/run-unit-tests.sh` (`[http3]~[integration]`) | `script/feature/http3/run-integration-tests.sh` (`[http3][integration]`) | Installer delegates to QUIC dependency bootstrap (BoringSSL/lsquic path). |
 | `modbus` | `script/feature/modbus/install-dependencies.sh` | `script/feature/modbus/run-unit-tests.sh` (`[modbus]~[integration]`) | `script/feature/modbus/run-integration-tests.sh` | Integration script creates/reuses TLS certs under `/tmp/kmx_modbus_certs_*`, runs `[modbus][integration]~[tls]`, then executes TLS tests in isolated invocations. |
-| `opc_ua` | `script/feature/opc_ua/install-dependencies.sh` | `script/feature/opc_ua/run-unit-tests.sh` (`[opc_ua]~[integration]`) | `script/feature/opc_ua/run-integration-tests.sh` (`[opc_ua][integration]`) | Bootstraps local `open62541` into `build/open62541/install-local`. |
+| `opc_ua` | `script/feature/opc_ua/install-dependencies.sh` | `script/feature/opc_ua/run-unit-tests.sh` (`[opc_ua]~[integration]`) | `script/feature/opc_ua/run-integration-tests.sh` (`[opc_ua][integration]`) | Bootstraps local `open62541` into `output/open62541/install-local`. |
 | `openonload` | `script/feature/openonload/install-dependencies.sh` | `script/feature/openonload/run-unit-tests.sh` (`[openonload]~[integration]`) | `script/feature/openonload/run-integration-tests.sh` (`[openonload][integration]`) | Verifies OpenOnload prerequisites and host support state. |
-| `quic` | `script/feature/quic/install-dependencies.sh` | `script/feature/quic/run-unit-tests.sh` | `script/feature/quic/run-integration-tests.sh` (`[quic][readiness][integration][smoke][slow]` and `[quic][http3][readiness][integration][smoke][slow]`) | Unit script currently prints no dedicated QUIC unit tests. Install script bootstraps BoringSSL + lsquic artifacts. |
+| `quic` | `script/feature/quic/install-dependencies.sh` | `script/feature/quic/run-unit-tests.sh` | `script/feature/quic/run-integration-tests.sh` (`[quic][readiness][integration][smoke][slow]` and `[quic][http3][readiness][integration][smoke][slow]`) | Unit script currently prints no dedicated QUIC unit tests. Install script uses an installed BoringSSL/lsquic when new enough, otherwise builds the pinned versions under `output/`. |
 | `readiness` | `script/feature/readiness/install-dependencies.sh` | `script/feature/readiness/run-unit-tests.sh` (`[readiness]~[integration]`) | `script/feature/readiness/run-integration-tests.sh` (`[readiness][integration]`) | No additional dependency install step required. |
 | `someip` | `script/feature/someip/install-dependencies.sh` | `script/feature/someip/run-unit-tests.sh` (`[someip]~[integration]`) | `script/feature/someip/run-integration-tests.sh` (`[someip][integration]`) | Unit/integration scripts perform SOME/IP-enabled `qbs resolve`/`qbs build` before tests. Installer can prompt to install missing distro packages and builds local vsomeip prefix. |
-| `spdk` | `script/feature/spdk/install-dependencies.sh` | `script/feature/spdk/run-unit-tests.sh` (`[spdk]~[integration]`) | `script/feature/spdk/run-integration-tests.sh` (`[spdk][integration]`) | Installs build deps and bootstraps local SPDK under `build/spdk-local/install-local`. |
+| `spdk` | `script/feature/spdk/install-dependencies.sh` | `script/feature/spdk/run-unit-tests.sh` (`[spdk]~[integration]`) | `script/feature/spdk/run-integration-tests.sh` (`[spdk][integration]`) | Installs build deps and bootstraps local SPDK under `output/spdk-local/install-local`. |
 | `v4l2` | `script/feature/v4l2/install-dependencies.sh` | `script/feature/v4l2/run-unit-tests.sh` (`[v4l2][model]`) | `script/feature/v4l2/run-integration-tests.sh` | Integration script currently reports no dedicated V4L2 integration tests. |
 
 ## Additional Feature-Specific Utilities
@@ -74,6 +81,13 @@ Run all enabled integration suites on pre-built artifacts:
 
 ```bash
 bash script/run-integration-tests.sh
+```
+
+Run the unit suites under sanitizers, or with coverage:
+
+```bash
+bash script/run-sanitizer-tests.sh asan+ubsan
+bash script/run-coverage.sh
 ```
 
 Enable selected features for script-driven workflows:

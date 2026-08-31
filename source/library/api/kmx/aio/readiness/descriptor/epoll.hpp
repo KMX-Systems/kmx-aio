@@ -2,6 +2,7 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <span>
     #include <vector>
 
     #include <kmx/aio/file_descriptor.hpp>
@@ -49,6 +50,19 @@ namespace kmx::aio::readiness::descriptor
         /// @param fd The file descriptor to stop monitoring.
         /// @return An error_code on failure, or void on success.
         [[nodiscard]] result_t remove_monitored_fd(const fd_t fd) noexcept;
+
+        /// @brief Wait for events on monitored file descriptors, filling a caller-owned buffer.
+        /// @param buffer Storage the kernel writes the ready events into.
+        /// @param timeout_ms Timeout in milliseconds (-1 = indefinite).
+        /// @return The number of events written to @p buffer, or an error_code on failure.
+        /// @note For an event loop that waits over and over on the same buffer. The vector overload
+        ///       below resizes its argument down to the number of events it received, so the next call
+        ///       grows it back - and growing a vector value-initializes the elements it adds, which
+        ///       means memsetting the whole buffer before every wait for values the kernel is about to
+        ///       overwrite anyway. With max_events at its default that is twelve kilobytes of zeroing
+        ///       per iteration of the loop.
+        [[nodiscard]] std::expected<std::size_t, std::error_code> wait_events(std::span<epoll_event> buffer,
+                                                                              const int timeout_ms = -1) noexcept;
 
         /// @brief Wait for events on monitored file descriptors.
         /// @param events Resulted vector of epoll events.

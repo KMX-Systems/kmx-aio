@@ -57,7 +57,10 @@ namespace kmx::aio
             },
             ip);
 
-        return ok ? std::string(buffer) : std::string {};
+        // LCOV_EXCL_BR_LINE: inet_ntop fails only on an unknown family or a buffer too small, and the
+        // visitor above passes AF_INET or AF_INET6 with an INET6_ADDRSTRLEN buffer. The empty string
+        // stays as the answer for a caller that somehow gets neither.
+        return ok ? std::string(buffer) : std::string {}; // LCOV_EXCL_BR_LINE
     }
 
     std::expected<socket_address, std::error_code> make_socket_address(const ip_address_t ip, const port_t port) noexcept
@@ -106,8 +109,16 @@ namespace kmx::aio
         {
             case AF_INET:
             {
+                // LCOV_EXCL_START
+                // Unreachable on Linux, where sockaddr and sockaddr_in are both 16 bytes: the
+                // `length < sizeof(sockaddr)` test at the top of this function has already rejected
+                // everything this one would catch. It is kept because that equality is a property of
+                // the platform, not of the protocol. aio/basic_types_test.cpp pins it with a
+                // STATIC_REQUIRE, so a platform where the two differ fails the test rather than
+                // silently losing the check.
                 if (address.length < sizeof(::sockaddr_in))
                     return std::unexpected(error_from_errno(EINVAL));
+                // LCOV_EXCL_STOP
 
                 const auto* addr4 = reinterpret_cast<const ::sockaddr_in*>(&address.storage);
                 auto& ip4 = result.ip.emplace<ipv4_address_owned_t>();

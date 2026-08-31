@@ -6,6 +6,7 @@
     #include <atomic>
     #include <cassert>
     #include <cstddef>
+    #include <cstdint>
     #include <cstdlib>
     #include <cstring>
     #include <vector>
@@ -52,6 +53,7 @@ namespace kmx::aio
             slot_count_(other.slot_count_),
             storage_(std::move(other.storage_)),
             free_head_(other.free_head_),
+            remote_free_head_(other.remote_free_head_.exchange(nullptr, std::memory_order_acq_rel)),
             allocated_(other.allocated_)
         {
             other.free_head_ = nullptr;
@@ -67,6 +69,7 @@ namespace kmx::aio
                 slot_count_ = other.slot_count_;
                 storage_ = std::move(other.storage_);
                 free_head_ = other.free_head_;
+                remote_free_head_.store(other.remote_free_head_.exchange(nullptr, std::memory_order_acq_rel), std::memory_order_relaxed);
                 allocated_ = other.allocated_;
                 other.free_head_ = nullptr;
                 other.allocated_ = 0u;
@@ -79,8 +82,12 @@ namespace kmx::aio
 
         /// @brief Allocates a single slot from the slab.
         /// @return Pointer to the allocated memory, or nullptr if the slab is exhausted.
+        /// @note Owning thread only.
         [[nodiscard]] void* allocate() noexcept
         {
+            if (free_head_ == nullptr)
+                adopt_remote_free_list();
+
             if (free_head_ == nullptr)
                 return nullptr;
 
@@ -93,6 +100,8 @@ namespace kmx::aio
         /// @brief Returns a previously allocated slot to the slab.
         /// @param ptr Pointer that was returned by a previous call to allocate().
         /// @warning Behavior is undefined if ptr was not allocated from this slab.
+        /// @warning Owning thread only. A slot freed from any other thread must go through
+        ///          deallocate_remote(), which is what makes the free list safe to share.
         void deallocate(void* const ptr) noexcept
         {
             if (ptr == nullptr)
@@ -104,6 +113,29 @@ namespace kmx::aio
             --allocated_;
         }
 
+        /// @brief Returns a slot to the slab from a thread that does not own it.
+        /// @param ptr Pointer that was returned by a previous call to allocate().
+        /// @details Pushed onto a separate lock-free list that the owning thread adopts the next time
+        ///          its own list runs dry. The owner's free list is never touched from here, so the
+        ///          single-threaded fast path stays exactly as fast as it was.
+        /// @note This is what a coroutine frame needs: a frame is allocated wherever the coroutine was
+        ///       created and destroyed wherever it last ran, and for anything spanning an executor
+        ///       boundary those are different threads. Sending such a frame to ::operator delete - or
+        ///       to another thread's free list - corrupts the heap.
+        /// @warning Behavior is undefined if ptr was not allocated from this slab.
+        void deallocate_remote(void* const ptr) noexcept
+        {
+            if (ptr == nullptr)
+                return;
+
+            auto* const slot = static_cast<slot_header*>(ptr);
+            auto* head = remote_free_head_.load(std::memory_order_relaxed);
+            do
+            {
+                slot->next = head;
+            } while (!remote_free_head_.compare_exchange_weak(head, slot, std::memory_order_release, std::memory_order_relaxed));
+        }
+
         /// @brief Returns the fixed slot size (including alignment padding).
         [[nodiscard]] std::size_t slot_size() const noexcept { return slot_size_; }
 
@@ -111,6 +143,8 @@ namespace kmx::aio
         [[nodiscard]] std::size_t slot_count() const noexcept { return slot_count_; }
 
         /// @brief Returns the number of currently allocated slots.
+        /// @note Slots freed by another thread are counted as still allocated until the owning thread
+        ///       adopts them, which it does the next time it needs a slot.
         [[nodiscard]] std::size_t allocated() const noexcept { return allocated_; }
 
         /// @brief Returns the number of free slots remaining.
@@ -130,6 +164,22 @@ namespace kmx::aio
         }
 
     private:
+        /// @brief Moves everything freed by other threads onto this thread's free list.
+        /// @details Taken in one exchange, so a remote deallocation racing with this either lands on
+        ///          the list being taken or starts the next one.
+        void adopt_remote_free_list() noexcept
+        {
+            auto* slot = remote_free_head_.exchange(nullptr, std::memory_order_acquire);
+            while (slot != nullptr)
+            {
+                auto* const next = slot->next;
+                slot->next = free_head_;
+                free_head_ = slot;
+                --allocated_;
+                slot = next;
+            }
+        }
+
         /// @brief Rounds `value` up to the nearest multiple of `alignment`.
         [[nodiscard]] static constexpr std::size_t align_up(const std::size_t value, const std::size_t alignment) noexcept
         {
@@ -146,7 +196,80 @@ namespace kmx::aio
         std::size_t slot_count_;
         std::vector<std::byte> storage_;
         slot_header* free_head_ {};
+        /// @brief Slots returned by threads other than the owner, waiting to be adopted.
+        std::atomic<slot_header*> remote_free_head_ {};
         std::size_t allocated_ {};
+    };
+
+    namespace detail
+    {
+        /// @brief Everything the coroutine-frame allocator keeps per thread.
+        /// @details One thread-local block holds both the slab this thread allocates frames from and
+        ///          the counters saying where those frames came from, so the allocation path performs a
+        ///          single thread-local lookup rather than one per item.
+        /// @note The counters are atomic only so that the statistics may be read from another thread
+        ///       without a data race. They are written exclusively by their owning thread, and with a
+        ///       plain relaxed load-add-store rather than a read-modify-write: a locked increment of a
+        ///       process-wide counter costs more than the slab allocation it is counting, and puts
+        ///       every executor thread on the same cache line to pay for it.
+        /// @note A block is never destroyed. It is small, and outliving its thread is what lets the
+        ///       process-wide totals stay correct - and readable - after that thread has exited,
+        ///       without any teardown ordering to get wrong on a path that runs for every coroutine
+        ///       frame. One block is kept per thread that has allocated a frame.
+        struct thread_state
+        {
+            /// @brief Counts one coroutine frame served from the slab.
+            void count_slab_allocation() noexcept
+            {
+                slab_allocations.store(slab_allocations.load(std::memory_order_relaxed) + 1u, std::memory_order_relaxed);
+            }
+
+            /// @brief Counts one coroutine frame served from the heap.
+            void count_heap_allocation() noexcept
+            {
+                heap_allocations.store(heap_allocations.load(std::memory_order_relaxed) + 1u, std::memory_order_relaxed);
+            }
+
+            /// @brief The slab this thread allocates coroutine frames from, if one was installed.
+            slab_allocator* allocator {};
+            /// @brief Frames this thread took from its slab.
+            std::atomic_uint64_t slab_allocations {};
+            /// @brief Frames this thread took from the heap.
+            std::atomic_uint64_t heap_allocations {};
+            /// @brief Next block in the process-wide registry.
+            thread_state* next {};
+        };
+
+        /// @brief Returns the calling thread's block, creating and registering it on first use.
+        [[nodiscard]] thread_state& current_thread_state() noexcept;
+
+        /// @brief Which of the per-thread counters a process-wide total refers to.
+        enum class counter_kind : std::uint8_t
+        {
+            slab, ///< Frames served from a thread's slab.
+            heap  ///< Frames served from the heap.
+        };
+    } // namespace detail
+
+    /// @brief A process-wide allocation total, summed from the per-thread counters when read.
+    /// @details Reads like the atomic counter it replaces - `load()` with an optional memory order -
+    ///          but there is no single location being read: the count is spread across the threads that
+    ///          did the allocating, which is what keeps the allocation path free of shared writes.
+    class allocation_counter
+    {
+    public:
+        /// @brief Binds the total to one of the per-thread counters.
+        /// @param kind Which counter this total sums.
+        explicit constexpr allocation_counter(const detail::counter_kind kind) noexcept: kind_(kind) {}
+
+        /// @brief Sums the counter across every thread that has allocated a coroutine frame.
+        /// @param order Ignored; accepted so this reads like the atomic it replaces.
+        /// @return The process-wide total.
+        [[nodiscard]] std::uint64_t load(std::memory_order order = std::memory_order_relaxed) const noexcept;
+
+    private:
+        /// @brief Which per-thread counter is summed.
+        detail::counter_kind kind_;
     };
 
     /// @brief Sets the thread-local instance of the slab allocator.
@@ -155,17 +278,16 @@ namespace kmx::aio
     /// @brief Retrieves the thread-local instance of the slab allocator.
     [[nodiscard]] slab_allocator* get_thread_allocator() noexcept;
 
-    /// @brief Global counters describing coroutine-frame allocation routing.
+    /// @brief Process-wide counters describing coroutine-frame allocation routing.
+    /// @details Each total is summed from the per-thread counters at the moment it is read, so a
+    ///          reference kept from an earlier call keeps reporting current values.
     struct allocator_statistics
     {
-        std::atomic_uint64_t slab_allocations {};
-        std::atomic_uint64_t heap_allocations {};
+        allocation_counter slab_allocations {detail::counter_kind::slab};
+        allocation_counter heap_allocations {detail::counter_kind::heap};
 
-        void reset() noexcept
-        {
-            slab_allocations.store(0u, std::memory_order_relaxed);
-            heap_allocations.store(0u, std::memory_order_relaxed);
-        }
+        /// @brief Zeroes the totals, including the counts every thread is holding.
+        void reset() noexcept;
     };
 
     /// @brief Returns the process-wide allocator statistics.

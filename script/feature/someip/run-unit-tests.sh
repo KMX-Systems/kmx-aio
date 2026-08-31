@@ -8,9 +8,9 @@ source "$script_dir/../common.sh"
 echo "==> Building SOME/IP-enabled unit tests"
 (
 	cd "$repo_root/source"
-	qbs resolve -f source.qbs "${qbs_build_dir_args[@]}" config:debug project.enable_someip:true
-	qbs build -f source.qbs "${qbs_build_dir_args[@]}" config:debug project.enable_someip:true -j"$(nproc)"
+	qbs resolve -f source.qbs "${qbs_build_dir_args[@]}" "${qbs_profile_args[@]}" config:debug project.enable_someip:true "${qbs_instrumentation_args[@]}"
+	qbs build -f source.qbs "${qbs_build_dir_args[@]}" "${qbs_profile_args[@]}" config:debug project.enable_someip:true "${qbs_instrumentation_args[@]}" -j"$(nproc)"
 )
 
 test_bin="$(find_test_bin)"
-run_with_local_gcc_runtime timeout 90s "$test_bin" "[someip]~[integration]"
+run_catch_tests timeout 90s "$test_bin" "[someip]~[integration]"

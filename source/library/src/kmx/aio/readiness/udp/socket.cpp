@@ -2,6 +2,8 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include "kmx/aio/readiness/udp/socket.hpp"
 
+#include "kmx/aio/error_code.hpp"
+
 #include <cerrno>
 
 namespace kmx::aio::readiness::udp
@@ -31,7 +33,8 @@ namespace kmx::aio::readiness::udp
 
             if (would_block(errno))
             {
-                co_await exec_.wait_io(fd_.get(), event_type::read);
+                if (!co_await exec_.wait_io(fd_.get(), event_type::read))
+                    co_return std::unexpected(to_std_error_code(error_code::operation_cancelled));
                 continue;
             }
 
@@ -52,7 +55,8 @@ namespace kmx::aio::readiness::udp
 
             if (would_block(errno))
             {
-                co_await exec_.wait_io(fd_.get(), event_type::write);
+                if (!co_await exec_.wait_io(fd_.get(), event_type::write))
+                    co_return std::unexpected(to_std_error_code(error_code::operation_cancelled));
                 continue;
             }
 

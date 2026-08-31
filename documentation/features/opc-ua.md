@@ -68,7 +68,7 @@ bash script/feature/opc_ua/install-dependencies.sh
 qbs build -f source/source.qbs config:debug -j"$(nproc)" \
     project.enable_opc_ua:true \
     project.opc_ua_vendored:true \
-    project.opc_ua_prefix:"$PWD/build/open62541/install-local"
+    project.opc_ua_prefix:"$PWD/output/open62541/install-local"
 ```
 
 Run fast service tests (excluding slow integration cases):

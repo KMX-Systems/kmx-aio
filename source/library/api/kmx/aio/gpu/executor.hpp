@@ -104,6 +104,16 @@ namespace kmx::aio::gpu
         /// @param coro The coroutine to spawn.
         /// @details The task is appended to the executor's work queue and will be
         ///          resumed by the I/O thread when GPU events it awaits fire.
+        /// @warning A lambda coroutine does not own its closure: the closure object is a temporary
+        ///          destroyed at the end of the full-expression, while the coroutine frame keeps a
+        ///          pointer into it. Spawning one directly - spawn([&]() -> task<void> { ... }()) -
+        ///          therefore leaves every capture dangling from the first suspension onwards. Give
+        ///          the lambda a name that outlives the run, or spawn a coroutine function instead,
+        ///          whose parameters are copied into the frame:
+        ///          @code
+        ///          auto body = [&]() -> task<void> { ... };   // outlives exec.run()
+        ///          exec.spawn(body());
+        ///          @endcode
         template <typename T>
         void spawn(task<T> coro) noexcept(false);
 

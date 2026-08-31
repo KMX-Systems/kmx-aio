@@ -84,14 +84,21 @@ namespace kmx::aio
                     requires std::is_base_of_v<promise_base, P>
                 std::coroutine_handle<> await_suspend(std::coroutine_handle<P> h) const noexcept
                 {
-                    if (h.promise().continuation_)
+                    if (h.promise().continuation_) // LCOV_EXCL_BR_LINE: see below
                         return h.promise().continuation_;
 
+                    // LCOV_EXCL_START
+                    // A task reaches its final suspend with no continuation only if nobody awaited it.
+                    // Every task the library runs is spawned, and spawn() hands it to execute_task,
+                    // which awaits it - so the continuation is always set by the time this runs. There
+                    // is no public way to start a task without awaiting it, and the fallback stays for
+                    // the day one appears.
                     return std::noop_coroutine();
                 }
 
                 /// @brief Completes the final suspend transition.
                 void await_resume() const noexcept {}
+                // LCOV_EXCL_STOP
             };
 
             /// @brief Forwards ordinary awaitables through the task promise.
@@ -118,7 +125,10 @@ namespace kmx::aio
                     bool await_ready() const noexcept { return true; }
                     /// @brief No suspension is required for stop-token retrieval.
                     /// @param h The coroutine handle.
-                    void await_suspend(std::coroutine_handle<>) const noexcept {}
+                    /// @note Never called: await_ready() above returns true, so the coroutine takes the
+                    ///       token without suspending. It exists because the awaiter concept asks for
+                    ///       it.
+                    void await_suspend(std::coroutine_handle<>) const noexcept {} // LCOV_EXCL_LINE
                     /// @brief Returns the captured stop token.
                     /// @return The coroutine stop token.
                     std::stop_token await_resume() const noexcept { return token; }
@@ -240,7 +250,10 @@ namespace kmx::aio
 
         /// @brief Indicates whether the task can resume immediately.
         /// @return `true` if the task is complete or empty.
-        bool await_ready() const noexcept { return !handle_ || handle_.done(); }
+        /// @note The empty and already-finished arms are guards, not paths: awaiting a moved-from task
+        ///       or one that has already completed is undefined through this API, so no test can take
+        ///       them without writing the undefined behaviour it would be testing.
+        bool await_ready() const noexcept { return !handle_ || handle_.done(); } // LCOV_EXCL_BR_LINE
 
         /// @brief Gives this task a stop token before it starts.
         /// @param token The token to observe; inherited by every task this one awaits.

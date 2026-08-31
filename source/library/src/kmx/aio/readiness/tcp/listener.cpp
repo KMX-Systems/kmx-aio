@@ -2,6 +2,8 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include "kmx/aio/readiness/tcp/listener.hpp"
 
+#include "kmx/aio/error_code.hpp"
+
 #include "kmx/logger.hpp"
 #include <netinet/in.h>
 
@@ -62,7 +64,8 @@ namespace kmx::aio::readiness::tcp
 
             if (would_block(accept_res.error()))
             {
-                co_await exec_.wait_io(fd_.get(), event_type::read);
+                if (!co_await exec_.wait_io(fd_.get(), event_type::read))
+                    co_return std::unexpected(to_std_error_code(error_code::operation_cancelled));
                 continue;
             }
 

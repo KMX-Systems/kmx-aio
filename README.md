@@ -118,6 +118,7 @@ Quick reference showing which APIs are available in each execution model:
 * [Setup and Dependencies](documentation/setup.md)
 * [Build and Feature Gates](documentation/build.md)
 * [Testing Workflow](documentation/testing.md)
+* [Benchmarking](documentation/benchmarking.md)
 * [Script Reference](documentation/scripts.md)
 * [Static Analysis](documentation/static-analysis.md)
 

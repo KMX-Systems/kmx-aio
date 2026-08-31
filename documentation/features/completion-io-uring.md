@@ -17,6 +17,20 @@ The completion model submits operations to `io_uring` and resumes coroutines on 
 - `xdp::socket` (feature-gated)
 - `spdk::runtime`, `spdk::device` (feature-gated)
 
+## Submission Batching
+
+An operation prepared by a coroutine running on the executor's own event-loop thread is not submitted
+there and then. The loop waits with `io_uring_submit_and_wait_timeout()`, which carries everything
+pending into the kernel in the same `io_uring_enter()` as the wait, so a batch of concurrent operations
+costs one system call between two waits instead of one each. With 64 coroutines echoing over their own
+sockets, 12,800 operations went from 12,801 `io_uring_enter()` calls to 264.
+
+Submissions from any other thread - a task spawned before `run()`, or from a foreign thread while the
+loop is running - are submitted immediately, because no wait of theirs is coming and the loop may be
+asleep. The batching also stops short of filling the submission queue: once less than a quarter of the
+ring is free, submissions go out at once, so an operation never fails for want of a queue entry that a
+deferred batch was holding.
+
 ## Important Differences vs Readiness
 
 - No high-level UDP endpoint wrapper (socket-level API only).

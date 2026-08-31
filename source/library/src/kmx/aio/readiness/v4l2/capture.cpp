@@ -287,7 +287,8 @@ namespace kmx::aio::readiness::v4l2
         while (true)
         {
             // Suspend until the driver signals the fd readable (a buffer is filled).
-            co_await exec_.wait_io(fd_.get(), event_type::read);
+            if (!co_await exec_.wait_io(fd_.get(), event_type::read))
+                co_return std::unexpected(error_code::operation_cancelled);
 
             ::v4l2_buffer buf {};
             buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;

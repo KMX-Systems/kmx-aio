@@ -11,8 +11,7 @@ CppApplication {
         "api",
         "inc_dep",
         "../../../../library/inc_dep",
-        "../../../../../build/lsquic/include",
-    ]
+    ].concat(project.quic_include_paths)
 
     cpp.defines: ["KMX_AIO_FEATURE_QUIC=1"]
 

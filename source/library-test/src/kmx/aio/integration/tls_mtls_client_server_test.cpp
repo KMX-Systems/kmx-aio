@@ -9,6 +9,7 @@
 #include <optional>
 #include <sstream>
 #include <thread>
+#include <vector>
 
 namespace kmx::aio::tls::test::integration
 {
@@ -73,22 +74,30 @@ namespace kmx::aio::tls::test::integration
         if (repo_root.empty())
             return std::nullopt;
 
-        auto debug_dir = std::filesystem::path(repo_root) / "debug";
-        if (!std::filesystem::exists(debug_dir))
-        {
-            return std::nullopt;
-        }
+        // output/debug is where the scripts build (see script/feature/common.sh); the other two are what a
+        // bare "qbs build" leaves behind depending on the directory it was run from.
+        const std::vector<std::filesystem::path> debug_dirs = {
+            std::filesystem::path(repo_root) / "output" / "debug",
+            std::filesystem::path(repo_root) / "debug",
+            std::filesystem::path(repo_root) / "source" / "debug",
+        };
 
         try
         {
-            for (const auto& entry: std::filesystem::recursive_directory_iterator(debug_dir))
+            for (const auto& debug_dir: debug_dirs)
             {
-                if (entry.is_regular_file())
+                if (!std::filesystem::exists(debug_dir))
+                    continue;
+
+                for (const auto& entry: std::filesystem::recursive_directory_iterator(debug_dir))
                 {
-                    auto filename = entry.path().filename().string();
-                    if (filename.find(binary_name) != std::string::npos && filename.find(".") == std::string::npos)
+                    if (entry.is_regular_file())
                     {
-                        return entry.path().string();
+                        auto filename = entry.path().filename().string();
+                        if (filename.find(binary_name) != std::string::npos && filename.find(".") == std::string::npos)
+                        {
+                            return entry.path().string();
+                        }
                     }
                 }
             }

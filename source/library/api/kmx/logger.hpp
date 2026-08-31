@@ -44,7 +44,9 @@ namespace kmx::logger
             // Extract only the file name from the full path
             auto full = loc.file_name();
             const char* file = full;
-            if (const char* last_slash = std::strrchr(full, '/'))
+            // LCOV_EXCL_BR_LINE: __FILE__ as this project compiles it always carries a directory, so
+            // the no-separator arm is never taken; it is here for a build that does not.
+            if (const char* last_slash = std::strrchr(full, '/')) // LCOV_EXCL_BR_LINE
                 file = last_slash + 1;
             // Route error messages to stderr (unbuffered), others to stdout
             // Manually flush to ensure immediate output
@@ -61,10 +63,16 @@ namespace kmx::logger
                 std::fflush(stdout);
             }
         }
+        // LCOV_EXCL_START
+        // Unreachable in practice, and deliberately kept: log() is noexcept, so anything escaping it
+        // would call std::terminate. Every call site passes a format string checked at compile time
+        // against its arguments, which leaves only an allocation failure inside std::format - and a
+        // process that cannot allocate a log line has already lost.
         catch (...)
         {
             // Swallow exceptions
         }
+        // LCOV_EXCL_STOP
     }
 
 } // namespace logger

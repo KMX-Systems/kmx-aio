@@ -183,9 +183,9 @@ namespace kmx::aio::modbus::test::integration
                                   .verify_peer  = true,
                                   .sni_hostname = ""};
 
-        exec->spawn(
-            [exec, srv, srv_cfg, srv_tls]() -> task<void>
-            { co_await srv->serve(*exec, srv_cfg, srv_tls); }());
+        auto serve = [exec, srv, srv_cfg, srv_tls]() -> task<void>
+        { co_await srv->serve(*exec, srv_cfg, srv_tls); };
+        exec->spawn(serve());
 
         std::jthread server_stopper(
             [srv, &completed]()
@@ -195,49 +195,49 @@ namespace kmx::aio::modbus::test::integration
                 srv->stop();
             });
 
-        exec->spawn(
-            [&, exec, srv, &ca = certs.ca_cert, &ccert = certs.client_cert,
-             &ckey = certs.client_key]() -> task<void>
+        auto exchange = [&, exec, srv, &ca = certs.ca_cert, &ccert = certs.client_cert,
+                         &ckey = certs.client_key]() -> task<void>
+        {
+            co_await exec->async_timeout(5'000'000u);
+
+            const client_config cl_cfg {.host    = "127.0.0.1",
+                                        .port    = tls_test_port,
+                                        .unit_id = tls_test_unit_id};
+            const tls_config cl_tls {.cert_path    = ccert,
+                                     .key_path     = ckey,
+                                     .ca_cert_path = ca,
+                                     .verify_peer  = true,
+                                     .sni_hostname = ""};
+
+            tls_client c {cl_cfg, cl_tls, *exec};
+
+            std::expected<void, std::error_code> connect_result =
+                std::unexpected(make_error_code(error::connection_failed));
+            for (int attempt = 0; attempt < 10; ++attempt)
             {
+                connect_result = co_await c.connect();
+                if (connect_result)
+                    break;
                 co_await exec->async_timeout(5'000'000u);
+            }
 
-                const client_config cl_cfg {.host    = "127.0.0.1",
-                                            .port    = tls_test_port,
-                                            .unit_id = tls_test_unit_id};
-                const tls_config cl_tls {.cert_path    = ccert,
-                                         .key_path     = ckey,
-                                         .ca_cert_path = ca,
-                                         .verify_peer  = true,
-                                         .sni_hostname = ""};
-
-                tls_client c {cl_cfg, cl_tls, *exec};
-
-                std::expected<void, std::error_code> connect_result =
-                    std::unexpected(make_error_code(error::connection_failed));
-                for (int attempt = 0; attempt < 10; ++attempt)
-                {
-                    connect_result = co_await c.connect();
-                    if (connect_result)
-                        break;
-                    co_await exec->async_timeout(5'000'000u);
-                }
-
-                if (!connect_result)
-                {
-                    completed.store(true, std::memory_order_release);
-                    op_error = connect_result.error();
-                    co_return;
-                }
-
-                const auto r = co_await c.read_holding_registers(0u, 3u);
-                if (r)
-                    result = *r;
-                else
-                    op_error = r.error();
-
+            if (!connect_result)
+            {
                 completed.store(true, std::memory_order_release);
-                co_await c.disconnect();
-            }());
+                op_error = connect_result.error();
+                co_return;
+            }
+
+            const auto r = co_await c.read_holding_registers(0u, 3u);
+            if (r)
+                result = *r;
+            else
+                op_error = r.error();
+
+            completed.store(true, std::memory_order_release);
+            co_await c.disconnect();
+        };
+        exec->spawn(exchange());
 
         exec->run();
 
@@ -267,6 +267,7 @@ namespace kmx::aio::modbus::test::integration
         auto exec = std::make_shared<readiness::executor>();
 
         std::atomic_bool completed = false;
+        std::optional<register_values> values;
         std::optional<std::error_code> op_error;
 
         const server_config srv_cfg {.bind_address = "127.0.0.1",
@@ -278,9 +279,9 @@ namespace kmx::aio::modbus::test::integration
                                   .verify_peer  = true,
                                   .sni_hostname = ""}; // server requires client cert
 
-        exec->spawn(
-            [exec, srv, srv_cfg, srv_tls]() -> task<void>
-            { co_await srv->serve(*exec, srv_cfg, srv_tls); }());
+        auto serve = [exec, srv, srv_cfg, srv_tls]() -> task<void>
+        { co_await srv->serve(*exec, srv_cfg, srv_tls); };
+        exec->spawn(serve());
 
         std::jthread server_stopper(
             [srv, &completed]()
@@ -290,38 +291,58 @@ namespace kmx::aio::modbus::test::integration
                 srv->stop();
             });
 
-        exec->spawn(
-            [&, exec, srv, &ca = certs.ca_cert]() -> task<void>
+        auto exchange = [&, exec, srv, &ca = certs.ca_cert]() -> task<void>
+        {
+            co_await exec->async_timeout(5'000'000u);
+
+            const client_config cl_cfg {.host    = "127.0.0.1",
+                                        .port    = tls_test_port + 1u,
+                                        .unit_id = tls_test_unit_id};
+            // No cert_path / key_path — client presents no certificate
+            const tls_config cl_tls {.cert_path    = "",
+                                     .key_path     = "",
+                                     .ca_cert_path = ca,
+                                     .verify_peer  = true,
+                                     .sni_hostname = ""};
+
+            tls_client c {cl_cfg, cl_tls, *exec};
+
+            // Asserted on the exchange, not on connect() alone. Under TLS 1.3 the client sends its
+            // Finished and considers the handshake done before the server has processed it, so a server
+            // that demands a certificate the client never sent rejects the connection only after
+            // connect() has already returned success. What has to hold either way is that no Modbus
+            // data is ever exchanged over it.
+            if (const auto r = co_await c.connect(); !r)
+                op_error = r.error();
+            else
             {
-                co_await exec->async_timeout(5'000'000u);
-
-                const client_config cl_cfg {.host    = "127.0.0.1",
-                                            .port    = tls_test_port + 1u,
-                                            .unit_id = tls_test_unit_id};
-                // No cert_path / key_path — client presents no certificate
-                const tls_config cl_tls {.cert_path    = "",
-                                         .key_path     = "",
-                                         .ca_cert_path = ca,
-                                         .verify_peer  = true,
-                                         .sni_hostname = ""};
-
-                tls_client c {cl_cfg, cl_tls, *exec};
-                const auto r = co_await c.connect();
-                if (!r)
-                    op_error = r.error();
+                if (const auto request = co_await c.read_holding_registers(0u, 1u); request)
+                    values = *request;
                 else
-                    co_await c.disconnect();
+                    op_error = request.error();
 
-                completed.store(true, std::memory_order_release);
-            }());
+                co_await c.disconnect();
+            }
+
+            completed.store(true, std::memory_order_release);
+        };
+        exec->spawn(exchange());
 
         exec->run();
 
         REQUIRE(completed.load(std::memory_order_acquire));
-        // Connection must fail because server demands a client certificate
+
+        // The property under test: a client that sends no certificate gets no data out of a server that
+        // demands one. That the exchange failed is the assertion; which code carries the failure depends
+        // on where TLS notices it, and is checked only loosely below.
         REQUIRE(op_error.has_value());
+        CHECK_FALSE(values.has_value());
+
+        INFO("reported error: " << op_error->message());
         CHECK(((*op_error == make_error_code(error::tls_handshake_failed)) ||
-             (*op_error == make_error_code(error::connection_failed))));
+               (*op_error == make_error_code(error::connection_failed)) ||
+               (*op_error == make_error_code(error::disconnected)) ||
+               (*op_error == std::make_error_code(std::errc::connection_aborted))));
     }
 
 } // namespace kmx::aio::modbus::test::integration

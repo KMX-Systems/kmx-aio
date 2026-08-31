@@ -6,8 +6,11 @@
 #include <kmx/aio/allocator.hpp>
 #include <kmx/aio/task.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <memory>
+#include <optional>
+#include <thread>
 #include <vector>
 
 namespace kmx::aio::allocation::slab_coroutine_test_detail
@@ -190,4 +193,89 @@ TEST_CASE("thread-local allocator isolation", "[allocation][slab][thread-local]"
 
     // Cleanup.
     alloc1->deallocate(p1);
+}
+
+TEST_CASE("a coroutine frame freed on another thread returns to its slab", "[allocation][slab][coroutine][thread-local]")
+{
+    // A frame is allocated wherever the coroutine is created and destroyed wherever it last ran, and a
+    // task handed to an executor routinely ends on a different thread than it started on. The freeing
+    // thread's own slab - here, none at all - says nothing about where the frame came from, so the
+    // frame has to carry that itself. A slab of exactly one slot makes the answer unambiguous: the
+    // allocation below can only succeed if the frame came back.
+    kmx::aio::slab_allocator slab {512u, 1u};
+    kmx::aio::set_thread_allocator(&slab);
+
+    std::optional<kmx::aio::task<int>> held;
+    held.emplace(kmx::aio::allocation::slab_coroutine_test_detail::simple_coro(7));
+    REQUIRE(slab.allocated() == 1u);
+    REQUIRE(slab.available() == 0u);
+
+    {
+        // No allocator of its own, so a frame it frees would otherwise go to ::operator delete - on
+        // memory ::operator new never handed out.
+        std::jthread other {[&held]() noexcept { held.reset(); }};
+    }
+
+    // Still counted as allocated until the owning thread collects it, which it does on its next
+    // allocation. That the slot comes back at all is the point.
+    CHECK(slab.allocated() == 1u);
+
+    void* const reused = slab.allocate();
+    REQUIRE(reused != nullptr);
+    CHECK(slab.allocated() == 1u);
+    CHECK(slab.available() == 0u);
+
+    slab.deallocate(reused);
+    CHECK(slab.allocated() == 0u);
+    kmx::aio::set_thread_allocator(nullptr);
+}
+
+TEST_CASE("frames from several threads come back to one slab", "[allocation][slab][coroutine][thread-local]")
+{
+    // The remote list is a lock-free stack that several threads push onto at once. What it must not do
+    // is lose a slot or hand the same one out twice, so the whole slab is emptied, freed from other
+    // threads, and then drained a slot at a time to see that every one of them is back.
+    constexpr std::size_t slots = 32u;
+    kmx::aio::slab_allocator slab {512u, slots};
+    kmx::aio::set_thread_allocator(&slab);
+
+    std::vector<std::optional<kmx::aio::task<int>>> tasks;
+    tasks.reserve(slots);
+    for (std::size_t i = 0u; i < slots; ++i)
+        tasks.emplace_back(kmx::aio::allocation::slab_coroutine_test_detail::simple_coro(static_cast<int>(i)));
+
+    REQUIRE(slab.allocated() == slots);
+
+    {
+        std::vector<std::jthread> threads;
+        threads.reserve(4u);
+        for (std::size_t t = 0u; t < 4u; ++t)
+            threads.emplace_back(
+                [&tasks, t]() noexcept
+                {
+                    for (std::size_t i = t; i < tasks.size(); i += 4u)
+                        tasks[i].reset();
+                });
+    }
+
+    std::vector<void*> reclaimed;
+    reclaimed.reserve(slots);
+    for (std::size_t i = 0u; i < slots; ++i)
+    {
+        void* const slot = slab.allocate();
+        REQUIRE(slot != nullptr);
+        reclaimed.push_back(slot);
+    }
+
+    CHECK(slab.allocate() == nullptr);
+
+    // Every slot handed back exactly once.
+    std::sort(reclaimed.begin(), reclaimed.end());
+    CHECK(std::adjacent_find(reclaimed.begin(), reclaimed.end()) == reclaimed.end());
+
+    for (void* const slot: reclaimed)
+        slab.deallocate(slot);
+
+    CHECK(slab.allocated() == 0u);
+    kmx::aio::set_thread_allocator(nullptr);
 }

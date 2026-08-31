@@ -51,14 +51,14 @@ namespace kmx::aio::someip
         auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
         completion::executor exec;
 
-        exec.spawn(
-            [&]() -> task<void>
-            {
-                state->result.emplace(co_await s.open());
-                state->completed = true;
-                exec.stop();
-                co_return;
-            }());
+        auto body = [&]() -> task<void>
+        {
+            state->result.emplace(co_await s.open());
+            state->completed = true;
+            exec.stop();
+            co_return;
+        };
+        exec.spawn(body());
         exec.run();
 
         REQUIRE(state->completed);
@@ -75,14 +75,14 @@ namespace kmx::aio::someip
         {
             completion::executor exec;
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            exec.spawn(
-                [&]() -> task<void>
-                {
-                    state->result.emplace(co_await c.start());
-                    state->completed = true;
-                    exec.stop();
-                    co_return;
-                }());
+            auto body = [&]() -> task<void>
+            {
+                state->result.emplace(co_await c.start());
+                state->completed = true;
+                exec.stop();
+                co_return;
+            };
+            exec.spawn(body());
             exec.run();
             REQUIRE(state->result.has_value());
             REQUIRE(state->result->has_value());
@@ -91,14 +91,14 @@ namespace kmx::aio::someip
         {
             completion::executor exec;
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            exec.spawn(
-                [&]() -> task<void>
-                {
-                    state->result.emplace(co_await s.open());
-                    state->completed = true;
-                    exec.stop();
-                    co_return;
-                }());
+            auto body = [&]() -> task<void>
+            {
+                state->result.emplace(co_await s.open());
+                state->completed = true;
+                exec.stop();
+                co_return;
+            };
+            exec.spawn(body());
             exec.run();
             REQUIRE(state->result.has_value());
             REQUIRE(state->result->has_value());
@@ -107,14 +107,14 @@ namespace kmx::aio::someip
         {
             completion::executor exec;
             auto state = std::make_shared<coroutine_result_state<std::expected<event_notification, std::error_code>>>();
-            exec.spawn(
-                [&]() -> task<void>
-                {
-                    state->result.emplace(co_await s.next());
-                    state->completed = true;
-                    exec.stop();
-                    co_return;
-                }());
+            auto body = [&]() -> task<void>
+            {
+                state->result.emplace(co_await s.next());
+                state->completed = true;
+                exec.stop();
+                co_return;
+            };
+            exec.spawn(body());
             exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
@@ -135,14 +135,14 @@ namespace kmx::aio::someip
         {
             completion::executor exec;
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            exec.spawn(
-                [&]() -> task<void>
-                {
-                    state->result.emplace(co_await c.start());
-                    state->completed = true;
-                    exec.stop();
-                    co_return;
-                }());
+            auto body = [&]() -> task<void>
+            {
+                state->result.emplace(co_await c.start());
+                state->completed = true;
+                exec.stop();
+                co_return;
+            };
+            exec.spawn(body());
             exec.run();
             REQUIRE(state->result.has_value());
             REQUIRE(state->result->has_value());
@@ -151,14 +151,14 @@ namespace kmx::aio::someip
         {
             completion::executor exec;
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            exec.spawn(
-                [&]() -> task<void>
-                {
-                    state->result.emplace(co_await s.open());
-                    state->completed = true;
-                    exec.stop();
-                    co_return;
-                }());
+            auto body = [&]() -> task<void>
+            {
+                state->result.emplace(co_await s.open());
+                state->completed = true;
+                exec.stop();
+                co_return;
+            };
+            exec.spawn(body());
             exec.run();
             REQUIRE(state->result.has_value());
             REQUIRE(state->result->has_value());
@@ -186,14 +186,14 @@ namespace kmx::aio::someip
         {
             completion::executor exec;
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            exec.spawn(
-                [&]() -> task<void>
-                {
-                    state->result.emplace(co_await c.start());
-                    state->completed = true;
-                    exec.stop();
-                    co_return;
-                }());
+            auto body = [&]() -> task<void>
+            {
+                state->result.emplace(co_await c.start());
+                state->completed = true;
+                exec.stop();
+                co_return;
+            };
+            exec.spawn(body());
             exec.run();
             REQUIRE(state->result.has_value());
             REQUIRE(state->result->has_value());
@@ -202,14 +202,14 @@ namespace kmx::aio::someip
         {
             completion::executor exec;
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            exec.spawn(
-                [&]() -> task<void>
-                {
-                    state->result.emplace(co_await s.open());
-                    state->completed = true;
-                    exec.stop();
-                    co_return;
-                }());
+            auto body = [&]() -> task<void>
+            {
+                state->result.emplace(co_await s.open());
+                state->completed = true;
+                exec.stop();
+                co_return;
+            };
+            exec.spawn(body());
             exec.run();
             REQUIRE(state->result.has_value());
             REQUIRE(state->result->has_value());
@@ -234,14 +234,14 @@ namespace kmx::aio::someip
         {
             completion::executor exec;
             auto state = std::make_shared<coroutine_result_state<std::expected<event_notification, std::error_code>>>();
-            exec.spawn(
-                [&]() -> task<void>
-                {
-                    state->result.emplace(co_await s.next());
-                    state->completed = true;
-                    exec.stop();
-                    co_return;
-                }());
+            auto body = [&]() -> task<void>
+            {
+                state->result.emplace(co_await s.next());
+                state->completed = true;
+                exec.stop();
+                co_return;
+            };
+            exec.spawn(body());
             exec.run();
 
             REQUIRE(state->completed);
@@ -265,14 +265,14 @@ namespace kmx::aio::someip
         {
             completion::executor exec;
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            exec.spawn(
-                [&]() -> task<void>
-                {
-                    state->result.emplace(co_await c.start());
-                    state->completed = true;
-                    exec.stop();
-                    co_return;
-                }());
+            auto body = [&]() -> task<void>
+            {
+                state->result.emplace(co_await c.start());
+                state->completed = true;
+                exec.stop();
+                co_return;
+            };
+            exec.spawn(body());
             exec.run();
             REQUIRE(state->result.has_value());
             REQUIRE(state->result->has_value());
@@ -281,14 +281,14 @@ namespace kmx::aio::someip
         {
             completion::executor exec;
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            exec.spawn(
-                [&]() -> task<void>
-                {
-                    state->result.emplace(co_await s.open());
-                    state->completed = true;
-                    exec.stop();
-                    co_return;
-                }());
+            auto body = [&]() -> task<void>
+            {
+                state->result.emplace(co_await s.open());
+                state->completed = true;
+                exec.stop();
+                co_return;
+            };
+            exec.spawn(body());
             exec.run();
             REQUIRE(state->result.has_value());
             REQUIRE(state->result->has_value());
@@ -306,14 +306,14 @@ namespace kmx::aio::someip
         {
             completion::executor exec;
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            exec.spawn(
-                [&]() -> task<void>
-                {
-                    state->result.emplace(co_await s.close());
-                    state->completed = true;
-                    exec.stop();
-                    co_return;
-                }());
+            auto body = [&]() -> task<void>
+            {
+                state->result.emplace(co_await s.close());
+                state->completed = true;
+                exec.stop();
+                co_return;
+            };
+            exec.spawn(body());
             exec.run();
             REQUIRE(state->result.has_value());
             REQUIRE(state->result->has_value());
@@ -322,14 +322,14 @@ namespace kmx::aio::someip
         {
             completion::executor exec;
             auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
-            exec.spawn(
-                [&]() -> task<void>
-                {
-                    state->result.emplace(co_await s.open());
-                    state->completed = true;
-                    exec.stop();
-                    co_return;
-                }());
+            auto body = [&]() -> task<void>
+            {
+                state->result.emplace(co_await s.open());
+                state->completed = true;
+                exec.stop();
+                co_return;
+            };
+            exec.spawn(body());
             exec.run();
             REQUIRE(state->result.has_value());
             REQUIRE(state->result->has_value());

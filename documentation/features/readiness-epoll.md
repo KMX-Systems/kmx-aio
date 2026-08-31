@@ -35,6 +35,40 @@ exec.spawn(my_readiness_task(exec));
 exec.run();
 ```
 
+## Stopping The Loop
+
+The event loop parks in `epoll_wait` for `timeout_ms` at a time, and a stop request by itself changes
+nothing it is waiting on. The executor therefore keeps an `eventfd` registered with its own epoll set
+and writes to it when `stop()` is called, so the loop returns at once instead of waiting out the rest
+of its timeout: stopping an idle executor at the default `timeout_ms` of 200 ms went from ~198 ms to
+~90 µs. If the descriptor cannot be created the executor logs a warning and falls back to noticing the
+stop when the wait times out.
+
+## Where A Ready Coroutine Continues
+
+`executor_config::resumption` chooses the thread a coroutine continues on once the descriptor it waited
+for is ready.
+
+| Mode | Behaviour |
+| :--- | :--- |
+| `resumption_mode::scheduler` (default) | The event loop hands the resumption to a scheduler worker. Application code never runs on the I/O thread, so a coroutine that blocks does not stall the loop - at the cost of a wake-up and a context switch on every completion, and of application code that may run on any worker. |
+| `resumption_mode::inline_on_io_thread` | The coroutine continues on the I/O thread that observed the event. No hand-off, no cross-core cache traffic, and every coroutine of the executor runs on the core it is pinned to, so state reached only from those coroutines needs no synchronization. The loop is blocked for as long as a resumption runs. |
+
+```cpp
+kmx::aio::readiness::executor_config cfg {
+    .core_id = 4,
+    .resumption = kmx::aio::readiness::resumption_mode::inline_on_io_thread,
+};
+auto exec = std::make_shared<kmx::aio::readiness::executor>(cfg);
+```
+
+The inline mode is the thread-per-core arrangement, and on a socket ping-pong it costs roughly a third
+of what the default does - see [Benchmarking](../benchmarking.md). Choose it when the coroutines this
+executor runs never block: no synchronous file or network I/O, no lock held by another thread, no long
+computation. Cancellations arriving from another thread (`cancel_io()`, `unregister_fd()`) still go
+through the scheduler in both modes, because the thread that cancels a wait is not the thread its
+coroutine should run on.
+
 ## TCP Echo Server (Readiness)
 
 ```cpp

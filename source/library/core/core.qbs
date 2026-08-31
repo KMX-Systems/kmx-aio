@@ -2,25 +2,12 @@ import qbs
 
 StaticLibrary {
     Depends { name: "cpp" }
+    Depends { name: "kmx_instrumentation" }
 
     name: "kmx-aio-core"
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.enableRtti: false
-    cpp.driverFlags: {
-        var flags = [];
-        if (project.enable_asan)
-        {
-            flags.push("-fsanitize=address");
-            flags.push("-fno-omit-frame-pointer");
-        }
-        if (project.enable_tsan)
-        {
-            flags.push("-fsanitize=thread");
-            flags.push("-fno-omit-frame-pointer");
-        }
-        return flags;
-    }
     cpp.defines: {
         var defs = [];
         if (project.enable_openonload)
@@ -37,23 +24,21 @@ StaticLibrary {
             defs.push("KMX_AIO_FEATURE_OPC_UA=1");
         if (project.enable_cuda)
             defs.push("KMX_AIO_FEATURE_CUDA=1");
-        if (project.enable_asan)
-            defs.push("KMX_AIO_SANITIZER_ASAN=1");
-        if (project.enable_tsan)
-            defs.push("KMX_AIO_SANITIZER_TSAN=1");
         return defs;
     }
     cpp.includePaths: [
         "../api",
         "/usr/local/include",
-    ]
+    ].concat(project.tls_include_paths)
     install: true
     files: [
         "../api/kmx/aio/allocator.hpp",
+        "../api/kmx/aio/async_mutex.hpp",
         "../api/kmx/aio/basic_types.hpp",
         "../api/kmx/aio/buffer.hpp",
         "../api/kmx/aio/buffer_pool.hpp",
         "../api/kmx/aio/channel.hpp",
+        "../api/kmx/aio/detail/syscalls.hpp",
         "../api/kmx/aio/error_code.hpp",
         "../api/kmx/aio/executor_base.hpp",
         "../api/kmx/aio/file_descriptor.hpp",
@@ -63,17 +48,25 @@ StaticLibrary {
         "../api/kmx/aio/scheduler.hpp",
         "../api/kmx/aio/stream_concepts.hpp",
         "../api/kmx/aio/task.hpp",
+        "../api/kmx/aio/tls/basic_stream.hpp",
+        "../api/kmx/aio/tls/detail/tls_syscalls.hpp",
+        "../api/kmx/aio/tls/stream.hpp",
         "../src/kmx/aio/allocator.cpp",
+        "../src/kmx/aio/async_mutex.cpp",
         "../src/kmx/aio/basic_types.cpp",
+        "../src/kmx/aio/detail/syscalls.cpp",
         "../src/kmx/aio/error_code.cpp",
         "../src/kmx/aio/file_descriptor.cpp",
         "../src/kmx/aio/net_parse.cpp",
         "../src/kmx/aio/scheduler.cpp",
         "../src/kmx/aio/task.cpp",
+        "../src/kmx/aio/tls/basic_stream.cpp",
+        "../src/kmx/aio/tls/detail/tls_syscalls.cpp",
     ]
 
     Export {
         Depends { name: "cpp" }
-        cpp.includePaths: [ product.sourceDirectory + "/../api" ]
+        Depends { name: "kmx_instrumentation" }
+        cpp.includePaths: [ product.sourceDirectory + "/../api" ].concat(project.tls_include_paths)
     }
 }

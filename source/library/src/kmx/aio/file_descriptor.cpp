@@ -2,6 +2,8 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include "kmx/aio/readiness/descriptor/epoll.hpp"
 
+#include <kmx/aio/detail/syscalls.hpp>
+
 namespace kmx::aio
 {
     std::expected<void, std::error_code> inet_pton(const int af, const char* const src, void* dst) noexcept
@@ -44,7 +46,7 @@ namespace kmx::aio
     std::expected<file_descriptor, std::error_code> file_descriptor::create_socket(const int domain, const int type,
                                                                                    const int protocol) noexcept
     {
-        const fd_t fd = ::socket(domain, type, protocol);
+        const fd_t fd = detail::syscalls::socket(domain, type, protocol);
         if (fd < 0)
             return std::unexpected(error_from_errno());
 
@@ -56,7 +58,7 @@ namespace kmx::aio
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
 
-        const int ret = ::fcntl(fd_, cmd, arg);
+        const int ret = detail::syscalls::fcntl(fd_, cmd, arg);
         if (ret < 0)
             return std::unexpected(error_from_errno());
 
@@ -101,8 +103,13 @@ namespace kmx::aio
     std::expected<void, std::error_code> file_descriptor::bind(const ip_address_t ip, const port_t port) noexcept
     {
         const auto addr = make_socket_address(ip, port);
+        // LCOV_EXCL_START
+        // make_socket_address fills a sockaddr from a variant that is either IPv4 or IPv6 and cannot
+        // fail today; it returns std::expected so that a future address family may. Forwarding the
+        // error is what keeps this call site correct when one does.
         if (!addr)
             return std::unexpected(addr.error());
+        // LCOV_EXCL_STOP
 
         return bind(reinterpret_cast<const sockaddr*>(&addr->storage), addr->length);
     }
@@ -198,8 +205,13 @@ namespace kmx::aio
     std::expected<void, std::error_code> file_descriptor::connect(const ip_address_t ip, const port_t port) noexcept
     {
         const auto addr = make_socket_address(ip, port);
+        // LCOV_EXCL_START
+        // make_socket_address fills a sockaddr from a variant that is either IPv4 or IPv6 and cannot
+        // fail today; it returns std::expected so that a future address family may. Forwarding the
+        // error is what keeps this call site correct when one does.
         if (!addr)
             return std::unexpected(addr.error());
+        // LCOV_EXCL_STOP
 
         return connect(reinterpret_cast<const sockaddr*>(&addr->storage), addr->length);
     }

@@ -134,7 +134,7 @@ jobs:
             project.enable_avb:true \
             project.enable_opc_ua:true \
             project.opc_ua_vendored:true \
-            project.opc_ua_prefix:"$GITHUB_WORKSPACE/build/open62541/install-local" \
+            project.opc_ua_prefix:"$GITHUB_WORKSPACE/output/open62541/install-local" \
             project.enable_cuda:false
 
           qbs build -f source.qbs config:debug -j 2 \
@@ -149,7 +149,7 @@ jobs:
             project.enable_avb:true \
             project.enable_opc_ua:true \
             project.opc_ua_vendored:true \
-            project.opc_ua_prefix:"$GITHUB_WORKSPACE/build/open62541/install-local" \
+            project.opc_ua_prefix:"$GITHUB_WORKSPACE/output/open62541/install-local" \
             project.enable_cuda:false
 
   quic-smoke:

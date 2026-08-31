@@ -4,26 +4,13 @@ StaticLibrary {
     Depends { name: "cpp" }
     Depends { name: "kmx-aio-core" }
     Depends { name: "kmx-aio-readiness" }
+    Depends { name: "kmx_instrumentation" }
 
     name: "kmx-aio-modbus"
     condition: project.enable_modbus
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.enableRtti: false
-    cpp.driverFlags: {
-        var flags = [];
-        if (project.enable_asan)
-        {
-            flags.push("-fsanitize=address");
-            flags.push("-fno-omit-frame-pointer");
-        }
-        if (project.enable_tsan)
-        {
-            flags.push("-fsanitize=thread");
-            flags.push("-fno-omit-frame-pointer");
-        }
-        return flags;
-    }
     cpp.defines: {
         var defs = [];
         if (project.enable_openonload)
@@ -42,17 +29,13 @@ StaticLibrary {
             defs.push("KMX_AIO_FEATURE_MODBUS=1");
         if (project.enable_cuda)
             defs.push("KMX_AIO_FEATURE_CUDA=1");
-        if (project.enable_asan)
-            defs.push("KMX_AIO_SANITIZER_ASAN=1");
-        if (project.enable_tsan)
-            defs.push("KMX_AIO_SANITIZER_TSAN=1");
         return defs;
     }
     cpp.includePaths: [
         "../api",
         "../inc",
         "/usr/local/include",
-    ]
+    ].concat(project.tls_include_paths)
     install: true
     files: [
         "../api/kmx/aio/modbus/**.hpp",
@@ -68,6 +51,7 @@ StaticLibrary {
         Depends { name: "cpp" }
         Depends { name: "kmx-aio-core" }
         Depends { name: "kmx-aio-readiness" }
-        cpp.includePaths: [ product.sourceDirectory + "/../api" ]
+        Depends { name: "kmx_instrumentation" }
+        cpp.includePaths: [ product.sourceDirectory + "/../api" ].concat(project.tls_include_paths)
     }
 }

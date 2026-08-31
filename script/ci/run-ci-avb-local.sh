@@ -57,9 +57,18 @@ resolve_repo_root() {
 repo_root="$(resolve_repo_root)"
 source_dir="$repo_root/source"
 
-sync_script_into_build_dir() {
+# Everything this script produces lives under output/: the Qbs build trees (output/debug, ...) and the
+# vendored dependency trees (lsquic, boringssl, spdk-local, open62541, someip) - the same layout
+# script/feature/common.sh uses; see the comment there.
+qbs_build_root="$repo_root/output"
+
+# Sets qbs_profile_args; see the comment at the top of that file for why the profile is not left to the
+# machine-wide default.
+source "$repo_root/script/qbs-profile.sh"
+
+sync_script_into_output_dir() {
     local target_dir target_file
-    target_dir="$repo_root/build"
+    target_dir="$repo_root/output"
     target_file="$target_dir/run-ci-avb-local.sh"
 
     mkdir -p "$target_dir"
@@ -70,7 +79,7 @@ sync_script_into_build_dir() {
     fi
 }
 
-sync_script_into_build_dir
+sync_script_into_output_dir
 
 require_cmd() {
     if ! command -v "$1" >/dev/null 2>&1; then
@@ -89,7 +98,7 @@ run_with_local_gcc_runtime() {
 
 find_test_bin() {
     local bin
-    bin="$(find "$repo_root/build/debug" -type f -name kmx-aio-test | head -n 1 || true)"
+    bin="$(find "$qbs_build_root/debug" -type f -name kmx-aio-test | head -n 1 || true)"
     if [[ -z "$bin" ]]; then
         echo "kmx-aio-test binary not found" >&2
         exit 1
@@ -101,7 +110,7 @@ run_build_and_test() {
     echo "==> build-and-test"
     (
         cd "$source_dir"
-        qbs resolve -f source.qbs -d "$repo_root/build" config:debug \
+        qbs resolve -f source.qbs -d "$qbs_build_root" "${qbs_profile_args[@]}" config:debug \
             project.enable_readiness:true \
             project.enable_openonload:false \
             project.enable_af_xdp:false \
@@ -111,7 +120,7 @@ run_build_and_test() {
             project.enable_opc_ua:false \
             project.enable_cuda:false
 
-        qbs build -f source.qbs -d "$repo_root/build" config:debug -j 2 \
+        qbs build -f source.qbs -d "$qbs_build_root" "${qbs_profile_args[@]}" config:debug -j 2 \
             project.enable_readiness:true \
             project.enable_openonload:false \
             project.enable_af_xdp:false \
@@ -132,8 +141,8 @@ run_build_and_test() {
     done
 
     local talker_bin listener_bin
-    talker_bin="$(find "$repo_root/build/debug" -type f -name sample-avb-talker | head -n 1 || true)"
-    listener_bin="$(find "$repo_root/build/debug" -type f -name sample-avb-listener | head -n 1 || true)"
+    talker_bin="$(find "$qbs_build_root/debug" -type f -name sample-avb-talker | head -n 1 || true)"
+    listener_bin="$(find "$qbs_build_root/debug" -type f -name sample-avb-listener | head -n 1 || true)"
     if [[ -z "$talker_bin" || -z "$listener_bin" ]]; then
         echo "sample-avb binaries not found" >&2
         exit 1
@@ -156,10 +165,10 @@ run_quic_smoke() {
 
     (
         cd "$source_dir"
-        qbs clean -d "$repo_root/build"
+        qbs clean -d "$qbs_build_root"
         local products
         products="sample-quic-echo-readiness-server,sample-quic-echo-readiness-client,sample-quic-http3-server,sample-quic-http3-client,kmx-aio-test"
-        qbs resolve -f source.qbs -d "$repo_root/build" config:debug \
+        qbs resolve -f source.qbs -d "$qbs_build_root" "${qbs_profile_args[@]}" config:debug \
             project.enable_readiness:true \
             project.enable_http3:true \
             project.enable_openonload:false \
@@ -168,7 +177,7 @@ run_quic_smoke() {
             project.enable_quic:true \
             project.enable_cuda:false
 
-        qbs build -f source.qbs -d "$repo_root/build" config:debug -j 2 \
+        qbs build -f source.qbs -d "$qbs_build_root" "${qbs_profile_args[@]}" config:debug -j 2 \
             --products "$products" \
             project.enable_readiness:true \
             project.enable_http3:true \
@@ -205,15 +214,15 @@ run_artifact_split_smoke() {
         bash script/feature/opc_ua/install-dependencies.sh
     )
 
-    if [[ ! -d "$repo_root/build/spdk-local/install-local" ]]; then
+    if [[ ! -d "$repo_root/output/spdk-local/install-local" ]]; then
         (
             cd "$repo_root"
-            mkdir -p build/spdk-local
-            if [[ ! -d build/spdk-local/src/.git ]]; then
-                git clone --depth 1 --branch v24.09 https://github.com/spdk/spdk.git build/spdk-local/src
+            mkdir -p output/spdk-local
+            if [[ ! -d output/spdk-local/src/.git ]]; then
+                git clone --depth 1 --branch v24.09 https://github.com/spdk/spdk.git output/spdk-local/src
             fi
-            git -C build/spdk-local/src submodule update --init --recursive
-            cd build/spdk-local/src
+            git -C output/spdk-local/src submodule update --init --recursive
+            cd output/spdk-local/src
             ./configure --prefix="$PWD/../install-local" --with-shared --disable-tests --disable-unit-tests --disable-apps --disable-examples \
                 --without-fio --without-vhost --without-iscsi-initiator --without-rbd --without-xnvme --without-fc --without-rdma \
                 --with-crypto --without-vfio-user --without-virtio --without-nvme-cuse
@@ -224,26 +233,26 @@ run_artifact_split_smoke() {
 
     (
         cd "$source_dir"
-        qbs clean -d "$repo_root/build"
+        qbs clean -d "$qbs_build_root"
         local products
         products="sample-tcp-minimal-client,sample-tcp-minimal-server,sample-tcp-echo-client,sample-tcp-echo-server,sample-udp-minimal-client,sample-udp-minimal-server,sample-udp-echo-client,sample-udp-echo-server,sample-tls-echo-completion-client,sample-tls-echo-completion-server,sample-tls-echo-readiness-client,sample-tls-echo-readiness-server,sample-tls-h2-alpn-client,sample-tls-h2-alpn-server,sample-tls-h2-alpn-readiness-client,sample-tls-h2-alpn-readiness-server,sample-avb-talker,sample-avb-listener,sample-avb-readiness-talker,sample-avb-readiness-listener,sample-spdk-minimal,sample-spdk-discovery,sample-xdp-packet-filter,sample-v4l2-capture,sample-v4l2-completion-capture,sample-hft-order-router,kmx-aio-test"
-        qbs resolve -f source.qbs -d "$repo_root/build" config:debug \
+        qbs resolve -f source.qbs -d "$qbs_build_root" "${qbs_profile_args[@]}" config:debug \
             project.enable_readiness:true \
             project.enable_completion:true \
             project.enable_http3:true \
             project.enable_openonload:false \
             project.enable_af_xdp:true \
             project.enable_spdk:true \
-            project.spdk_prefix:"$repo_root/build/spdk-local/install-local" \
+            project.spdk_prefix:"$repo_root/output/spdk-local/install-local" \
             project.spdk_enable_crypto:true \
             project.enable_quic:false \
             project.enable_avb:true \
             project.enable_opc_ua:true \
             project.opc_ua_vendored:true \
-            project.opc_ua_prefix:"$repo_root/build/open62541/install-local" \
+            project.opc_ua_prefix:"$repo_root/output/open62541/install-local" \
             project.enable_cuda:false
 
-        qbs build -f source.qbs -d "$repo_root/build" config:debug -j 2 \
+        qbs build -f source.qbs -d "$qbs_build_root" "${qbs_profile_args[@]}" config:debug -j 2 \
             --products "$products" \
             project.enable_readiness:true \
             project.enable_completion:true \
@@ -251,13 +260,13 @@ run_artifact_split_smoke() {
             project.enable_openonload:false \
             project.enable_af_xdp:true \
             project.enable_spdk:true \
-            project.spdk_prefix:"$repo_root/build/spdk-local/install-local" \
+            project.spdk_prefix:"$repo_root/output/spdk-local/install-local" \
             project.spdk_enable_crypto:true \
             project.enable_quic:false \
             project.enable_avb:true \
             project.enable_opc_ua:true \
             project.opc_ua_vendored:true \
-            project.opc_ua_prefix:"$repo_root/build/open62541/install-local" \
+            project.opc_ua_prefix:"$repo_root/output/open62541/install-local" \
             project.enable_cuda:false
     )
 }
@@ -276,10 +285,10 @@ run_gpu_smoke() {
 
     (
         cd "$source_dir"
-        qbs clean -d "$repo_root/build"
+        qbs clean -d "$qbs_build_root"
         local products
         products="kmx-aio-test,sample-gpu-image-processing"
-        qbs resolve -f source.qbs -d "$repo_root/build" config:debug \
+        qbs resolve -f source.qbs -d "$qbs_build_root" "${qbs_profile_args[@]}" config:debug \
             project.enable_readiness:false \
             project.enable_openonload:false \
             project.enable_af_xdp:false \
@@ -289,7 +298,7 @@ run_gpu_smoke() {
             project.enable_opc_ua:false \
             project.enable_cuda:true
 
-        qbs build -f source.qbs -d "$repo_root/build" config:debug -j 2 \
+        qbs build -f source.qbs -d "$qbs_build_root" "${qbs_profile_args[@]}" config:debug -j 2 \
             --products "$products" \
             project.enable_readiness:false \
             project.enable_openonload:false \
@@ -302,7 +311,7 @@ run_gpu_smoke() {
     )
 
     local sample_bin test_bin
-    sample_bin="$(find "$repo_root/build/debug" -type f -name sample-gpu-image-processing | head -n 1 || true)"
+    sample_bin="$(find "$qbs_build_root/debug" -type f -name sample-gpu-image-processing | head -n 1 || true)"
     if [[ -z "$sample_bin" ]]; then
         echo "sample-gpu-image-processing binary not found" >&2
         exit 1
@@ -317,7 +326,7 @@ run_gpu_smoke() {
 
 require_cmd qbs
 require_cmd timeout
-sync_script_into_build_dir
+sync_script_into_output_dir
 
 case "$job" in
     all)

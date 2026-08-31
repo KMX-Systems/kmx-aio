@@ -29,11 +29,21 @@ namespace kmx::aio::modbus
         handle_connection(readiness::executor& exec, file_descriptor fd,
                           const server_config& config) noexcept(false)
         {
+            const auto connection_fd = fd.get();
             readiness::tcp::stream stream {exec, std::move(fd)};
             const auto stop_token = stop_source_.get_token();
 
+            // The read this connection parks in between requests has no timeout, so an idle peer would
+            // otherwise keep the task - and the executor's run() - alive for as long as it stays
+            // connected. stop() has to reach here as well as the accept loop.
+            const std::stop_callback cancel_on_stop {stop_token, [&exec, connection_fd]() noexcept
+                                                     { exec.cancel_io(connection_fd); }};
+
             while (!stop_token.stop_requested())
-                co_await process_request(stream, config);
+            {
+                if (!co_await process_request(stream, config))
+                    break;
+            }
         }
     };
 
@@ -64,6 +74,12 @@ namespace kmx::aio::modbus
             co_return std::unexpected(r.error());
 
         const auto stop_token = impl_->stop_source_.get_token();
+
+        // stop() only sets a flag that the loop below reads between connections. The accept it is
+        // suspended in has to be woken too, or serve() stays outstanding for good - and an executor
+        // whose run() returns once its work drains then never returns at all.
+        const std::stop_callback cancel_on_stop {stop_token, [&exec, fd = listener.get_fd()]() noexcept
+                                                 { exec.cancel_io(fd); }};
 
         while (!stop_token.stop_requested())
         {
