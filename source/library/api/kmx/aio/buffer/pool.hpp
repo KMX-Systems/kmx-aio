@@ -105,7 +105,7 @@ namespace kmx::aio::buffer
         struct slot
         {
             /// @brief Storage for T (uninitialized until acquired).
-            std::aligned_storage_t<sizeof(T), alignof(T)> storage;
+            alignas(T) std::byte storage[sizeof(T)];
 
             /// @brief Intrusive free-list link (valid only when slot is not leased).
             slot* next_free_ {};

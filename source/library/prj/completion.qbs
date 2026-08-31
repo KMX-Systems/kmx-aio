@@ -48,12 +48,14 @@ StaticLibrary {
             "../src/kmx/aio/completion/detail/**.cpp",
             "../src/kmx/aio/completion/executor.cpp",
             "../src/kmx/aio/completion/timer.cpp",
-            "../src/kmx/aio/completion/avb/**.cpp",
             "../src/kmx/aio/completion/tcp/**.cpp",
             "../src/kmx/aio/completion/udp/**.cpp",
             "../src/kmx/aio/completion/tls/**.cpp",
             "../src/kmx/aio/completion/v4l2/**.cpp",
         ];
+
+        if (project.enable_avb)
+            entries.push("../src/kmx/aio/completion/avb/**.cpp");
 
         if (project.enable_quic)
         {
