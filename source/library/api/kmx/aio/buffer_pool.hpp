@@ -91,19 +91,19 @@ namespace kmx::aio
         [[nodiscard]] std::optional<buffer_handle<T>> try_acquire() noexcept;
 
         /// @brief Number of buffers currently available (not yet leased).
-        [[nodiscard]] std::size_t available() const noexcept;
+        [[nodiscard]] std::size_t available() const noexcept { return Capacity - allocated_count_.load(std::memory_order_acquire); }
 
         /// @brief Number of buffers currently leased (allocated).
-        [[nodiscard]] std::size_t allocated() const noexcept;
+        [[nodiscard]] std::size_t allocated() const noexcept { return allocated_count_.load(std::memory_order_acquire); }
 
         /// @brief Checks if all Capacity slots are currently leased.
-        [[nodiscard]] bool is_full() const noexcept;
+        [[nodiscard]] bool is_full() const noexcept { return allocated_count_.load(std::memory_order_acquire) == Capacity; }
 
         /// @brief Checks if no buffers are currently leased (all slots available).
-        [[nodiscard]] bool is_empty() const noexcept;
+        [[nodiscard]] bool is_empty() const noexcept { return allocated_count_.load(std::memory_order_acquire) == 0; }
 
         /// @brief Total capacity (maximum number of buffers).
-        [[nodiscard]] static constexpr std::size_t capacity() noexcept;
+        [[nodiscard]] static constexpr std::size_t capacity() noexcept { return Capacity; }
 
     private:
         /// @brief Internal slot structure holding one buffer instance.
@@ -136,12 +136,16 @@ namespace kmx::aio
         /// @brief Reinterprets raw pointer as slot pointer (type erasure support).
         /// @param ptr Raw T* pointer (must point to a slot in this pool).
         /// @return Pointer to the containing slot.
-        static slot* ptr_to_slot(T* ptr) noexcept;
+        static slot* ptr_to_slot(T* ptr) noexcept
+        {
+            // Reinterpret T* as the address of the slot's storage member
+            return reinterpret_cast<slot*>(reinterpret_cast<std::byte*>(ptr) - offsetof(slot, storage));
+        }
 
         /// @brief Reinterprets slot pointer as T pointer.
         /// @param s Pointer to a slot.
         /// @return Pointer to the T object within the slot.
-        static T* slot_to_ptr(slot* s) noexcept;
+        static T* slot_to_ptr(slot* s) noexcept { return reinterpret_cast<T*>(&s->storage); }
 
         // buffer_handle needs access to release() and slot conversion
         friend class buffer_handle<T>;
@@ -170,7 +174,7 @@ namespace kmx::aio
         buffer_handle() noexcept = default;
 
         /// @brief Destructor: returns the buffer to the pool (if valid).
-        ~buffer_handle() noexcept;
+        ~buffer_handle() noexcept { reset(); }
 
         /// @brief Non-copyable.
         buffer_handle(const buffer_handle&) = delete;
@@ -178,38 +182,86 @@ namespace kmx::aio
         buffer_handle& operator=(const buffer_handle&) = delete;
 
         /// @brief Move constructor.
-        buffer_handle(buffer_handle&& other) noexcept;
+        buffer_handle(buffer_handle&& other) noexcept:
+            buffer_(std::exchange(other.buffer_, nullptr)),
+            pool_(std::exchange(other.pool_, nullptr)),
+            release_fn_(std::exchange(other.release_fn_, nullptr))
+        {
+        }
 
         /// @brief Move assignment operator.
-        buffer_handle& operator=(buffer_handle&& other) noexcept;
+        buffer_handle& operator=(buffer_handle&& other) noexcept
+        {
+            if (this != &other)
+            {
+                reset();
+                buffer_ = std::exchange(other.buffer_, nullptr);
+                pool_ = std::exchange(other.pool_, nullptr);
+                release_fn_ = std::exchange(other.release_fn_, nullptr);
+            }
+
+            return *this;
+        }
 
         /// @brief Dereference operator: obtains mutable reference to the buffer.
         /// @return Reference to the leased buffer.
         /// @throws std::logic_error if the handle is invalid (already moved or default-constructed).
-        [[nodiscard]] T& operator*() noexcept(false);
+        [[nodiscard]] T& operator*() noexcept(false)
+        {
+            validate_or_throw();
+            return *buffer_;
+        }
+
         /// @brief Dereference operator (const overload).
-        [[nodiscard]] const T& operator*() const noexcept(false);
+        [[nodiscard]] const T& operator*() const noexcept(false)
+        {
+            validate_or_throw();
+            return *buffer_;
+        }
 
         /// @brief Arrow operator: obtains mutable pointer to the buffer for member access.
         /// @return Pointer to the leased buffer.
         /// @throws std::logic_error if the handle is invalid.
-        [[nodiscard]] T* operator->() noexcept(false);
+        [[nodiscard]] T* operator->() noexcept(false)
+        {
+            validate_or_throw();
+            return buffer_;
+        }
+
         /// @brief Arrow operator (const overload).
-        [[nodiscard]] const T* operator->() const noexcept(false);
+        [[nodiscard]] const T* operator->() const noexcept(false)
+        {
+            validate_or_throw();
+            return buffer_;
+        }
 
         /// @brief Obtains raw pointer to the buffer.
         /// @return Pointer to the leased buffer, or nullptr if invalid.
-        [[nodiscard]] T* get() noexcept;
+        [[nodiscard]] T* get() noexcept { return buffer_; }
         /// @brief Get raw pointer (const overload).
-        [[nodiscard]] const T* get() const noexcept;
+        [[nodiscard]] const T* get() const noexcept { return buffer_; }
 
         /// @brief Checks if the handle holds a valid buffer.
-        [[nodiscard]] bool valid() const noexcept;
+        [[nodiscard]] bool valid() const noexcept
+        {
+            // LCOV_EXCL_BR_LINE: a handle is either fully constructed or fully empty - the three members
+            // are set together and cleared together - so the mixed combinations this tests for cannot be
+            // built. The check stays because it is the invariant, not an assumption.
+            return (buffer_ != nullptr) && (pool_ != nullptr) && (release_fn_ != nullptr); // LCOV_EXCL_BR_LINE
+        }
 
         /// @brief Explicitly releases the buffer back to the pool before destruction.
         /// @details After calling this, the handle becomes invalid. Useful for
         /// deterministic cleanup in performance-critical code.
-        void reset() noexcept;
+        void reset() noexcept
+        {
+            if (valid())
+                release_fn_(pool_, buffer_);
+
+            buffer_ = nullptr;
+            pool_ = nullptr;
+            release_fn_ = nullptr;
+        }
 
     private:
         /// @brief Raw pointer to the leased buffer.
@@ -225,28 +277,22 @@ namespace kmx::aio
         release_fn_t release_fn_ = nullptr;
 
         /// @brief Helper to validate the handle.
-        void validate_or_throw() const noexcept(false);
+        void validate_or_throw() const noexcept(false)
+        {
+            if (!valid())
+                throw std::logic_error("buffer_handle: invalid or moved-from handle");
+        }
 
         /// @brief Private constructor used by buffer_pool::acquire().
         /// @param buf Raw pointer to the acquired buffer.
         /// @param pool Type-erased pointer to the pool.
         /// @param release_fn Function that will be called on destruction to release the buffer.
-        buffer_handle(T* buf, void* pool, release_fn_t release_fn) noexcept;
+        buffer_handle(T* buf, void* pool, release_fn_t release_fn) noexcept: buffer_(buf), pool_(pool), release_fn_(release_fn) {}
 
         // All buffer_pool specializations are friends
         template <typename U, std::size_t C>
         friend class buffer_pool;
     };
-
-    // ===================================================================
-    // Inline implementations
-    // ===================================================================
-
-    template <typename T, std::size_t Capacity>
-    constexpr std::size_t buffer_pool<T, Capacity>::capacity() noexcept
-    {
-        return Capacity;
-    }
 
     template <typename T, std::size_t Capacity>
     buffer_pool<T, Capacity>::buffer_pool() noexcept
@@ -324,30 +370,6 @@ namespace kmx::aio
     }
 
     template <typename T, std::size_t Capacity>
-    std::size_t buffer_pool<T, Capacity>::available() const noexcept
-    {
-        return Capacity - allocated_count_.load(std::memory_order_acquire);
-    }
-
-    template <typename T, std::size_t Capacity>
-    std::size_t buffer_pool<T, Capacity>::allocated() const noexcept
-    {
-        return allocated_count_.load(std::memory_order_acquire);
-    }
-
-    template <typename T, std::size_t Capacity>
-    bool buffer_pool<T, Capacity>::is_full() const noexcept
-    {
-        return allocated_count_.load(std::memory_order_acquire) == Capacity;
-    }
-
-    template <typename T, std::size_t Capacity>
-    bool buffer_pool<T, Capacity>::is_empty() const noexcept
-    {
-        return allocated_count_.load(std::memory_order_acquire) == 0;
-    }
-
-    template <typename T, std::size_t Capacity>
     void buffer_pool<T, Capacity>::release(T* ptr) noexcept
     {
         // LCOV_EXCL_BR_LINE / LCOV_EXCL_LINE on the return: release() is private and reached only
@@ -370,122 +392,4 @@ namespace kmx::aio
         // Decrement allocated count
         allocated_count_.fetch_sub(1, std::memory_order_release);
     }
-
-    template <typename T, std::size_t Capacity>
-    typename buffer_pool<T, Capacity>::slot* buffer_pool<T, Capacity>::ptr_to_slot(T* ptr) noexcept
-    {
-        // Reinterpret T* as the address of the slot's storage member
-        return reinterpret_cast<slot*>(reinterpret_cast<std::byte*>(ptr) - offsetof(slot, storage));
-    }
-
-    template <typename T, std::size_t Capacity>
-    T* buffer_pool<T, Capacity>::slot_to_ptr(slot* s) noexcept
-    {
-        return reinterpret_cast<T*>(&s->storage);
-    }
-
-    // buffer_handle implementations
-    template <typename T>
-    buffer_handle<T>::buffer_handle(T* buf, void* pool, release_fn_t release_fn) noexcept:
-        buffer_(buf),
-        pool_(pool),
-        release_fn_(release_fn)
-    {
-    }
-
-    template <typename T>
-    buffer_handle<T>::~buffer_handle() noexcept
-    {
-        reset();
-    }
-
-    template <typename T>
-    buffer_handle<T>::buffer_handle(buffer_handle&& other) noexcept:
-        buffer_(std::exchange(other.buffer_, nullptr)),
-        pool_(std::exchange(other.pool_, nullptr)),
-        release_fn_(std::exchange(other.release_fn_, nullptr))
-    {
-    }
-
-    template <typename T>
-    buffer_handle<T>& buffer_handle<T>::operator=(buffer_handle&& other) noexcept
-    {
-        if (this != &other)
-        {
-            reset();
-            buffer_ = std::exchange(other.buffer_, nullptr);
-            pool_ = std::exchange(other.pool_, nullptr);
-            release_fn_ = std::exchange(other.release_fn_, nullptr);
-        }
-
-        return *this;
-    }
-
-    template <typename T>
-    T& buffer_handle<T>::operator*() noexcept(false)
-    {
-        validate_or_throw();
-        return *buffer_;
-    }
-
-    template <typename T>
-    const T& buffer_handle<T>::operator*() const noexcept(false)
-    {
-        validate_or_throw();
-        return *buffer_;
-    }
-
-    template <typename T>
-    T* buffer_handle<T>::operator->() noexcept(false)
-    {
-        validate_or_throw();
-        return buffer_;
-    }
-
-    template <typename T>
-    const T* buffer_handle<T>::operator->() const noexcept(false)
-    {
-        validate_or_throw();
-        return buffer_;
-    }
-
-    template <typename T>
-    T* buffer_handle<T>::get() noexcept
-    {
-        return buffer_;
-    }
-
-    template <typename T>
-    const T* buffer_handle<T>::get() const noexcept
-    {
-        return buffer_;
-    }
-
-    template <typename T>
-    bool buffer_handle<T>::valid() const noexcept
-    {
-        // LCOV_EXCL_BR_LINE: a handle is either fully constructed or fully empty - the three members
-        // are set together and cleared together - so the mixed combinations this tests for cannot be
-        // built. The check stays because it is the invariant, not an assumption.
-        return (buffer_ != nullptr) && (pool_ != nullptr) && (release_fn_ != nullptr); // LCOV_EXCL_BR_LINE
-    }
-
-    template <typename T>
-    void buffer_handle<T>::reset() noexcept
-    {
-        if (valid())
-            release_fn_(pool_, buffer_);
-
-        buffer_ = nullptr;
-        pool_ = nullptr;
-        release_fn_ = nullptr;
-    }
-
-    template <typename T>
-    void buffer_handle<T>::validate_or_throw() const noexcept(false)
-    {
-        if (!valid())
-            throw std::logic_error("buffer_handle: invalid or moved-from handle");
-    }
-
 } // namespace kmx::aio

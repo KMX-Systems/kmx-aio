@@ -7,6 +7,111 @@
 
 namespace kmx::aio
 {
+    slab_allocator::slab_allocator(const std::size_t slot_size, const std::size_t slot_count) noexcept(false):
+        slot_size_(align_up(slot_size, alignof(std::max_align_t))),
+        slot_count_(slot_count),
+        storage_(slot_size_ * slot_count_)
+    {
+        // Build the embedded free-list by chaining slot headers
+        free_head_ = nullptr;
+        for (std::size_t i = slot_count_; i > 0u; --i)
+        {
+            auto* const slot = reinterpret_cast<slot_header*>(storage_.data() + ((i - 1u) * slot_size_));
+            slot->next = free_head_;
+            free_head_ = slot;
+        }
+    }
+
+    slab_allocator::slab_allocator(slab_allocator&& other) noexcept:
+        slot_size_(other.slot_size_),
+        slot_count_(other.slot_count_),
+        storage_(std::move(other.storage_)),
+        free_head_(other.free_head_),
+        remote_free_head_(other.remote_free_head_.exchange(nullptr, std::memory_order_acq_rel)),
+        allocated_(other.allocated_)
+    {
+        other.free_head_ = nullptr;
+        other.allocated_ = 0u;
+    }
+
+    slab_allocator& slab_allocator::operator=(slab_allocator&& other) noexcept
+    {
+        if (this != &other)
+        {
+            slot_size_ = other.slot_size_;
+            slot_count_ = other.slot_count_;
+            storage_ = std::move(other.storage_);
+            free_head_ = other.free_head_;
+            remote_free_head_.store(other.remote_free_head_.exchange(nullptr, std::memory_order_acq_rel), std::memory_order_relaxed);
+            allocated_ = other.allocated_;
+            other.free_head_ = nullptr;
+            other.allocated_ = 0u;
+        }
+
+        return *this;
+    }
+
+    void* slab_allocator::allocate() noexcept
+    {
+        if (free_head_ == nullptr)
+            adopt_remote_free_list();
+
+        if (free_head_ == nullptr)
+            return nullptr;
+
+        auto* const slot = free_head_;
+        free_head_ = slot->next;
+        ++allocated_;
+        return static_cast<void*>(slot);
+    }
+
+    void slab_allocator::deallocate(void* const ptr) noexcept
+    {
+        if (ptr == nullptr)
+            return;
+
+        auto* const slot = static_cast<slot_header*>(ptr);
+        slot->next = free_head_;
+        free_head_ = slot;
+        --allocated_;
+    }
+
+    void slab_allocator::deallocate_remote(void* const ptr) noexcept
+    {
+        if (ptr == nullptr)
+            return;
+
+        auto* const slot = static_cast<slot_header*>(ptr);
+        auto* head = remote_free_head_.load(std::memory_order_relaxed);
+        do
+        {
+            slot->next = head;
+        } while (!remote_free_head_.compare_exchange_weak(head, slot, std::memory_order_release, std::memory_order_relaxed));
+    }
+
+    bool slab_allocator::owns(const void* const ptr) const noexcept
+    {
+        if (ptr == nullptr)
+            return false;
+
+        const auto* const p = static_cast<const std::byte*>(ptr);
+        const auto* const start = storage_.data();
+        return p >= start && p < (start + storage_.size());
+    }
+
+    void slab_allocator::adopt_remote_free_list() noexcept
+    {
+        auto* slot = remote_free_head_.exchange(nullptr, std::memory_order_acquire);
+        while (slot != nullptr)
+        {
+            auto* const next = slot->next;
+            slot->next = free_head_;
+            free_head_ = slot;
+            --allocated_;
+            slot = next;
+        }
+    }
+
     namespace detail
     {
         /// @brief Guards the registry of per-thread blocks.
