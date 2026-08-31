@@ -80,6 +80,9 @@ namespace kmx::aio::someip::test::integration
                                                       const std::string_view binary_name) -> std::optional<fs::path>
     {
         const std::vector<fs::path> debug_dirs = {
+            // Where the scripts build (see script/feature/common.sh), then the two in-tree locations a bare
+            // "qbs build" leaves behind depending on the directory it was run from.
+            repo_root / "output" / "debug",
             repo_root / "debug",
             repo_root / "source" / "debug",
         };

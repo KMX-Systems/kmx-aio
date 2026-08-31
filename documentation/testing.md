@@ -249,22 +249,121 @@ LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} \
 
 ## Sanitizers
 
-Run tests with a specific sanitizer by setting the QBS project property during build:
+`script/run-sanitizer-tests.sh` builds the project instrumented and runs the unit tests against it:
+
+```bash
+bash script/run-sanitizer-tests.sh              # AddressSanitizer + UndefinedBehaviorSanitizer
+bash script/run-sanitizer-tests.sh asan
+bash script/run-sanitizer-tests.sh ubsan
+bash script/run-sanitizer-tests.sh tsan
+bash script/run-sanitizer-tests.sh tsan+ubsan
+```
+
+Feature selection works exactly as it does for `script/run-unit-tests.sh`:
+
+```bash
+KMX_ENABLE_READINESS=true KMX_ENABLE_QUIC=true bash script/run-sanitizer-tests.sh asan+ubsan
+```
+
+Each selection builds into its own tree — `output/asan-ubsan`, `output/tsan`, and so on — so an
+instrumented build never displaces the ordinary `output/debug` one, and no uninstrumented
+`kmx-aio-test` is left where the instrumented one is expected.
+
+ASan and TSan cannot be combined: they ship mutually exclusive runtimes, and the build rejects the
+combination rather than producing a binary that half works. UBSan combines with either.
+
+### Building Under A Sanitizer By Hand
+
+The runner is a wrapper over project properties, so a build from the command line or from Qt Creator
+sets the same switches:
 
 - `project.enable_asan:true` — AddressSanitizer
+- `project.enable_ubsan:true` — UndefinedBehaviorSanitizer
 - `project.enable_tsan:true` — ThreadSanitizer
-
-Example:
 
 ```bash
 cd source
-qbs build -f source.qbs config:debug -j"$(nproc)" project.enable_asan:true
+qbs build -f source.qbs -d ../output/asan config:debug -j"$(nproc)" \
+    project.enable_asan:true project.enable_ubsan:true
 cd ..
 
-TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
-if [[ -d /opt/gcc-16/lib64 ]]; then
+TEST_BIN="$(find output/asan -type f -name kmx-aio-test | head -n 1)"
+UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 \
     LD_LIBRARY_PATH="/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-}" timeout 120s "$TEST_BIN"
-else
-    timeout 120s "$TEST_BIN"
-fi
 ```
+
+The flags themselves live in one place, the `kmx_instrumentation` QBS module under
+`source/qbs/modules/`, which every product depends on and every library re-exports. That is what puts
+the same `-fsanitize=` on the libraries, the samples and the test binary: a static library compiled
+with ASan needs the executable linking it to bring in the ASan runtime, or the link fails outright.
+
+### Runtime Options
+
+`script/feature/common.sh` sets the environment every instrumented binary it launches needs, and only
+fills in a variable the caller has not already set:
+
+| Variable | Default the runner applies |
+| :--- | :--- |
+| `ASAN_OPTIONS` | `detect_leaks=1:detect_stack_use_after_return=1:strict_string_checks=1:check_initialization_order=1:print_stacktrace=1` |
+| `UBSAN_OPTIONS` | `print_stacktrace=1:halt_on_error=1` |
+| `TSAN_OPTIONS` | `halt_on_error=1:second_deadlock_stack=1` |
+| `LSAN_OPTIONS` | `suppressions=script/sanitizer/lsan.supp` |
+
+`halt_on_error=1` is what makes a UBSan finding fail the run: UBSan otherwise recovers from every
+check and the process still exits 0.
+
+Suppressions live in `script/sanitizer/lsan.supp` and `script/sanitizer/tsan.supp`, and are picked up
+automatically. Both start empty of active rules — a leak or race in this library's own code is a bug
+to fix, not one to suppress; the files are for allocations and synchronisation that genuinely belong
+to a third-party library.
+
+## Coverage
+
+`script/run-coverage.sh` builds with `gcov` instrumentation, runs the tests, and turns the counters
+into a report:
+
+```bash
+bash script/run-coverage.sh                  # unit tests, lcov report + HTML
+bash script/run-coverage.sh --integration    # unit and integration tests
+bash script/run-coverage.sh --no-html        # tracefile and summary only
+bash script/run-coverage.sh --gcov-only      # plain gcov listings, no lcov
+```
+
+The instrumented build goes to `output/coverage`, and the report to `output/coverage-report`:
+
+| Path | Contents |
+| :--- | :--- |
+| `output/coverage-report/coverage.info` | lcov tracefile, filtered down to `source/library` |
+| `output/coverage-report/html/index.html` | browsable report, from `genhtml` |
+| `output/coverage-report/gcov/` | per-file `.gcov` listings, from `--gcov-only` or when lcov is missing |
+
+lcov is optional. Without it the script falls back to plain `gcov` and prints a per-file summary; the
+report is then per translation unit, so a header included by several `.cpp` files is listed once for
+each of them. Merging those is what lcov adds:
+
+```bash
+sudo apt-get install lcov        # Debian/Ubuntu
+sudo dnf install lcov            # Fedora/RHEL
+```
+
+The `.gcno` and `.gcda` files carry a format version stamp that has to match the compiler exactly, and
+these builds use a GCC that is usually newer than the system one. The script therefore uses the `gcov`
+sitting next to the profile's compiler rather than whatever is first in `PATH`; `GCOV=/path/to/gcov`
+overrides that choice.
+
+Counters accumulate across runs by design, so each run clears them first. Pass `--keep-data` to
+combine several runs into one report on purpose.
+
+Coverage can be combined with a sanitizer — `project.enable_coverage:true` alongside
+`project.enable_asan:true` — though the two are usually more informative apart.
+
+### Building With Coverage By Hand
+
+```bash
+cd source
+qbs build -f source.qbs -d ../output/coverage config:debug -j"$(nproc)" project.enable_coverage:true
+```
+
+This compiles with `--coverage -fprofile-update=atomic -fprofile-abs-path`. The atomic counter updates
+matter here: this library is threaded throughout, and the default non-atomic updates lose increments
+when two threads take the same arc, which reads as covered lines being reported cold.

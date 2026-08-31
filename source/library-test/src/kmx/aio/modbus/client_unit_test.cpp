@@ -42,11 +42,11 @@ namespace kmx::aio::modbus::test
         task<std::expected<T, std::error_code>> coro)
     {
         std::optional<std::expected<T, std::error_code>> result;
-        exec->spawn(
-            [&result, exec](task<std::expected<T, std::error_code>> t) -> task<void>
-            {
-                result.emplace(co_await t);
-            }(std::move(coro)));
+        auto await_result = [&result, exec](task<std::expected<T, std::error_code>> t) -> task<void>
+        {
+            result.emplace(co_await t);
+        };
+        exec->spawn(await_result(std::move(coro)));
         exec->run();
         if (result && result->has_value())
             return result->value();
@@ -85,13 +85,13 @@ namespace kmx::aio::modbus::test
         std::ranges::copy(*req_pdu, req_adu.begin() + static_cast<std::ptrdiff_t>(mbap_size));
 
         std::optional<std::vector<std::uint8_t>> raw_response;
-        exec->spawn(
-            [&, exec]() -> task<void>
-            {
-                auto r = co_await detail::exchange(ms, req_adu, tid, unit_id);
-                if (r)
-                    raw_response = *r;
-            }());
+        auto run_exchange = [&, exec]() -> task<void>
+        {
+            auto r = co_await detail::exchange(ms, req_adu, tid, unit_id);
+            if (r)
+                raw_response = *r;
+        };
+        exec->spawn(run_exchange());
         exec->run();
 
         REQUIRE(raw_response.has_value());
@@ -124,13 +124,13 @@ namespace kmx::aio::modbus::test
         std::ranges::copy(req_pdu, req_adu.begin() + static_cast<std::ptrdiff_t>(mbap_size));
 
         std::optional<std::vector<std::uint8_t>> raw_response;
-        exec->spawn(
-            [&, exec]() -> task<void>
-            {
-                auto r = co_await detail::exchange(ms, req_adu, tid, unit_id);
-                if (r)
-                    raw_response = *r;
-            }());
+        auto run_exchange = [&, exec]() -> task<void>
+        {
+            auto r = co_await detail::exchange(ms, req_adu, tid, unit_id);
+            if (r)
+                raw_response = *r;
+        };
+        exec->spawn(run_exchange());
         exec->run();
 
         REQUIRE(raw_response.has_value());
@@ -158,13 +158,13 @@ namespace kmx::aio::modbus::test
         std::ranges::copy(*req_pdu, req_adu.begin() + static_cast<std::ptrdiff_t>(mbap_size));
 
         std::optional<std::vector<std::uint8_t>> raw_response;
-        exec->spawn(
-            [&, exec]() -> task<void>
-            {
-                auto r = co_await detail::exchange(ms, req_adu, tid, unit_id);
-                if (r)
-                    raw_response = *r;
-            }());
+        auto run_exchange = [&, exec]() -> task<void>
+        {
+            auto r = co_await detail::exchange(ms, req_adu, tid, unit_id);
+            if (r)
+                raw_response = *r;
+        };
+        exec->spawn(run_exchange());
         exec->run();
 
         REQUIRE(raw_response.has_value());
@@ -199,13 +199,13 @@ namespace kmx::aio::modbus::test
         std::ranges::copy(*req_pdu, req_adu.begin() + static_cast<std::ptrdiff_t>(mbap_size));
 
         std::optional<std::vector<std::uint8_t>> raw_response;
-        exec->spawn(
-            [&, exec]() -> task<void>
-            {
-                auto r = co_await detail::exchange(ms, req_adu, tid, unit_id);
-                if (r)
-                    raw_response = *r;
-            }());
+        auto run_exchange = [&, exec]() -> task<void>
+        {
+            auto r = co_await detail::exchange(ms, req_adu, tid, unit_id);
+            if (r)
+                raw_response = *r;
+        };
+        exec->spawn(run_exchange());
         exec->run();
 
         // Exchange itself succeeds; the exception is encoded in the PDU
@@ -235,13 +235,13 @@ namespace kmx::aio::modbus::test
         std::ranges::copy(*req_pdu, req_adu.begin() + static_cast<std::ptrdiff_t>(mbap_size));
 
         bool got_tid_error = false;
-        exec->spawn(
-            [&, exec]() -> task<void>
-            {
-                auto r = co_await detail::exchange(ms, req_adu, req_tid, unit_id);
-                if (!r && r.error() == make_error_code(error::unexpected_transaction_id))
-                    got_tid_error = true;
-            }());
+        auto run_exchange = [&, exec]() -> task<void>
+        {
+            auto r = co_await detail::exchange(ms, req_adu, req_tid, unit_id);
+            if (!r && r.error() == make_error_code(error::unexpected_transaction_id))
+                got_tid_error = true;
+        };
+        exec->spawn(run_exchange());
         exec->run();
 
         CHECK(got_tid_error);
@@ -266,13 +266,13 @@ namespace kmx::aio::modbus::test
         std::ranges::copy(*req_pdu, req_adu.begin() + static_cast<std::ptrdiff_t>(mbap_size));
 
         bool got_unit_error = false;
-        exec->spawn(
-            [&, exec]() -> task<void>
-            {
-                auto r = co_await detail::exchange(ms, req_adu, tid, req_unit_id);
-                if (!r && r.error() == make_error_code(error::invalid_unit_id))
-                    got_unit_error = true;
-            }());
+        auto run_exchange = [&, exec]() -> task<void>
+        {
+            auto r = co_await detail::exchange(ms, req_adu, tid, req_unit_id);
+            if (!r && r.error() == make_error_code(error::invalid_unit_id))
+                got_unit_error = true;
+        };
+        exec->spawn(run_exchange());
         exec->run();
 
         CHECK(got_unit_error);
@@ -291,13 +291,13 @@ namespace kmx::aio::modbus::test
         std::ranges::copy(*req_pdu, req_adu.begin() + static_cast<std::ptrdiff_t>(mbap_size));
 
         bool got_disconnect = false;
-        exec->spawn(
-            [&, exec]() -> task<void>
-            {
-                auto r = co_await detail::exchange(ms, req_adu, 1u, 1u);
-                if (!r && r.error() == make_error_code(error::disconnected))
-                    got_disconnect = true;
-            }());
+        auto run_exchange = [&, exec]() -> task<void>
+        {
+            auto r = co_await detail::exchange(ms, req_adu, 1u, 1u);
+            if (!r && r.error() == make_error_code(error::disconnected))
+                got_disconnect = true;
+        };
+        exec->spawn(run_exchange());
         exec->run();
 
         CHECK(got_disconnect);
@@ -325,13 +325,13 @@ namespace kmx::aio::modbus::test
                           req_adu.begin() + static_cast<std::ptrdiff_t>(mbap_size));
 
         std::optional<std::vector<std::uint8_t>> raw_response;
-        exec->spawn(
-            [&, exec]() -> task<void>
-            {
-                auto r = co_await detail::exchange(ms, req_adu, tid, unit_id);
-                if (r)
-                    raw_response = *r;
-            }());
+        auto run_exchange = [&, exec]() -> task<void>
+        {
+            auto r = co_await detail::exchange(ms, req_adu, tid, unit_id);
+            if (r)
+                raw_response = *r;
+        };
+        exec->spawn(run_exchange());
         exec->run();
 
         REQUIRE(raw_response.has_value());

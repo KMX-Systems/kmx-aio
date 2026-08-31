@@ -13,9 +13,9 @@ Options:
   --accelerators  Install shared optional accelerator/system dependencies.
   --af-xdp        Install AF_XDP dependencies.
   --avb           Install AVB/PTP host tooling.
-  --spdk          Install and build local SPDK prefix under build/spdk-local.
+  --spdk          Install and build local SPDK prefix under output/spdk-local.
   --v4l2          Install V4L2 host tooling.
-  --quic          Install/build BoringSSL + lsquic.
+  --quic          Use the installed BoringSSL + lsquic, or build the pinned versions when missing or too old.
   --opc-ua        Install/build open62541 local prefix.
   --someip        Install/build vsomeip local prefix.
   --cuda-check    Run CUDA environment preflight check.

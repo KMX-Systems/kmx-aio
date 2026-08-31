@@ -34,6 +34,12 @@ namespace kmx::aio
     ///   safely acquire/release buffers concurrently. However, individual buffers
     ///   are NOT protected and must not be shared across threads.
     ///
+    ///   The mutex is deliberate. A compare-and-swap free list was measured against it here and lost
+    ///   twice over: about 2 ns per lease slower with one thread, and three to four times slower with
+    ///   four threads hammering one pool, because every thread then retries its swap against the same
+    ///   contended head while the mutex simply serializes a critical section a few nanoseconds long.
+    ///   See documentation/benchmarking.md.
+    ///
     /// MEMORY LAYOUT:
     ///   - Preallocates Capacity buffers at construction (no heap growth).
     ///   - Free list is intrusive (embedded in unused slots, zero malloc overhead).
@@ -344,8 +350,11 @@ namespace kmx::aio
     template <typename T, std::size_t Capacity>
     void buffer_pool<T, Capacity>::release(T* ptr) noexcept
     {
-        if (ptr == nullptr)
-            return;
+        // LCOV_EXCL_BR_LINE / LCOV_EXCL_LINE on the return: release() is private and reached only
+        // through buffer_handle, which checks its pointer before calling. The guard stays because the
+        // class is the one thing standing between a double release and a corrupted free list.
+        if (ptr == nullptr) // LCOV_EXCL_BR_LINE
+            return;         // LCOV_EXCL_LINE
 
         std::lock_guard<std::mutex> lock(free_list_mutex_);
 
@@ -455,7 +464,10 @@ namespace kmx::aio
     template <typename T>
     bool buffer_handle<T>::valid() const noexcept
     {
-        return (buffer_ != nullptr) && (pool_ != nullptr) && (release_fn_ != nullptr);
+        // LCOV_EXCL_BR_LINE: a handle is either fully constructed or fully empty - the three members
+        // are set together and cleared together - so the mixed combinations this tests for cannot be
+        // built. The check stays because it is the invariant, not an assumption.
+        return (buffer_ != nullptr) && (pool_ != nullptr) && (release_fn_ != nullptr); // LCOV_EXCL_BR_LINE
     }
 
     template <typename T>

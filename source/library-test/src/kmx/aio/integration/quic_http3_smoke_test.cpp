@@ -96,6 +96,9 @@ namespace kmx::aio::quic::test::integration
                                                       const std::string_view binary_name) -> std::optional<fs::path>
     {
         const std::vector<fs::path> debug_dirs = {
+            // Where the scripts build (see script/feature/common.sh), then the two in-tree locations a bare
+            // "qbs build" leaves behind depending on the directory it was run from.
+            repo_root / "output" / "debug",
             repo_root / "debug",
             repo_root / "source" / "debug",
         };
@@ -125,22 +128,26 @@ namespace kmx::aio::quic::test::integration
         return newest_path;
     }
 
+    /// SPDK is installed into its own prefix rather than next to the sample binaries, so when a build has
+    /// the SPDK feature on, the samples need that directory on their library path. It is optional: a build
+    /// without SPDK produces samples that never load it. Only the directory is looked for here, not any
+    /// particular soname, so an SPDK built at a different version is still found.
     [[nodiscard]] static auto find_spdk_runtime_dir(const fs::path& repo_root) -> std::optional<fs::path>
     {
-        const std::vector<fs::path> search_roots = {
-            repo_root / "build",
-            repo_root / "debug",
-            repo_root / "default",
+        const fs::path install_prefix = repo_root / "output" / "spdk-local" / "install-local";
+        const std::vector<fs::path> library_dirs = {
+            install_prefix / "lib",
+            install_prefix / "lib64",
         };
 
-        for (const auto& root: search_roots)
+        for (const auto& library_dir: library_dirs)
         {
-            if (!fs::exists(root) || !fs::is_directory(root))
+            if (!fs::exists(library_dir) || !fs::is_directory(library_dir))
                 continue;
 
-            for (const auto& entry: fs::recursive_directory_iterator(root))
-                if (entry.is_regular_file() && entry.path().filename() == "libspdk_env_dpdk.so.15.0")
-                    return entry.path().parent_path();
+            for (const auto& entry: fs::directory_iterator(library_dir))
+                if (entry.is_regular_file() && entry.path().filename().string().starts_with("libspdk_env_dpdk.so"))
+                    return library_dir;
         }
 
         return std::nullopt;
@@ -161,8 +168,9 @@ namespace kmx::aio::quic::test::integration
         const auto client_bin_opt = find_binary_under_debug(repo_root, client_bin_name);
         const auto spdk_runtime_dir_opt = find_spdk_runtime_dir(repo_root);
 
-        if (!server_bin_opt.has_value() || !client_bin_opt.has_value() || !spdk_runtime_dir_opt.has_value())
-            SKIP("QUIC smoke skipped: build readiness/completion QUIC sample binaries first");
+        if (!server_bin_opt.has_value() || !client_bin_opt.has_value())
+            SKIP(std::string("QUIC smoke skipped: sample binary not built: ") +
+                 (server_bin_opt.has_value() ? client_bin_name : server_bin_name));
 
         if (!ensure_quic_certificates())
             SKIP("QUIC smoke skipped: failed to generate /tmp/quic_cert.pem and /tmp/quic_key.pem");
@@ -177,7 +185,9 @@ namespace kmx::aio::quic::test::integration
             fs::path("/tmp") /
             ((is_completion ? "kmx_http3_client_smoke_" : "kmx_quic_readiness_echo_client_smoke_") + std::to_string(now_ns) + ".log");
         const std::string port_env = (is_completion ? "KMX_QUIC_HTTP3_PORT=" : "KMX_QUIC_ECHO_PORT=") + std::to_string(test_port);
-        const std::string ld_library_path = "LD_LIBRARY_PATH=/opt/gcc-16/lib64:" + spdk_runtime_dir_opt->string() + ":${LD_LIBRARY_PATH:-}";
+        const std::string ld_library_path = "LD_LIBRARY_PATH=/opt/gcc-16/lib64:" +
+                                            (spdk_runtime_dir_opt.has_value() ? spdk_runtime_dir_opt->string() + ":" : std::string {}) +
+                                            "${LD_LIBRARY_PATH:-}";
 
         const std::string server_cmd = "env " + port_env + " " + ld_library_path + " stdbuf -oL -eL " +
                                        shell_quote(server_bin_opt->string()) + " > " + shell_quote(server_log.string()) + " 2>&1";

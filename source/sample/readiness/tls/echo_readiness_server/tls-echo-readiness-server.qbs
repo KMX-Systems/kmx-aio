@@ -14,10 +14,8 @@ CppApplication {
         "../../../../library/inc_dep",
     ]
     cpp.dynamicLibraries: [
-        "crypto",
-        "ssl",
-        "pthread"
-    ]
+        "pthread",
+    ].concat(project.tls_libraries)
     files: [
         "inc/kmx/aio/sample/tls/echo_readiness_server/**.hpp",
         "src/kmx/aio/sample/tls/echo_readiness_server/**.cpp",

@@ -177,6 +177,16 @@ namespace kmx::aio::completion
         /// @warning The executor is not owned by the spawned task. The caller must keep this
         ///          executor object alive until the task completes (or until run()/stop() has
         ///          fully drained pending work); destroying it earlier is undefined behaviour.
+        /// @warning A lambda coroutine does not own its closure: the closure object is a temporary
+        ///          destroyed at the end of the full-expression, while the coroutine frame keeps a
+        ///          pointer into it. Spawning one directly - spawn([&]() -> task<void> { ... }()) -
+        ///          therefore leaves every capture dangling from the first suspension onwards. Give
+        ///          the lambda a name that outlives the run, or spawn a coroutine function instead,
+        ///          whose parameters are copied into the frame:
+        ///          @code
+        ///          auto body = [&]() -> task<void> { ... };   // outlives exec.run()
+        ///          exec.spawn(body());
+        ///          @endcode
         void spawn(task<void>&& t) noexcept(false);
 
         /// @brief Runs the completion event loop. Blocks until stop() is called.
@@ -232,9 +242,20 @@ namespace kmx::aio::completion
         template <typename Prepare>
         [[nodiscard]] task<std::expected<int, std::error_code>> await_uring_result(Prepare&& prepare) noexcept(false);
 
-        /// @brief Submits all pending SQEs to the kernel.
-        /// @return Number of submitted entries, or error.
+        /// @brief Hands the prepared SQEs to the kernel, now or with the next wait.
+        /// @details A submission from the event loop's own thread is left in the ring: the loop waits
+        ///          with io_uring_submit_and_wait_timeout(), which carries whatever is pending into the
+        ///          kernel in the same io_uring_enter() as the wait. Every operation would otherwise
+        ///          cost an enter of its own on top of the one the loop already makes - two system
+        ///          calls per operation where one will do, and system calls are what this path is made
+        ///          of. Submissions from any other thread go immediately, because no wait of theirs is
+        ///          coming, and the loop may be asleep.
+        /// @return Number of entries handed to the kernel - zero when the submission was left for the
+        ///         loop - or an error.
         [[nodiscard]] std::expected<std::size_t, std::error_code> submit() noexcept;
+
+        /// @brief True when the calling thread is this executor's event-loop thread.
+        [[nodiscard]] bool on_loop_thread() const noexcept;
 
         /// @brief Reaps completions and resumes suspended coroutines.
         void process_completions() noexcept;
@@ -261,11 +282,17 @@ namespace kmx::aio::completion
                 {
                     bool await_ready() const noexcept { return false; }
                     void await_suspend(std::coroutine_handle<promise_type> h) const noexcept { h.destroy(); }
-                    void await_resume() const noexcept {}
+                    // LCOV_EXCL_LINE: await_suspend above destroys the frame, so nothing resumes to
+                    // run this. It exists because the awaiter concept asks for it.
+                    void await_resume() const noexcept {} // LCOV_EXCL_LINE
                 };
 
                 final_awaiter final_suspend() const noexcept { return {}; }
-                void unhandled_exception() noexcept { std::terminate(); }
+                // LCOV_EXCL_LINE: reaching this ends the process, so no test can take it and return.
+                // execute_task() catches std::exception around the whole body, which leaves only a
+                // throw of something not derived from it - and there is no sane way to continue from
+                // that inside a detached task whose frame is about to be destroyed.
+                void unhandled_exception() noexcept { std::terminate(); } // LCOV_EXCL_LINE
                 void return_void() const noexcept {}
             };
 

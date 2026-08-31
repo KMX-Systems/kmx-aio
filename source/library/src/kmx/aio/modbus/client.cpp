@@ -1,5 +1,7 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/modbus/client.hpp>
+
+#include <kmx/aio/error_code.hpp>
 #if defined(KMX_AIO_FEATURE_MODBUS)
     #include <kmx/aio/modbus/detail/client_ops.hpp>
     #include <kmx/aio/modbus/detail/session.hpp>
@@ -70,7 +72,8 @@ namespace kmx::aio::modbus
 
             // Wait for socket to become writable (connect completed)
             if (in_progress)
-                co_await exec_.wait_io(fd.get(), readiness::event_type::write);
+                if (!co_await exec_.wait_io(fd.get(), readiness::event_type::write))
+                    co_return std::unexpected(to_std_error_code(error_code::operation_cancelled));
 
             // Verify connection succeeded via SO_ERROR
             int so_error {};

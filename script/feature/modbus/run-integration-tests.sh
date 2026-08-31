@@ -38,18 +38,10 @@ generate_modbus_tls_certs /tmp/kmx_modbus_certs_reject
 test_bin="$(find_test_bin)"
 
 # Run core Modbus integration tests first.
-run_with_local_gcc_runtime timeout 25s "$test_bin" "[modbus][integration]~[tls]"
+run_catch_tests timeout 25s "$test_bin" "[modbus][integration]~[tls]"
 
-# Run TLS integration tests in isolated processes to avoid cross-test runtime interference.
-set +e
-run_with_local_gcc_runtime timeout 25s "$test_bin" "modbus tls: mTLS client and server exchange registers"
-mtls_status=$?
-set -e
-if [[ "$mtls_status" -ne 0 && "$mtls_status" -ne 4 ]]; then
-	exit "$mtls_status"
-fi
-if [[ "$mtls_status" -eq 4 ]]; then
-	echo "[modbus] mTLS exchange test skipped by Catch2 in current environment"
-fi
+# Run TLS integration tests in isolated processes to avoid cross-test runtime interference. A skip in an
+# environment without the certificates is not a failure; run_catch_tests already treats it as success.
+run_catch_tests timeout 25s "$test_bin" "modbus tls: mTLS client and server exchange registers"
 
-run_with_local_gcc_runtime timeout 25s "$test_bin" "modbus tls: server rejects client with missing certificate"
+run_catch_tests timeout 25s "$test_bin" "modbus tls: server rejects client with missing certificate"

@@ -48,8 +48,8 @@ if [[ "$run_build" == "true" ]]; then
     echo "==> Resolving/building SOME/IP targets"
     (
         cd "$source_dir"
-        qbs resolve -f source.qbs "${qbs_build_dir_args[@]}" config:debug project.enable_someip:true
-        qbs build -f source.qbs "${qbs_build_dir_args[@]}" config:debug project.enable_someip:true -j"$(nproc)"
+        qbs resolve -f source.qbs "${qbs_build_dir_args[@]}" "${qbs_profile_args[@]}" config:debug project.enable_someip:true "${qbs_instrumentation_args[@]}"
+        qbs build -f source.qbs "${qbs_build_dir_args[@]}" "${qbs_profile_args[@]}" config:debug project.enable_someip:true "${qbs_instrumentation_args[@]}" -j"$(nproc)"
     )
 fi
 

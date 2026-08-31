@@ -1,0 +1,17 @@
+# LeakSanitizer suppressions for kmx-aio.
+#
+# Read automatically by script/feature/common.sh whenever an ASan build runs, and only then: LSan takes
+# its options from LSAN_OPTIONS, which is set only when the address sanitizer is actually active.
+#
+# A suppression belongs here when the allocation is genuinely not ours to free - a library that
+# allocates once per process and hands ownership to no one, most often. Anything the library itself
+# allocates is a leak worth fixing, not worth suppressing. Each entry should say which library it
+# covers and why, so that a later toolchain or dependency update can tell whether it still applies.
+#
+# The syntax is one "leak:<substring>" per line, matched against function or library names in the
+# allocation stack, for example:
+#
+#     leak:libcrypto.so
+#     leak:vsomeip_v3::runtime::get
+#
+# No suppressions are active: every leak the current test suite reports is one to look at.

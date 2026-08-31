@@ -73,9 +73,9 @@ sudo apt install -y \
 Workspace-local SPDK build (recommended for this repository):
 
 ```bash
-git clone --depth 1 --branch v24.09 https://github.com/spdk/spdk.git build/spdk-local/src
-git -C build/spdk-local/src submodule update --init --recursive
-cd build/spdk-local/src
+git clone --depth 1 --branch v24.09 https://github.com/spdk/spdk.git output/spdk-local/src
+git -C output/spdk-local/src submodule update --init --recursive
+cd output/spdk-local/src
 ./configure --prefix="$PWD/../install-local" --with-shared \
     --disable-tests --disable-unit-tests --disable-apps --disable-examples
 make -j"$(nproc)"

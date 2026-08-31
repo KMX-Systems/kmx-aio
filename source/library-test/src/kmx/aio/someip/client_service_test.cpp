@@ -132,14 +132,14 @@ namespace kmx::aio::someip
         {
             auto request_state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
             completion::executor exec;
-            exec.spawn(
-                [&]() -> task<void>
-                {
-                    request_state->result.emplace(co_await c.request_service(0x1111u, 0x2222u));
-                    request_state->completed = true;
-                    exec.stop();
-                    co_return;
-                }());
+            auto body = [&]() -> task<void>
+            {
+                request_state->result.emplace(co_await c.request_service(0x1111u, 0x2222u));
+                request_state->completed = true;
+                exec.stop();
+                co_return;
+            };
+            exec.spawn(body());
             exec.run();
             REQUIRE(request_state->completed);
             REQUIRE(request_state->result.has_value());

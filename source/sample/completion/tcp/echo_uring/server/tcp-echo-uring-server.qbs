@@ -18,10 +18,8 @@ CppApplication {
     ]
     cpp.dynamicLibraries: [
         "uring",
-        "crypto",
-        "ssl",
-        "pthread"
-    ]
+        "pthread",
+    ].concat(project.tls_libraries)
     files: [
         "inc/kmx/aio/sample/tcp/echo_uring/server/**.hpp",
         "src/kmx/aio/sample/tcp/echo_uring/server/**.cpp",

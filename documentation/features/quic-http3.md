@@ -9,11 +9,16 @@ HTTP/3 sample applications are included under completion samples.
 
 ## Prerequisites
 
-Build BoringSSL and lsquic before using QUIC/TLS-enabled builds:
+Resolve BoringSSL and lsquic before using QUIC/TLS-enabled builds:
 
 ```bash
 bash script/feature/quic/install-dependencies.sh
 ```
+
+This uses the copies already installed on the system when they are new enough (BoringSSL API version 36
+or later, lsquic 4.x or later) and downloads and builds the pinned versions otherwise. The choice lands
+in `output/quic-dependencies.json`, which the Qbs project reads. See
+[setup](../setup.md#boringssl-and-lsquic-tlsquic) for the search order and the overrides.
 
 ## Quick Smoke Tests
 

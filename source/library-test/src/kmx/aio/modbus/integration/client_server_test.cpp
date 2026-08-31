@@ -189,22 +189,20 @@ namespace kmx::aio::modbus::test::integration
                                     .port         = test_port,
                                     .unit_id      = test_unit_id};
 
-        exec->spawn(
-            [exec, srv, config]()
-                -> task<void> { co_await srv->serve(*exec, config); }());
+        auto serve = [exec, srv, config]() -> task<void> { co_await srv->serve(*exec, config); };
+        exec->spawn(serve());
 
-        exec->spawn(
-            [&state, exec, srv]() -> task<void>
-            {
-                co_await exec->async_timeout(5'000'000u); // 5 ms
-                client c {{.host = "127.0.0.1", .port = test_port, .unit_id = test_unit_id}, *exec};
-                const auto r = co_await c.connect();
-                state.error = r ? std::optional<std::error_code> {} : std::optional {r.error()};
-                state.completed = true;
-                co_await c.disconnect();
-                srv->stop();
-                exec->stop();
-            }());
+        auto exchange = [&state, exec, srv]() -> task<void>
+        {
+            co_await exec->async_timeout(5'000'000u); // 5 ms
+            client c {{.host = "127.0.0.1", .port = test_port, .unit_id = test_unit_id}, *exec};
+            const auto r = co_await c.connect();
+            state.error = r ? std::optional<std::error_code> {} : std::optional {r.error()};
+            state.completed = true;
+            co_await c.disconnect();
+            srv->stop();
+        };
+        exec->spawn(exchange());
 
         exec->run();
 
@@ -229,59 +227,57 @@ namespace kmx::aio::modbus::test::integration
         std::optional<register_values> read_result;
         std::optional<std::error_code> op_error;
 
-        exec->spawn(
-            [exec, srv]() -> task<void>
+        auto serve = [exec, srv]() -> task<void>
+        {
+            co_await srv->serve(*exec,
+                                {.bind_address = "127.0.0.1", .port = test_port + 1u, .unit_id = test_unit_id});
+        };
+        exec->spawn(serve());
+
+        auto exchange = [&, exec, srv]() -> task<void>
+        {
+            co_await exec->async_timeout(5'000'000u);
+            client c {{.host = "127.0.0.1", .port = test_port + 1u, .unit_id = test_unit_id}, *exec};
+
+            if (const auto r = co_await c.connect(); !r)
             {
-                co_await srv->serve(*exec,
-                                    {.bind_address = "127.0.0.1", .port = test_port + 1u, .unit_id = test_unit_id});
-            }());
-
-        exec->spawn(
-            [&, exec, srv]() -> task<void>
-            {
-                co_await exec->async_timeout(5'000'000u);
-                client c {{.host = "127.0.0.1", .port = test_port + 1u, .unit_id = test_unit_id}, *exec};
-
-                if (const auto r = co_await c.connect(); !r)
-                {
-                    op_error = r.error();
-                    srv->stop();
-                    exec->stop();
-                    co_return;
-                }
-
-                // Read initial values
-                const auto read1 = co_await c.read_holding_registers(100u, 3u);
-                if (!read1)
-                {
-                    op_error = read1.error();
-                }
-                else
-                {
-                    read_result = *read1;
-                }
-
-                // Write new values then read back
-                const std::vector<std::uint16_t> new_vals {7u, 8u, 9u};
-                const auto write_r = co_await c.write_multiple_registers(100u, new_vals);
-                if (!write_r)
-                {
-                    op_error = write_r.error();
-                }
-                else
-                {
-                    const auto read2 = co_await c.read_holding_registers(100u, 3u);
-                    if (!read2)
-                        op_error = read2.error();
-                    else
-                        read_result = *read2; // overwrite with post-write read
-                }
-
-                completed = true;
-                co_await c.disconnect();
+                op_error = r.error();
                 srv->stop();
-                exec->stop();
-            }());
+                co_return;
+            }
+
+            // Read initial values
+            const auto read1 = co_await c.read_holding_registers(100u, 3u);
+            if (!read1)
+            {
+                op_error = read1.error();
+            }
+            else
+            {
+                read_result = *read1;
+            }
+
+            // Write new values then read back
+            const std::vector<std::uint16_t> new_vals {7u, 8u, 9u};
+            const auto write_r = co_await c.write_multiple_registers(100u, new_vals);
+            if (!write_r)
+            {
+                op_error = write_r.error();
+            }
+            else
+            {
+                const auto read2 = co_await c.read_holding_registers(100u, 3u);
+                if (!read2)
+                    op_error = read2.error();
+                else
+                    read_result = *read2; // overwrite with post-write read
+            }
+
+            completed = true;
+            co_await c.disconnect();
+            srv->stop();
+        };
+        exec->spawn(exchange());
 
         exec->run();
 
@@ -312,46 +308,44 @@ namespace kmx::aio::modbus::test::integration
         std::optional<coil_values> post_write_coils;
         std::optional<std::error_code> op_error;
 
-        exec->spawn(
-            [exec, srv]() -> task<void>
+        auto serve = [exec, srv]() -> task<void>
+        {
+            co_await srv->serve(*exec,
+                                {.bind_address = "127.0.0.1", .port = test_port + 2u, .unit_id = test_unit_id});
+        };
+        exec->spawn(serve());
+
+        auto exchange = [&, exec, srv]() -> task<void>
+        {
+            co_await exec->async_timeout(5'000'000u);
+            client c {{.host = "127.0.0.1", .port = test_port + 2u, .unit_id = test_unit_id}, *exec};
+
+            if (const auto r = co_await c.connect(); !r)
             {
-                co_await srv->serve(*exec,
-                                    {.bind_address = "127.0.0.1", .port = test_port + 2u, .unit_id = test_unit_id});
-            }());
-
-        exec->spawn(
-            [&, exec, srv]() -> task<void>
-            {
-                co_await exec->async_timeout(5'000'000u);
-                client c {{.host = "127.0.0.1", .port = test_port + 2u, .unit_id = test_unit_id}, *exec};
-
-                if (const auto r = co_await c.connect(); !r)
-                {
-                    op_error = r.error();
-                    srv->stop();
-                    exec->stop();
-                    co_return;
-                }
-
-                if (const auto r = co_await c.read_coils(0u, 3u); r)
-                    initial_coils = *r;
-                else
-                    op_error = r.error();
-
-                // Flip coil 0 OFF
-                if (const auto r = co_await c.write_single_coil(0u, false); !r)
-                    op_error = r.error();
-
-                if (const auto r = co_await c.read_coils(0u, 3u); r)
-                    post_write_coils = *r;
-                else
-                    op_error = r.error();
-
-                completed = true;
-                co_await c.disconnect();
+                op_error = r.error();
                 srv->stop();
-                exec->stop();
-            }());
+                co_return;
+            }
+
+            if (const auto r = co_await c.read_coils(0u, 3u); r)
+                initial_coils = *r;
+            else
+                op_error = r.error();
+
+            // Flip coil 0 OFF
+            if (const auto r = co_await c.write_single_coil(0u, false); !r)
+                op_error = r.error();
+
+            if (const auto r = co_await c.read_coils(0u, 3u); r)
+                post_write_coils = *r;
+            else
+                op_error = r.error();
+
+            completed = true;
+            co_await c.disconnect();
+            srv->stop();
+        };
+        exec->spawn(exchange());
 
         exec->run();
 
@@ -379,36 +373,34 @@ namespace kmx::aio::modbus::test::integration
         bool completed = false;
         std::optional<std::error_code> result_error;
 
-        exec->spawn(
-            [exec, srv]() -> task<void>
+        auto serve = [exec, srv]() -> task<void>
+        {
+            co_await srv->serve(*exec,
+                                {.bind_address = "127.0.0.1", .port = test_port + 3u, .unit_id = test_unit_id});
+        };
+        exec->spawn(serve());
+
+        auto exchange = [&, exec, srv]() -> task<void>
+        {
+            co_await exec->async_timeout(5'000'000u);
+            client c {{.host = "127.0.0.1", .port = test_port + 3u, .unit_id = test_unit_id}, *exec};
+
+            if (const auto r = co_await c.connect(); !r)
             {
-                co_await srv->serve(*exec,
-                                    {.bind_address = "127.0.0.1", .port = test_port + 3u, .unit_id = test_unit_id});
-            }());
-
-        exec->spawn(
-            [&, exec, srv]() -> task<void>
-            {
-                co_await exec->async_timeout(5'000'000u);
-                client c {{.host = "127.0.0.1", .port = test_port + 3u, .unit_id = test_unit_id}, *exec};
-
-                if (const auto r = co_await c.connect(); !r)
-                {
-                    result_error = r.error();
-                    srv->stop();
-                    exec->stop();
-                    co_return;
-                }
-
-                const auto r = co_await c.read_holding_registers(0u, 1u);
-                if (!r)
-                    result_error = r.error();
-
-                completed = true;
-                co_await c.disconnect();
+                result_error = r.error();
                 srv->stop();
-                exec->stop();
-            }());
+                co_return;
+            }
+
+            const auto r = co_await c.read_holding_registers(0u, 1u);
+            if (!r)
+                result_error = r.error();
+
+            completed = true;
+            co_await c.disconnect();
+            srv->stop();
+        };
+        exec->spawn(exchange());
 
         exec->run();
 

@@ -1,29 +1,17 @@
 import qbs
+import qbs.File
 
 StaticLibrary {
     Depends { name: "cpp" }
     Depends { name: "kmx-aio-core" }
     Depends { name: "kmx-aio-completion" }
+    Depends { name: "kmx_instrumentation" }
 
     name: "kmx-aio-spdk"
     condition: project.enable_spdk
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.enableRtti: false
-    cpp.driverFlags: {
-        var flags = [];
-        if (project.enable_asan)
-        {
-            flags.push("-fsanitize=address");
-            flags.push("-fno-omit-frame-pointer");
-        }
-        if (project.enable_tsan)
-        {
-            flags.push("-fsanitize=thread");
-            flags.push("-fno-omit-frame-pointer");
-        }
-        return flags;
-    }
     cpp.defines: {
         var defs = [];
         if (project.enable_openonload)
@@ -40,10 +28,6 @@ StaticLibrary {
             defs.push("KMX_AIO_FEATURE_OPC_UA=1");
         if (project.enable_cuda)
             defs.push("KMX_AIO_FEATURE_CUDA=1");
-        if (project.enable_asan)
-            defs.push("KMX_AIO_SANITIZER_ASAN=1");
-        if (project.enable_tsan)
-            defs.push("KMX_AIO_SANITIZER_TSAN=1");
         return defs;
     }
     cpp.includePaths: [
@@ -88,9 +72,24 @@ StaticLibrary {
             "rte_rcu",
             "ssl",
             "crypto",
-            "isal",
-            "isal_crypto",
         ];
+
+        // SPDK only builds ISA-L when nasm 2.14+ is present at configure time; without it the
+        // prefix holds no libisal at all and its pkg-config files reference none, so linking these
+        // unconditionally fails a build against an otherwise working SPDK. Follow the prefix.
+        var prefix = project.spdk_prefix;
+        if (prefix)
+        {
+            var hasIsal = File.exists(prefix + "/lib/libisal.so") || File.exists(prefix + "/lib/libisal.a") ||
+                          File.exists(prefix + "/lib64/libisal.so") || File.exists(prefix + "/lib64/libisal.a");
+            if (hasIsal)
+                libs.push("isal");
+
+            var hasIsalCrypto = File.exists(prefix + "/lib/libisal_crypto.so") || File.exists(prefix + "/lib/libisal_crypto.a") ||
+                                File.exists(prefix + "/lib64/libisal_crypto.so") || File.exists(prefix + "/lib64/libisal_crypto.a");
+            if (hasIsalCrypto)
+                libs.push("isal_crypto");
+        }
 
         return libs;
     }
@@ -104,6 +103,7 @@ StaticLibrary {
         Depends { name: "cpp" }
         Depends { name: "kmx-aio-core" }
         Depends { name: "kmx-aio-completion" }
+        Depends { name: "kmx_instrumentation" }
         cpp.includePaths: [ product.sourceDirectory + "/../api" ]
         cpp.libraryPaths: [
             project.spdk_prefix ? project.spdk_prefix + "/lib" : "",

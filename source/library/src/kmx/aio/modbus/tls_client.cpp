@@ -1,5 +1,7 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/modbus/tls_client.hpp>
+
+#include <kmx/aio/error_code.hpp>
 #if defined(KMX_AIO_FEATURE_MODBUS)
     #include <kmx/aio/modbus/detail/client_ops.hpp>
     #include <kmx/aio/modbus/detail/session.hpp>
@@ -124,7 +126,8 @@ namespace kmx::aio::modbus
                 co_return std::unexpected(make_error_code(error::connection_failed));
 
             if (in_progress)
-                co_await exec_.wait_io(fd.get(), readiness::event_type::write);
+                if (!co_await exec_.wait_io(fd.get(), readiness::event_type::write))
+                    co_return std::unexpected(to_std_error_code(error_code::operation_cancelled));
 
             int so_error {};
             ::socklen_t so_len {sizeof(so_error)};

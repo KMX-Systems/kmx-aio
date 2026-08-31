@@ -2,6 +2,8 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include "kmx/aio/readiness/tcp/stream.hpp"
 
+#include "kmx/aio/error_code.hpp"
+
 #include "kmx/aio/readiness/openonload/extensions.hpp"
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -45,7 +47,8 @@ namespace kmx::aio::readiness::tcp
                         if (total != 0u)
                             co_return total;
 
-                        co_await exec_.wait_io(fd_.get(), event_type::read);
+                        if (!co_await exec_.wait_io(fd_.get(), event_type::read))
+                            co_return std::unexpected(to_std_error_code(error_code::operation_cancelled));
                         continue;
                     }
                     if (err != std::errc::function_not_supported)
@@ -71,7 +74,8 @@ namespace kmx::aio::readiness::tcp
                 if (total != 0u)
                     co_return total;
 
-                co_await exec_.wait_io(fd_.get(), event_type::read);
+                if (!co_await exec_.wait_io(fd_.get(), event_type::read))
+                    co_return std::unexpected(to_std_error_code(error_code::operation_cancelled));
                 continue;
             }
 
@@ -103,7 +107,8 @@ namespace kmx::aio::readiness::tcp
                     const auto err = zc_res.error();
                     if ((err.category() == std::system_category()) && would_block(err.value()))
                     {
-                        co_await exec_.wait_io(fd_.get(), event_type::write);
+                        if (!co_await exec_.wait_io(fd_.get(), event_type::write))
+                            co_return std::unexpected(to_std_error_code(error_code::operation_cancelled));
                         continue;
                     }
 
@@ -124,7 +129,8 @@ namespace kmx::aio::readiness::tcp
 
             if (would_block(errno))
             {
-                co_await exec_.wait_io(fd_.get(), event_type::write);
+                if (!co_await exec_.wait_io(fd_.get(), event_type::write))
+                    co_return std::unexpected(to_std_error_code(error_code::operation_cancelled));
                 continue;
             }
 

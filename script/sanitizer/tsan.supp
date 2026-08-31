@@ -1,0 +1,14 @@
+# ThreadSanitizer suppressions for kmx-aio.
+#
+# Read automatically by script/feature/common.sh whenever a TSan build runs.
+#
+# TSan reports races that are real by its model but deliberate by design - a benign flag read outside a
+# lock, or a third-party library with its own synchronisation that TSan cannot see. Those are what this
+# file is for; a race in this library's own code is a bug, and suppressing it hides it.
+#
+# The syntax names the report type and a function or library substring, for example:
+#
+#     race:liburing
+#     called_from_lib:libvsomeip3.so
+#
+# No suppressions are active: every race the current test suite reports is one to look at.

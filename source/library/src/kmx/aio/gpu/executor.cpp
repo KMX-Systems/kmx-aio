@@ -549,7 +549,14 @@ namespace kmx::aio::gpu
 
         self->stats_.total_tasks_completed.fetch_add(1u, std::memory_order_release);
         if (self->active_work_.fetch_sub(1u, std::memory_order_acq_rel) == 1u)
+        {
+            // Under idle_mutex_ for the same reason as in stop(): run()'s predicate reads active_work_,
+            // and a notification that lands between its evaluation and the wait is lost.
+            {
+                const std::lock_guard idle_lock(self->idle_mutex_);
+            }
             self->idle_cv_.notify_one();
+        }
     }
 
 } // namespace kmx::aio::gpu

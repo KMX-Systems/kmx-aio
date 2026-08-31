@@ -14,6 +14,7 @@
     #include <optional>
     #include <string>
     #include <string_view>
+    #include <vector>
 
 namespace kmx::aio::gpu::test::integration
 {
@@ -63,14 +64,21 @@ namespace kmx::aio::gpu::test::integration
     [[nodiscard]] static auto find_binary_under_debug(const fs::path& repo_root,
                                                       const std::string_view binary_name) -> std::optional<fs::path>
     {
-        const fs::path debug_dir = repo_root / "source" / "debug";
-        if (!fs::exists(debug_dir) || !fs::is_directory(debug_dir))
-            return std::nullopt;
+        // output/debug is where the scripts build (see script/feature/common.sh); source/debug is what a bare
+        // "qbs build" from the source directory leaves behind.
+        const std::vector<fs::path> debug_dirs = {
+            repo_root / "output" / "debug",
+            repo_root / "source" / "debug",
+        };
 
-        for (const auto& entry: fs::recursive_directory_iterator(debug_dir))
+        for (const auto& debug_dir: debug_dirs)
         {
-            if (entry.is_regular_file() && entry.path().filename() == binary_name)
-                return entry.path();
+            if (!fs::exists(debug_dir) || !fs::is_directory(debug_dir))
+                continue;
+
+            for (const auto& entry: fs::recursive_directory_iterator(debug_dir))
+                if (entry.is_regular_file() && entry.path().filename() == binary_name)
+                    return entry.path();
         }
 
         return std::nullopt;

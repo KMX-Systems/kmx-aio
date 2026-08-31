@@ -15,23 +15,10 @@ StaticLibrary {
     Depends { name: "kmx-aio-xdp"; condition: project.enable_af_xdp }
     Depends { name: "kmx-aio-spdk"; condition: project.enable_spdk }
     Depends { name: "kmx-aio-avb"; condition: project.enable_avb }
+    Depends { name: "kmx_instrumentation" }
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.enableRtti: false
-    cpp.driverFlags: {
-        var flags = [];
-        if (project.enable_asan)
-        {
-            flags.push("-fsanitize=address");
-            flags.push("-fno-omit-frame-pointer");
-        }
-        if (project.enable_tsan)
-        {
-            flags.push("-fsanitize=thread");
-            flags.push("-fno-omit-frame-pointer");
-        }
-        return flags;
-    }
     cpp.defines: {
         var defs = [];
         if (project.enable_openonload)
@@ -52,10 +39,6 @@ StaticLibrary {
             defs.push("KMX_AIO_FEATURE_SOMEIP=1");
         if (project.enable_cuda)
             defs.push("KMX_AIO_FEATURE_CUDA=1");
-        if (project.enable_asan)
-            defs.push("KMX_AIO_SANITIZER_ASAN=1");
-        if (project.enable_tsan)
-            defs.push("KMX_AIO_SANITIZER_TSAN=1");
         return defs;
     }
     cpp.includePaths: [
@@ -65,10 +48,9 @@ StaticLibrary {
         "/usr/local/include",
         project.enable_spdk && project.spdk_prefix ? project.spdk_prefix + "/include" : "",
         project.enable_spdk && project.spdk_prefix ? project.spdk_prefix + "/include/dpdk" : "",
-        "../../build/lsquic/include",
         project.enable_opc_ua && project.opc_ua_prefix ? project.opc_ua_prefix + "/include" : "",
         project.enable_someip && project.someip_prefix ? project.someip_prefix + "/include" : "",
-    ]
+    ].concat(project.quic_include_paths).concat(project.tls_include_paths)
     cpp.libraryPaths: [
         "/usr/local/lib",
         project.enable_spdk && project.spdk_prefix ? project.spdk_prefix + "/lib" : "",
@@ -132,12 +114,7 @@ StaticLibrary {
         }
 
         if (project.enable_quic)
-        {
-            libs.push(product.sourceDirectory + "/../../build/lsquic/build/src/liblsquic/liblsquic.a");
-            libs.push(product.sourceDirectory + "/../../build/boringssl/build/libssl.a");
-            libs.push(product.sourceDirectory + "/../../build/boringssl/build/libcrypto.a");
-            libs.push("z");
-        }
+            libs = libs.concat(project.quic_libraries);
 
         if (project.enable_opc_ua)
         {
@@ -191,7 +168,8 @@ StaticLibrary {
         Depends { name: "kmx-aio-xdp"; condition: project.enable_af_xdp }
         Depends { name: "kmx-aio-spdk"; condition: project.enable_spdk }
         Depends { name: "kmx-aio-avb"; condition: project.enable_avb }
-        cpp.includePaths: [ product.sourceDirectory + "/api" ]
+        Depends { name: "kmx_instrumentation" }
+        cpp.includePaths: [ product.sourceDirectory + "/api" ].concat(project.tls_include_paths)
         cpp.libraryPaths: [
             project.enable_spdk && project.spdk_prefix ? project.spdk_prefix + "/lib" : "",
             project.enable_spdk && project.spdk_prefix ? project.spdk_prefix + "/lib64" : "",

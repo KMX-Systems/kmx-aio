@@ -1,6 +1,8 @@
 /// @file aio/completion/executor.cpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include "kmx/aio/completion/executor.hpp"
+#include <kmx/aio/completion/detail/uring_syscalls.hpp>
+#include <kmx/aio/detail/syscalls.hpp>
 
 #include "kmx/aio/allocator.hpp"
 #include "kmx/logger.hpp"
@@ -16,6 +18,11 @@ namespace kmx::aio::completion
 {
     static constexpr auto mem_order = std::memory_order_relaxed;
 
+    /// @brief The executor whose event loop is running on this thread, if any.
+    /// @details Lets submit() tell "the loop will flush this in a moment" from "nobody here is going to
+    ///          wait, so it has to go now".
+    thread_local const executor* t_current_loop_executor = nullptr;
+
     void statistics::reset() noexcept
     {
         total_submissions.store(0u, mem_order);
@@ -28,7 +35,15 @@ namespace kmx::aio::completion
 
     executor::executor(const executor_config& config) noexcept(false): config_(config)
     {
-        const int ret = ::io_uring_queue_init(config.ring_entries, &ring_, 0);
+        // Opened with no setup flags. COOP_TASKRUN and TASKRUN_FLAG were tried here - the pairing a
+        // single-loop ring is usually advised to use - and made no measurable difference to any case in
+        // the benchmark suite, whose completions are produced inline by the kernel rather than by a
+        // device interrupt on another core. They are worth revisiting against a real NIC, where the
+        // interrupt they suppress is the point. SINGLE_ISSUER and DEFER_TASKRUN are not available at
+        // all: both require every submission to come from one thread, and spawn() resumes a task on
+        // whichever thread called it.
+        const int ret = detail::uring_syscalls::queue_init(config.ring_entries, &ring_, 0u);
+
         if (ret < 0)
             throw std::system_error(-ret, std::generic_category(), "io_uring_queue_init failed");
     }
@@ -329,6 +344,11 @@ namespace kmx::aio::completion
         std::unique_lock lock(idle_mutex_);
         idle_cv_.wait(lock, [this] { return !running_.load(mem_order) || (active_work_.load(mem_order) == 0u); });
 
+        // The wait is over; nothing below reads the idle state, and stop() now takes this mutex to
+        // publish its change safely. Holding it across that call would be a thread locking a
+        // non-recursive mutex it already owns.
+        lock.unlock();
+
         if (running_.load(mem_order))
             stop();
 
@@ -337,8 +357,17 @@ namespace kmx::aio::completion
         std::jthread thread_to_join;
         {
             const std::lock_guard thread_lock(io_thread_mutex_);
-            if (io_thread_.joinable() && (io_thread_.get_id() != std::this_thread::get_id()))
+            if (io_thread_.joinable() && (io_thread_.get_id() != std::this_thread::get_id())) // LCOV_EXCL_BR_LINE
+            {
+                // request_stop() here and not only in stop(). stop() asks the I/O thread to finish only on
+                // the call that wins running_.exchange(false), and run() publishes running_ = true before it
+                // takes this mutex to create the thread. A stop landing in that gap therefore finds no
+                // thread to ask, and the run() that creates it a moment later sees running_ already false
+                // and skips its own stop() - leaving a thread nobody has asked to finish, and this join
+                // waiting on it for good. Asking again costs nothing when the stop was already requested.
+                io_thread_.request_stop();
                 thread_to_join = std::move(io_thread_);
+            }
         }
 
         if (thread_to_join.joinable())
@@ -349,11 +378,19 @@ namespace kmx::aio::completion
     {
         if (running_.exchange(false, std::memory_order_acq_rel))
         {
+            // Under idle_mutex_, not outside it. run() evaluates its wait predicate - which reads
+            // running_ and active_work_ - while holding this mutex, and then releases it inside
+            // idle_cv_.wait(). A notification issued in the gap between those two steps reaches nobody,
+            // and run() then waits for a wake-up that has already been and gone. Taking the mutex first
+            // means run() is either not yet at the predicate or already waiting; both are woken.
+            {
+                const std::lock_guard idle_lock(idle_mutex_);
+            }
             idle_cv_.notify_all();
             std::jthread thread_to_join;
             {
                 const std::lock_guard thread_lock(io_thread_mutex_);
-                if (io_thread_.joinable())
+                if (io_thread_.joinable()) // LCOV_EXCL_BR_LINE
                 {
                     io_thread_.request_stop();
 
@@ -366,7 +403,7 @@ namespace kmx::aio::completion
                 }
             }
 
-            if (thread_to_join.joinable())
+            if (thread_to_join.joinable()) // LCOV_EXCL_BR_LINE
                 thread_to_join.join();
 
             return;
@@ -374,15 +411,32 @@ namespace kmx::aio::completion
 
         // If already marked as stopped but join is still pending (e.g., self-stop path),
         // allow an external thread to finalize the join.
+        // LCOV_EXCL_START
+        // Reached only through a race, which is why no test drives it. A task that calls stop() from a
+        // thread this executor owns cannot join the I/O thread, so it leaves the join to whoever comes
+        // next - and this is that path. In every ordinary shutdown run() gets there first, because it
+        // is woken by the same stop() that deferred the join. What is left is the window where an
+        // outside stop() lands between the deferral and run() taking the thread, and a test that
+        // sometimes covers it would be a test that sometimes does not.
         std::jthread thread_to_join;
         {
             const std::lock_guard thread_lock(io_thread_mutex_);
-            if (io_thread_.joinable() && (io_thread_.get_id() != std::this_thread::get_id()))
+            if (io_thread_.joinable() && (io_thread_.get_id() != std::this_thread::get_id())) // LCOV_EXCL_BR_LINE
+            {
+                // request_stop() here and not only in stop(). stop() asks the I/O thread to finish only
+                // on the call that wins running_.exchange(false), and run() publishes running_ = true
+                // before it takes this mutex to create the thread. A stop landing in that gap finds no
+                // thread to ask, and the run() that creates it a moment later sees running_ already
+                // false and skips its own stop() - leaving a thread nobody asked to finish and a join
+                // waiting on it for good. Asking again costs nothing when it was already requested.
+                io_thread_.request_stop();
                 thread_to_join = std::move(io_thread_);
+            }
         }
 
         if (thread_to_join.joinable())
             thread_to_join.join();
+        // LCOV_EXCL_STOP
     }
 
     std::expected<bool, std::error_code> executor::is_io_thread_affined_to(const int core_id) noexcept
@@ -399,7 +453,7 @@ namespace kmx::aio::completion
             if (!io_thread_.joinable())
                 return std::unexpected(std::make_error_code(std::errc::operation_not_permitted));
 
-            ret = ::pthread_getaffinity_np(io_thread_.native_handle(), sizeof(cpu_set_t), &cpuset);
+            ret = aio::detail::syscalls::pthread_getaffinity_np(io_thread_.native_handle(), sizeof(cpu_set_t), &cpuset);
         }
 
         if (ret != 0)
@@ -408,9 +462,21 @@ namespace kmx::aio::completion
         return CPU_ISSET(core_id, &cpuset) != 0;
     }
 
+    bool executor::on_loop_thread() const noexcept
+    {
+        return t_current_loop_executor == this;
+    }
+
     std::expected<std::size_t, std::error_code> executor::submit() noexcept
     {
-        const int ret = ::io_uring_submit(&ring_);
+        // Left for the loop, which submits and waits in one call. Not when the submission queue is
+        // running out of room, though: a batch of completions can resume a coroutine per entry, each
+        // preparing one more SQE, and an SQE that finds no room is an operation that fails outright.
+        // A quarter of the ring is kept as the margin that has to stay free.
+        if (on_loop_thread() && (::io_uring_sq_space_left(&ring_) > (config_.ring_entries / 4u)))
+            return std::size_t {};
+
+        const int ret = detail::uring_syscalls::submit(&ring_);
         if (ret < 0)
         {
             metrics_.error_count.fetch_add(1u, mem_order);
@@ -454,7 +520,9 @@ namespace kmx::aio::completion
             if (ctx != nullptr)
             {
                 ctx->result = cqe->res;
-                if (ctx->continuation)
+                // LCOV_EXCL_BR_LINE: the continuation is stored before the SQE is submitted, and both
+                // happen inside await_suspend, so a reaped completion always has one.
+                if (ctx->continuation) // LCOV_EXCL_BR_LINE
                     ctx->continuation.resume();
             }
 
@@ -465,6 +533,14 @@ namespace kmx::aio::completion
     void executor::event_loop(std::stop_token st) noexcept
     {
         pin_to_core();
+
+        // Marks this thread as the executor's own for as long as the loop runs, so submit() can leave
+        // its entries for the wait below to carry into the kernel.
+        t_current_loop_executor = this;
+        const struct loop_thread_marker
+        {
+            ~loop_thread_marker() noexcept { t_current_loop_executor = nullptr; }
+        } marker {};
 
         // Initialize coroutine slab allocator for this event loop thread.
         // E.g. allocating 1024-byte frames for up to the maximum ring entries.
@@ -515,13 +591,19 @@ namespace kmx::aio::completion
             ts.tv_sec = {};
             ts.tv_nsec = 100'000'000; // 100ms timeout
 
-            const int ret = ::io_uring_wait_cqe_timeout(&ring_, &cqe, &ts);
-            if (ret == 0)
-                process_completions();
-            else if ((ret != -ETIME) && (ret != -EINTR))
+            // Submits whatever the coroutines resumed on this thread have prepared and waits for the
+            // next completion, in one io_uring_enter().
+            const int ret = detail::uring_syscalls::submit_and_wait_timeout(&ring_, &cqe, 1u, &ts);
+
+            // Reaped whatever the wait returned: a timeout, or an error such as a full completion
+            // queue, does not mean there is nothing to collect, and peeking when there is not costs a
+            // read of the ring head.
+            process_completions();
+
+            if ((ret < 0) && (ret != -ETIME) && (ret != -EINTR) && (ret != -EAGAIN) && (ret != -EBUSY))
             {
                 metrics_.error_count.fetch_add(1u, mem_order);
-                logger::log(logger::level::error, std::source_location::current(), "io_uring_wait_cqe_timeout error: {}",
+                logger::log(logger::level::error, std::source_location::current(), "io_uring_submit_and_wait_timeout error: {}",
                             std::strerror(-ret));
             }
         }
@@ -541,7 +623,7 @@ namespace kmx::aio::completion
         CPU_ZERO(&cpuset);
         CPU_SET(static_cast<int>(config_.core_id), &cpuset);
 
-        const int ret = ::pthread_setaffinity_np(::pthread_self(), sizeof(cpu_set_t), &cpuset);
+        const int ret = aio::detail::syscalls::pthread_setaffinity_np(::pthread_self(), sizeof(cpu_set_t), &cpuset);
         if (ret != 0)
             logger::log(logger::level::warn, std::source_location::current(), "Failed to pin io_uring thread to core {}: {}",
                         config_.core_id, std::strerror(ret));
@@ -569,7 +651,14 @@ namespace kmx::aio::completion
 
         self->metrics_.total_tasks_completed.fetch_add(1u, mem_order);
         if (self->active_work_.fetch_sub(1u, std::memory_order_acq_rel) == 1u)
+        {
+            // Under idle_mutex_ for the same reason as in stop(): run()'s predicate reads active_work_,
+            // and a notification that lands between its evaluation and the wait is lost.
+            {
+                const std::lock_guard idle_lock(self->idle_mutex_);
+            }
             self->idle_cv_.notify_one();
+        }
     }
 
     executor& executor::get_default() noexcept(false)

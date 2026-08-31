@@ -14,6 +14,7 @@ CppApplication {
     Depends { name: "kmx-aio-xdp"; condition: project.enable_af_xdp }
     Depends { name: "kmx-aio-spdk"; condition: project.enable_spdk }
     Depends { name: "kmx-aio-avb"; condition: project.enable_avb }
+    Depends { name: "kmx_instrumentation" }
 
     name: "kmx-aio-test"
     consoleApplication: true
@@ -22,6 +23,8 @@ CppApplication {
     cpp.enableRtti: false
     cpp.defines: {
         var defs = [];
+        if (project.enable_readiness)
+            defs.push("KMX_AIO_FEATURE_READINESS=1");
         if (project.enable_openonload)
             defs.push("KMX_AIO_FEATURE_OPENONLOAD=1");
         if (project.enable_af_xdp)
@@ -40,25 +43,7 @@ CppApplication {
             defs.push("KMX_AIO_FEATURE_SOMEIP=1");
         if (project.enable_cuda)
             defs.push("KMX_AIO_FEATURE_CUDA=1");
-        if (project.enable_asan)
-            defs.push("KMX_AIO_SANITIZER_ASAN=1");
-        if (project.enable_tsan)
-            defs.push("KMX_AIO_SANITIZER_TSAN=1");
         return defs;
-    }
-    cpp.driverFlags: {
-        var flags = [];
-        if (project.enable_asan)
-        {
-            flags.push("-fsanitize=address");
-            flags.push("-fno-omit-frame-pointer");
-        }
-        if (project.enable_tsan)
-        {
-            flags.push("-fsanitize=thread");
-            flags.push("-fno-omit-frame-pointer");
-        }
-        return flags;
     }
     cpp.includePaths: [
         "inc",
@@ -70,60 +55,58 @@ CppApplication {
         "../sample/readiness/v4l2/capture/inc",
         project.enable_opc_ua && project.opc_ua_prefix ? project.opc_ua_prefix + "/include" : "",
         project.enable_someip && project.someip_prefix ? project.someip_prefix + "/include" : ""
-    ]
-    cpp.dynamicLibraries: [
-        "crypto",
-        "ssl",
-    ]
+    ].concat(project.quic_include_paths).concat(project.tls_include_paths)
+    cpp.dynamicLibraries: project.tls_libraries
     cpp.staticLibraries: [
         "Catch2Main",
         "Catch2"
     ]
     files: [
-        "inc/kmx/aio/**.hpp",
+        "inc/kmx/aio/**/*.hpp",
         "src/**/*.cpp",
     ]
     excludeFiles: {
         var files = [];
 
         if (!project.enable_modbus)
-            files.push("src/kmx/aio/modbus/**.cpp");
+            files.push("src/kmx/aio/modbus/**/*.cpp");
 
         if (!project.enable_opc_ua)
-            files.push("src/kmx/aio/opc_ua/**.cpp");
+            files.push("src/kmx/aio/opc_ua/**/*.cpp");
 
         if (!project.enable_someip)
-            files.push("src/kmx/aio/someip/**.cpp");
+            files.push("src/kmx/aio/someip/**/*.cpp");
 
         if (!project.enable_cuda)
         {
-            files.push("src/kmx/aio/gpu/**.cpp");
+            files.push("src/kmx/aio/gpu/**/*.cpp");
             files.push("src/kmx/aio/integration/gpu_image_processing_smoke_test.cpp");
         }
 
         if (!project.enable_spdk)
         {
-            files.push("src/kmx/aio/completion/spdk/**.cpp");
+            files.push("src/kmx/aio/completion/spdk/**/*.cpp");
             files.push("src/kmx/aio/integration/pillar_1_integration_test.cpp");
         }
 
         if (!project.enable_af_xdp)
-            files.push("src/kmx/aio/completion/xdp/**.cpp");
+            files.push("src/kmx/aio/completion/xdp/**/*.cpp");
 
         if (!project.enable_avb)
             files.push("src/kmx/aio/avb/**/*.cpp");
 
         if (!project.enable_http2)
-            files.push("src/kmx/aio/http2/**.cpp");
+            files.push("src/kmx/aio/http2/**/*.cpp");
 
         if (!project.enable_http3)
-            files.push("src/kmx/aio/http3/**.cpp");
+            files.push("src/kmx/aio/http3/**/*.cpp");
 
         if (!project.enable_http3)
             files.push("src/kmx/aio/integration/quic_http3_smoke_test.cpp");
 
         if (!project.enable_readiness)
         {
+            files.push("src/kmx/aio/readiness/**/*.cpp");
             files.push("src/kmx/aio/integration/readiness_core_pinning_test.cpp");
             files.push("src/kmx/aio/integration/pillar_2_integration_test.cpp");
             files.push("src/kmx/aio/integration/quic_readiness_echo_smoke_test.cpp");
@@ -134,6 +117,7 @@ CppApplication {
         if (!project.enable_quic)
         {
             files.push("src/kmx/aio/integration/quic_readiness_echo_smoke_test.cpp");
+            files.push("src/kmx/aio/quic/**/*.cpp");
         }
 
         return files;

@@ -4,26 +4,13 @@ StaticLibrary {
     Depends { name: "cpp" }
     Depends { name: "kmx-aio-core" }
     Depends { name: "kmx-aio-completion" }
+    Depends { name: "kmx_instrumentation" }
 
     name: "kmx-aio-xdp"
     condition: project.enable_af_xdp
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.enableRtti: false
-    cpp.driverFlags: {
-        var flags = [];
-        if (project.enable_asan)
-        {
-            flags.push("-fsanitize=address");
-            flags.push("-fno-omit-frame-pointer");
-        }
-        if (project.enable_tsan)
-        {
-            flags.push("-fsanitize=thread");
-            flags.push("-fno-omit-frame-pointer");
-        }
-        return flags;
-    }
     cpp.defines: {
         var defs = [];
         if (project.enable_openonload)
@@ -40,10 +27,6 @@ StaticLibrary {
             defs.push("KMX_AIO_FEATURE_OPC_UA=1");
         if (project.enable_cuda)
             defs.push("KMX_AIO_FEATURE_CUDA=1");
-        if (project.enable_asan)
-            defs.push("KMX_AIO_SANITIZER_ASAN=1");
-        if (project.enable_tsan)
-            defs.push("KMX_AIO_SANITIZER_TSAN=1");
         return defs;
     }
     cpp.includePaths: [
@@ -64,6 +47,7 @@ StaticLibrary {
         Depends { name: "cpp" }
         Depends { name: "kmx-aio-core" }
         Depends { name: "kmx-aio-completion" }
+        Depends { name: "kmx_instrumentation" }
         cpp.includePaths: [ product.sourceDirectory + "/../api" ]
     }
 }

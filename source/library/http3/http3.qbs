@@ -3,6 +3,7 @@ import qbs
 StaticLibrary {
     Depends { name: "cpp" }
     Depends { name: "kmx-aio-core" }
+    Depends { name: "kmx_instrumentation" }
 
     name: "kmx-aio-http3"
     condition: project.enable_http3 && project.enable_quic
@@ -22,6 +23,7 @@ StaticLibrary {
     Export {
         Depends { name: "cpp" }
         Depends { name: "kmx-aio-core" }
+        Depends { name: "kmx_instrumentation" }
         cpp.includePaths: [ product.sourceDirectory + "/../api" ]
     }
 }
