@@ -31,18 +31,20 @@ kmx-aio/
 │   │   │   └── quic/                # QUIC generic engine
 │   │   ├── inc/kmx/aio/             # Private headers (opc_ua/open62541_compat.hpp, quic/base_engine.hpp, ...)
 │   │   ├── src/                     # Implementation (.cpp) files
-│   │   ├── core/core.qbs            # kmx-aio-core
-│   │   ├── readiness/readiness.qbs  # kmx-aio-readiness
-│   │   ├── completion/completion.qbs# kmx-aio-completion
-│   │   ├── http2/http2.qbs          # kmx-aio-http2
-│   │   ├── quic/quic.qbs            # kmx-aio-quic
-│   │   ├── avb/avb.qbs              # kmx-aio-avb
-│   │   ├── spdk/spdk.qbs            # kmx-aio-spdk
-│   │   ├── someip/someip.qbs        # kmx-aio-someip
-│   │   ├── xdp/xdp.qbs              # kmx-aio-xdp
-│   │   ├── opcua/opcua.qbs          # kmx-aio-opcua
-│   │   ├── modbus/modbus.qbs        # kmx-aio-modbus
-│   │   ├── gpu/gpu.qbs              # kmx-aio-gpu
+│   │   ├── prj/                     # Sub-library project files
+│   │   │   ├── core.qbs             # kmx-aio-core
+│   │   │   ├── readiness.qbs        # kmx-aio-readiness
+│   │   │   ├── completion.qbs       # kmx-aio-completion
+│   │   │   ├── http2.qbs            # kmx-aio-http2
+│   │   │   ├── http3.qbs            # kmx-aio-http3
+│   │   │   ├── quic.qbs             # kmx-aio-quic
+│   │   │   ├── avb.qbs              # kmx-aio-avb
+│   │   │   ├── spdk.qbs             # kmx-aio-spdk
+│   │   │   ├── someip.qbs           # kmx-aio-someip
+│   │   │   ├── xdp.qbs              # kmx-aio-xdp
+│   │   │   ├── opcua.qbs            # kmx-aio-opcua
+│   │   │   ├── modbus.qbs           # kmx-aio-modbus
+│   │   │   └── gpu.qbs              # kmx-aio-gpu
 │   │   ├── library.qbs              # Aggregates split sub-libraries
 │   │   └── lib.qbs                  # Umbrella compatibility artifact (kmx-aio-lib)
 │   ├── library-test/                # Unit tests and integration tests
@@ -100,7 +102,7 @@ Current implementation notes:
 
 - `kmx-aio-avb` depends on `kmx-aio-readiness` because readiness-specific AVB instantiations live there.
 - `kmx-aio-quic` depends on `kmx-aio-readiness`; completion-specific QUIC explicit instantiation now lives in `kmx-aio-completion`.
-- `kmx-aio-someip` is a standalone feature artifact under `source/library/someip`.
+- `kmx-aio-someip` is a standalone feature artifact defined by `source/library/prj/someip.qbs`.
 - `kmx-aio-lib` is kept as a compatibility umbrella over all split artifacts.
 
 ## Ownership Rules
