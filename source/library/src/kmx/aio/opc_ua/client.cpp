@@ -2,6 +2,7 @@
 #include <kmx/aio/opc_ua/client.hpp>
 #include <kmx/aio/opc_ua/error.hpp>
 #include <kmx/aio/opc_ua/open62541_compat.hpp>
+#include <kmx/aio/opc_ua/pending_outcome_awaiter.hpp>
 
 #include <chrono>
 #include <memory>
@@ -30,7 +31,7 @@ namespace kmx::aio::opc_ua
 
         struct read_request_state
         {
-            std::uint64_t id = 0u;
+            std::uint64_t id {};
             std::string node_id;
             std::optional<std::expected<read_result, std::error_code>> outcome;
             coroutine_handle_t continuation {};
@@ -38,7 +39,7 @@ namespace kmx::aio::opc_ua
 
         struct write_request_state
         {
-            std::uint64_t id = 0u;
+            std::uint64_t id {};
             std::string node_id;
             std::string value;
             std::optional<expected_void_t> outcome;
@@ -47,7 +48,7 @@ namespace kmx::aio::opc_ua
 
         struct call_request_state
         {
-            std::uint64_t id = 0u;
+            std::uint64_t id {};
             std::string object_node_id;
             std::string method_node_id;
             std::vector<std::string> input_arguments;
@@ -55,25 +56,29 @@ namespace kmx::aio::opc_ua
             coroutine_handle_t continuation {};
         };
 
-        template <typename State, typename Result>
-        class pending_outcome_awaiter
+        using detail::pending_outcome_awaiter;
+
+        template <typename Result, typename State, typename Map>
+        task<std::expected<Result, std::error_code>> await_request_outcome(client& owner, Map& requests, const std::uint64_t request_id,
+                                                                          std::shared_ptr<State> request) noexcept(false)
         {
-        public:
-            explicit pending_outcome_awaiter(std::shared_ptr<State> state) noexcept: state_(std::move(state)) {}
-
-            [[nodiscard]] bool await_ready() const noexcept { return state_->outcome.has_value(); }
-
-            bool await_suspend(coroutine_handle_t continuation) noexcept
+            const auto iterate_result = co_await owner.iterate(std::chrono::milliseconds(0));
+            if (!iterate_result)
             {
-                state_->continuation = continuation;
-                return true;
+                requests.erase(request_id);
+                co_return std::unexpected(iterate_result.error());
             }
 
-            [[nodiscard]] std::expected<Result, std::error_code> await_resume() noexcept { return std::move(*state_->outcome); }
+            if (!(*iterate_result))
+            {
+                requests.erase(request_id);
+                co_return std::unexpected(make_error_code(error::disconnected));
+            }
 
-        private:
-            std::shared_ptr<State> state_;
-        };
+            const auto outcome = co_await pending_outcome_awaiter<State, Result> {request};
+            requests.erase(request_id);
+            co_return outcome;
+        }
 
         template <typename HandleContainer>
         void resume_pending_continuations(HandleContainer& handles)
@@ -88,28 +93,37 @@ namespace kmx::aio::opc_ua
 
         [[nodiscard]] std::error_code map_status_to_error(const UA_StatusCode status, const status_context context) noexcept
         {
+            error code;
             switch (status)
             {
                 case UA_STATUSCODE_GOOD:
                     return {};
                 case UA_STATUSCODE_BADTIMEOUT:
-                    return make_error_code(error::timed_out);
+                    code = error::timed_out;
+                    break;
                 case UA_STATUSCODE_BADCONFIGURATIONERROR:
-                    return make_error_code(error::invalid_configuration);
+                    code = error::invalid_configuration;
+                    break;
                 case UA_STATUSCODE_BADSECURECHANNELCLOSED:
-                    return context == status_context::connect ? make_error_code(error::security_error) :
-                                                                make_error_code(error::disconnected);
+                    code = context == status_context::connect ? error::security_error :
+                                                                error::disconnected;
+                    break;
                 case UA_STATUSCODE_BADNOTCONNECTED:
                 case UA_STATUSCODE_BADCONNECTIONCLOSED:
-                    return context == status_context::connect ? make_error_code(error::connect_failed) :
-                                                                make_error_code(error::disconnected);
+                    code = context == status_context::connect ? error::connect_failed :
+                                                                error::disconnected;
+                    break;
                 case UA_STATUSCODE_BADINTERNALERROR:
-                    return context == status_context::connect ? make_error_code(error::connect_failed) :
-                                                                make_error_code(error::request_failed);
+                    code = context == status_context::connect ? error::connect_failed :
+                                                                error::request_failed;
+                    break;
                 default:
-                    return context == status_context::connect ? make_error_code(error::connect_failed) :
-                                                                make_error_code(error::internal_error);
+                    code = context == status_context::connect ? error::connect_failed :
+                                                                error::internal_error;
+                    break;
             }
+
+            return make_error_code(code);
         }
 
         [[nodiscard]] bool is_connected(const UA_SecureChannelState channel_state, const UA_SessionState session_state) noexcept
@@ -249,6 +263,13 @@ namespace kmx::aio::opc_ua
         std::unordered_map<std::uint64_t, std::shared_ptr<write_request_state>> pending_write_requests;
         std::unordered_map<std::uint64_t, std::shared_ptr<call_request_state>> pending_call_requests;
 
+        void fail_all_pending_requests(const std::error_code error_code, std::vector<coroutine_handle_t>& continuations)
+        {
+            fail_pending_requests(pending_read_requests, error_code, continuations);
+            fail_pending_requests(pending_write_requests, error_code, continuations);
+            fail_pending_requests(pending_call_requests, error_code, continuations);
+        }
+
         ~impl() noexcept
         {
             if (native_client != nullptr)
@@ -308,9 +329,7 @@ namespace kmx::aio::opc_ua
             co_return std::unexpected(map_status_to_error(status, status_context::runtime));
 
         const std::error_code disconnected_error = make_error_code(error::disconnected);
-        fail_pending_requests(impl_->pending_read_requests, disconnected_error, continuations);
-        fail_pending_requests(impl_->pending_write_requests, disconnected_error, continuations);
-        fail_pending_requests(impl_->pending_call_requests, disconnected_error, continuations);
+        impl_->fail_all_pending_requests(disconnected_error, continuations);
         resume_pending_continuations(continuations);
 
         impl_->state = lifecycle_state::disconnecting;
@@ -341,9 +360,7 @@ namespace kmx::aio::opc_ua
         {
             const status_context context = impl_->state == lifecycle_state::connecting ? status_context::connect : status_context::runtime;
             const std::error_code mapped = map_status_to_error(connect_status, context);
-            fail_pending_requests(impl_->pending_read_requests, mapped, continuations);
-            fail_pending_requests(impl_->pending_write_requests, mapped, continuations);
-            fail_pending_requests(impl_->pending_call_requests, mapped, continuations);
+            impl_->fail_all_pending_requests(mapped, continuations);
             if (is_closed(channel_state, session_state))
                 finalize_disconnect(impl_->native_client, impl_->state, impl_->delete_after_disconnect);
             else
@@ -361,9 +378,7 @@ namespace kmx::aio::opc_ua
         if (impl_->delete_after_disconnect && is_closed(channel_state, session_state))
         {
             const std::error_code disconnected_error = make_error_code(error::disconnected);
-            fail_pending_requests(impl_->pending_read_requests, disconnected_error, continuations);
-            fail_pending_requests(impl_->pending_write_requests, disconnected_error, continuations);
-            fail_pending_requests(impl_->pending_call_requests, disconnected_error, continuations);
+            impl_->fail_all_pending_requests(disconnected_error, continuations);
             finalize_disconnect(impl_->native_client, impl_->state, impl_->delete_after_disconnect);
             resume_pending_continuations(continuations);
             co_return false;
@@ -372,9 +387,7 @@ namespace kmx::aio::opc_ua
         if (!is_connected(channel_state, session_state) && impl_->state == lifecycle_state::connected)
         {
             const std::error_code disconnected_error = make_error_code(error::disconnected);
-            fail_pending_requests(impl_->pending_read_requests, disconnected_error, continuations);
-            fail_pending_requests(impl_->pending_write_requests, disconnected_error, continuations);
-            fail_pending_requests(impl_->pending_call_requests, disconnected_error, continuations);
+            impl_->fail_all_pending_requests(disconnected_error, continuations);
             impl_->state = lifecycle_state::idle;
             resume_pending_continuations(continuations);
             co_return std::unexpected(disconnected_error);
@@ -409,22 +422,7 @@ namespace kmx::aio::opc_ua
             co_return std::unexpected(map_status_to_error(submit_status, status_context::runtime));
         }
 
-        const auto iterate_result = co_await iterate(std::chrono::milliseconds(0));
-        if (!iterate_result)
-        {
-            impl_->pending_read_requests.erase(request_id);
-            co_return std::unexpected(iterate_result.error());
-        }
-
-        if (!(*iterate_result))
-        {
-            impl_->pending_read_requests.erase(request_id);
-            co_return std::unexpected(make_error_code(error::disconnected));
-        }
-
-        const auto outcome = co_await pending_outcome_awaiter<read_request_state, read_result> {request};
-        impl_->pending_read_requests.erase(request_id);
-        co_return outcome;
+        co_return co_await await_request_outcome<read_result>(*this, impl_->pending_read_requests, request_id, std::move(request));
     }
 
     task_returning_expected_void_t client::write_node(std::string node_id, std::string value) noexcept(false)
@@ -453,22 +451,7 @@ namespace kmx::aio::opc_ua
             co_return std::unexpected(map_status_to_error(submit_status, status_context::runtime));
         }
 
-        const auto iterate_result = co_await iterate(std::chrono::milliseconds(0));
-        if (!iterate_result)
-        {
-            impl_->pending_write_requests.erase(request_id);
-            co_return std::unexpected(iterate_result.error());
-        }
-
-        if (!(*iterate_result))
-        {
-            impl_->pending_write_requests.erase(request_id);
-            co_return std::unexpected(make_error_code(error::disconnected));
-        }
-
-        const auto outcome = co_await pending_outcome_awaiter<write_request_state, void> {request};
-        impl_->pending_write_requests.erase(request_id);
-        co_return outcome;
+        co_return co_await await_request_outcome<void>(*this, impl_->pending_write_requests, request_id, std::move(request));
     }
 
     task<std::expected<method_call_result, std::error_code>> client::call_method(std::string object_node_id, std::string method_node_id,
@@ -505,22 +488,7 @@ namespace kmx::aio::opc_ua
             co_return std::unexpected(map_status_to_error(submit_status, status_context::runtime));
         }
 
-        const auto iterate_result = co_await iterate(std::chrono::milliseconds(0));
-        if (!iterate_result)
-        {
-            impl_->pending_call_requests.erase(request_id);
-            co_return std::unexpected(iterate_result.error());
-        }
-
-        if (!(*iterate_result))
-        {
-            impl_->pending_call_requests.erase(request_id);
-            co_return std::unexpected(make_error_code(error::disconnected));
-        }
-
-        const auto outcome = co_await pending_outcome_awaiter<call_request_state, method_call_result> {request};
-        impl_->pending_call_requests.erase(request_id);
-        co_return outcome;
+        co_return co_await await_request_outcome<method_call_result>(*this, impl_->pending_call_requests, request_id, std::move(request));
     }
 
     bool client::has_active_session() const noexcept
