@@ -34,6 +34,7 @@ StaticLibrary {
     files: [
         "../api/kmx/aio/allocator.hpp",
         "../api/kmx/aio/async_mutex.hpp",
+        "../api/kmx/aio/basic_channel.hpp",
         "../api/kmx/aio/basic_types.hpp",
         "../api/kmx/aio/buffer.hpp",
         "../api/kmx/aio/buffer_pool.hpp",
@@ -53,6 +54,7 @@ StaticLibrary {
         "../api/kmx/aio/tls/stream.hpp",
         "../src/kmx/aio/allocator.cpp",
         "../src/kmx/aio/async_mutex.cpp",
+        "../src/kmx/aio/basic_channel.cpp",
         "../src/kmx/aio/basic_types.cpp",
         "../src/kmx/aio/detail/syscalls.cpp",
         "../src/kmx/aio/error_code.cpp",

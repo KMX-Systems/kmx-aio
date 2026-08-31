@@ -27,20 +27,7 @@ namespace kmx::aio
         /// @param slot_size   Size of each allocation slot in bytes. Rounded up to alignment.
         /// @param slot_count  Number of slots in this slab.
         /// @throws std::bad_alloc if the underlying memory cannot be allocated.
-        explicit slab_allocator(const std::size_t slot_size, const std::size_t slot_count) noexcept(false):
-            slot_size_(align_up(slot_size, alignof(std::max_align_t))),
-            slot_count_(slot_count),
-            storage_(slot_size_ * slot_count_)
-        {
-            // Build the embedded free-list by chaining slot headers
-            free_head_ = nullptr;
-            for (std::size_t i = slot_count_; i > 0u; --i)
-            {
-                auto* const slot = reinterpret_cast<slot_header*>(storage_.data() + ((i - 1u) * slot_size_));
-                slot->next = free_head_;
-                free_head_ = slot;
-            }
-        }
+        explicit slab_allocator(const std::size_t slot_size, const std::size_t slot_count) noexcept(false);
 
         /// @brief Non-copyable.
         slab_allocator(const slab_allocator&) = delete;
@@ -48,70 +35,24 @@ namespace kmx::aio
         slab_allocator& operator=(const slab_allocator&) = delete;
 
         /// @brief Move constructor.
-        slab_allocator(slab_allocator&& other) noexcept:
-            slot_size_(other.slot_size_),
-            slot_count_(other.slot_count_),
-            storage_(std::move(other.storage_)),
-            free_head_(other.free_head_),
-            remote_free_head_(other.remote_free_head_.exchange(nullptr, std::memory_order_acq_rel)),
-            allocated_(other.allocated_)
-        {
-            other.free_head_ = nullptr;
-            other.allocated_ = 0u;
-        }
+        slab_allocator(slab_allocator&& other) noexcept;
 
         /// @brief Move assignment.
-        slab_allocator& operator=(slab_allocator&& other) noexcept
-        {
-            if (this != &other)
-            {
-                slot_size_ = other.slot_size_;
-                slot_count_ = other.slot_count_;
-                storage_ = std::move(other.storage_);
-                free_head_ = other.free_head_;
-                remote_free_head_.store(other.remote_free_head_.exchange(nullptr, std::memory_order_acq_rel), std::memory_order_relaxed);
-                allocated_ = other.allocated_;
-                other.free_head_ = nullptr;
-                other.allocated_ = 0u;
-            }
-
-            return *this;
-        }
+        slab_allocator& operator=(slab_allocator&& other) noexcept;
 
         ~slab_allocator() noexcept = default;
 
         /// @brief Allocates a single slot from the slab.
         /// @return Pointer to the allocated memory, or nullptr if the slab is exhausted.
         /// @note Owning thread only.
-        [[nodiscard]] void* allocate() noexcept
-        {
-            if (free_head_ == nullptr)
-                adopt_remote_free_list();
-
-            if (free_head_ == nullptr)
-                return nullptr;
-
-            auto* const slot = free_head_;
-            free_head_ = slot->next;
-            ++allocated_;
-            return static_cast<void*>(slot);
-        }
+        [[nodiscard]] void* allocate() noexcept;
 
         /// @brief Returns a previously allocated slot to the slab.
         /// @param ptr Pointer that was returned by a previous call to allocate().
         /// @warning Behavior is undefined if ptr was not allocated from this slab.
         /// @warning Owning thread only. A slot freed from any other thread must go through
         ///          deallocate_remote(), which is what makes the free list safe to share.
-        void deallocate(void* const ptr) noexcept
-        {
-            if (ptr == nullptr)
-                return;
-
-            auto* const slot = static_cast<slot_header*>(ptr);
-            slot->next = free_head_;
-            free_head_ = slot;
-            --allocated_;
-        }
+        void deallocate(void* const ptr) noexcept;
 
         /// @brief Returns a slot to the slab from a thread that does not own it.
         /// @param ptr Pointer that was returned by a previous call to allocate().
@@ -123,18 +64,7 @@ namespace kmx::aio
         ///       boundary those are different threads. Sending such a frame to ::operator delete - or
         ///       to another thread's free list - corrupts the heap.
         /// @warning Behavior is undefined if ptr was not allocated from this slab.
-        void deallocate_remote(void* const ptr) noexcept
-        {
-            if (ptr == nullptr)
-                return;
-
-            auto* const slot = static_cast<slot_header*>(ptr);
-            auto* head = remote_free_head_.load(std::memory_order_relaxed);
-            do
-            {
-                slot->next = head;
-            } while (!remote_free_head_.compare_exchange_weak(head, slot, std::memory_order_release, std::memory_order_relaxed));
-        }
+        void deallocate_remote(void* const ptr) noexcept;
 
         /// @brief Returns the fixed slot size (including alignment padding).
         [[nodiscard]] std::size_t slot_size() const noexcept { return slot_size_; }
@@ -153,32 +83,13 @@ namespace kmx::aio
         /// @brief Checks if a given pointer is managed by this slab allocator.
         /// @param ptr Pointer to check.
         /// @return true if the pointer falls within this slab's memory region.
-        [[nodiscard]] bool owns(const void* const ptr) const noexcept
-        {
-            if (ptr == nullptr)
-                return false;
-
-            const auto* const p = static_cast<const std::byte*>(ptr);
-            const auto* const start = storage_.data();
-            return p >= start && p < (start + storage_.size());
-        }
+        [[nodiscard]] bool owns(const void* const ptr) const noexcept;
 
     private:
         /// @brief Moves everything freed by other threads onto this thread's free list.
         /// @details Taken in one exchange, so a remote deallocation racing with this either lands on
         ///          the list being taken or starts the next one.
-        void adopt_remote_free_list() noexcept
-        {
-            auto* slot = remote_free_head_.exchange(nullptr, std::memory_order_acquire);
-            while (slot != nullptr)
-            {
-                auto* const next = slot->next;
-                slot->next = free_head_;
-                free_head_ = slot;
-                --allocated_;
-                slot = next;
-            }
-        }
+        void adopt_remote_free_list() noexcept;
 
         /// @brief Rounds `value` up to the nearest multiple of `alignment`.
         [[nodiscard]] static constexpr std::size_t align_up(const std::size_t value, const std::size_t alignment) noexcept

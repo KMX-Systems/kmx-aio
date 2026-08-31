@@ -7,6 +7,7 @@
 
 // Root Primitives (kmx::aio)
 #include <kmx/aio/allocator.hpp>
+#include <kmx/aio/basic_channel.hpp>
 #include <kmx/aio/basic_types.hpp>
 #include <kmx/aio/buffer.hpp>
 #include <kmx/aio/channel.hpp>
