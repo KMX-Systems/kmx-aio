@@ -38,7 +38,7 @@ namespace kmx::aio
 
     std::string ip_to_string(const ip_address_t ip) noexcept
     {
-        char buffer[INET6_ADDRSTRLEN] {};
+        std::array<char, INET6_ADDRSTRLEN> buffer {};
 
         const bool ok = std::visit(
             [&buffer](const auto& bytes) noexcept
@@ -48,19 +48,19 @@ namespace kmx::aio
                 {
                     in_addr addr {};
                     std::memcpy(&addr, bytes.data(), bytes.size());
-                    return ::inet_ntop(AF_INET, &addr, buffer, sizeof(buffer)) != nullptr;
+                    return ::inet_ntop(AF_INET, &addr, buffer.data(), buffer.size()) != nullptr;
                 }
 
                 in6_addr addr {};
                 std::memcpy(&addr, bytes.data(), bytes.size());
-                return ::inet_ntop(AF_INET6, &addr, buffer, sizeof(buffer)) != nullptr;
+                return ::inet_ntop(AF_INET6, &addr, buffer.data(), buffer.size()) != nullptr;
             },
             ip);
 
         // LCOV_EXCL_BR_LINE: inet_ntop fails only on an unknown family or a buffer too small, and the
         // visitor above passes AF_INET or AF_INET6 with an INET6_ADDRSTRLEN buffer. The empty string
         // stays as the answer for a caller that somehow gets neither.
-        return ok ? std::string(buffer) : std::string {}; // LCOV_EXCL_BR_LINE
+        return ok ? std::string(buffer.data()) : std::string {}; // LCOV_EXCL_BR_LINE
     }
 
     expected_socket_address_t make_socket_address(const ip_address_t ip, const port_t port) noexcept

@@ -2,14 +2,9 @@
 #include <kmx/aio/someip/vsomeip_compat.hpp>
 
 #include <atomic>
-#include <condition_variable>
 #include <cstdlib>
 #include <deque>
-#include <mutex>
-#include <set>
-#include <thread>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 
 namespace kmx::aio::someip::compat

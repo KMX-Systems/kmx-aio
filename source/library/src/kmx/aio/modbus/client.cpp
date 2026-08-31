@@ -4,7 +4,6 @@
 #include <kmx/aio/error_code.hpp>
 #if defined(KMX_AIO_FEATURE_MODBUS)
     #include <kmx/aio/modbus/detail/client_ops.hpp>
-    #include <kmx/aio/modbus/detail/session.hpp>
     #include <kmx/aio/modbus/frame.hpp>
     #include <kmx/aio/readiness/basic_types.hpp>
     #include <kmx/aio/readiness/executor.hpp>
@@ -16,7 +15,6 @@
     #include <cstdint>
     #include <optional>
     #include <utility>
-    #include <vector>
 
 namespace kmx::aio::modbus
 {
@@ -26,18 +24,14 @@ namespace kmx::aio::modbus
     using async_coil_result = task<std::expected<coil_values, std::error_code>>;
     using async_fd_result = task<file_descriptor::expected_t>;
 
-    struct client::impl : detail::client_ops<client::impl, readiness::tcp::stream>
+    struct client::impl: detail::client_ops<client::impl, readiness::tcp::stream>
     {
         readiness::executor& exec_;
         client_config config_;
         std::optional<readiness::tcp::stream> stream_;
         std::uint16_t next_tid_ = 0u;
 
-        explicit impl(client_config config, readiness::executor& exec) noexcept
-            : exec_(exec)
-            , config_(std::move(config))
-        {
-        }
+        explicit impl(client_config config, readiness::executor& exec) noexcept: exec_(exec), config_(std::move(config)) {}
 
         [[nodiscard]] task<file_descriptor::expected_t> prepare_socket() noexcept(false)
         {
@@ -63,9 +57,7 @@ namespace kmx::aio::modbus
         {
             // Initiate non-blocking connect
             const auto connect_result = fd.connect(ip, config_.port);
-            const bool in_progress =
-                !connect_result &&
-                (connect_result.error() == std::error_code(EINPROGRESS, std::generic_category()));
+            const bool in_progress = !connect_result && (connect_result.error() == std::error_code(EINPROGRESS, std::generic_category()));
 
             if (!connect_result && !in_progress)
                 co_return std::unexpected(make_error_code(error::connection_failed));
@@ -122,8 +114,7 @@ namespace kmx::aio::modbus
         }
     };
 
-    client::client(client_config config, readiness::executor& exec) noexcept
-        : impl_(std::make_unique<impl>(std::move(config), exec))
+    client::client(client_config config, readiness::executor& exec) noexcept: impl_(std::make_unique<impl>(std::move(config), exec))
     {
     }
 
@@ -141,32 +132,27 @@ namespace kmx::aio::modbus
         return impl_->disconnect();
     }
 
-    async_register_result
-    client::read_holding_registers(const std::uint16_t address, const std::uint16_t count) noexcept(false)
+    async_register_result client::read_holding_registers(const std::uint16_t address, const std::uint16_t count) noexcept(false)
     {
         return impl_->read_registers(function_code::read_holding_registers, address, count);
     }
 
-    async_register_result
-    client::read_input_registers(const std::uint16_t address, const std::uint16_t count) noexcept(false)
+    async_register_result client::read_input_registers(const std::uint16_t address, const std::uint16_t count) noexcept(false)
     {
         return impl_->read_registers(function_code::read_input_registers, address, count);
     }
 
-    async_coil_result
-    client::read_coils(const std::uint16_t address, const std::uint16_t count) noexcept(false)
+    async_coil_result client::read_coils(const std::uint16_t address, const std::uint16_t count) noexcept(false)
     {
         return impl_->read_coils_impl(function_code::read_coils, address, count);
     }
 
-    async_coil_result
-    client::read_discrete_inputs(const std::uint16_t address, const std::uint16_t count) noexcept(false)
+    async_coil_result client::read_discrete_inputs(const std::uint16_t address, const std::uint16_t count) noexcept(false)
     {
         return impl_->read_coils_impl(function_code::read_discrete_inputs, address, count);
     }
 
-    async_result
-    client::write_single_register(const std::uint16_t address, const std::uint16_t value) noexcept(false)
+    async_result client::write_single_register(const std::uint16_t address, const std::uint16_t value) noexcept(false)
     {
         const auto pdu = frame::encode_write_single_register(address, value);
         auto self = impl_.get();
@@ -176,8 +162,7 @@ namespace kmx::aio::modbus
         co_return frame::decode_write_single_response(*response, function_code::write_single_register);
     }
 
-    async_result
-    client::write_single_coil(const std::uint16_t address, const bool on) noexcept(false)
+    async_result client::write_single_coil(const std::uint16_t address, const bool on) noexcept(false)
     {
         const auto pdu = frame::encode_write_single_coil(address, on);
         auto self = impl_.get();
@@ -187,9 +172,7 @@ namespace kmx::aio::modbus
         co_return frame::decode_write_single_response(*response, function_code::write_single_coil);
     }
 
-    async_result
-    client::write_multiple_registers(const std::uint16_t address,
-                                     const std::span<const std::uint16_t> values) noexcept(false)
+    async_result client::write_multiple_registers(const std::uint16_t address, const std::span<const std::uint16_t> values) noexcept(false)
     {
         auto self = impl_.get();
         const auto pdu_result = frame::encode_write_multiple_registers(address, values);
@@ -202,9 +185,7 @@ namespace kmx::aio::modbus
         co_return frame::decode_write_multiple_response(*response, function_code::write_multiple_registers);
     }
 
-    async_result
-    client::write_multiple_coils(const std::uint16_t address,
-                                 const std::span<const std::uint8_t> values) noexcept(false)
+    async_result client::write_multiple_coils(const std::uint16_t address, const std::span<const std::uint8_t> values) noexcept(false)
     {
         auto self = impl_.get();
         const auto pdu_result = frame::encode_write_multiple_coils(address, values);

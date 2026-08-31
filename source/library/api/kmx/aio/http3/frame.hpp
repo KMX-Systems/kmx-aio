@@ -2,11 +2,12 @@
 /// @brief HTTP/3 frame definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-
-#include <cstdint>
-#include <string>
-#include <system_error>
-#include <vector>
+#ifndef PCH
+    #include <cstdint>
+    #include <string>
+    #include <system_error>
+    #include <vector>
+#endif
 
 /// @brief HTTP/3 core protocol definitions and utilities.
 /// @details HTTP/3 rides over QUIC and encodes frame and settings identifiers
@@ -124,6 +125,7 @@ namespace kmx::aio::http3
         version_fallback = 0x110u
     };
 
+    /// @brief `std::error_category` describing HTTP/3 protocol errors.
     class http3_error_category final: public std::error_category
     {
     public:
@@ -148,6 +150,7 @@ namespace kmx::aio::http3
 
 namespace std
 {
+    /// @brief Registers @ref kmx::aio::http3::error_code as a `std::error_code` enum.
     template <>
     struct is_error_code_enum<kmx::aio::http3::error_code>: true_type
     {

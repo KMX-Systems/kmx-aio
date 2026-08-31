@@ -2,9 +2,10 @@
 /// @brief Readiness-model alias for the AVB raw Ethernet socket.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-
-#include <kmx/aio/avb/eth_socket.hpp>
-#include <kmx/aio/readiness/executor.hpp>
+#ifndef PCH
+    #include <kmx/aio/avb/eth_socket.hpp>
+    #include <kmx/aio/readiness/executor.hpp>
+#endif
 
 namespace kmx::aio::readiness::avb
 {

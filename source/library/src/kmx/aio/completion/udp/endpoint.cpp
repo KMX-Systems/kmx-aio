@@ -1,14 +1,12 @@
 /// @file aio/completion/udp/endpoint.cpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/completion/udp/endpoint.hpp"
+#include <kmx/aio/completion/udp/endpoint.hpp>
 
-#include <arpa/inet.h>
 #include <netinet/in.h>
-#include <sys/uio.h>
 
 namespace kmx::aio::completion::udp
 {
-    endpoint::create_result endpoint::create(executor& exec, const int domain) noexcept
+    endpoint::expected_t endpoint::create(executor& exec, const int domain) noexcept
     {
         auto sock = socket::create(exec, domain);
         if (!sock)
@@ -18,7 +16,7 @@ namespace kmx::aio::completion::udp
     }
 
     task_returning_expected_size_t endpoint::recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
-                                         ::socklen_t& out_peer_addr_len) noexcept(false)
+                                                  ::socklen_t& out_peer_addr_len) noexcept(false)
     {
         out_peer_addr_len = 0u;
 
@@ -40,7 +38,7 @@ namespace kmx::aio::completion::udp
     }
 
     task_returning_expected_size_t endpoint::recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr, ::socklen_t& out_peer_addr_len,
-                                         ip_address_t& out_peer_ip, port_t& out_peer_port) noexcept(false)
+                                                  ip_address_t& out_peer_ip, port_t& out_peer_port) noexcept(false)
     {
         auto result = co_await recv(buffer, peer_addr, out_peer_addr_len);
         if (!result)
@@ -78,7 +76,7 @@ namespace kmx::aio::completion::udp
     }
 
     task_returning_expected_size_t endpoint::send(std::span<const std::byte> buffer, const sockaddr* peer_addr,
-                                         const ::socklen_t addr_len) noexcept(false)
+                                                  const ::socklen_t addr_len) noexcept(false)
     {
         if (peer_addr == nullptr)
             co_return std::unexpected(error_from_errno(EINVAL));
@@ -101,7 +99,7 @@ namespace kmx::aio::completion::udp
     }
 
     task_returning_expected_size_t endpoint::send(std::span<const std::byte> buffer, const ip_address_t peer_ip,
-                                         const port_t peer_port) noexcept(false)
+                                                  const port_t peer_port) noexcept(false)
     {
         const auto peer_addr = make_socket_address(peer_ip, peer_port);
         if (!peer_addr)

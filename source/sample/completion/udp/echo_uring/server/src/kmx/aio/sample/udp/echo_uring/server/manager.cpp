@@ -1,8 +1,14 @@
-#include "kmx/aio/sample/udp/echo_uring/server/manager.hpp"
+#include <kmx/aio/completion/udp/endpoint.hpp>
+#include <kmx/aio/completion/udp/socket.hpp>
+#include <kmx/aio/sample/udp/echo_uring/server/manager.hpp>
 
+#include <array>
+#include <csignal>
+#include <iostream>
 #include <print>
 #include <source_location>
 #include <sys/socket.h>
+#include <vector>
 
 namespace kmx::aio::sample::udp::echo_uring::server
 {
@@ -178,8 +184,8 @@ namespace kmx::aio::sample::udp::echo_uring::server
     {
         if (signum == SIGINT || signum == SIGTERM)
         {
-            const char msg[] = "\n[SIGNAL] Stopping UDP Uring Server executor...\n";
-            [[maybe_unused]] auto res = ::write(STDERR_FILENO, msg, sizeof(msg) - 1);
+            static constexpr auto msg = std::to_array("\n[SIGNAL] Stopping UDP Uring Server executor...\n");
+            [[maybe_unused]] auto res = ::write(STDERR_FILENO, msg.data(), msg.size() - 1u);
 
             auto* exec = g_executor_ptr.load(std::memory_order_acquire);
             if (exec)

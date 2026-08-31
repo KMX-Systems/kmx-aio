@@ -22,7 +22,9 @@
 // tag names, so repeating the typedef here is the whole of what the seam needs to know about either.
 // A redeclaration identical to the one in <openssl/types.h> is well-formed, so a file that includes
 // both this header and OpenSSL's - tls/stream.hpp does - still compiles.
-typedef struct bio_st BIO;               // NOLINT(modernize-use-using)
+/// @brief OpenSSL/BoringSSL BIO handle, redeclared so this header need not include OpenSSL.
+typedef struct bio_st BIO; // NOLINT(modernize-use-using)
+/// @brief OpenSSL/BoringSSL BIO method table, redeclared to keep OpenSSL out of this header.
 typedef struct bio_method_st BIO_METHOD; // NOLINT(modernize-use-using)
 
 namespace kmx::aio::tls::detail

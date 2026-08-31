@@ -1,17 +1,16 @@
 /// @file aio/benchmark/core_cases.cpp
 /// @brief Coroutine, allocator, channel and buffer-pool micro-benchmarks.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/benchmark/cases.hpp"
+#include <kmx/aio/benchmark/cases.hpp>
 
 #include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <thread>
-#include <vector>
 
-#include <kmx/aio/allocator.hpp>
-#include <kmx/aio/buffer_pool.hpp>
+#include <kmx/aio/allocator/slab.hpp>
+#include <kmx/aio/buffer/pool.hpp>
 #include <kmx/aio/channel.hpp>
 #include <kmx/aio/scheduler.hpp>
 #include <kmx/aio/task.hpp>
@@ -54,7 +53,7 @@ namespace kmx::aio::benchmark
         /// @brief Times a coroutine-await loop, optionally with a slab allocator installed.
         static result measure_await(std::string name, const std::size_t iterations, const unsigned depth, const bool use_slab)
         {
-            slab_allocator slab {1024u, 64u};
+            allocator::slab slab {1024u, 64u};
             if (use_slab)
                 set_thread_allocator(&slab);
 
@@ -95,7 +94,7 @@ namespace kmx::aio::benchmark
     static result bench_slab_alloc(const double scale)
     {
         const auto iterations = scaled(20'000'000u, scale);
-        slab_allocator slab {256u, 64u};
+        allocator::slab slab {256u, 64u};
 
         const auto start = clock_t::now();
         for (std::size_t i {}; i != iterations; ++i)
@@ -161,7 +160,7 @@ namespace kmx::aio::benchmark
     static result bench_buffer_pool(const double scale)
     {
         const auto iterations = scaled(10'000'000u, scale);
-        buffer_pool<std::array<std::byte, 256u>, 64u> pool {};
+        buffer::pool<std::array<std::byte, 256u>, 64u> pool {};
 
         const auto start = clock_t::now();
         for (std::size_t i {}; i != iterations; ++i)

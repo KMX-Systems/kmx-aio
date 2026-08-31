@@ -1,18 +1,19 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <catch2/catch_test_macros.hpp>
 
+#include <kmx/aio/modbus/error.hpp>
 #include <kmx/aio/modbus/frame.hpp>
 
 #include <array>
 #include <cstdint>
 #include <vector>
 
-namespace kmx::aio::modbus::frame
+namespace kmx::aio::test::modbus::frame_test
 {
-    // =========================================================================
-    // MBAP header
-    // =========================================================================
+    using namespace kmx::aio::modbus;
+    using namespace kmx::aio::modbus::frame;
 
+    // MBAP header
     TEST_CASE("modbus frame encode_mbap produces correct byte sequence", "[modbus][frame][unit]")
     {
         std::array<std::uint8_t, 7> buf {};
@@ -65,19 +66,16 @@ namespace kmx::aio::modbus::frame
         CHECK(result.error() == make_error_code(error::malformed_frame));
     }
 
-    // =========================================================================
     // Read request PDU builders
-    // =========================================================================
-
     TEST_CASE("modbus frame encode_read_request read holding registers", "[modbus][frame][unit]")
     {
         const auto result = encode_read_request(function_code::read_holding_registers, 0x0064u, 10u);
         REQUIRE(result.has_value());
-        CHECK(result->at(0) == 0x03u);           // function code
-        CHECK(result->at(1) == 0x00u);           // address hi
-        CHECK(result->at(2) == 0x64u);           // address lo
-        CHECK(result->at(3) == 0x00u);           // count hi
-        CHECK(result->at(4) == 0x0Au);           // count lo
+        CHECK(result->at(0) == 0x03u); // function code
+        CHECK(result->at(1) == 0x00u); // address hi
+        CHECK(result->at(2) == 0x64u); // address lo
+        CHECK(result->at(3) == 0x00u); // count hi
+        CHECK(result->at(4) == 0x0Au); // count lo
     }
 
     TEST_CASE("modbus frame encode_read_request read coils", "[modbus][frame][unit]")
@@ -115,18 +113,15 @@ namespace kmx::aio::modbus::frame
         CHECK(fail.error() == make_error_code(error::frame_too_large));
     }
 
-    // =========================================================================
     // Write request PDU builders
-    // =========================================================================
-
     TEST_CASE("modbus frame encode_write_single_register produces correct bytes", "[modbus][frame][unit]")
     {
         const auto pdu = encode_write_single_register(0x0010u, 0x03E8u);
-        CHECK(pdu[0] == 0x06u);  // fc
-        CHECK(pdu[1] == 0x00u);  // addr hi
-        CHECK(pdu[2] == 0x10u);  // addr lo
-        CHECK(pdu[3] == 0x03u);  // value hi
-        CHECK(pdu[4] == 0xE8u);  // value lo
+        CHECK(pdu[0] == 0x06u); // fc
+        CHECK(pdu[1] == 0x00u); // addr hi
+        CHECK(pdu[2] == 0x10u); // addr lo
+        CHECK(pdu[3] == 0x03u); // value hi
+        CHECK(pdu[4] == 0xE8u); // value lo
     }
 
     TEST_CASE("modbus frame encode_write_single_coil ON encodes 0xFF00", "[modbus][frame][unit]")
@@ -153,18 +148,18 @@ namespace kmx::aio::modbus::frame
 
         // fc(1) + addr(2) + count(2) + byte_count(1) + data(6)
         REQUIRE(result->size() == 12u);
-        CHECK(result->at(0) == 0x10u);           // fc
-        CHECK(result->at(1) == 0x00u);           // addr hi
-        CHECK(result->at(2) == 0x20u);           // addr lo
-        CHECK(result->at(3) == 0x00u);           // count hi
-        CHECK(result->at(4) == 0x03u);           // count lo
-        CHECK(result->at(5) == 0x06u);           // byte count
-        CHECK(result->at(6) == 0x00u);           // reg[0] hi
-        CHECK(result->at(7) == 0x01u);           // reg[0] lo
-        CHECK(result->at(8) == 0x00u);           // reg[1] hi
-        CHECK(result->at(9) == 0x02u);           // reg[1] lo
-        CHECK(result->at(10) == 0xFFu);          // reg[2] hi
-        CHECK(result->at(11) == 0xFFu);          // reg[2] lo
+        CHECK(result->at(0) == 0x10u);  // fc
+        CHECK(result->at(1) == 0x00u);  // addr hi
+        CHECK(result->at(2) == 0x20u);  // addr lo
+        CHECK(result->at(3) == 0x00u);  // count hi
+        CHECK(result->at(4) == 0x03u);  // count lo
+        CHECK(result->at(5) == 0x06u);  // byte count
+        CHECK(result->at(6) == 0x00u);  // reg[0] hi
+        CHECK(result->at(7) == 0x01u);  // reg[0] lo
+        CHECK(result->at(8) == 0x00u);  // reg[1] hi
+        CHECK(result->at(9) == 0x02u);  // reg[1] lo
+        CHECK(result->at(10) == 0xFFu); // reg[2] hi
+        CHECK(result->at(11) == 0xFFu); // reg[2] lo
     }
 
     TEST_CASE("modbus frame encode_write_multiple_registers rejects 0 values", "[modbus][frame][unit]")
@@ -186,10 +181,7 @@ namespace kmx::aio::modbus::frame
         CHECK(result.error() == make_error_code(error::frame_too_large));
     }
 
-    // =========================================================================
     // Coil bit-packing
-    // =========================================================================
-
     TEST_CASE("modbus frame encode_write_multiple_coils packs bits correctly", "[modbus][frame][unit]")
     {
         // 9 coils: [1,0,1,1,0,0,0,1, 1] → byte0 = 0b10001101 = 0x8D, byte1 = 0x01
@@ -199,9 +191,9 @@ namespace kmx::aio::modbus::frame
 
         // fc(1) + addr(2) + count(2) + byte_count(1) + packed(2) = 8 bytes
         REQUIRE(result->size() == 8u);
-        CHECK(result->at(5) == 0x02u);  // byte_count = 2
-        CHECK(result->at(6) == 0x8Du);  // bits 0-7
-        CHECK(result->at(7) == 0x01u);  // bits 8 (only bit 0 of second byte set)
+        CHECK(result->at(5) == 0x02u); // byte_count = 2
+        CHECK(result->at(6) == 0x8Du); // bits 0-7
+        CHECK(result->at(7) == 0x01u); // bits 8 (only bit 0 of second byte set)
     }
 
     TEST_CASE("modbus frame encode_write_multiple_coils 8 coils uses 1 byte", "[modbus][frame][unit]")
@@ -209,14 +201,11 @@ namespace kmx::aio::modbus::frame
         const std::vector<std::uint8_t> values(8u, 1u);
         const auto result = encode_write_multiple_coils(0u, values);
         REQUIRE(result.has_value());
-        CHECK(result->at(5) == 0x01u);  // byte_count
-        CHECK(result->at(6) == 0xFFu);  // all bits set
+        CHECK(result->at(5) == 0x01u); // byte_count
+        CHECK(result->at(6) == 0xFFu); // all bits set
     }
 
-    // =========================================================================
     // Exception PDU
-    // =========================================================================
-
     TEST_CASE("modbus frame is_exception_pdu detects high bit on fc", "[modbus][frame][unit]")
     {
         const std::array<std::uint8_t, 2> exc_pdu {0x83u, 0x02u}; // fc 0x03 | 0x80
@@ -245,19 +234,16 @@ namespace kmx::aio::modbus::frame
         CHECK(result.error() == make_error_code(error::malformed_frame));
     }
 
-    // =========================================================================
     // Register response decoder
-    // =========================================================================
-
     TEST_CASE("modbus frame decode_read_registers_response decodes correctly", "[modbus][frame][unit]")
     {
         // Canned server response for read_holding_registers of 3 registers
-        // PDU: fc(0x03) + byte_count(6) + reg0_hi + reg0_lo + ... 
+        // PDU: fc(0x03) + byte_count(6) + reg0_hi + reg0_lo + ...
         const std::array<std::uint8_t, 8> pdu {
-            0x03u, 0x06u,             // fc + byte_count
-            0x00u, 0x0Au,             // reg[0] = 10
-            0x01u, 0xF4u,             // reg[1] = 500
-            0xFFu, 0xFFu              // reg[2] = 65535
+            0x03u, 0x06u, // fc + byte_count
+            0x00u, 0x0Au, // reg[0] = 10
+            0x01u, 0xF4u, // reg[1] = 500
+            0xFFu, 0xFFu  // reg[2] = 65535
         };
         const auto result = decode_read_registers_response(pdu, function_code::read_holding_registers, 3u);
         REQUIRE(result.has_value());
@@ -284,10 +270,7 @@ namespace kmx::aio::modbus::frame
         CHECK(result.error() == make_error_code(error::unexpected_function_code));
     }
 
-    // =========================================================================
     // Coil response decoder
-    // =========================================================================
-
     TEST_CASE("modbus frame decode_read_coils_response unpacks bits correctly", "[modbus][frame][unit]")
     {
         // 9 coils packed in 2 bytes: byte0=0x8D=0b10001101, byte1=0x01
@@ -315,10 +298,7 @@ namespace kmx::aio::modbus::frame
         CHECK(result.error() == make_error_code(error::exception_response));
     }
 
-    // =========================================================================
     // Write response decoders
-    // =========================================================================
-
     TEST_CASE("modbus frame decode_write_single_response validates function code", "[modbus][frame][unit]")
     {
         // Server echoes fc + addr + value (5 bytes)
@@ -347,4 +327,4 @@ namespace kmx::aio::modbus::frame
         CHECK(result.error() == make_error_code(error::exception_response));
     }
 
-} // namespace kmx::aio::modbus::frame
+} // namespace kmx::aio::test::modbus::frame_test

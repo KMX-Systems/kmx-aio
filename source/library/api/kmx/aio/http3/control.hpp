@@ -2,11 +2,12 @@
 /// @brief HTTP/3 control stream definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
+#ifndef PCH
+    #include <kmx/aio/http3/frame.hpp>
+    #include <kmx/aio/http3/settings.hpp>
 
-#include <kmx/aio/http3/frame.hpp>
-#include <kmx/aio/http3/settings.hpp>
-
-#include <optional>
+    #include <optional>
+#endif
 
 namespace kmx::aio::http3
 {

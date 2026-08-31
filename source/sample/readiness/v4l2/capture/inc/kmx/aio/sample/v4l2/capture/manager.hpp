@@ -1,12 +1,13 @@
 #pragma once
-#include <atomic>
-#include <string>
-#include <string_view>
+#ifndef PCH
+    #include <atomic>
+    #include <string>
 
-#include <kmx/aio/readiness/executor.hpp>
-#include <kmx/aio/readiness/v4l2/capture.hpp>
-#include <kmx/aio/task.hpp>
-#include <kmx/logger.hpp>
+    #include <kmx/aio/readiness/executor.hpp>
+    #include <kmx/aio/readiness/v4l2/capture.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/logger.hpp>
+#endif
 
 namespace kmx::aio::sample::v4l2::capture
 {

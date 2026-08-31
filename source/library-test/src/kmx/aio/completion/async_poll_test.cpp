@@ -13,8 +13,10 @@
 #include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/task.hpp>
 
-namespace kmx::aio::completion
+namespace kmx::aio::test::completion::async_poll_test
 {
+    using namespace kmx::aio::completion;
+
     // ---------------------------------------------------------------------------
     // Test 1 — fd already readable before poll is submitted
     // ---------------------------------------------------------------------------
@@ -106,4 +108,4 @@ namespace kmx::aio::completion
         REQUIRE(state->error.value() != 0);
     }
 
-} // namespace kmx::aio::completion
+} // namespace kmx::aio::test::completion::async_poll_test

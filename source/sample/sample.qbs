@@ -1,6 +1,7 @@
 import qbs
 
 Project {
+    name: "kmx-aio-benchmark"
     references: [
         "common/common.qbs",
         "readiness/tcp/echo/common/tcp-echo-common.qbs",
@@ -9,4 +10,3 @@ Project {
         "gpu/gpu.qbs",
     ]
 }
-

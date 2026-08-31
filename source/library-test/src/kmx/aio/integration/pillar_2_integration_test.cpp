@@ -15,7 +15,7 @@
 #include <system_error>
 #include <vector>
 
-namespace kmx::aio::tls::test::integration
+namespace kmx::aio::test::integration::pillar_2_integration_test
 {
     template <typename Stream>
     concept alpn_api_surface = requires(Stream s, std::span<const std::uint8_t> p) {
@@ -77,4 +77,4 @@ namespace kmx::aio::tls::test::integration
             REQUIRE(result.error() == std::make_error_code(std::errc::invalid_argument));
         }
     }
-} // namespace kmx::aio::tls::test::integration
+} // namespace kmx::aio::test::integration::pillar_2_integration_test

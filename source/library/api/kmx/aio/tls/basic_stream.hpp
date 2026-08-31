@@ -17,11 +17,9 @@
 #pragma once
 #ifndef PCH
     #include <cstdint>
-    #include <expected>
     #include <mutex>
     #include <span>
     #include <string_view>
-    #include <system_error>
 
     #include <kmx/aio/async_mutex.hpp>
     #include <kmx/aio/task.hpp>
@@ -31,8 +29,11 @@
 // names, so repeating the typedefs here is the whole of what this header needs to know about either. A
 // redeclaration identical to the one in <openssl/types.h> is well-formed, so a translation unit that
 // includes this header and OpenSSL's - basic_stream.cpp does - still compiles.
-typedef struct bio_st BIO;         // NOLINT(modernize-use-using)
-typedef struct ssl_st SSL;         // NOLINT(modernize-use-using)
+/// @brief OpenSSL/BoringSSL BIO handle, redeclared so this header need not include OpenSSL.
+typedef struct bio_st BIO; // NOLINT(modernize-use-using)
+/// @brief OpenSSL/BoringSSL SSL connection handle, redeclared to keep OpenSSL out of this header.
+typedef struct ssl_st SSL; // NOLINT(modernize-use-using)
+/// @brief OpenSSL/BoringSSL SSL context handle, redeclared to keep OpenSSL out of this header.
 typedef struct ssl_ctx_st SSL_CTX; // NOLINT(modernize-use-using)
 
 namespace kmx::aio::tls

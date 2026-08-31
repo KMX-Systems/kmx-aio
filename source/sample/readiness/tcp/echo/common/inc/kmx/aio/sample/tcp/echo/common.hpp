@@ -1,8 +1,9 @@
 #pragma once
-
-#include <cstdint>
-#include <string>
-#include <vector>
+#ifndef PCH
+    #include <cstdint>
+    #include <string>
+    #include <vector>
+#endif
 
 namespace kmx::aio::sample::common
 {

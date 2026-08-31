@@ -4,7 +4,6 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <kmx/aio/readiness/executor.hpp>
-#include <kmx/aio/task.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -15,8 +14,10 @@
 #include <system_error>
 #include <thread>
 
-namespace kmx::aio::readiness::test::integration
+namespace kmx::aio::test::integration::readiness_core_pinning_test
 {
+    using namespace kmx::aio::readiness;
+
     [[nodiscard]] static std::expected<int, std::error_code> first_allowed_cpu_for_current_thread() noexcept
     {
         cpu_set_t allowed {};
@@ -113,4 +114,4 @@ namespace kmx::aio::readiness::test::integration
         if (stopper.joinable())
             stopper.join();
     }
-} // namespace kmx::aio::readiness::test::integration
+} // namespace kmx::aio::test::integration::readiness_core_pinning_test

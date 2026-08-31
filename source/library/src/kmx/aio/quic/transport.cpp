@@ -6,8 +6,9 @@
     #include <algorithm>
     #include <array>
     #include <cstring>
-    #include <kmx/aio/quic/transport.hpp>
     #include <openssl/ssl.h>
+
+    #include <kmx/aio/quic/transport.hpp>
 
 namespace kmx::aio::quic
 {
@@ -17,8 +18,8 @@ namespace kmx::aio::quic
         static std::string server_alpn;
 
         /// @brief Selects the configured name out of the client's offer.
-        static int select_alpn(::SSL*, const unsigned char** out, unsigned char* out_len, const unsigned char* in,
-                               unsigned int in_len, void*) noexcept
+        static int select_alpn(::SSL*, const unsigned char** out, unsigned char* out_len, const unsigned char* in, unsigned int in_len,
+                               void*) noexcept
         {
             // The offer is a sequence of length-prefixed names; walk it looking for the one we speak.
             for (unsigned int i = 0u; i < in_len;)
@@ -113,8 +114,7 @@ namespace kmx::aio::quic
         co_return expected_void_t {};
     }
 
-    expected_void_t basic_endpoint::connect(const ip_address_t ip, const port_t port, const std::string& sni,
-                                                                 void* const ssl_ctx) noexcept
+    expected_void_t basic_endpoint::connect(const ip_address_t ip, const port_t port, const std::string& sni, void* const ssl_ctx) noexcept
     {
         // Bind to an ephemeral local port; the peer address is where packets go.
         static constexpr std::array<std::uint8_t, 4u> any {0u, 0u, 0u, 0u};
@@ -317,8 +317,7 @@ namespace kmx::aio::quic
         return ::ntohs(reinterpret_cast<const ::sockaddr_in*>(&addr)->sin_port);
     }
 
-    expected_void_t basic_endpoint::setup(const ip_address_t ip, const port_t port, void* const ssl_ctx,
-                                                               const bool server) noexcept
+    expected_void_t basic_endpoint::setup(const ip_address_t ip, const port_t port, void* const ssl_ctx, const bool server) noexcept
     {
         is_server_ = server;
         ssl_ctx_ = ssl_ctx;
@@ -346,8 +345,8 @@ namespace kmx::aio::quic
         settings.es_max_streams_in = 64u;
         settings.es_idle_timeout = 30u;
         // Without this lsquic refuses to start when the versions it was built with disagree with defaults.
-        char err[256] {};
-        if (::lsquic_engine_check_settings(&settings, flags, err, sizeof(err)) != 0)
+        std::array<char, 256u> err {};
+        if (::lsquic_engine_check_settings(&settings, flags, err.data(), err.size()) != 0)
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
 
         stream_if_.on_new_conn = &basic_endpoint::cb_new_conn;
@@ -519,13 +518,13 @@ namespace kmx::aio::quic
         if ((state == nullptr) || (self == nullptr))
             return;
 
-        char buffer[4096];
+        std::array<char, 4096u> buffer;
         for (;;)
         {
-            const auto count = ::lsquic_stream_read(handle, buffer, sizeof(buffer));
+            const auto count = ::lsquic_stream_read(handle, buffer.data(), buffer.size());
             if (count > 0)
             {
-                state->incoming.append(buffer, static_cast<std::size_t>(count));
+                state->incoming.append(buffer.data(), static_cast<std::size_t>(count));
                 if (state->incoming.size() >= stream_read_high_water)
                 {
                     // Stop pulling until the reader catches up; QUIC flow control then stalls the sender.

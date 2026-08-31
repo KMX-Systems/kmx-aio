@@ -1,35 +1,34 @@
 /// @file aio/basic_types_test.cpp
 /// @brief Unit tests for the IP address vocabulary and sockaddr conversions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_template_test_macros.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 #include <kmx/aio/basic_types.hpp>
 
-#include <arpa/inet.h>
 #include <cerrno>
 #include <cstring>
 #include <netinet/in.h>
 
-namespace kmx::aio
+namespace kmx::aio::test::basic_types_test
 {
-    namespace
+    namespace detail
     {
         constexpr ipv4::storage_t ipv4_documentation {192u, 0u, 2u, 33u};
         constexpr ipv6::storage_t ipv6_documentation {0x20u, 0x01u, 0x0du, 0xb8u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0x01u};
         constexpr ipv6::storage_t ipv6_loopback {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 1u};
-    }
+    } // namespace detail
 
     TEST_CASE("ip_family reports the family of a view", "[core][basic_types][family]")
     {
         CHECK(ip_family(make_ip_address(ipv4::localhost)) == AF_INET);
-        CHECK(ip_family(make_ip_address(ipv6_loopback)) == AF_INET6);
+        CHECK(ip_family(make_ip_address(detail::ipv6_loopback)) == AF_INET6);
     }
 
     TEST_CASE("ip_family reports the family of owned storage", "[core][basic_types][family]")
     {
         CHECK(ip_family(ip_address_owned_t {ipv4::localhost}) == AF_INET);
-        CHECK(ip_family(ip_address_owned_t {ipv6_loopback}) == AF_INET6);
+        CHECK(ip_family(ip_address_owned_t {detail::ipv6_loopback}) == AF_INET6);
     }
 
     TEST_CASE("would_block recognises both spellings", "[core][basic_types][would_block]")
@@ -62,16 +61,16 @@ namespace kmx::aio
 
     TEST_CASE("to_owned_ip_address copies IPv4 bytes out of a view", "[core][basic_types][conversion]")
     {
-        const auto owned = to_owned_ip_address(make_ip_address(ipv4_documentation));
+        const auto owned = to_owned_ip_address(make_ip_address(detail::ipv4_documentation));
         REQUIRE(std::holds_alternative<ipv4::address_owned_t>(owned));
-        CHECK(std::get<ipv4::address_owned_t>(owned) == ipv4_documentation);
+        CHECK(std::get<ipv4::address_owned_t>(owned) == detail::ipv4_documentation);
     }
 
     TEST_CASE("to_owned_ip_address copies IPv6 bytes out of a view", "[core][basic_types][conversion]")
     {
-        const auto owned = to_owned_ip_address(make_ip_address(ipv6_documentation));
+        const auto owned = to_owned_ip_address(make_ip_address(detail::ipv6_documentation));
         REQUIRE(std::holds_alternative<ipv6::address_owned_t>(owned));
-        CHECK(std::get<ipv6::address_owned_t>(owned) == ipv6_documentation);
+        CHECK(std::get<ipv6::address_owned_t>(owned) == detail::ipv6_documentation);
     }
 
     TEST_CASE("to_owned_ip_address detaches from the source storage", "[core][basic_types][conversion]")
@@ -87,29 +86,30 @@ namespace kmx::aio
 
     TEST_CASE("to_ip_address_view exposes owned IPv4 storage", "[core][basic_types][conversion]")
     {
-        const ip_address_owned_t owned {ipv4_documentation};
+        const ip_address_owned_t owned {detail::ipv4_documentation};
         const auto view = to_ip_address_view(owned);
         REQUIRE(std::holds_alternative<ipv4::address_t>(view));
 
         const auto bytes = std::get<ipv4::address_t>(view);
         CHECK(bytes.data() == std::get<ipv4::address_owned_t>(owned).data());
-        CHECK(std::memcmp(bytes.data(), ipv4_documentation.data(), ipv4_documentation.size()) == 0);
+        CHECK(std::memcmp(bytes.data(), detail::ipv4_documentation.data(), detail::ipv4_documentation.size()) == 0);
     }
 
     TEST_CASE("to_ip_address_view exposes owned IPv6 storage", "[core][basic_types][conversion]")
     {
-        const ip_address_owned_t owned {ipv6_documentation};
+        const ip_address_owned_t owned {detail::ipv6_documentation};
         const auto view = to_ip_address_view(owned);
         REQUIRE(std::holds_alternative<ipv6::address_t>(view));
 
         const auto bytes = std::get<ipv6::address_t>(view);
         CHECK(bytes.data() == std::get<ipv6::address_owned_t>(owned).data());
-        CHECK(std::memcmp(bytes.data(), ipv6_documentation.data(), ipv6_documentation.size()) == 0);
+        CHECK(std::memcmp(bytes.data(), detail::ipv6_documentation.data(), detail::ipv6_documentation.size()) == 0);
     }
 
     TEST_CASE("view and owned conversions round-trip", "[core][basic_types][round_trip]")
     {
-        for (const ip_address_owned_t owned: {ip_address_owned_t {ipv4_documentation}, ip_address_owned_t {ipv6_documentation}})
+        for (const ip_address_owned_t owned:
+             {ip_address_owned_t {detail::ipv4_documentation}, ip_address_owned_t {detail::ipv6_documentation}})
         {
             const auto reowned = to_owned_ip_address(to_ip_address_view(owned));
             CHECK(reowned == owned);
@@ -118,48 +118,48 @@ namespace kmx::aio
 
     TEST_CASE("ip_to_string renders IPv4 in dotted-decimal", "[core][basic_types][to_string]")
     {
-        CHECK(ip_to_string(make_ip_address(ipv4_documentation)) == "192.0.2.33");
+        CHECK(ip_to_string(make_ip_address(detail::ipv4_documentation)) == "192.0.2.33");
         CHECK(ip_to_string(make_ip_address(ipv4::localhost)) == "127.0.0.1");
         CHECK(ip_to_string(make_ip_address(ipv4::any)) == "0.0.0.0");
     }
 
     TEST_CASE("ip_to_string renders IPv6 in compressed notation", "[core][basic_types][to_string]")
     {
-        CHECK(ip_to_string(make_ip_address(ipv6_documentation)) == "2001:db8::1");
-        CHECK(ip_to_string(make_ip_address(ipv6_loopback)) == "::1");
+        CHECK(ip_to_string(make_ip_address(detail::ipv6_documentation)) == "2001:db8::1");
+        CHECK(ip_to_string(make_ip_address(detail::ipv6_loopback)) == "::1");
     }
 
     TEST_CASE("make_socket_address builds a sockaddr_in", "[core][basic_types][socket_address]")
     {
-        const auto result = make_socket_address(make_ip_address(ipv4_documentation), 8080u);
+        const auto result = make_socket_address(make_ip_address(detail::ipv4_documentation), 8080u);
         REQUIRE(result.has_value());
         CHECK(result->length == sizeof(::sockaddr_in));
 
         const auto* addr = reinterpret_cast<const ::sockaddr_in*>(&result->storage);
         CHECK(addr->sin_family == AF_INET);
         CHECK(::ntohs(addr->sin_port) == 8080u);
-        CHECK(std::memcmp(&addr->sin_addr, ipv4_documentation.data(), ipv4_documentation.size()) == 0);
+        CHECK(std::memcmp(&addr->sin_addr, detail::ipv4_documentation.data(), detail::ipv4_documentation.size()) == 0);
     }
 
     TEST_CASE("make_socket_address builds a sockaddr_in6", "[core][basic_types][socket_address]")
     {
-        const auto result = make_socket_address(make_ip_address(ipv6_documentation), 443u);
+        const auto result = make_socket_address(make_ip_address(detail::ipv6_documentation), 443u);
         REQUIRE(result.has_value());
         CHECK(result->length == sizeof(::sockaddr_in6));
 
         const auto* addr = reinterpret_cast<const ::sockaddr_in6*>(&result->storage);
         CHECK(addr->sin6_family == AF_INET6);
         CHECK(::ntohs(addr->sin6_port) == 443u);
-        CHECK(std::memcmp(&addr->sin6_addr, ipv6_documentation.data(), ipv6_documentation.size()) == 0);
+        CHECK(std::memcmp(&addr->sin6_addr, detail::ipv6_documentation.data(), detail::ipv6_documentation.size()) == 0);
     }
 
     TEST_CASE("make_socket_address accepts owned storage", "[core][basic_types][socket_address]")
     {
-        const auto from_v4 = make_socket_address(ip_address_owned_t {ipv4_documentation}, 1024u);
+        const auto from_v4 = make_socket_address(ip_address_owned_t {detail::ipv4_documentation}, 1024u);
         REQUIRE(from_v4.has_value());
         CHECK(from_v4->length == sizeof(::sockaddr_in));
 
-        const auto from_v6 = make_socket_address(ip_address_owned_t {ipv6_documentation}, 1025u);
+        const auto from_v6 = make_socket_address(ip_address_owned_t {detail::ipv6_documentation}, 1025u);
         REQUIRE(from_v6.has_value());
         CHECK(from_v6->length == sizeof(::sockaddr_in6));
     }
@@ -179,32 +179,33 @@ namespace kmx::aio
 
     TEST_CASE("parse_socket_address recovers an IPv4 endpoint", "[core][basic_types][parse]")
     {
-        const auto built = make_socket_address(make_ip_address(ipv4_documentation), 8080u);
+        const auto built = make_socket_address(make_ip_address(detail::ipv4_documentation), 8080u);
         REQUIRE(built.has_value());
 
         const auto parsed = parse_socket_address(*built);
         REQUIRE(parsed.has_value());
         CHECK(parsed->port == 8080u);
         REQUIRE(std::holds_alternative<ipv4::address_owned_t>(parsed->ip));
-        CHECK(std::get<ipv4::address_owned_t>(parsed->ip) == ipv4_documentation);
+        CHECK(std::get<ipv4::address_owned_t>(parsed->ip) == detail::ipv4_documentation);
     }
 
     TEST_CASE("parse_socket_address recovers an IPv6 endpoint", "[core][basic_types][parse]")
     {
-        const auto built = make_socket_address(make_ip_address(ipv6_documentation), 443u);
+        const auto built = make_socket_address(make_ip_address(detail::ipv6_documentation), 443u);
         REQUIRE(built.has_value());
 
         const auto parsed = parse_socket_address(*built);
         REQUIRE(parsed.has_value());
         CHECK(parsed->port == 443u);
         REQUIRE(std::holds_alternative<ipv6::address_owned_t>(parsed->ip));
-        CHECK(std::get<ipv6::address_owned_t>(parsed->ip) == ipv6_documentation);
+        CHECK(std::get<ipv6::address_owned_t>(parsed->ip) == detail::ipv6_documentation);
     }
 
     TEST_CASE("make_socket_address and parse_socket_address round-trip", "[core][basic_types][round_trip]")
     {
-        for (const ip_address_owned_t ip: {ip_address_owned_t {ipv4::localhost}, ip_address_owned_t {ipv6_loopback},
-                                           ip_address_owned_t {ipv4_documentation}, ip_address_owned_t {ipv6_documentation}})
+        for (const ip_address_owned_t ip:
+             {ip_address_owned_t {ipv4::localhost}, ip_address_owned_t {detail::ipv6_loopback},
+              ip_address_owned_t {detail::ipv4_documentation}, ip_address_owned_t {detail::ipv6_documentation}})
         {
             const auto built = make_socket_address(ip, 9000u);
             REQUIRE(built.has_value());
@@ -245,7 +246,7 @@ namespace kmx::aio
 
     TEST_CASE("parse_socket_address rejects a truncated sockaddr_in6", "[core][basic_types][parse][error]")
     {
-        auto built = make_socket_address(make_ip_address(ipv6_documentation), 443u);
+        auto built = make_socket_address(make_ip_address(detail::ipv6_documentation), 443u);
         REQUIRE(built.has_value());
         built->length = sizeof(::sockaddr_in);
 
@@ -264,4 +265,4 @@ namespace kmx::aio
         REQUIRE_FALSE(parsed.has_value());
         CHECK(parsed.error() == error_from_errno(EAFNOSUPPORT));
     }
-}
+} // namespace kmx::aio::test::basic_types_test

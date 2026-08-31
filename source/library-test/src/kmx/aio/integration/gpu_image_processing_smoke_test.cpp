@@ -16,7 +16,7 @@
     #include <string_view>
     #include <vector>
 
-namespace kmx::aio::gpu::test::integration
+namespace kmx::aio::test::integration::gpu_image_processing_smoke_test
 {
     namespace fs = std::filesystem;
 
@@ -114,6 +114,6 @@ namespace kmx::aio::gpu::test::integration
         REQUIRE(run_text.find("[GPU Image Processing] frame_bytes=") != std::string::npos);
         REQUIRE(run_text.find("[GPU Image Processing] tasks_spawned=") != std::string::npos);
     }
-} // namespace kmx::aio::gpu::test::integration
+} // namespace kmx::aio::test::integration::gpu_image_processing_smoke_test
 
 #endif // KMX_AIO_FEATURE_CUDA

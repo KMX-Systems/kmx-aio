@@ -2,17 +2,21 @@
 /// @brief V4L2 capture types shared across the V4L2 pillar.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-
-#include <cstdint>
-#include <string>
+#ifndef PCH
+    #include <cstdint>
+    #include <string>
+#endif
 
 namespace kmx::aio::readiness::v4l2
 {
     /// @brief Pixel format described by a V4L2 FourCC code.
     struct pixel_format
     {
+        /// @brief The V4L2 FourCC code identifying the pixel layout.
         std::uint32_t fourcc {};
 
+        /// @brief Compares two formats by FourCC code.
+        /// @return `true` when both formats carry the same FourCC.
         [[nodiscard]] constexpr bool operator==(const pixel_format&) const noexcept = default;
     };
 
@@ -38,18 +42,25 @@ namespace kmx::aio::readiness::v4l2
     /// @brief Frame resolution in pixels.
     struct frame_size
     {
+        /// @brief Frame width in pixels.
         std::uint32_t width {};
+        /// @brief Frame height in pixels.
         std::uint32_t height {};
 
+        /// @brief Compares width and height.
+        /// @return `true` when both sizes are equal.
         [[nodiscard]] constexpr bool operator==(const frame_size&) const noexcept = default;
     };
 
     /// @brief Common frame rate expressed as a rational number (numerator / denominator).
     struct frame_rate
     {
+        /// @brief Numerator of the frame interval, in seconds.
         std::uint32_t numerator {1u};
         std::uint32_t denominator {30u}; ///< Default: 30 fps
 
+        /// @brief Compares numerator and denominator without normalising the fraction.
+        /// @return `true` when both rates carry the same numerator and denominator.
         [[nodiscard]] constexpr bool operator==(const frame_rate&) const noexcept = default;
     };
 

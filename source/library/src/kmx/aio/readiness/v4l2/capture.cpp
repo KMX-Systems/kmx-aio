@@ -1,14 +1,13 @@
 /// @file aio/readiness/v4l2/capture.cpp
 /// @brief Async V4L2 video capture — readiness (epoll) model implementation.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/readiness/v4l2/capture.hpp"
+#include <kmx/aio/readiness/v4l2/capture.hpp>
 
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
-#include <unistd.h>
 
 #include <linux/videodev2.h>
 

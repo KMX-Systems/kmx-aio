@@ -29,8 +29,10 @@
 #include <kmx/aio/task.hpp>
 #include <kmx/aio/test/executor_runner.hpp>
 
-namespace kmx::aio::readiness::test
+namespace kmx::aio::test::readiness::executor_cancellation_test
 {
+    using namespace kmx::aio::readiness;
+
     using namespace std::literals::chrono_literals;
     using kmx::aio::test::scoped_runner;
     using kmx::aio::test::wait_for_flag;
@@ -70,10 +72,7 @@ namespace kmx::aio::readiness::test
         std::atomic_bool fired {false};     ///< What the wait reported: an event (true) or a cancel.
     };
 
-    // =========================================================================
     // 1. unregister_fd() must resume what is waiting on the descriptor
-    // =========================================================================
-
     TEST_CASE("readiness executor: unregister_fd resumes a parked wait", "[readiness][executor][cancellation]")
     {
         socket_pair sockets;
@@ -104,10 +103,7 @@ namespace kmx::aio::readiness::test
         CHECK_FALSE(outcome.fired.load(std::memory_order_acquire));
     }
 
-    // =========================================================================
     // 2. cancel_io() must do the same while the descriptor stays registered
-    // =========================================================================
-
     TEST_CASE("readiness executor: cancel_io resumes a parked wait", "[readiness][executor][cancellation]")
     {
         socket_pair sockets;
@@ -136,10 +132,7 @@ namespace kmx::aio::readiness::test
         CHECK_FALSE(outcome.fired.load(std::memory_order_acquire));
     }
 
-    // =========================================================================
     // 3. A cancel arriving before the wait must not be lost
-    // =========================================================================
-
     TEST_CASE("readiness executor: a cancel before the wait is not lost", "[readiness][executor][cancellation]")
     {
         socket_pair sockets;
@@ -172,10 +165,7 @@ namespace kmx::aio::readiness::test
         CHECK_FALSE(outcome.fired.load(std::memory_order_acquire));
     }
 
-    // =========================================================================
     // 4. register_fd() re-arms a descriptor that was cancelled
-    // =========================================================================
-
     TEST_CASE("readiness executor: register_fd re-arms a cancelled descriptor", "[readiness][executor][cancellation]")
     {
         socket_pair sockets;
@@ -214,4 +204,4 @@ namespace kmx::aio::readiness::test
         CHECK(outcome.fired.load(std::memory_order_acquire));
     }
 
-} // namespace kmx::aio::readiness::test
+} // namespace kmx::aio::test::readiness::executor_cancellation_test

@@ -90,7 +90,12 @@ CppApplication {
         }
 
         if (!project.enable_af_xdp)
+        {
             files.push("src/kmx/aio/completion/xdp/**/*.cpp");
+            // pillar_1 drives an AF_XDP socket as well as an SPDK device, so it has to go
+            // whenever either backend is out - not only when SPDK is.
+            files.push("src/kmx/aio/integration/pillar_1_integration_test.cpp");
+        }
 
         if (!project.enable_avb)
             files.push("src/kmx/aio/avb/**/*.cpp");

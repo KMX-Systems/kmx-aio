@@ -2,16 +2,17 @@
 /// @brief Internal backend abstraction layer between the SOME/IP facade and vsomeip.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
+#ifndef PCH
+    #include <chrono>
+    #include <cstdint>
+    #include <functional>
+    #include <memory>
+    #include <optional>
+    #include <string>
+    #include <vector>
 
-#include <chrono>
-#include <cstdint>
-#include <functional>
-#include <memory>
-#include <optional>
-#include <string>
-#include <vector>
-
-#include <kmx/aio/someip/types.hpp>
+    #include <kmx/aio/someip/types.hpp>
+#endif
 
 #if defined(KMX_AIO_FEATURE_SOMEIP) && defined(KMX_AIO_SOMEIP_LINK_BACKEND)
     #if __has_include(<vsomeip/vsomeip.hpp>)
@@ -81,11 +82,16 @@ namespace kmx::aio::someip::compat
         /// @param application_name Unique vsomeip application name.
         /// @param config_file_path Path to vsomeip JSON config, or empty for the default.
         client_runtime(std::string application_name, std::string config_file_path);
+        /// @brief Stops the dispatch thread and releases the vsomeip application.
         ~client_runtime();
 
+        /// @brief Non-copyable: the runtime owns the vsomeip application.
         client_runtime(const client_runtime&) = delete;
+        /// @brief Non-copyable: the runtime owns the vsomeip application.
         client_runtime& operator=(const client_runtime&) = delete;
+        /// @brief Move constructor — transfers ownership of the vsomeip application.
         client_runtime(client_runtime&&) noexcept;
+        /// @brief Move assignment — transfers ownership of the vsomeip application.
         client_runtime& operator=(client_runtime&&) noexcept;
 
         /// @brief Initialises the vsomeip application and starts its dispatch thread.
@@ -139,7 +145,9 @@ namespace kmx::aio::someip::compat
 #endif
 
     private:
+        /// @brief The backend implementation, real vsomeip or in-process stub.
         struct impl;
+        /// @brief The backend implementation, kept opaque so this header need not include vsomeip.
         std::unique_ptr<impl> impl_;
     };
 
@@ -154,11 +162,16 @@ namespace kmx::aio::someip::compat
         /// @param application_name Unique vsomeip application name.
         /// @param config_file_path Path to vsomeip JSON config, or empty for the default.
         server_runtime(std::string application_name, std::string config_file_path);
+        /// @brief Stops the dispatch thread and releases the vsomeip application.
         ~server_runtime();
 
+        /// @brief Non-copyable: the runtime owns the vsomeip application.
         server_runtime(const server_runtime&) = delete;
+        /// @brief Non-copyable: the runtime owns the vsomeip application.
         server_runtime& operator=(const server_runtime&) = delete;
+        /// @brief Move constructor — transfers ownership of the vsomeip application.
         server_runtime(server_runtime&&) noexcept;
+        /// @brief Move assignment — transfers ownership of the vsomeip application.
         server_runtime& operator=(server_runtime&&) noexcept;
 
         /// @brief Initialises the vsomeip application and starts its dispatch thread.
@@ -195,7 +208,9 @@ namespace kmx::aio::someip::compat
         void set_request_handler(std::function<void()> handler);
 
     private:
+        /// @brief The backend implementation, real vsomeip or in-process stub.
         struct impl;
+        /// @brief The backend implementation, kept opaque so this header need not include vsomeip.
         std::unique_ptr<impl> impl_;
     };
 

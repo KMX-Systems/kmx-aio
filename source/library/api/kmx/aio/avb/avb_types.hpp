@@ -2,9 +2,10 @@
 /// @brief AVB-specific types shared across the AVB pillar.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-
-#include <array>
-#include <cstdint>
+#ifndef PCH
+    #include <array>
+    #include <cstdint>
+#endif
 
 namespace kmx::aio::avb
 {
@@ -14,9 +15,13 @@ namespace kmx::aio::avb
     /// @brief AVB Stream ID = source MAC + 2-byte unique identifier (IEEE 1722).
     struct stream_id_t
     {
+        /// @brief MAC address of the talker that owns the stream.
         mac_address_t source_mac {};
+        /// @brief Identifier distinguishing the streams of one talker.
         std::uint16_t unique_id {};
 
+        /// @brief Compares source MAC and unique identifier.
+        /// @return `true` when both stream identifiers are equal.
         [[nodiscard]] constexpr bool operator==(const stream_id_t&) const noexcept = default;
     };
 

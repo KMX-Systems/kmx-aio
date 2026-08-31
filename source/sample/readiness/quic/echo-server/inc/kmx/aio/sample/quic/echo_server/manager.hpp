@@ -1,8 +1,10 @@
 #pragma once
+#ifndef PCH
+    #include <kmx/aio/readiness/executor.hpp>
+    #include <kmx/aio/task.hpp>
 
-#include <kmx/aio/readiness/executor.hpp>
-#include <kmx/aio/task.hpp>
-#include <memory>
+    #include <memory>
+#endif
 
 namespace kmx::aio::sample::quic::echo_server
 {

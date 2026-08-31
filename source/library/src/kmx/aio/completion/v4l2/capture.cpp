@@ -1,14 +1,13 @@
 /// @file aio/completion/v4l2/capture.cpp
 /// @brief Async V4L2 video capture — completion (io_uring) model implementation.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/completion/v4l2/capture.hpp"
+#include <kmx/aio/completion/v4l2/capture.hpp>
 
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
-#include <unistd.h>
 
 #include <linux/videodev2.h>
 #include <poll.h>
@@ -65,7 +64,7 @@ namespace kmx::aio::completion::v4l2
 
     // capture — private constructor
 
-    capture::capture(executor& exec, file_descriptor&& fd, capture_config cfg, std::vector<mmap_buffer> buffers) noexcept:
+    capture::capture(executor& exec, file_descriptor&& fd, capture_config cfg, mmap_buffers buffers) noexcept:
         io_base(exec, std::move(fd)),
         config_(std::move(cfg)),
         buffers_(std::move(buffers))
@@ -81,7 +80,7 @@ namespace kmx::aio::completion::v4l2
     {
     }
 
-    std::expected<file_descriptor, kmx::aio::error_code> capture::open_device(const capture_config& cfg) noexcept
+    capture::expected_file_descriptor capture::open_device(const capture_config& cfg) noexcept
     {
         const int raw_fd = ::open(cfg.device.c_str(), O_RDWR | O_NONBLOCK | O_CLOEXEC); // NOLINT(cppcoreguidelines-pro-type-vararg)
         if (raw_fd < 0)
@@ -90,7 +89,7 @@ namespace kmx::aio::completion::v4l2
         return file_descriptor {raw_fd};
     }
 
-    std::expected<void, kmx::aio::error_code> capture::validate_capabilities(const fd_t device_fd) noexcept
+    capture::expected_void_t capture::validate_capabilities(const fd_t device_fd) noexcept
     {
         ::v4l2_capability cap {};
         if (::ioctl(device_fd, VIDIOC_QUERYCAP, &cap) < 0)
@@ -106,7 +105,7 @@ namespace kmx::aio::completion::v4l2
         return {};
     }
 
-    std::expected<void, kmx::aio::error_code> capture::negotiate_format(const fd_t device_fd, capture_config& cfg) noexcept
+    capture::expected_void_t capture::negotiate_format(const fd_t device_fd, capture_config& cfg) noexcept
     {
         ::v4l2_format fmt {};
         fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -127,7 +126,7 @@ namespace kmx::aio::completion::v4l2
         return {};
     }
 
-    std::expected<void, kmx::aio::error_code> capture::negotiate_frame_rate(const fd_t device_fd, const capture_config& cfg) noexcept
+    capture::expected_void_t capture::negotiate_frame_rate(const fd_t device_fd, const capture_config& cfg) noexcept
     {
         ::v4l2_streamparm parm {};
         parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -138,8 +137,7 @@ namespace kmx::aio::completion::v4l2
         return {};
     }
 
-    std::expected<std::vector<capture::mmap_buffer>, kmx::aio::error_code> capture::request_and_map_buffers(const fd_t device_fd,
-                                                                                                            capture_config& cfg) noexcept
+    capture::expected_mmap_buffers capture::request_and_map_buffers(const fd_t device_fd, capture_config& cfg) noexcept
     {
         ::v4l2_requestbuffers req {};
         req.count = cfg.buffer_count;
@@ -157,9 +155,10 @@ namespace kmx::aio::completion::v4l2
         std::vector<mmap_buffer> buffers;
         buffers.reserve(req.count);
 
+        ::v4l2_buffer buf;
         for (std::uint32_t i = 0u; i < req.count; ++i)
         {
-            ::v4l2_buffer buf {};
+            buf = {};
             buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
             buf.memory = V4L2_MEMORY_MMAP;
             buf.index = i;
@@ -183,12 +182,12 @@ namespace kmx::aio::completion::v4l2
         return buffers;
     }
 
-    std::expected<void, kmx::aio::error_code> capture::queue_all_buffers(const fd_t device_fd,
-                                                                         const std::vector<mmap_buffer>& buffers) noexcept
+    capture::expected_void_t capture::queue_all_buffers(const fd_t device_fd, const mmap_buffers& buffers) noexcept
     {
+        ::v4l2_buffer buf;
         for (std::uint32_t i = 0u; i < buffers.size(); ++i)
         {
-            ::v4l2_buffer buf {};
+            buf = {};
             buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
             buf.memory = V4L2_MEMORY_MMAP;
             buf.index = i;
@@ -200,7 +199,7 @@ namespace kmx::aio::completion::v4l2
         return {};
     }
 
-    std::expected<void, kmx::aio::error_code> capture::start_streaming(const fd_t device_fd) noexcept
+    capture::expected_void_t capture::start_streaming(const fd_t device_fd) noexcept
     {
         const int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         if (::ioctl(device_fd, VIDIOC_STREAMON, &type) < 0)
@@ -211,7 +210,7 @@ namespace kmx::aio::completion::v4l2
 
     // capture::create()
 
-    capture::create_result capture::create(executor& exec, capture_config cfg) noexcept
+    capture::expected_t capture::create(executor& exec, capture_config cfg) noexcept
     {
         auto fd = open_device(cfg);
         if (!fd)
@@ -254,7 +253,7 @@ namespace kmx::aio::completion::v4l2
         unmap_buffers(buffers_);
     }
 
-    void capture::unmap_buffers(std::vector<mmap_buffer>& buffers) noexcept
+    void capture::unmap_buffers(mmap_buffers& buffers) noexcept
     {
         for (auto& buf: buffers)
             if (buf.ptr && buf.ptr != MAP_FAILED)
@@ -278,7 +277,7 @@ namespace kmx::aio::completion::v4l2
 
     // capture::stream_on / stream_off
 
-    std::expected<void, kmx::aio::error_code> capture::stream_on() noexcept
+    capture::expected_void_t capture::stream_on() noexcept
     {
         if (streaming_)
             return {};
@@ -291,7 +290,7 @@ namespace kmx::aio::completion::v4l2
         return {};
     }
 
-    std::expected<void, kmx::aio::error_code> capture::stream_off() noexcept
+    capture::expected_void_t capture::stream_off() noexcept
     {
         if (!streaming_)
             return {};

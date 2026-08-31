@@ -2,10 +2,10 @@
 /// @brief HTTP/2 frame definitions and utilities.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-
-#include <cstdint>
-#include <span>
-#include <vector>
+#ifndef PCH
+    #include <cstdint>
+    #include <span>
+#endif
 
 /// @brief HTTP/2 core protocol definitions and utilities
 namespace kmx::aio::http2
@@ -14,15 +14,25 @@ namespace kmx::aio::http2
     /// @brief Defines standard HTTP/2 frame type identifiers
     enum class frame_type : std::uint8_t
     {
+        /// @brief Carries request or response body octets.
         data = 0u,
+        /// @brief Opens a stream and carries a header block fragment.
         headers = 1u,
+        /// @brief Adjusts the priority of a stream (deprecated by RFC 9113).
         priority = 2u,
+        /// @brief Terminates a single stream with an error code.
         rst_stream = 3u,
+        /// @brief Carries connection configuration parameters.
         settings = 4u,
+        /// @brief Announces a server-pushed stream.
         push_promise = 5u,
+        /// @brief Measures round-trip time and checks connection liveness.
         ping = 6u,
+        /// @brief Initiates connection shutdown and reports the last processed stream.
         goaway = 7u,
+        /// @brief Grants additional flow-control credit.
         window_update = 8u,
+        /// @brief Continues a header block begun by HEADERS or PUSH_PROMISE.
         continuation = 9u
     };
 

@@ -16,7 +16,7 @@
     #include <string_view>
     #include <vector>
 
-namespace kmx::aio::someip::test::integration
+namespace kmx::aio::test::integration::someip_smoke_test
 {
     namespace fs = std::filesystem;
 
@@ -208,14 +208,14 @@ namespace kmx::aio::someip::test::integration
         REQUIRE(subscriber_exit == 0);
 
         REQUIRE(contains_markers_in_order(publisher_text, {
-                                                               "SOMEIP_EVENT_PUBLISHER_START",
-                                                               "SOMEIP_EVENT_PUBLISHER_STOP",
-                                                           }));
+                                                              "SOMEIP_EVENT_PUBLISHER_START",
+                                                              "SOMEIP_EVENT_PUBLISHER_STOP",
+                                                          }));
 
         REQUIRE(contains_markers_in_order(subscriber_text, {
-                                                                "SOMEIP_EVENT_SUBSCRIBER_START",
-                                                                "SOMEIP_EVENT_SUBSCRIBER_DONE",
-                                                            }));
+                                                               "SOMEIP_EVENT_SUBSCRIBER_START",
+                                                               "SOMEIP_EVENT_SUBSCRIBER_DONE",
+                                                           }));
     }
 
     TEST_CASE("someip diagnostics sample smoke", "[someip][integration][smoke][slow]")
@@ -249,9 +249,9 @@ namespace kmx::aio::someip::test::integration
 
         REQUIRE(diagnostics_exit == 0);
         REQUIRE(contains_markers_in_order(diagnostics_text, {
-                                                                 "SOMEIP_DIAGNOSTICS_DONE",
-                                                             }));
+                                                                "SOMEIP_DIAGNOSTICS_DONE",
+                                                            }));
     }
-} // namespace kmx::aio::someip::test::integration
+} // namespace kmx::aio::test::integration::someip_smoke_test
 
 #endif // KMX_AIO_FEATURE_SOMEIP

@@ -6,8 +6,10 @@
 #include <string>
 #include <system_error>
 
-namespace kmx::aio::opc_ua
+namespace kmx::aio::test::opc_ua::error_test
 {
+    using namespace kmx::aio::opc_ua;
+
     TEST_CASE("opc_ua error category exposes stable name", "[opc_ua][error]")
     {
         const std::error_code ec = make_error_code(error::feature_disabled);
@@ -19,4 +21,4 @@ namespace kmx::aio::opc_ua
         const std::error_code ec = make_error_code(error::timed_out);
         CHECK(ec.message() == std::string("OPC UA operation timed out"));
     }
-}
+} // namespace kmx::aio::test::opc_ua::error_test

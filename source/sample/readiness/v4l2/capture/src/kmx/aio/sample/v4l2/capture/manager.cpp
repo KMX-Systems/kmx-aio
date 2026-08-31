@@ -1,3 +1,4 @@
+#include <kmx/aio/readiness/v4l2/capture.hpp>
 #include <kmx/aio/sample/v4l2/capture/manager.hpp>
 
 #include <csignal>

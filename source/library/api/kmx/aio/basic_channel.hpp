@@ -12,7 +12,9 @@ namespace kmx::aio
     /// @brief Backpressure thresholds for producer-side throttling.
     struct channel_backpressure_config
     {
+        /// @brief Occupancy at or below which a throttled producer is released.
         std::size_t low_watermark = 256u;
+        /// @brief Occupancy at or above which the producer is throttled.
         std::size_t high_watermark = 512u;
     };
 
@@ -95,6 +97,7 @@ namespace kmx::aio
         /// @brief Non-movable.
         basic_channel& operator=(basic_channel&&) = delete;
 
+        /// @brief Destroys the ring state; derived channels release the elements themselves.
         ~basic_channel() noexcept = default;
 
         /// @brief Reserves the next write slot if the ring has room and the producer is not throttled.
@@ -135,15 +138,22 @@ namespace kmx::aio
         /// @brief Returns the number of slots usable for elements (the ring less its sentinel slot).
         [[nodiscard]] std::size_t usable_capacity() const noexcept { return capacity_ - 1u; }
 
+        /// @brief Number of ring slots, always a power of two and one more than the usable capacity.
         std::size_t capacity_;
+        /// @brief `capacity_ - 1`, used to wrap an index onto the ring without a division.
         std::size_t mask_;
 
+        /// @brief Occupancy at or below which a throttled producer is released.
         atomic_size_t low_watermark_ {};
+        /// @brief Occupancy at or above which the producer is throttled.
         atomic_size_t high_watermark_ {};
+        /// @brief Whether the producer is currently throttled, under the watermark hysteresis.
         std::atomic_bool throttled_ {};
 
         // Separated cache lines to prevent false sharing between producer and consumer
+        /// @brief Index of the next slot the consumer reads; written by the consumer only.
         alignas(cache_line_size) atomic_size_t head_ {};
+        /// @brief Index of the next slot the producer writes; written by the producer only.
         alignas(cache_line_size) atomic_size_t tail_ {};
     };
 

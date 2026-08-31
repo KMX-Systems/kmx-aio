@@ -1,25 +1,25 @@
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/tcp/listener.hpp>
-#include <kmx/aio/completion/tcp/stream.hpp>
-#include <kmx/aio/completion/tls/stream.hpp>
-#include <kmx/aio/file_descriptor.hpp>
-#include <kmx/aio/task.hpp>
-#include <kmx/logger.hpp>
-#include <openssl/err.h>
-#include <openssl/ssl.h>
+#pragma once
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/tls/stream.hpp>
+    #include <kmx/aio/file_descriptor.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/logger.hpp>
 
-#include <arpa/inet.h>
-#include <atomic>
-#include <chrono>
-#include <csignal>
-#include <expected>
-#include <fcntl.h>
-#include <iostream>
-#include <mutex>
-#include <stop_token>
-#include <sys/socket.h>
-#include <thread>
-#include <unordered_map>
+    #include <arpa/inet.h>
+    #include <fcntl.h>
+    #include <openssl/err.h>
+    #include <openssl/ssl.h>
+    #include <sys/socket.h>
+
+    #include <atomic>
+    #include <chrono>
+    #include <expected>
+    #include <mutex>
+    #include <stop_token>
+    #include <thread>
+    #include <unordered_map>
+#endif
 
 namespace kmx::aio::sample::tls::echo_completion_client
 {

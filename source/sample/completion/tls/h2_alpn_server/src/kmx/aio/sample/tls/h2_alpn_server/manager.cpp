@@ -1,11 +1,13 @@
-#include "kmx/aio/sample/tls/h2_alpn_server/manager.hpp"
+#include <kmx/aio/completion/tcp/listener.hpp>
+#include <kmx/aio/sample/tls/h2_alpn_server/manager.hpp>
 
-#include <chrono>
+#include <array>
+#include <csignal>
 #include <format>
-#include <iostream>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <span>
+#include <vector>
 
 namespace kmx::aio::sample::tls::h2_alpn_server
 {
@@ -83,46 +85,46 @@ namespace kmx::aio::sample::tls::h2_alpn_server
                 co_return;
 
             // Wait for 24 byte Preface + 9 byte Client Settings
-            char recv_buf[33];
-            auto read_res = co_await stream.read(std::span<char>(recv_buf, 33));
-            if (!read_res || *read_res < 33)
+            std::array<char, 33u> recv_buf {};
+            auto read_res = co_await stream.read(std::span<char>(recv_buf.data(), recv_buf.size()));
+            if (!read_res || *read_res < recv_buf.size())
                 co_return;
 
             std::string_view expected_preface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
-            std::string_view received(recv_buf, 24);
+            std::string_view received(recv_buf.data(), 24);
             if (received == expected_preface && recv_buf[24 + 3] == 4)
                 // type == SETTINGS
                 logger::log(logger::level::info, std::source_location::current(), "Server: Received valid Preface + Client SETTINGS frame");
 
             // Send Server SETTINGS + SETTINGS ACK to Client
-            static const char send_frames[18] {
+            static constexpr std::array<char, 18u> send_frames {
                 0, 0, 0, 4, 0, 0, 0, 0, 0, // Server SETTINGS
                 0, 0, 0, 4, 1, 0, 0, 0, 0  // SETTINGS ACK
             };
 
-            if (auto w_res = co_await stream.write_all(std::span<const char>(send_frames, 18)); !w_res)
+            if (auto w_res = co_await stream.write_all(std::span<const char>(send_frames)); !w_res)
                 co_return;
             logger::log(logger::level::info, std::source_location::current(), "Server: Sent SETTINGS + SETTINGS ACK");
 
             // Read Client SETTINGS ACK
-            auto r_ack = co_await stream.read(std::span<char>(recv_buf, 9));
+            auto r_ack = co_await stream.read(std::span<char>(recv_buf.data(), 9u));
             if (r_ack && *r_ack >= 9 && recv_buf[3] == 4 && recv_buf[4] == 1)
                 // type == SETTINGS, flags == 1
                 logger::log(logger::level::info, std::source_location::current(),
                             "Server: Received Client SETTINGS ACK. Handshake Complete!");
 
             // HTTP/2 Extension: Listen for incoming GET packet and process HEADERS
-            char req_hdr[9];
+            std::array<char, 9u> req_hdr {};
             size_t total {};
-            while (total < 9)
+            while (total < req_hdr.size())
             {
-                auto r = co_await stream.read(std::span<char>(req_hdr + total, 9 - total));
+                auto r = co_await stream.read(std::span<char>(req_hdr.data() + total, req_hdr.size() - total));
                 if (!r || *r == 0)
                     break;
                 total += *r;
             }
 
-            if ((total == 9) && (req_hdr[3] == 0x01))
+            if ((total == req_hdr.size()) && (req_hdr[3] == 0x01))
             { // Type HEADERS
                 uint32_t payload_len =
                     (static_cast<uint8_t>(req_hdr[0]) << 16) | (static_cast<uint8_t>(req_hdr[1]) << 8) | static_cast<uint8_t>(req_hdr[2]);
@@ -139,19 +141,16 @@ namespace kmx::aio::sample::tls::h2_alpn_server
                 logger::log(logger::level::info, std::source_location::current(),
                             "Server: Received HEADERS map (Length: {}) -> Formulating Response", payload_len);
 
-                char resp[] = {0x00,        0x00, 0x01,       // Length: 1
-                               0x01,                          // Type: HEADERS
-                               0x04,                          // Flags: END_HEADERS
-                               0x00,        0x00, 0x00, 0x01, // Stream ID 1
-                               (char) 0x88,                   // :status 200
+                // HEADERS frame (length 1, END_HEADERS, stream 1, :status 200) followed by a DATA
+                // frame (length 21, END_STREAM, stream 1) carrying the response body.
+                static constexpr auto resp = std::to_array<char>({
+                    0x00, 0x00, 0x01, 0x01, 0x04, 0x00, 0x00, 0x00, 0x01, static_cast<char>(0x88),
 
-                               0x00,        0x00, 0x15,       // Length: 21
-                               0x00,                          // Type: DATA
-                               0x01,                          // Flags: END_STREAM
-                               0x00,        0x00, 0x00, 0x01, // Stream ID 1
-                               'H',         'e',  'l',  'l',  'o', ' ', 'f', 'r', 'o', 'm', ' ',
-                               'K',         'M',  'X',  ' ',  'H', 'T', 'T', 'P', '/', '2'};
-                if (auto w_res = co_await stream.write_all(std::span<const char>(resp, sizeof(resp))); w_res)
+                    0x00, 0x00, 0x15, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 'H',
+                    'e',  'l',  'l',  'o',  ' ',  'f',  'r',  'o',  'm',  ' ',
+                    'K',  'M',  'X',  ' ',  'H',  'T',  'T',  'P',  '/',  '2',
+                });
+                if (auto w_res = co_await stream.write_all(std::span<const char>(resp)); w_res)
                     logger::log(logger::level::info, std::source_location::current(), "Server: Sent 200 OK + DATA");
             }
         }

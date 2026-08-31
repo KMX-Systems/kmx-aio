@@ -10,7 +10,7 @@
 #include <string_view>
 #include <vector>
 
-namespace kmx::aio::error_code_test_detail
+namespace kmx::aio::test::error_code_test::detail
 {
     // Every enumerator, in declaration order. Kept explicit rather than derived from a sentinel: a new
     // enumerator should fail this list loudly, which is the point of the exhaustiveness test below.
@@ -49,16 +49,14 @@ namespace kmx::aio::error_code_test_detail
         error_code::internal_error,
         error_code::unknown,
     };
-} // namespace kmx::aio::error_code_test_detail
+} // namespace kmx::aio::test::error_code_test::detail
 
-namespace kmx::aio
+namespace kmx::aio::test::error_code_test
 {
-    using error_code_test_detail::all_codes;
-
     TEST_CASE("to_string describes every error code", "[core][error_code][to_string]")
     {
         // The switch has one arm per enumerator; walking the whole list is what drives them all.
-        for (const auto ec: all_codes)
+        for (const auto ec: detail::all_codes)
         {
             const auto text = to_string(ec);
             CAPTURE(static_cast<std::uint32_t>(ec));
@@ -107,7 +105,7 @@ namespace kmx::aio
     {
         // Two codes sharing a description makes a log line ambiguous about which condition occurred.
         std::set<std::string_view> seen;
-        for (const auto ec: all_codes)
+        for (const auto ec: detail::all_codes)
         {
             CAPTURE(to_string(ec));
             CHECK(seen.insert(to_string(ec)).second);
@@ -172,13 +170,26 @@ namespace kmx::aio
     TEST_CASE("to_std_error_code funnels unmapped codes to io_error", "[core][error_code][std_interop]")
     {
         // The default arm: every code with no std::errc counterpart still has to surface as a failure.
-        for (const auto ec: {error_code::end_of_stream, error_code::buffer_overflow, error_code::tls_handshake_failed,
-                             error_code::tls_certificate_error, error_code::quic_protocol_error, error_code::openonload_not_available,
-                             error_code::openonload_init_failed, error_code::xdp_setup_failed, error_code::xdp_umem_registration_failed,
-                             error_code::xdp_ring_setup_failed, error_code::xdp_queue_bind_failed, error_code::spdk_env_init_failed,
-                             error_code::spdk_probe_failed, error_code::spdk_queue_pair_failed, error_code::spdk_io_submit_failed,
-                             error_code::spdk_io_completion_failed, error_code::ring_full, error_code::unsupported_operation,
-                             error_code::internal_error, error_code::unknown})
+        for (const auto ec: {error_code::end_of_stream,
+                             error_code::buffer_overflow,
+                             error_code::tls_handshake_failed,
+                             error_code::tls_certificate_error,
+                             error_code::quic_protocol_error,
+                             error_code::openonload_not_available,
+                             error_code::openonload_init_failed,
+                             error_code::xdp_setup_failed,
+                             error_code::xdp_umem_registration_failed,
+                             error_code::xdp_ring_setup_failed,
+                             error_code::xdp_queue_bind_failed,
+                             error_code::spdk_env_init_failed,
+                             error_code::spdk_probe_failed,
+                             error_code::spdk_queue_pair_failed,
+                             error_code::spdk_io_submit_failed,
+                             error_code::spdk_io_completion_failed,
+                             error_code::ring_full,
+                             error_code::unsupported_operation,
+                             error_code::internal_error,
+                             error_code::unknown})
         {
             CAPTURE(to_string(ec));
             CHECK(to_std_error_code(ec) == std::errc::io_error);
@@ -189,7 +200,7 @@ namespace kmx::aio
     {
         // to_string / to_std_error_code are noexcept; this pins the whole enum against that contract and
         // drives the remaining switch arms in one sweep.
-        for (const auto ec: all_codes)
+        for (const auto ec: detail::all_codes)
         {
             static_assert(noexcept(to_string(error_code::success)));
             static_assert(noexcept(to_std_error_code(error_code::success)));
@@ -210,15 +221,13 @@ namespace kmx::aio
             std::errc expected;
         };
 
-        for (const auto& [err, expected]: {expectation {ECONNRESET, std::errc::connection_reset},
-                                           expectation {ECONNREFUSED, std::errc::connection_refused},
-                                           expectation {EPIPE, std::errc::broken_pipe},
-                                           expectation {EBADF, std::errc::bad_file_descriptor},
-                                           expectation {EINVAL, std::errc::invalid_argument},
-                                           expectation {ECANCELED, std::errc::operation_canceled}})
+        for (const auto& [err, expected]:
+             {expectation {ECONNRESET, std::errc::connection_reset}, expectation {ECONNREFUSED, std::errc::connection_refused},
+              expectation {EPIPE, std::errc::broken_pipe}, expectation {EBADF, std::errc::bad_file_descriptor},
+              expectation {EINVAL, std::errc::invalid_argument}, expectation {ECANCELED, std::errc::operation_canceled}})
         {
             CAPTURE(err);
             CHECK(to_std_error_code(from_errno(err)) == expected);
         }
     }
-}
+} // namespace kmx::aio::test::error_code_test

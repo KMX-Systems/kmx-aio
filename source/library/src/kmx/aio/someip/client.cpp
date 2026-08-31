@@ -1,5 +1,6 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/someip/client.hpp>
+#include <kmx/aio/someip/error.hpp>
 #include <kmx/aio/someip/vsomeip_compat.hpp>
 
 #include <optional>
@@ -76,8 +77,7 @@ namespace kmx::aio::someip
         co_return true;
     }
 
-    task_returning_expected_void_t client::request_service(const service_id_t service_id,
-                                                                       const instance_id_t instance_id) noexcept(false)
+    task_returning_expected_void_t client::request_service(const service_id_t service_id, const instance_id_t instance_id) noexcept(false)
     {
         if (!impl_->started)
             co_return std::unexpected(make_error_code(error::not_initialized));
@@ -89,8 +89,7 @@ namespace kmx::aio::someip
         co_return expected_void_t {};
     }
 
-    task_returning_expected_void_t client::release_service(const service_id_t service_id,
-                                                                       const instance_id_t instance_id) noexcept(false)
+    task_returning_expected_void_t client::release_service(const service_id_t service_id, const instance_id_t instance_id) noexcept(false)
     {
         if (!impl_->started)
             co_return std::unexpected(make_error_code(error::not_initialized));

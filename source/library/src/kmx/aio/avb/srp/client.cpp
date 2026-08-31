@@ -8,9 +8,6 @@
 #include <map>
 #include <optional>
 #include <source_location>
-#include <type_traits>
-
-#include <arpa/inet.h>
 
 #include <kmx/aio/avb/eth_socket.hpp>
 #include <kmx/aio/avb/srp/client.hpp>

@@ -44,9 +44,13 @@ namespace kmx::aio::opc_ua
         /// @brief Destroy subscription and release internal resources.
         ~subscription() noexcept;
 
+        /// @brief Non-copyable: the subscription owns its backend runtime.
         subscription(const subscription&) = delete;
+        /// @brief Non-copyable: the subscription owns its backend runtime.
         subscription& operator=(const subscription&) = delete;
+        /// @brief Move constructor — transfers ownership of the backend runtime.
         subscription(subscription&&) noexcept;
+        /// @brief Move assignment — transfers ownership of the backend runtime.
         subscription& operator=(subscription&&) noexcept;
 
         /// @brief Open backend subscription resources asynchronously.
@@ -69,6 +73,7 @@ namespace kmx::aio::opc_ua
 
     private:
         struct impl;
+        /// @brief The backend implementation, kept opaque so the public header stays free of backend types.
         std::unique_ptr<impl> impl_;
     };
 

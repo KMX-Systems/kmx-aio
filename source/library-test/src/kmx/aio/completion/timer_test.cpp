@@ -11,8 +11,10 @@
 #include <kmx/aio/completion/timer.hpp>
 #include <kmx/aio/task.hpp>
 
-namespace kmx::aio::completion
+namespace kmx::aio::test::completion::timer_test
 {
+    using namespace kmx::aio::completion;
+
     struct timer_state
     {
         bool completed {};
@@ -53,4 +55,4 @@ namespace kmx::aio::completion
         REQUIRE(elapsed.count() >= 10);
     }
 
-} // namespace kmx::aio::completion
+} // namespace kmx::aio::test::completion::timer_test

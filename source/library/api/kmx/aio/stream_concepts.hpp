@@ -21,7 +21,7 @@ namespace kmx::aio
     /// @tparam T The type to check against the stream_reader concept.
     template <typename T>
     concept stream_reader = requires(T& t, std::span<char> buf) {
-        { t.read(buf) } -> std::same_as<task_returning_expected_size_t>>;
+        { t.read(buf) } -> std::same_as<task_returning_expected_size_t>;
     };
 
     /// @brief Concept constraining types that provide asynchronous byte writing.
@@ -30,7 +30,7 @@ namespace kmx::aio
     /// @tparam T The type to check against the stream_writer concept.
     template <typename T>
     concept stream_writer = requires(T& t, std::span<const char> buf) {
-        { t.write(buf) } -> std::same_as<task_returning_expected_size_t>>;
+        { t.write(buf) } -> std::same_as<task_returning_expected_size_t>;
     };
 
     /// @brief Concept constraining types that provide both reading and writing.

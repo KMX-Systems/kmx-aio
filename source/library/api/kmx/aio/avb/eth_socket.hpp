@@ -2,18 +2,19 @@
 /// @brief Public API for a raw Ethernet socket with hardware timestamping (AVB/TSN).
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
+#ifndef PCH
+    #include <expected>
+    #include <memory>
+    #include <optional>
+    #include <span>
+    #include <string_view>
+    #include <system_error>
+    #include <utility>
+    #include <vector>
 
-#include <expected>
-#include <memory>
-#include <optional>
-#include <span>
-#include <string_view>
-#include <system_error>
-#include <utility>
-#include <vector>
-
-#include <kmx/aio/avb/avb_types.hpp>
-#include <kmx/aio/task.hpp>
+    #include <kmx/aio/avb/avb_types.hpp>
+    #include <kmx/aio/task.hpp>
+#endif
 
 namespace kmx::aio::avb
 {
@@ -36,12 +37,19 @@ namespace kmx::aio::avb
     class generic_eth_socket
     {
     public:
+        /// @brief Constructs an unopened socket bound to an executor.
+        /// @param exec The executor that will drive the socket's I/O.
         explicit generic_eth_socket(Executor& exec) noexcept;
+        /// @brief Closes the socket if it is still open.
         ~generic_eth_socket() noexcept;
 
+        /// @brief Non-copyable: the socket owns a descriptor.
         generic_eth_socket(const generic_eth_socket&) = delete;
+        /// @brief Non-copyable: the socket owns a descriptor.
         generic_eth_socket& operator=(const generic_eth_socket&) = delete;
+        /// @brief Move constructor — transfers ownership of the descriptor.
         generic_eth_socket(generic_eth_socket&&) noexcept = default;
+        /// @brief Move assignment — transfers ownership of the descriptor.
         generic_eth_socket& operator=(generic_eth_socket&&) noexcept = default;
 
         /// @brief Open the socket, binding to a specific NIC and EtherType filter.
@@ -49,8 +57,7 @@ namespace kmx::aio::avb
         /// @param ethertype EtherType to filter on receive (e.g. avb::ethertype::avtp).
         ///                  Use 0 or ETH_P_ALL to receive all frames.
         /// @return Success or an error code.
-        [[nodiscard]] task_returning_expected_void_t open(const std::string_view iface,
-                                                                      std::uint16_t ethertype) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t open(const std::string_view iface, std::uint16_t ethertype) noexcept(false);
 
         /// @brief Send a raw Layer 2 frame.
         /// @param dest_mac  Destination MAC address.
@@ -59,7 +66,7 @@ namespace kmx::aio::avb
         ///                  If empty, frame is sent immediately.
         /// @return Success or an error code.
         [[nodiscard]] task_returning_expected_void_t send(const mac_address_t& dest_mac, std::span<const std::byte> frame,
-                                                                      std::optional<avb_timestamp_t> tx_time = {}) noexcept(false);
+                                                          std::optional<avb_timestamp_t> tx_time = {}) noexcept(false);
 
         /// @brief Receive the next frame matching the bound EtherType.
         /// @return Pair of {frame bytes, hardware RX TAI timestamp} or an error.
@@ -72,7 +79,9 @@ namespace kmx::aio::avb
         [[nodiscard]] int iface_index() const noexcept;
 
     private:
+        /// @brief Model-specific implementation, defined in the corresponding translation unit.
         struct impl;
+        /// @brief The implementation, kept opaque so the AVB headers stay free of kernel types.
         std::unique_ptr<impl> impl_;
     };
 }

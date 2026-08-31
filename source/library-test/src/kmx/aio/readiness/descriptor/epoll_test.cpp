@@ -5,14 +5,15 @@
 
 #include <kmx/aio/readiness/descriptor/epoll.hpp>
 
-#include <array>
 #include <cerrno>
 #include <unistd.h>
 #include <vector>
 
-namespace kmx::aio::readiness::descriptor
+namespace kmx::aio::test::readiness::descriptor::epoll_test
 {
-    namespace
+    using namespace kmx::aio::readiness::descriptor;
+
+    namespace detail
     {
         /// @brief A pipe whose ends are closed on destruction.
         class pipe_pair
@@ -40,7 +41,7 @@ namespace kmx::aio::readiness::descriptor
             int fds_[2] {-1, -1};
             bool valid_ = false;
         };
-    }
+    } // namespace detail
 
     TEST_CASE("epoll::create returns a valid instance", "[readiness][epoll][create]")
     {
@@ -82,7 +83,7 @@ namespace kmx::aio::readiness::descriptor
 
     TEST_CASE("add, modify and remove drive the epoll_ctl commands", "[readiness][epoll][ctl]")
     {
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
         auto ep = epoll::create();
@@ -95,7 +96,7 @@ namespace kmx::aio::readiness::descriptor
 
     TEST_CASE("add_monitored_fd uses the default event mask", "[readiness][epoll][ctl]")
     {
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
         auto ep = epoll::create();
@@ -105,7 +106,7 @@ namespace kmx::aio::readiness::descriptor
 
     TEST_CASE("add_monitored_fd rejects a descriptor twice", "[readiness][epoll][ctl][error]")
     {
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
         auto ep = epoll::create();
@@ -129,7 +130,7 @@ namespace kmx::aio::readiness::descriptor
 
     TEST_CASE("modify_events rejects an unregistered descriptor", "[readiness][epoll][ctl][error]")
     {
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
         auto ep = epoll::create();
@@ -142,7 +143,7 @@ namespace kmx::aio::readiness::descriptor
 
     TEST_CASE("remove_monitored_fd rejects an unregistered descriptor", "[readiness][epoll][ctl][error]")
     {
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
         auto ep = epoll::create();
@@ -155,7 +156,7 @@ namespace kmx::aio::readiness::descriptor
 
     TEST_CASE("wait_events reports a readable descriptor", "[readiness][epoll][wait]")
     {
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
         auto ep = epoll::create();
@@ -175,7 +176,7 @@ namespace kmx::aio::readiness::descriptor
     {
         // The out-parameter overload resizes to max_events up front and back down to what arrived; a
         // caller reading size() has to see the second number, not the first.
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
         auto ep = epoll::create();
@@ -193,7 +194,7 @@ namespace kmx::aio::readiness::descriptor
 
     TEST_CASE("wait_events returns an empty set on timeout", "[readiness][epoll][wait]")
     {
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
         auto ep = epoll::create();
@@ -222,7 +223,7 @@ namespace kmx::aio::readiness::descriptor
 
     TEST_CASE("the returning wait_events overload reports a readable descriptor", "[readiness][epoll][wait]")
     {
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
         auto ep = epoll::create();
@@ -239,7 +240,7 @@ namespace kmx::aio::readiness::descriptor
 
     TEST_CASE("the returning wait_events overload yields an empty vector on timeout", "[readiness][epoll][wait]")
     {
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
         auto ep = epoll::create();
@@ -293,4 +294,4 @@ namespace kmx::aio::readiness::descriptor
         CHECK(::fcntl(replaced, F_GETFD) == -1);
         CHECK(errno == EBADF);
     }
-}
+} // namespace kmx::aio::test::readiness::descriptor::epoll_test

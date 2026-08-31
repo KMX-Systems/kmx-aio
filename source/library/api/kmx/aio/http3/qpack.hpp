@@ -2,14 +2,15 @@
 /// @brief HTTP/3 QPACK definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
+#ifndef PCH
+    #include <kmx/aio/http3/message.hpp>
 
-#include <kmx/aio/http3/message.hpp>
-
-#include <expected>
-#include <optional>
-#include <span>
-#include <system_error>
-#include <vector>
+    #include <expected>
+    #include <optional>
+    #include <span>
+    #include <system_error>
+    #include <vector>
+#endif
 
 namespace kmx::aio::http3::qpack
 {

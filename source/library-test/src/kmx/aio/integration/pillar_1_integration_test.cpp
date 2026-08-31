@@ -19,7 +19,7 @@
 #include <string>
 #include <system_error>
 
-namespace kmx::aio::kernel_bypass::test::integration
+namespace kmx::aio::test::integration::pillar_1_integration_test
 {
     [[nodiscard]] static bool hugepages_available() noexcept
     {
@@ -138,4 +138,4 @@ namespace kmx::aio::kernel_bypass::test::integration
         // XDP fallback engine ensures it returns 'ok' when software backend fires.
         REQUIRE((state->xdp_init_ok || (state->xdp_error.value() != 0)));
     }
-} // namespace kmx::aio::kernel_bypass::test::integration
+} // namespace kmx::aio::test::integration::pillar_1_integration_test

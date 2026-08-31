@@ -1,4 +1,5 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#include <kmx/aio/someip/error.hpp>
 #include <kmx/aio/someip/server.hpp>
 #include <kmx/aio/someip/vsomeip_compat.hpp>
 
@@ -69,8 +70,7 @@ namespace kmx::aio::someip
         co_return impl_->started;
     }
 
-    task_returning_expected_void_t server::offer_service(const service_id_t service_id,
-                                                                     const instance_id_t instance_id) noexcept(false)
+    task_returning_expected_void_t server::offer_service(const service_id_t service_id, const instance_id_t instance_id) noexcept(false)
     {
         if (!impl_->started)
             co_return std::unexpected(make_error_code(error::not_initialized));
@@ -83,7 +83,7 @@ namespace kmx::aio::someip
     }
 
     task_returning_expected_void_t server::stop_offer_service(const service_id_t service_id,
-                                                                          const instance_id_t instance_id) noexcept(false)
+                                                              const instance_id_t instance_id) noexcept(false)
     {
         if (!impl_->started)
             co_return std::unexpected(make_error_code(error::not_initialized));
@@ -115,8 +115,7 @@ namespace kmx::aio::someip
         co_return std::unexpected(make_error_code(error::timed_out));
     }
 
-    task_returning_expected_void_t server::send_response(const request_id_t request_id,
-                                                                     std::vector<std::uint8_t> payload) noexcept(false)
+    task_returning_expected_void_t server::send_response(const request_id_t request_id, std::vector<std::uint8_t> payload) noexcept(false)
     {
         if (!impl_->started)
             co_return std::unexpected(make_error_code(error::not_initialized));
@@ -131,8 +130,8 @@ namespace kmx::aio::someip
         co_return expected_void_t {};
     }
 
-    task_returning_expected_void_t server::notify(const service_id_t service_id, const instance_id_t instance_id,
-                                                              const event_id_t event_id, std::vector<std::uint8_t> payload) noexcept(false)
+    task_returning_expected_void_t server::notify(const service_id_t service_id, const instance_id_t instance_id, const event_id_t event_id,
+                                                  std::vector<std::uint8_t> payload) noexcept(false)
     {
         if (!impl_->started)
             co_return std::unexpected(make_error_code(error::not_initialized));

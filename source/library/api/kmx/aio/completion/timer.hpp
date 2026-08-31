@@ -5,8 +5,6 @@
 #ifndef PCH
     #include <chrono>
     #include <cstdint>
-    #include <expected>
-    #include <system_error>
 
     #include <kmx/aio/completion/executor.hpp>
     #include <kmx/aio/task.hpp>
@@ -36,6 +34,7 @@ namespace kmx::aio::completion
         ///        made it implicitly deleted anyway.
         timer& operator=(timer&&) = delete;
 
+        /// @brief Destroys the timer; a wait still outstanding is completed by the executor.
         ~timer() noexcept = default;
 
         /// @brief Asynchronously waits for the specified duration.
@@ -55,6 +54,7 @@ namespace kmx::aio::completion
         /// @return A task yielding success or an error.
         [[nodiscard]] task_returning_expected_void_t wait_ns(std::uint64_t ns) noexcept(false);
 
+        /// @brief The executor the timeout SQEs are submitted to.
         executor& exec_;
     };
 

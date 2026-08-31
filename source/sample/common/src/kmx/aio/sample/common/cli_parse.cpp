@@ -1,6 +1,5 @@
 #include <kmx/aio/sample/common/cli_parse.hpp>
 
-#include <array>
 #include <charconv>
 #include <cstdint>
 #include <limits>

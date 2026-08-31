@@ -1,10 +1,8 @@
 #include <array>
-#include <atomic>
 #include <cstddef>
 #include <cstring>
 #include <memory>
 #include <span>
-#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -12,8 +10,11 @@
 #include <kmx/aio/completion/xdp/socket.hpp>
 #include <kmx/aio/task.hpp>
 
-namespace kmx::aio::completion::xdp
+namespace kmx::aio::test::completion::xdp::socket_test
 {
+    using namespace kmx::aio::completion;
+    using namespace kmx::aio::completion::xdp;
+
     struct xdp_roundtrip_state
     {
         bool ok = false;
@@ -176,4 +177,4 @@ namespace kmx::aio::completion::xdp
         REQUIRE((state->ok || state->create_error.value() != 0));
         REQUIRE((state->ok || state->create_error.value() != 0));
     }
-}
+} // namespace kmx::aio::test::completion::xdp::socket_test

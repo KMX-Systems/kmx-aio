@@ -1,10 +1,8 @@
 #pragma once
-
-#include <kmx/aio/mac.hpp>
-
-#include <array>
-#include <cstdint>
-#include <string_view>
+#ifndef PCH
+    #include <cstdint>
+    #include <string_view>
+#endif
 
 namespace kmx::aio::sample::common
 {

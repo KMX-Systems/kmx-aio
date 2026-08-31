@@ -9,11 +9,16 @@
 
 namespace kmx::logger
 {
+    /// @brief Severity of a log record, in increasing order.
     enum class level
     {
+        /// @brief Diagnostic detail useful only while debugging.
         debug,
+        /// @brief Ordinary progress information.
         info,
+        /// @brief A condition worth attention that did not stop the operation.
         warn,
+        /// @brief An operation failed.
         error
     };
 

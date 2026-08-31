@@ -2,11 +2,12 @@
 /// @brief HTTP/3 message definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-
-#include <cstdint>
-#include <string>
-#include <utility>
-#include <vector>
+#ifndef PCH
+    #include <cstdint>
+    #include <string>
+    #include <utility>
+    #include <vector>
+#endif
 
 namespace kmx::aio::http3
 {

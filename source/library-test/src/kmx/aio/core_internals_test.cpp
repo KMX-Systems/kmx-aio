@@ -7,26 +7,22 @@
 #include <cstddef>
 #include <optional>
 #include <stdexcept>
-#include <string>
 #include <vector>
 
-#include <kmx/aio/allocator.hpp>
-#include <kmx/aio/completion/executor.hpp>
+#include <kmx/aio/allocator/slab.hpp>
 #include <kmx/aio/channel.hpp>
+#include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/task.hpp>
 #include <kmx/logger.hpp>
 
-namespace kmx::aio
+namespace kmx::aio::test::core_internals_test
 {
-    // =========================================================================
-    // slab_allocator - the paths a coroutine frame takes when the slab cannot serve it
-    // =========================================================================
-
-    TEST_CASE("slab_allocator hands out every slot then reports exhaustion", "[core][allocator][slab]")
+    // allocator::slab - the paths a coroutine frame takes when the slab cannot serve it
+    TEST_CASE("allocator::slab hands out every slot then reports exhaustion", "[core][allocator][slab]")
     {
         // The nullptr return is not a failure: it is the signal the coroutine allocator uses to fall
         // back to the heap, so it has to be reached rather than assumed.
-        slab_allocator slab {64u, 4u};
+        allocator::slab slab {64u, 4u};
         std::vector<void*> slots;
 
         for (std::size_t i = 0u; i < slab.slot_count(); ++i)
@@ -46,9 +42,9 @@ namespace kmx::aio
         CHECK(slab.available() == slab.slot_count());
     }
 
-    TEST_CASE("slab_allocator ignores a null deallocation", "[core][allocator][slab]")
+    TEST_CASE("allocator::slab ignores a null deallocation", "[core][allocator][slab]")
     {
-        slab_allocator slab {64u, 4u};
+        allocator::slab slab {64u, 4u};
         void* const slot = slab.allocate();
         REQUIRE(slot != nullptr);
         REQUIRE(slab.allocated() == 1u);
@@ -62,16 +58,16 @@ namespace kmx::aio
         CHECK(slab.allocated() == 0u);
     }
 
-    TEST_CASE("slab_allocator disclaims a null pointer", "[core][allocator][slab]")
+    TEST_CASE("allocator::slab disclaims a null pointer", "[core][allocator][slab]")
     {
-        slab_allocator slab {64u, 4u};
+        allocator::slab slab {64u, 4u};
         CHECK_FALSE(slab.owns(nullptr));
     }
 
-    TEST_CASE("slab_allocator recognises only its own storage", "[core][allocator][slab]")
+    TEST_CASE("allocator::slab recognises only its own storage", "[core][allocator][slab]")
     {
-        slab_allocator slab {64u, 4u};
-        slab_allocator other {64u, 4u};
+        allocator::slab slab {64u, 4u};
+        allocator::slab other {64u, 4u};
 
         void* const mine = slab.allocate();
         void* const theirs = other.allocate();
@@ -86,19 +82,16 @@ namespace kmx::aio
         CHECK_FALSE(slab.owns(&on_the_stack));
     }
 
-    TEST_CASE("slab_allocator reports its geometry", "[core][allocator][slab]")
+    TEST_CASE("allocator::slab reports its geometry", "[core][allocator][slab]")
     {
-        slab_allocator slab {128u, 8u};
+        allocator::slab slab {128u, 8u};
         CHECK(slab.slot_size() >= 128u);
         CHECK(slab.slot_count() == 8u);
         CHECK(slab.allocated() == 0u);
         CHECK(slab.available() == 8u);
     }
 
-    // =========================================================================
     // logger
-    // =========================================================================
-
     TEST_CASE("the logger emits at every level", "[core][logger]")
     {
         // Errors go to stderr and everything else to stdout; both branches format and flush, and the
@@ -117,11 +110,8 @@ namespace kmx::aio
         SUCCEED("argument-free messages format");
     }
 
-    // =========================================================================
     // task - exception propagation
-    // =========================================================================
-
-    namespace
+    namespace detail
     {
         struct test_error: std::runtime_error
         {
@@ -140,8 +130,11 @@ namespace kmx::aio
             co_return;
         }
 
-        task<int> value_task(const int value) { co_return value; }
-    }
+        task<int> value_task(const int value)
+        {
+            co_return value;
+        }
+    } // namespace detail
 
     TEST_CASE("an exception thrown in a task body reaches the awaiting coroutine", "[core][task][exception]")
     {
@@ -156,10 +149,10 @@ namespace kmx::aio
         {
             try
             {
-                const int value = co_await throwing_task();
+                const int value = co_await detail::throwing_task();
                 (void) value;
             }
-            catch (const test_error&)
+            catch (const detail::test_error&)
             {
                 caught = true;
             }
@@ -183,9 +176,9 @@ namespace kmx::aio
         {
             try
             {
-                co_await throwing_void_task();
+                co_await detail::throwing_void_task();
             }
-            catch (const test_error&)
+            catch (const detail::test_error&)
             {
                 caught = true;
             }
@@ -205,7 +198,7 @@ namespace kmx::aio
 
         auto body = [&exec, &observed]() -> task<void>
         {
-            observed = co_await value_task(41);
+            observed = co_await detail::value_task(41);
             exec.stop();
         };
         exec.spawn(body());
@@ -214,10 +207,7 @@ namespace kmx::aio
         CHECK(observed == 41);
     }
 
-    // =========================================================================
     // channel - the edges the backpressure suite does not reach
-    // =========================================================================
-
     TEST_CASE("try_pop on an empty channel yields nothing", "[core][channel]")
     {
         channel<int> ch {8u};
@@ -295,4 +285,4 @@ namespace kmx::aio
 
         CHECK(pushed == ch.capacity() - 1u);
     }
-}
+} // namespace kmx::aio::test::core_internals_test

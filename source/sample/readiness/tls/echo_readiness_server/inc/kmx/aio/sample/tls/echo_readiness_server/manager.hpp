@@ -1,19 +1,16 @@
 #pragma once
-#include <kmx/aio/readiness/executor.hpp>
-#include <kmx/aio/readiness/tcp/listener.hpp>
-#include <kmx/aio/readiness/tcp/stream.hpp>
-#include <kmx/aio/readiness/tls/stream.hpp>
-#include <kmx/logger.hpp>
+#ifndef PCH
+    #include <kmx/aio/readiness/executor.hpp>
+    #include <kmx/aio/readiness/tls/stream.hpp>
+    #include <kmx/logger.hpp>
 
-#include <openssl/ssl.h>
+    #include <openssl/ssl.h>
 
-#include <atomic>
-#include <csignal>
-#include <iostream>
-#include <memory>
-#include <string>
-#include <thread>
-#include <vector>
+    #include <atomic>
+    #include <memory>
+    #include <string>
+    #include <thread>
+#endif
 
 namespace kmx::aio::sample::tls::echo_readiness_server
 {

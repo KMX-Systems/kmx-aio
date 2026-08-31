@@ -2,9 +2,10 @@
 /// @brief Deterministic control-flow model for the readiness V4L2 capture sample.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-
-#include <cstdint>
-#include <span>
+#ifndef PCH
+    #include <cstdint>
+    #include <span>
+#endif
 
 namespace kmx::aio::sample::v4l2::capture
 {

@@ -31,16 +31,13 @@
 #include <kmx/aio/test/executor_runner.hpp>
 #include <kmx/logger.hpp>
 
-namespace kmx::aio
+namespace kmx::aio::test::branch_edges_test
 {
     using namespace std::literals::chrono_literals;
     using kmx::aio::test::scoped_runner;
     using kmx::aio::test::wait_for_flag;
 
-    // =========================================================================
     // logger
-    // =========================================================================
-
     TEST_CASE("an out-of-range log level falls back to the unknown marker", "[core][logger][branch]")
     {
         // level_to_char indexes a table and clamps past the end. Every ordinary call takes the in-range
@@ -50,10 +47,7 @@ namespace kmx::aio
         SUCCEED("an unknown level formatted without indexing past the table");
     }
 
-    // =========================================================================
     // scheduler
-    // =========================================================================
-
     TEST_CASE("wait_until_idle returns immediately when called from a worker", "[core][scheduler][branch]")
     {
         // A worker waiting for the scheduler to fall idle would be waiting for the task it is itself
@@ -103,11 +97,8 @@ namespace kmx::aio
         SUCCEED("an idle scheduler is already idle");
     }
 
-    // =========================================================================
     // readiness executor: cancellation bookkeeping
-    // =========================================================================
-
-    namespace
+    namespace detail
     {
         /// @brief A connected pair of non-blocking sockets, closed on destruction.
         class socket_pair
@@ -135,14 +126,14 @@ namespace kmx::aio
             int fds_[2] {-1, -1};
             bool valid_ = false;
         };
-    }
+    } // namespace detail
 
 #if defined(KMX_AIO_FEATURE_READINESS)
     TEST_CASE("cancelling a descriptor nobody waits on is a no-op", "[readiness][executor][branch]")
     {
         // cancel_io walks the subscription table and finds nothing to resume. The empty-table side of
         // that search is never taken by a test that cancels a wait it just parked.
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<readiness::executor>();
@@ -159,7 +150,7 @@ namespace kmx::aio
         // subscribe() refuses a descriptor that cancel_io has marked, and the awaiter reports the wait
         // as cancelled without ever suspending. That is the arm that keeps a cancel landing between a
         // caller's own check and its subscription from being lost.
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<readiness::executor>();
@@ -188,7 +179,7 @@ namespace kmx::aio
     {
         // The subscription list holds more than one entry per descriptor, and cancel walks all of them.
         // A single-waiter test only ever takes the "list is now empty" side of that loop.
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<readiness::executor>();
@@ -238,7 +229,7 @@ namespace kmx::aio
     {
         // Subscriptions are keyed on descriptor and direction, so cancelling one direction leaves the
         // other in the table - the "different key, keep looking" arm of the cancellation walk.
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<readiness::executor>();
@@ -264,10 +255,7 @@ namespace kmx::aio
         REQUIRE(wait_for_flag(read_done, 5s));
     }
 
-    // =========================================================================
     // executor shutdown: the untaken sides of the join conditions
-    // =========================================================================
-
     TEST_CASE("a second stop from inside a task finds the join already taken", "[readiness][executor][branch]")
     {
         // stop() has two shapes. The first call wins running_.exchange(false) and, from a thread the
@@ -314,12 +302,11 @@ namespace kmx::aio
     }
 
 #if defined(KMX_AIO_FEATURE_READINESS)
-    TEST_CASE("run on an executor that is already running does not start a second loop",
-              "[readiness][executor][branch]")
+    TEST_CASE("run on an executor that is already running does not start a second loop", "[readiness][executor][branch]")
     {
         // run() arms the executor with running_.exchange(true) and only creates the I/O thread when it
         // was the one to arm it. A second run() has to find it already armed and not start a rival loop.
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<readiness::executor>();
@@ -341,11 +328,12 @@ namespace kmx::aio
         REQUIRE(wait_for_flag(parked, 2s));
 
         std::atomic_bool second_returned {false};
-        std::jthread second([exec, &second_returned]()
-                            {
-                                exec->run();
-                                second_returned.store(true, std::memory_order_release);
-                            });
+        std::jthread second(
+            [exec, &second_returned]()
+            {
+                exec->run();
+                second_returned.store(true, std::memory_order_release);
+            });
 
         std::this_thread::sleep_for(50ms);
         exec->cancel_io(sockets.local());
@@ -356,10 +344,7 @@ namespace kmx::aio
     }
 #endif // KMX_AIO_FEATURE_READINESS
 
-    // =========================================================================
     // scheduler: the remaining sides of the idle predicate
-    // =========================================================================
-
     TEST_CASE("the idle predicate distinguishes a busy worker from a full queue", "[core][scheduler][branch]")
     {
         // `queue_.empty() && active_ == 0` has four outcomes and a single-worker drain reaches two of
@@ -398,10 +383,7 @@ namespace kmx::aio
         CHECK(completed.load(std::memory_order_acquire) == 5);
     }
 
-    // =========================================================================
     // channel: the throttle transitions that happen mid-push
-    // =========================================================================
-
     TEST_CASE("a push that crosses the high watermark flips the throttle", "[core][channel][branch]")
     {
         // try_push re-evaluates the throttle both before and after storing. The before-push flip is the
@@ -437,7 +419,7 @@ namespace kmx::aio
         // has awaited it, and the loop must drop the event rather than resume something that is not
         // there. Every other test in the suite parks a wait first, so only the found-and-non-empty side
         // had ever been taken.
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<readiness::executor>();
@@ -466,7 +448,7 @@ namespace kmx::aio
     {
         // The list for a descriptor is erased once its last waiter is taken, and kept when others
         // remain. A single waiter reaches the erase; the two-waiter case below it reaches the other.
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<readiness::executor>();
@@ -499,10 +481,7 @@ namespace kmx::aio
     }
 #endif // KMX_AIO_FEATURE_READINESS
 
-    // =========================================================================
     // task: the guard on a task that no longer owns a coroutine
-    // =========================================================================
-
     TEST_CASE("with_stop_token ignores a task that has been moved from", "[core][task][branch]")
     {
         // with_stop_token guards on the handle because a moved-from task owns nothing. Handing one a
@@ -546,11 +525,12 @@ namespace kmx::aio
         REQUIRE(wait_for_flag(submitted, 2s));
 
         std::atomic_bool second_returned {false};
-        std::jthread second([&exec, &second_returned]()
-                            {
-                                exec.run();
-                                second_returned.store(true, std::memory_order_release);
-                            });
+        std::jthread second(
+            [&exec, &second_returned]()
+            {
+                exec.run();
+                second_returned.store(true, std::memory_order_release);
+            });
 
         std::this_thread::sleep_for(50ms);
 
@@ -570,7 +550,7 @@ namespace kmx::aio
         // resume_if_found takes the front waiter and erases the list only once it is empty. Two waiters
         // woken by real events - not by a cancellation, which resumes them all at once - is what takes
         // the "list still has entries" side of that check.
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<readiness::executor>();
@@ -631,4 +611,4 @@ namespace kmx::aio
 
         CHECK(completed.load(std::memory_order_acquire) == 12);
     }
-}
+} // namespace kmx::aio::test::branch_edges_test

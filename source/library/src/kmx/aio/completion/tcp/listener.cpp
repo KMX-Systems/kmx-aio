@@ -1,10 +1,8 @@
 /// @file aio/completion/tcp/listener.cpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/completion/tcp/listener.hpp"
+#include <kmx/aio/completion/tcp/listener.hpp>
 
-#include "kmx/logger.hpp"
-#include <fcntl.h>
-#include <netinet/in.h>
+#include <kmx/logger.hpp>
 
 namespace kmx::aio::completion::tcp
 {

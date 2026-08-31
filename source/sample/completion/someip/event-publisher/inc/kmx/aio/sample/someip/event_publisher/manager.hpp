@@ -1,12 +1,13 @@
 #pragma once
+#ifndef PCH
+    #include <atomic>
+    #include <cstddef>
+    #include <memory>
 
-#include <atomic>
-#include <cstddef>
-#include <memory>
-
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/someip/server.hpp>
-#include <kmx/aio/task.hpp>
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/someip/server.hpp>
+    #include <kmx/aio/task.hpp>
+#endif
 
 namespace kmx::aio::sample::someip::event_publisher
 {
@@ -15,8 +16,7 @@ namespace kmx::aio::sample::someip::event_publisher
     public:
         manager(kmx::aio::someip::server_config config, kmx::aio::someip::event_id_t event_id, std::size_t event_count) noexcept;
 
-        kmx::aio::task<void> run(kmx::aio::completion::executor& exec,
-                                 std::shared_ptr<std::atomic_bool> ok) noexcept(false);
+        kmx::aio::task<void> run(kmx::aio::completion::executor& exec, std::shared_ptr<std::atomic_bool> ok) noexcept(false);
 
     private:
         kmx::aio::someip::server server_;

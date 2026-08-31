@@ -1,7 +1,9 @@
-#include "kmx/aio/sample/tls/echo_completion_client/manager.hpp"
-#include "kmx/aio/sample/tcp/echo/common.hpp"
+#include <kmx/aio/sample/tcp/echo/common.hpp>
+#include <kmx/aio/sample/tls/echo_completion_client/manager.hpp>
 
 #include <algorithm>
+#include <csignal>
+#include <iostream>
 #include <span>
 #include <string_view>
 #include <sys/socket.h>
@@ -87,8 +89,8 @@ namespace kmx::aio::sample::tls::echo_completion_client
 
             const auto failures = metrics_.failures.load(mem_order);
             logger::log(logger::level::info, std::source_location::current(),
-                        "Stress test completed in {} ms with {} successes and {} failures", elapsed.count(), metrics_.successes.load(mem_order),
-                        failures);
+                        "Stress test completed in {} ms with {} successes and {} failures", elapsed.count(),
+                        metrics_.successes.load(mem_order), failures);
 
             const bool ok = failures == 0u;
             cleanup();

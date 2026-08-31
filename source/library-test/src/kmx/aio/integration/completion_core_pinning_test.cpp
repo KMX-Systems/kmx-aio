@@ -16,8 +16,10 @@
 #include <system_error>
 #include <thread>
 
-namespace kmx::aio::completion::test::integration
+namespace kmx::aio::test::integration::completion_core_pinning_test
 {
+    using namespace kmx::aio::completion;
+
     [[nodiscard]] static std::expected<int, std::error_code> first_allowed_cpu_for_current_thread() noexcept
     {
         cpu_set_t allowed {};
@@ -118,4 +120,4 @@ namespace kmx::aio::completion::test::integration
         if (runner.joinable())
             runner.join();
     }
-} // namespace kmx::aio::completion::test::integration
+} // namespace kmx::aio::test::integration::completion_core_pinning_test

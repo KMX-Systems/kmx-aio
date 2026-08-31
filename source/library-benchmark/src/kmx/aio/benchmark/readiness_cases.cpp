@@ -1,7 +1,7 @@
 /// @file aio/benchmark/readiness_cases.cpp
 /// @brief Readiness-executor (epoll) benchmarks.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/benchmark/cases.hpp"
+#include <kmx/aio/benchmark/cases.hpp>
 
 #if defined(KMX_AIO_FEATURE_READINESS)
 

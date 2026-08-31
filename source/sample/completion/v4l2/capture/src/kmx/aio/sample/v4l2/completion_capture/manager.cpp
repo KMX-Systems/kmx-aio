@@ -1,3 +1,4 @@
+#include <kmx/aio/completion/timer.hpp>
 #include <kmx/aio/sample/v4l2/completion_capture/manager.hpp>
 
 #include <chrono>

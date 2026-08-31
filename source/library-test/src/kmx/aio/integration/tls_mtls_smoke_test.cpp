@@ -3,18 +3,13 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <sys/wait.h>
-
-#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <optional>
 #include <string>
 #include <string_view>
-#include <vector>
 
-namespace kmx::aio::tls::test::integration
+namespace kmx::aio::test::integration::tls_mtls_smoke_test
 {
     namespace fs = std::filesystem;
 
@@ -152,4 +147,4 @@ namespace kmx::aio::tls::test::integration
         REQUIRE(!client_key_text.empty());
     }
 
-} // namespace kmx::aio::tls::test::integration
+} // namespace kmx::aio::test::integration::tls_mtls_smoke_test

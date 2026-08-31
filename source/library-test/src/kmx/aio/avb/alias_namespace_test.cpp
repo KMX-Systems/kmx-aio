@@ -16,17 +16,25 @@
 #include <kmx/aio/readiness/avb/gptp/clock.hpp>
 #include <kmx/aio/readiness/avb/srp/client.hpp>
 
-TEST_CASE("avb model aliases map to expected generic types", "[avb][alias][compile]")
+namespace kmx::aio::test::avb::alias_namespace_test
 {
-    static_assert(std::is_same_v<kmx::aio::completion::avb::eth_socket, kmx::aio::avb::generic_eth_socket<kmx::aio::completion::executor>>);
-    static_assert(
-        std::is_same_v<kmx::aio::completion::avb::gptp::clock, kmx::aio::avb::gptp::generic_clock<kmx::aio::completion::executor>>);
-    static_assert(
-        std::is_same_v<kmx::aio::completion::avb::srp::client, kmx::aio::avb::srp::generic_client<kmx::aio::completion::executor>>);
+    TEST_CASE("avb model aliases map to expected generic types", "[avb][alias][compile]")
+    {
+        static_assert(
+            std::is_same_v<kmx::aio::completion::avb::eth_socket, kmx::aio::avb::generic_eth_socket<kmx::aio::completion::executor>>);
+        static_assert(
+            std::is_same_v<kmx::aio::completion::avb::gptp::clock, kmx::aio::avb::gptp::generic_clock<kmx::aio::completion::executor>>);
+        static_assert(
+            std::is_same_v<kmx::aio::completion::avb::srp::client, kmx::aio::avb::srp::generic_client<kmx::aio::completion::executor>>);
 
-    static_assert(std::is_same_v<kmx::aio::readiness::avb::eth_socket, kmx::aio::avb::generic_eth_socket<kmx::aio::readiness::executor>>);
-    static_assert(std::is_same_v<kmx::aio::readiness::avb::gptp::clock, kmx::aio::avb::gptp::generic_clock<kmx::aio::readiness::executor>>);
-    static_assert(std::is_same_v<kmx::aio::readiness::avb::srp::client, kmx::aio::avb::srp::generic_client<kmx::aio::readiness::executor>>);
+        static_assert(
+            std::is_same_v<kmx::aio::readiness::avb::eth_socket, kmx::aio::avb::generic_eth_socket<kmx::aio::readiness::executor>>);
+        static_assert(
+            std::is_same_v<kmx::aio::readiness::avb::gptp::clock, kmx::aio::avb::gptp::generic_clock<kmx::aio::readiness::executor>>);
+        static_assert(
+            std::is_same_v<kmx::aio::readiness::avb::srp::client, kmx::aio::avb::srp::generic_client<kmx::aio::readiness::executor>>);
 
-    SUCCEED();
-}
+        SUCCEED();
+    }
+
+} // namespace kmx::aio::test::avb::alias_namespace_test

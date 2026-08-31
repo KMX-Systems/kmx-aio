@@ -9,6 +9,8 @@
     #include <span>
     #include <string_view>
     #include <system_error>
+
+    #include <kmx/aio/basic_types.hpp>
 #endif
 
 // Guard around actual Onload implementation

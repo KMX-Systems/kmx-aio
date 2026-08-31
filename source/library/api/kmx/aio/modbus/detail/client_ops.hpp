@@ -1,15 +1,14 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <kmx/aio/modbus/detail/session.hpp>
     #include <kmx/aio/modbus/frame.hpp>
     #include <kmx/aio/modbus/types.hpp>
-    #include <kmx/aio/modbus/detail/session.hpp>
     #include <kmx/aio/task.hpp>
 
     #include <cstdint>
     #include <expected>
     #include <span>
-    #include <utility>
     #include <vector>
 #endif
 
@@ -23,8 +22,8 @@ namespace kmx::aio::modbus::detail
     {
     public:
         /// @brief Encode a complete ADU, send it, and return the raw response PDU.
-        [[nodiscard]] task<std::expected<std::vector<std::uint8_t>, std::error_code>>
-        exchange_pdu(const std::span<const std::uint8_t> pdu_bytes) noexcept(false)
+        [[nodiscard]] task<std::expected<std::vector<std::uint8_t>, std::error_code>> exchange_pdu(
+            const std::span<const std::uint8_t> pdu_bytes) noexcept(false)
         {
             auto* self = static_cast<ImplT*>(this);
             if (!self->stream_.has_value())
@@ -36,16 +35,15 @@ namespace kmx::aio::modbus::detail
             // Build ADU: 7-byte MBAP header + PDU
             std::vector<std::uint8_t> adu(frame::mbap_size + pdu_len);
             frame::encode_mbap(adu, tid, pdu_len, self->config_.unit_id);
-            std::ranges::copy(pdu_bytes,
-                              adu.begin() + static_cast<std::ptrdiff_t>(frame::mbap_size));
+            std::ranges::copy(pdu_bytes, adu.begin() + static_cast<std::ptrdiff_t>(frame::mbap_size));
 
             co_return co_await exchange(*self->stream_, adu, tid, self->config_.unit_id);
         }
 
         /// @brief Read holding or input registers.
-        [[nodiscard]] task<std::expected<register_values, std::error_code>>
-        read_registers(const function_code fc, const std::uint16_t address,
-                       const std::uint16_t count) noexcept(false)
+        [[nodiscard]] task<std::expected<register_values, std::error_code>> read_registers(const function_code fc,
+                                                                                           const std::uint16_t address,
+                                                                                           const std::uint16_t count) noexcept(false)
         {
             const auto pdu_result = frame::encode_read_request(fc, address, count);
             if (!pdu_result)
@@ -59,9 +57,8 @@ namespace kmx::aio::modbus::detail
         }
 
         /// @brief Read coils or discrete inputs.
-        [[nodiscard]] task<std::expected<coil_values, std::error_code>>
-        read_coils_impl(const function_code fc, const std::uint16_t address,
-                        const std::uint16_t count) noexcept(false)
+        [[nodiscard]] task<std::expected<coil_values, std::error_code>> read_coils_impl(const function_code fc, const std::uint16_t address,
+                                                                                        const std::uint16_t count) noexcept(false)
         {
             const auto pdu_result = frame::encode_read_request(fc, address, count);
             if (!pdu_result)

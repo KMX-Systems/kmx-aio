@@ -1,22 +1,19 @@
 #pragma once
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/tcp/listener.hpp>
-#include <kmx/aio/completion/tcp/stream.hpp>
-#include <kmx/logger.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/tcp/listener.hpp>
+    #include <kmx/aio/completion/tcp/stream.hpp>
+    #include <kmx/logger.hpp>
+    #include <unistd.h>
 
-#include <atomic>
-#include <csignal>
-#include <format>
-#include <iostream>
-#include <memory>
-#include <mutex>
-#include <random>
-#include <stop_token>
-#include <string>
-#include <thread>
-#include <unistd.h>
-#include <unordered_map>
-#include <vector>
+    #include <atomic>
+    #include <memory>
+    #include <mutex>
+    #include <stop_token>
+    #include <thread>
+    #include <unordered_map>
+    #include <vector>
+#endif
 
 namespace kmx::aio::sample::tcp::echo_uring::server
 {

@@ -1,18 +1,14 @@
 #pragma once
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/udp/socket.hpp>
-#include <kmx/logger.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/logger.hpp>
+    #include <unistd.h>
 
-#include <atomic>
-#include <csignal>
-#include <format>
-#include <iostream>
-#include <memory>
-#include <stop_token>
-#include <string>
-#include <thread>
-#include <unistd.h>
-#include <vector>
+    #include <atomic>
+    #include <memory>
+    #include <stop_token>
+    #include <thread>
+#endif
 
 namespace kmx::aio::sample::udp::echo_uring::server
 {

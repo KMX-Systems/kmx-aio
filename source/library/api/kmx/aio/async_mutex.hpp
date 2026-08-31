@@ -19,6 +19,7 @@
 
 namespace kmx::aio
 {
+    /// @brief Type-erased coroutine handle used for the waiter queue.
     using coroutine_handle_t = std::coroutine_handle<>;
 
     /// @brief A mutex acquired by co_await rather than by blocking.

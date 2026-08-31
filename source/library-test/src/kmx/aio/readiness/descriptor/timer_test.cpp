@@ -4,7 +4,6 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
-#include <cerrno>
 #include <chrono>
 #include <memory>
 #include <unistd.h>
@@ -15,13 +14,16 @@
 #include <kmx/aio/task.hpp>
 #include <kmx/aio/test/executor_runner.hpp>
 
-namespace kmx::aio::readiness::descriptor
+namespace kmx::aio::test::readiness::descriptor::timer_test
 {
+    using namespace kmx::aio::readiness;
+    using namespace kmx::aio::readiness::descriptor;
+
     using namespace std::literals::chrono_literals;
     using kmx::aio::test::scoped_runner;
     using kmx::aio::test::wait_for_flag;
 
-    namespace
+    namespace detail
     {
         [[nodiscard]] ::itimerspec after(const std::chrono::nanoseconds delay) noexcept
         {
@@ -39,7 +41,7 @@ namespace kmx::aio::readiness::descriptor
             std::atomic_uint64_t expirations {0u};
             std::error_code error {};
         };
-    }
+    } // namespace detail
 
     TEST_CASE("timer::create returns a valid timerfd", "[readiness][timerfd][create]")
     {
@@ -74,7 +76,7 @@ namespace kmx::aio::readiness::descriptor
         timer tmr {};
         REQUIRE_FALSE(tmr.is_valid());
 
-        const auto spec = after(10ms);
+        const auto spec = detail::after(10ms);
         const auto result = tmr.set_time(0, spec);
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error() == std::errc::bad_file_descriptor);
@@ -85,7 +87,7 @@ namespace kmx::aio::readiness::descriptor
         auto tmr = timer::create();
         REQUIRE(tmr.has_value());
 
-        const auto spec = after(50ms);
+        const auto spec = detail::after(50ms);
         CHECK(tmr->set_time(0, spec).has_value());
     }
 
@@ -94,11 +96,11 @@ namespace kmx::aio::readiness::descriptor
         auto tmr = timer::create();
         REQUIRE(tmr.has_value());
 
-        const auto first = after(10s);
+        const auto first = detail::after(10s);
         REQUIRE(tmr->set_time(0, first).has_value());
 
         ::itimerspec previous {};
-        const auto second = after(20ms);
+        const auto second = detail::after(20ms);
         REQUIRE(tmr->set_time(0, second, &previous).has_value());
 
         // The old value is what remained of the 10s arming, so it must still be counting down.
@@ -109,7 +111,7 @@ namespace kmx::aio::readiness::descriptor
     {
         auto tmr = timer::create();
         REQUIRE(tmr.has_value());
-        REQUIRE(tmr->set_time(0, after(10s)).has_value());
+        REQUIRE(tmr->set_time(0, detail::after(10s)).has_value());
 
         ::itimerspec previous {};
         const ::itimerspec disarm {};
@@ -143,12 +145,12 @@ namespace kmx::aio::readiness::descriptor
         // the coroutine parks on the executor, and the expiry wakes it for a second read that succeeds.
         auto tmr = timer::create();
         REQUIRE(tmr.has_value());
-        REQUIRE(tmr->set_time(0, after(30ms)).has_value());
+        REQUIRE(tmr->set_time(0, detail::after(30ms)).has_value());
 
         auto exec = std::make_shared<executor>();
         REQUIRE(exec->register_fd(tmr->get()).has_value());
 
-        wait_outcome outcome;
+        detail::wait_outcome outcome;
         auto body = [&outcome, &timer_ref = *tmr, exec]() -> task<void>
         {
             const auto result = co_await timer_ref.wait(*exec);
@@ -178,13 +180,13 @@ namespace kmx::aio::readiness::descriptor
         // The first read succeeds outright, so the wait never parks - the loop's fast path.
         auto tmr = timer::create();
         REQUIRE(tmr.has_value());
-        REQUIRE(tmr->set_time(0, after(1ms)).has_value());
+        REQUIRE(tmr->set_time(0, detail::after(1ms)).has_value());
         std::this_thread::sleep_for(30ms);
 
         auto exec = std::make_shared<executor>();
         REQUIRE(exec->register_fd(tmr->get()).has_value());
 
-        wait_outcome outcome;
+        detail::wait_outcome outcome;
         auto body = [&outcome, &timer_ref = *tmr, exec]() -> task<void>
         {
             const auto result = co_await timer_ref.wait(*exec);
@@ -212,7 +214,7 @@ namespace kmx::aio::readiness::descriptor
         auto tmr = timer::create();
         REQUIRE(tmr.has_value());
 
-        ::itimerspec spec = after(5ms);
+        ::itimerspec spec = detail::after(5ms);
         spec.it_interval.tv_nsec = 5'000'000; // 5ms period
         REQUIRE(tmr->set_time(0, spec).has_value());
         std::this_thread::sleep_for(60ms);
@@ -220,7 +222,7 @@ namespace kmx::aio::readiness::descriptor
         auto exec = std::make_shared<executor>();
         REQUIRE(exec->register_fd(tmr->get()).has_value());
 
-        wait_outcome outcome;
+        detail::wait_outcome outcome;
         auto body = [&outcome, &timer_ref = *tmr, exec]() -> task<void>
         {
             const auto result = co_await timer_ref.wait(*exec);
@@ -250,13 +252,13 @@ namespace kmx::aio::readiness::descriptor
         // enough out that only the cancel can end the wait.
         auto tmr = timer::create();
         REQUIRE(tmr.has_value());
-        REQUIRE(tmr->set_time(0, after(10s)).has_value());
+        REQUIRE(tmr->set_time(0, detail::after(10s)).has_value());
 
         auto exec = std::make_shared<executor>();
         REQUIRE(exec->register_fd(tmr->get()).has_value());
 
         std::atomic_bool parked {false};
-        wait_outcome outcome;
+        detail::wait_outcome outcome;
         auto body = [&outcome, &parked, &timer_ref = *tmr, exec]() -> task<void>
         {
             parked.store(true, std::memory_order_release);
@@ -292,7 +294,7 @@ namespace kmx::aio::readiness::descriptor
         timer tmr {fds[1]};
 
         auto exec = std::make_shared<executor>();
-        wait_outcome outcome;
+        detail::wait_outcome outcome;
         auto body = [&outcome, &tmr, exec]() -> task<void>
         {
             const auto result = co_await tmr.wait(*exec);
@@ -315,4 +317,4 @@ namespace kmx::aio::readiness::descriptor
 
         ::close(fds[0]);
     }
-}
+} // namespace kmx::aio::test::readiness::descriptor::timer_test

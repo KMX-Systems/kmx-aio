@@ -25,11 +25,15 @@ namespace kmx::aio::readiness::descriptor
         explicit timer(const fd_t fd) noexcept: file_descriptor(fd) {}
 
         // Non-copyable
+        /// @brief Non-copyable: the object owns its descriptor.
         timer(const timer&) = delete;
+        /// @brief Non-copyable: the object owns its descriptor.
         timer& operator=(const timer&) = delete;
 
         // Move-only
+        /// @brief Move constructor — transfers ownership of the descriptor.
         timer(timer&&) noexcept = default;
+        /// @brief Move assignment — transfers ownership of the descriptor.
         timer& operator=(timer&&) noexcept = default;
 
         /// @brief Creates a new timer instance.
@@ -52,4 +56,4 @@ namespace kmx::aio::readiness::descriptor
         /// @throws std::bad_alloc Coroutine frame allocation failure.
         [[nodiscard]] task<std::expected<std::uint64_t, std::error_code>> wait(readiness::executor& exec) noexcept(false);
     };
-} // namespace kmx::aio::descriptor
+} // namespace kmx::aio::readiness::descriptor

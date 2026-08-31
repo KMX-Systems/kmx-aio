@@ -1,19 +1,18 @@
 #include <kmx/aio/sample/quic/http3_client/manager.hpp>
 
-#include <array>
-#include <charconv>
-#include <cstdlib>
-#include <iostream>
 #include <kmx/aio/completion/quic/engine.hpp>
 #include <kmx/aio/http3/alpn.hpp>
 #include <kmx/aio/http3/codec.hpp>
 #include <kmx/aio/http3/message.hpp>
+
+#include <array>
+#include <charconv>
+#include <cstdlib>
+#include <iostream>
 #include <lsquic.h>
-#include <memory>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <string>
-#include <string_view>
 
 namespace kmx::aio::sample::quic::http3_client
 {

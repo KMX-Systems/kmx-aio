@@ -1,16 +1,13 @@
 #pragma once
-#include <kmx/aio/readiness/executor.hpp>
-#include <kmx/aio/readiness/udp/socket.hpp>
-#include <kmx/aio/task.hpp>
-#include <kmx/logger.hpp>
+#ifndef PCH
+    #include <kmx/aio/readiness/executor.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/logger.hpp>
+    #include <unistd.h>
 
-#include <atomic>
-#include <csignal>
-#include <format>
-#include <iostream>
-#include <memory>
-#include <string_view>
-#include <unistd.h>
+    #include <atomic>
+    #include <memory>
+#endif
 
 namespace kmx::aio::sample::udp::minimal::server
 {

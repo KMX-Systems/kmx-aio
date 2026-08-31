@@ -35,11 +35,16 @@ namespace kmx::aio::someip
         /// @param bound_client The client whose application name and config are reused.
         /// @param config       Event-group coordinates, capacity, and timing settings.
         subscription(client& bound_client, subscription_config config) noexcept;
+        /// @brief Cancels the subscription and releases the vsomeip runtime.
         ~subscription() noexcept;
 
+        /// @brief Non-copyable: the subscription owns its backend runtime.
         subscription(const subscription&) = delete;
+        /// @brief Non-copyable: the subscription owns its backend runtime.
         subscription& operator=(const subscription&) = delete;
+        /// @brief Move constructor — transfers ownership of the backend runtime.
         subscription(subscription&&) noexcept;
+        /// @brief Move assignment — transfers ownership of the backend runtime.
         subscription& operator=(subscription&&) noexcept;
 
         /// @brief Starts the subscription runtime and subscribes to the event group.
@@ -86,6 +91,7 @@ namespace kmx::aio::someip
 
     private:
         struct impl;
+        /// @brief The backend implementation, kept opaque so the public header stays free of backend types.
         std::unique_ptr<impl> impl_;
     };
 

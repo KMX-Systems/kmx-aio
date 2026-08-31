@@ -35,10 +35,15 @@ extern "C"
     #include <cstddef>
     #include <cstdint>
 
+/// @brief Stand-in for open62541 `UA_Boolean` in shim mode.
 using UA_Boolean = bool;
+/// @brief Stand-in for open62541 `UA_Byte` in shim mode.
 using UA_Byte = std::uint8_t;
+/// @brief Stand-in for open62541 `UA_UInt16` in shim mode.
 using UA_UInt16 = std::uint16_t;
+/// @brief Stand-in for open62541 `UA_UInt32` in shim mode.
 using UA_UInt32 = std::uint32_t;
+/// @brief Stand-in for open62541 `UA_StatusCode` in shim mode.
 using UA_StatusCode = std::uint32_t;
 
 /// @brief Minimal stand-in for open62541 `UA_String` in shim mode.
@@ -50,48 +55,79 @@ struct UA_String
     UA_Byte* data;
 };
 
+/// @brief Stand-in for open62541 `UA_ByteString` in shim mode; shares the layout of @ref UA_String.
 using UA_ByteString = UA_String;
 
+/// @brief Opaque shim client handle.
 struct UA_Client;
+/// @brief Opaque shim client configuration block.
 struct UA_ClientConfig;
+/// @brief Opaque shim server handle.
 struct UA_Server;
+/// @brief Opaque shim server configuration block.
 struct UA_ServerConfig;
 
 /// @brief Secure channel lifecycle state in shim mode.
 enum UA_SecureChannelState
 {
+    /// @brief No secure channel exists.
     UA_SECURECHANNELSTATE_CLOSED = 0,
+    /// @brief Listening for a reverse-connect attempt from the server.
     UA_SECURECHANNELSTATE_REVERSE_LISTENING,
+    /// @brief The underlying transport connection is being established.
     UA_SECURECHANNELSTATE_CONNECTING,
+    /// @brief The transport connection is established.
     UA_SECURECHANNELSTATE_CONNECTED,
+    /// @brief A reverse-connect transport connection is established.
     UA_SECURECHANNELSTATE_REVERSE_CONNECTED,
+    /// @brief A reverse Hello (RHE) message has been sent.
     UA_SECURECHANNELSTATE_RHE_SENT,
+    /// @brief A Hello (HEL) message has been sent.
     UA_SECURECHANNELSTATE_HEL_SENT,
+    /// @brief A Hello (HEL) message has been received.
     UA_SECURECHANNELSTATE_HEL_RECEIVED,
+    /// @brief An Acknowledge (ACK) message has been sent.
     UA_SECURECHANNELSTATE_ACK_SENT,
+    /// @brief An Acknowledge (ACK) message has been received.
     UA_SECURECHANNELSTATE_ACK_RECEIVED,
+    /// @brief An OpenSecureChannel (OPN) request has been sent.
     UA_SECURECHANNELSTATE_OPN_SENT,
+    /// @brief The secure channel is open and usable.
     UA_SECURECHANNELSTATE_OPEN,
+    /// @brief The secure channel is being closed.
     UA_SECURECHANNELSTATE_CLOSING,
 };
 
 /// @brief Session lifecycle state in shim mode.
 enum UA_SessionState
 {
+    /// @brief No session exists.
     UA_SESSIONSTATE_CLOSED = 0,
+    /// @brief A CreateSession request has been sent.
     UA_SESSIONSTATE_CREATE_REQUESTED,
+    /// @brief The session has been created but not yet activated.
     UA_SESSIONSTATE_CREATED,
+    /// @brief An ActivateSession request has been sent.
     UA_SESSIONSTATE_ACTIVATE_REQUESTED,
+    /// @brief The session is activated and usable.
     UA_SESSIONSTATE_ACTIVATED,
+    /// @brief The session is being closed.
     UA_SESSIONSTATE_CLOSING,
 };
 
+/// @brief Operation completed successfully.
 static constexpr UA_StatusCode UA_STATUSCODE_GOOD = 0x00000000u;
+/// @brief An unexpected internal error occurred.
 static constexpr UA_StatusCode UA_STATUSCODE_BADINTERNALERROR = 0x80020000u;
+/// @brief The operation timed out.
 static constexpr UA_StatusCode UA_STATUSCODE_BADTIMEOUT = 0x800A0000u;
+/// @brief The supplied configuration is invalid.
 static constexpr UA_StatusCode UA_STATUSCODE_BADCONFIGURATIONERROR = 0x80890000u;
+/// @brief The client is not connected to a server.
 static constexpr UA_StatusCode UA_STATUSCODE_BADNOTCONNECTED = 0x808A0000u;
+/// @brief The transport connection was closed.
 static constexpr UA_StatusCode UA_STATUSCODE_BADCONNECTIONCLOSED = 0x80AE0000u;
+/// @brief The secure channel was closed.
 static constexpr UA_StatusCode UA_STATUSCODE_BADSECURECHANNELCLOSED = 0x80860000u;
 
 #endif

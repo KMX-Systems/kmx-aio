@@ -2,7 +2,9 @@
 /// @brief PI clock servo for gPTP (IEEE 802.1AS) timestamp adjustment via clock_adjtime().
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 
+#include <ctime>
 #include <kmx/aio/avb/gptp/servo.hpp>
+#include <sys/timex.h>
 
 namespace kmx::aio::avb::gptp
 {

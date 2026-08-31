@@ -58,17 +58,17 @@ namespace kmx::aio
     /// @brief Returns a human-readable string for the given error code.
     /// @param ec The error code to describe.
     /// @return A view into a static string describing the error.
-    [[nodiscard]] std::string_view to_string(error_code ec) noexcept;
+    [[nodiscard]] std::string_view to_string(const error_code ec) noexcept;
 
     /// @brief Maps a POSIX errno value to a kmx::aio::error_code.
     /// @param err The errno value.
     /// @return The corresponding application-level error code.
-    [[nodiscard]] error_code from_errno(int err) noexcept;
+    [[nodiscard]] error_code from_errno(const int err) noexcept;
 
     /// @brief Maps a kmx::aio::error_code back to a std::error_code for
     /// interop.
     /// @param ec The application-level error code.
     /// @return A std::error_code in std::generic_category().
-    [[nodiscard]] std::error_code to_std_error_code(error_code ec) noexcept;
+    [[nodiscard]] std::error_code to_std_error_code(const error_code ec) noexcept;
 
 } // namespace kmx::aio

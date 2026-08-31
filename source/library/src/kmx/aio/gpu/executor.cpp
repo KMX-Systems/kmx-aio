@@ -1,8 +1,8 @@
 /// @file aio/gpu/executor.cpp
 /// @brief GPU completion-model executor implementation.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/gpu/executor.hpp"
-#include "kmx/aio/allocator.hpp"
+#include <kmx/aio/allocator/slab.hpp>
+#include <kmx/aio/gpu/executor.hpp>
 
 #include <algorithm>
 #include <condition_variable>

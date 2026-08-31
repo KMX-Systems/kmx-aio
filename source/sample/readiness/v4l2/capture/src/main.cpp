@@ -2,6 +2,7 @@
 #include <source_location>
 #include <string>
 
+#include <kmx/aio/readiness/v4l2/capture.hpp>
 #include <kmx/aio/sample/v4l2/capture/manager.hpp>
 #include <kmx/logger.hpp>
 

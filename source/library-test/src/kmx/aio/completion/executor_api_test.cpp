@@ -11,21 +11,19 @@
 #include <array>
 #include <atomic>
 #include <chrono>
-#include <expected>
 #include <cstring>
+#include <expected>
 #include <memory>
 #include <string>
 #include <system_error>
 #include <thread>
-#include <vector>
 
 #include <fcntl.h>
+#include <netinet/in.h>
 #include <poll.h>
 #include <pthread.h>
 #include <sched.h>
-#include <netinet/in.h>
 #include <sys/socket.h>
-#include <sys/uio.h>
 #include <unistd.h>
 
 #include <kmx/aio/completion/executor.hpp>
@@ -33,9 +31,11 @@
 #include <kmx/aio/task.hpp>
 #include <kmx/aio/test/executor_runner.hpp>
 
-namespace kmx::aio::completion
+namespace kmx::aio::test::completion::executor_api_test
 {
-    namespace
+    using namespace kmx::aio::completion;
+
+    namespace detail
     {
         /// @brief A pipe whose ends are closed on destruction.
         class pipe_pair
@@ -92,19 +92,16 @@ namespace kmx::aio::completion
         using size_outcome = outcome<std::size_t>;
         using fd_outcome = outcome<fd_t>;
         using void_outcome = outcome<int>;
-    }
+    } // namespace detail
 
-    // =========================================================================
     // statistics
-    // =========================================================================
-
     TEST_CASE("reset_stats clears every counter", "[completion][executor][statistics]")
     {
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
         executor exec;
-        auto state = std::make_shared<size_outcome>();
+        auto state = std::make_shared<detail::size_outcome>();
 
         // Any real operation moves the submission and completion counters off zero, so the reset below
         // has something to clear.
@@ -159,18 +156,15 @@ namespace kmx::aio::completion
         CHECK(stats.submission_full_count.load() == 0u);
     }
 
-    // =========================================================================
     // async_read / async_write
-    // =========================================================================
-
     TEST_CASE("async_write then async_read move bytes through a pipe", "[completion][executor][async_read]")
     {
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
         executor exec;
-        auto written = std::make_shared<size_outcome>();
-        auto read = std::make_shared<size_outcome>();
+        auto written = std::make_shared<detail::size_outcome>();
+        auto read = std::make_shared<detail::size_outcome>();
         std::array<char, 32> buffer {};
 
         auto body = [&exec, written, read, &buffer, &pipes]() -> task<void>
@@ -210,12 +204,12 @@ namespace kmx::aio::completion
 
     TEST_CASE("async_read reports end of stream as zero bytes", "[completion][executor][async_read]")
     {
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
         pipes.close_write();
 
         executor exec;
-        auto state = std::make_shared<size_outcome>();
+        auto state = std::make_shared<detail::size_outcome>();
         std::array<char, 8> buffer {};
 
         auto body = [&exec, state, &buffer, fd = pipes.read_end()]() -> task<void>
@@ -242,7 +236,7 @@ namespace kmx::aio::completion
     TEST_CASE("async_read reports a bad descriptor", "[completion][executor][async_read][error]")
     {
         executor exec;
-        auto state = std::make_shared<size_outcome>();
+        auto state = std::make_shared<detail::size_outcome>();
         std::array<char, 8> buffer {};
 
         auto body = [&exec, state, &buffer]() -> task<void>
@@ -267,7 +261,7 @@ namespace kmx::aio::completion
     TEST_CASE("async_write reports a bad descriptor", "[completion][executor][async_write][error]")
     {
         executor exec;
-        auto state = std::make_shared<size_outcome>();
+        auto state = std::make_shared<detail::size_outcome>();
 
         auto body = [&exec, state]() -> task<void>
         {
@@ -289,10 +283,7 @@ namespace kmx::aio::completion
         CHECK(state->error == std::errc::bad_file_descriptor);
     }
 
-    // =========================================================================
     // registered buffers and the fixed-buffer operations
-    // =========================================================================
-
     TEST_CASE("register_buffers and unregister_buffers succeed in order", "[completion][executor][fixed]")
     {
         executor exec;
@@ -321,7 +312,7 @@ namespace kmx::aio::completion
 
     TEST_CASE("async_write_fixed and async_read_fixed use a registered buffer", "[completion][executor][fixed]")
     {
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
         executor exec;
@@ -329,8 +320,8 @@ namespace kmx::aio::completion
         const ::iovec iov {storage.data(), storage.size()};
         REQUIRE(exec.register_buffers(std::span<const ::iovec>(&iov, 1u)).has_value());
 
-        auto written = std::make_shared<size_outcome>();
-        auto read = std::make_shared<size_outcome>();
+        auto written = std::make_shared<detail::size_outcome>();
+        auto read = std::make_shared<detail::size_outcome>();
 
         auto body = [&exec, written, read, &storage, &pipes]() -> task<void>
         {
@@ -373,7 +364,7 @@ namespace kmx::aio::completion
 
     TEST_CASE("async_read_fixed reports an unknown buffer index", "[completion][executor][fixed][error]")
     {
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
         executor exec;
@@ -381,7 +372,7 @@ namespace kmx::aio::completion
         const ::iovec iov {storage.data(), storage.size()};
         REQUIRE(exec.register_buffers(std::span<const ::iovec>(&iov, 1u)).has_value());
 
-        auto state = std::make_shared<size_outcome>();
+        auto state = std::make_shared<detail::size_outcome>();
         auto body = [&exec, state, &storage, fd = pipes.read_end()]() -> task<void>
         {
             const auto r = co_await exec.async_read_fixed(fd, std::span<char>(storage.data(), storage.size()), 0u, 7);
@@ -403,10 +394,7 @@ namespace kmx::aio::completion
         CHECK(exec.unregister_buffers().has_value());
     }
 
-    // =========================================================================
     // async_accept / async_connect
-    // =========================================================================
-
     TEST_CASE("async_connect and async_accept complete a loopback handshake", "[completion][executor][async_accept]")
     {
         auto listener = file_descriptor::create_socket(AF_INET, SOCK_STREAM, 0);
@@ -425,8 +413,8 @@ namespace kmx::aio::completion
         REQUIRE(client.has_value());
 
         executor exec;
-        auto accepted = std::make_shared<fd_outcome>();
-        auto connected = std::make_shared<void_outcome>();
+        auto accepted = std::make_shared<detail::fd_outcome>();
+        auto connected = std::make_shared<detail::void_outcome>();
 
         ::sockaddr_storage peer {};
         ::socklen_t peer_len = sizeof(peer);
@@ -474,11 +462,11 @@ namespace kmx::aio::completion
 
     TEST_CASE("async_accept reports a non-listening descriptor", "[completion][executor][async_accept][error]")
     {
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
         executor exec;
-        auto state = std::make_shared<fd_outcome>();
+        auto state = std::make_shared<detail::fd_outcome>();
         ::sockaddr_storage peer {};
         ::socklen_t peer_len = sizeof(peer);
 
@@ -523,7 +511,7 @@ namespace kmx::aio::completion
         REQUIRE(address.has_value());
 
         executor exec;
-        auto state = std::make_shared<void_outcome>();
+        auto state = std::make_shared<detail::void_outcome>();
 
         auto body = [&exec, state, &address, fd = client->get()]() -> task<void>
         {
@@ -544,10 +532,7 @@ namespace kmx::aio::completion
         CHECK(state->error == std::errc::connection_refused);
     }
 
-    // =========================================================================
     // async_cancel
-    // =========================================================================
-
     TEST_CASE("async_cancel reports no match for an unknown user_data", "[completion][executor][async_cancel]")
     {
         // Nothing in the ring carries this user_data. Whether the kernel answers ENOENT or reports the
@@ -555,7 +540,7 @@ namespace kmx::aio::completion
         // the caller either way: the request is submitted, reaped, and the coroutine resumed exactly
         // once - not on which of the two answers this kernel gives.
         executor exec;
-        auto state = std::make_shared<void_outcome>();
+        auto state = std::make_shared<detail::void_outcome>();
 
         auto body = [&exec, state]() -> task<void>
         {
@@ -579,10 +564,7 @@ namespace kmx::aio::completion
         CHECK(exec.get_stats().total_completions.load() > 0u);
     }
 
-    // =========================================================================
     // lifecycle accessors
-    // =========================================================================
-
     TEST_CASE("is_io_thread_affined_to rejects a negative core", "[completion][executor][affinity][error]")
     {
         executor exec;
@@ -638,11 +620,8 @@ namespace kmx::aio::completion
         CHECK(token.expired());
     }
 
-    // =========================================================================
     // core pinning
-    // =========================================================================
-
-    namespace
+    namespace detail
     {
         /// @brief The first CPU this thread is allowed to run on.
         /// @details Pinning to a core outside the process's own affinity mask fails, and on a machine
@@ -662,11 +641,11 @@ namespace kmx::aio::completion
 
             return std::unexpected(std::make_error_code(std::errc::no_such_device));
         }
-    }
+    } // namespace detail
 
     TEST_CASE("a configured core pins the I/O thread", "[completion][executor][affinity]")
     {
-        const auto core = first_allowed_cpu();
+        const auto core = detail::first_allowed_cpu();
         REQUIRE(core.has_value());
 
         const executor_config config {
@@ -680,7 +659,7 @@ namespace kmx::aio::completion
 
         // Something has to hold the loop open long enough to be asked about, so a read that will not
         // complete until the write below parks the executor rather than letting run() drain at once.
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
         std::array<char, 8> buffer {};
@@ -725,7 +704,7 @@ namespace kmx::aio::completion
         const executor_config config {.ring_entries = 64u, .max_completions = 64u, .thread_count = 1u, .core_id = -1};
         executor exec {config};
 
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
         std::array<char, 8> buffer {};
@@ -740,7 +719,7 @@ namespace kmx::aio::completion
         kmx::aio::test::scoped_completion_runner runner {exec};
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-        const auto core = first_allowed_cpu();
+        const auto core = detail::first_allowed_cpu();
         REQUIRE(core.has_value());
         const auto affined = exec.is_io_thread_affined_to(*core);
 
@@ -754,21 +733,18 @@ namespace kmx::aio::completion
             CHECK(*affined);
     }
 
-    // =========================================================================
     // shutdown with work still in flight
-    // =========================================================================
-
     TEST_CASE("stopping with an operation in flight cancels it and drains", "[completion][executor][shutdown]")
     {
         // The shutdown path that matters: a coroutine is suspended on an io_uring operation that will
         // never complete on its own. Leaving the loop at that point would abandon the frame and tear the
         // ring down underneath a request the kernel still owns, so the loop instead submits a
         // cancel-all, lets the suspended coroutine resume with an error, and only then exits.
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
-        completion::executor exec;
-        auto state = std::make_shared<size_outcome>();
+        kmx::aio::completion::executor exec;
+        auto state = std::make_shared<detail::size_outcome>();
         std::atomic_bool submitted {false};
         std::array<char, 8> buffer {};
 
@@ -812,10 +788,10 @@ namespace kmx::aio::completion
     {
         // Same shutdown path reached through a different operation, to show the cancel-all covers the
         // ring rather than one opcode.
-        pipe_pair pipes;
+        detail::pipe_pair pipes;
         REQUIRE(pipes.valid());
 
-        completion::executor exec;
+        kmx::aio::completion::executor exec;
         std::atomic_bool submitted {false};
         std::atomic_bool finished {false};
 
@@ -842,4 +818,4 @@ namespace kmx::aio::completion
 
         CHECK(finished.load(std::memory_order_acquire));
     }
-}
+} // namespace kmx::aio::test::completion::executor_api_test

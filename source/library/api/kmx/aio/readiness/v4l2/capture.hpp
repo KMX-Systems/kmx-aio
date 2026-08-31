@@ -6,7 +6,6 @@
     #include <expected>
     #include <memory>
     #include <span>
-    #include <system_error>
     #include <vector>
 
     #include <kmx/aio/basic_types.hpp>
@@ -31,8 +30,11 @@ namespace kmx::aio::readiness::v4l2
     class frame_view
     {
     public:
+        /// @brief A frame view is only ever produced by @ref capture; default construction is disabled.
         frame_view() = delete;
+        /// @brief Non-copyable: the view owns a driver buffer slot.
         frame_view(const frame_view&) = delete;
+        /// @brief Non-copyable: the view owns a driver buffer slot.
         frame_view& operator=(const frame_view&) = delete;
 
         /// @brief Move constructor — transfers ownership of the buffer slot.
@@ -53,15 +55,29 @@ namespace kmx::aio::readiness::v4l2
     private:
         friend class capture;
 
+        /// @brief Constructs a view over one mmap'd driver buffer.
+        /// @param device_fd        The capture device descriptor used to re-enqueue the buffer.
+        /// @param index            The driver buffer index this view owns.
+        /// @param ptr              The mapped start of the buffer.
+        /// @param length           The number of valid bytes in the buffer.
+        /// @param metadata         The frame metadata reported by the driver.
+        /// @param device_lifetime  Weak reference to the owning capture, so a destroyed device is not touched.
         frame_view(fd_t device_fd, std::uint32_t index, const std::byte* ptr, std::size_t length, frame_metadata metadata,
                    std::weak_ptr<void> device_lifetime) noexcept;
 
+        /// @brief The capture device descriptor used to re-enqueue the buffer.
         fd_t device_fd_ {};
+        /// @brief The driver buffer index this view owns.
         std::uint32_t index_ {};
+        /// @brief Start of the mapped buffer.
         const std::byte* ptr_ {};
+        /// @brief Number of valid bytes in the buffer.
         std::size_t length_ {};
+        /// @brief Frame metadata reported by the driver.
         frame_metadata metadata_ {};
+        /// @brief Weak reference to the owning capture; expired once the device is gone.
         std::weak_ptr<void> device_lifetime_;
+        /// @brief Cleared by a move, so only the surviving view re-enqueues the buffer.
         bool active_ {true};
     };
 
@@ -93,7 +109,9 @@ namespace kmx::aio::readiness::v4l2
     class capture: public io_base
     {
     public:
+        /// @brief A task yielding the next @ref frame_view, or the error that ended the capture.
         using frame_result = task<std::expected<frame_view, kmx::aio::error_code>>;
+        /// @brief A configured @ref capture, or the error code explaining why one could not be created.
         using create_result = std::expected<capture, kmx::aio::error_code>;
 
         /// @brief Opens and configures a V4L2 capture device.
@@ -114,8 +132,11 @@ namespace kmx::aio::readiness::v4l2
         /// @return A fully initialised `capture` ready for `next_frame()`, or an error.
         [[nodiscard]] static create_result create(executor& exec, capture_config cfg) noexcept;
 
+        /// @brief Move constructor — transfers ownership of the device and its mapped buffers.
         capture(capture&&) noexcept;
+        /// @brief Move assignment is disabled to keep ownership unambiguous.
         capture& operator=(capture&&) noexcept = delete;
+        /// @brief Stops streaming, unmaps every buffer, and closes the device.
         ~capture() noexcept override;
 
         /// @brief Suspends until the driver has a filled frame, then returns it.
@@ -137,20 +158,32 @@ namespace kmx::aio::readiness::v4l2
         [[nodiscard]] std::expected<void, kmx::aio::error_code> stream_on() noexcept;
 
     private:
+        /// @brief One MMAP'd driver buffer: its mapped address and length.
         struct mmap_buffer
         {
+            /// @brief Start of the mapping, or null when the buffer was never mapped.
             void* ptr {};
+            /// @brief Length of the mapping in bytes.
             std::size_t length {};
         };
 
+        /// @brief Constructs a streaming capture from resources @ref create has already acquired.
+        /// @param exec    The executor the device descriptor is registered with.
+        /// @param fd      The opened capture device.
+        /// @param cfg     The negotiated configuration.
+        /// @param buffers The mapped driver buffers.
         capture(executor& exec, file_descriptor&& fd, capture_config cfg, std::vector<mmap_buffer> buffers) noexcept;
 
         /// @brief Unmaps all mmap'd buffers. Called from destructor and failed create().
         void unmap_buffers() noexcept;
 
+        /// @brief The negotiated configuration, as accepted by the driver.
         capture_config config_;
+        /// @brief The mapped driver buffers, indexed by driver buffer index.
         std::vector<mmap_buffer> buffers_;
+        /// @brief Lifetime token weakly held by every @ref frame_view this device hands out.
         std::shared_ptr<void> device_lifetime_ {std::make_shared<int>(0)};
+        /// @brief `true` between @ref stream_on and @ref stream_off.
         bool streaming_ {};
     };
 
