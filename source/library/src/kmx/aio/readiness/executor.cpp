@@ -534,7 +534,7 @@ namespace kmx::aio::readiness
         // LCOV_EXCL_STOP
     }
 
-    std::expected<bool, std::error_code> executor::is_io_thread_affined_to(const int core_id) noexcept
+    expected_bool_t executor::is_io_thread_affined_to(const int core_id) noexcept
     {
         if (core_id < 0)
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));

@@ -18,7 +18,7 @@ namespace kmx::aio::test::integration::readiness_core_pinning_test
 {
     using namespace kmx::aio::readiness;
 
-    [[nodiscard]] static std::expected<int, std::error_code> first_allowed_cpu_for_current_thread() noexcept
+    [[nodiscard]] static expected_int_t first_allowed_cpu_for_current_thread() noexcept
     {
         cpu_set_t allowed {};
         CPU_ZERO(&allowed);

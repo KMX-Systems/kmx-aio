@@ -51,7 +51,7 @@ namespace kmx::aio::someip
         /// @brief Drives the internal dispatch loop for one time slot.
         /// @param timeout Maximum time to wait for pending events.
         /// @return @c true while the runtime is active, @c false after stop().
-        [[nodiscard]] task<std::expected<bool, std::error_code>> iterate(std::chrono::milliseconds timeout) noexcept(false);
+        [[nodiscard]] task_returning_expected_bool_t iterate(std::chrono::milliseconds timeout) noexcept(false);
 
         /// @brief Advertises a service/instance to the network via Service Discovery.
         /// @param service_id  Identifier of the service to offer.

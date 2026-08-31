@@ -23,6 +23,8 @@ namespace kmx::aio
     /// @brief Non-owning IP address view variant.
     using ip_address_t = std::variant<ipv4::address_t, ipv6::address_t>;
 
+    /// @brief Result of an operation yielding a boolean, or an error code.
+    using expected_bool_t = std::expected<bool, std::error_code>;
     /// @brief Result of an operation yielding an integer, or an error code.
     using expected_int_t = std::expected<int, std::error_code>;
     /// @brief Result of an operation yielding a byte count, or an error code.

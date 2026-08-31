@@ -291,7 +291,7 @@ namespace kmx::aio::completion
         co_return expected_void_t {};
     }
 
-    task<std::expected<int, std::error_code>> executor::async_poll(const fd_t fd, const unsigned poll_mask) noexcept(false)
+    task_returning_expected_int_t executor::async_poll(const fd_t fd, const unsigned poll_mask) noexcept(false)
     {
         if (fd < 0)
             co_return std::unexpected(std::make_error_code(std::errc::bad_file_descriptor));
@@ -434,7 +434,7 @@ namespace kmx::aio::completion
         // LCOV_EXCL_STOP
     }
 
-    std::expected<bool, std::error_code> executor::is_io_thread_affined_to(const int core_id) noexcept
+    expected_bool_t executor::is_io_thread_affined_to(const int core_id) noexcept
     {
         if (core_id < 0)
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
@@ -482,7 +482,7 @@ namespace kmx::aio::completion
     }
 
     template <typename Prepare>
-    task<std::expected<int, std::error_code>> executor::await_uring_result(Prepare&& prepare) noexcept(false)
+    task<expected_int_t> executor::await_uring_result(Prepare&& prepare) noexcept(false)
     {
         io_context ctx {};
         auto* const sqe = ::io_uring_get_sqe(&ring_);

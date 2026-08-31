@@ -537,7 +537,7 @@ namespace kmx::aio::test::readiness::executor_api_test
         /// @brief The first CPU this thread is allowed to run on.
         /// @details Pinning to a core outside the process's own affinity mask fails, and on a machine
         ///          under cgroup or taskset restrictions core 0 need not be in it.
-        [[nodiscard]] std::expected<int, std::error_code> first_allowed_cpu() noexcept
+        [[nodiscard]] expected_int_t first_allowed_cpu() noexcept
         {
             cpu_set_t allowed {};
             CPU_ZERO(&allowed);
@@ -582,7 +582,7 @@ namespace kmx::aio::test::readiness::executor_api_test
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(parked, 2s));
 
-        std::expected<bool, std::error_code> affined = std::unexpected(std::make_error_code(std::errc::operation_not_permitted));
+        expected_bool_t affined = std::unexpected(std::make_error_code(std::errc::operation_not_permitted));
         const auto deadline = std::chrono::steady_clock::now() + 3s;
         while (std::chrono::steady_clock::now() < deadline)
         {

@@ -66,7 +66,7 @@ namespace kmx::aio::someip
         co_return expected_void_t {};
     }
 
-    task<std::expected<bool, std::error_code>> client::iterate(const std::chrono::milliseconds timeout) noexcept(false)
+    task<expected_bool_t> client::iterate(const std::chrono::milliseconds timeout) noexcept(false)
     {
         if (timeout.count() < 0)
             co_return std::unexpected(make_error_code(error::invalid_configuration));

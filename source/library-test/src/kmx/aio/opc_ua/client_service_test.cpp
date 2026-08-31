@@ -95,7 +95,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
         }
 
         task<void> run_iterate(client& c, const std::chrono::milliseconds timeout,
-                               std::shared_ptr<coroutine_result_state<std::expected<bool, std::error_code>>> state,
+                               std::shared_ptr<coroutine_result_state<expected_bool_t>> state,
                                completion::executor& exec)
         {
             state->result.emplace(co_await c.iterate(timeout));
@@ -254,7 +254,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
             REQUIRE(server_state->result.has_value());
             REQUIRE(server_state->result->has_value());
 
-            auto client_state = std::make_shared<detail::coroutine_result_state<std::expected<bool, std::error_code>>>();
+            auto client_state = std::make_shared<detail::coroutine_result_state<expected_bool_t>>();
             completion::executor client_exec;
             client_exec.spawn(detail::run_iterate(c, std::chrono::milliseconds(0), client_state, client_exec));
             client_exec.run();
@@ -289,7 +289,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
 
         for (int attempt = 0; attempt < 10; ++attempt)
         {
-            auto state = std::make_shared<detail::coroutine_result_state<std::expected<bool, std::error_code>>>();
+            auto state = std::make_shared<detail::coroutine_result_state<expected_bool_t>>();
             completion::executor exec;
             exec.spawn(detail::run_iterate(c, std::chrono::milliseconds(0), state, exec));
             exec.run();
@@ -529,7 +529,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
         REQUIRE(connect_state->result->has_value());
 
         completion::executor iterate_exec;
-        auto iterate_state = std::make_shared<coroutine_result_state<std::expected<bool, std::error_code>>>();
+        auto iterate_state = std::make_shared<coroutine_result_state<expected_bool_t>>();
         iterate_exec.spawn(run_iterate(c, std::chrono::milliseconds(0), iterate_state, iterate_exec));
         iterate_exec.run();
         REQUIRE(iterate_state->completed);
@@ -667,7 +667,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
         REQUIRE(connect_state->result->has_value());
 
         completion::executor iterate_exec;
-        auto iterate_state = std::make_shared<coroutine_result_state<std::expected<bool, std::error_code>>>();
+        auto iterate_state = std::make_shared<coroutine_result_state<expected_bool_t>>();
         iterate_exec.spawn(run_iterate(c, std::chrono::milliseconds(0), iterate_state, iterate_exec));
         iterate_exec.run();
         REQUIRE(iterate_state->completed);

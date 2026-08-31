@@ -48,9 +48,9 @@ namespace kmx::aio::opc_ua
         [[nodiscard]] task_returning_expected_void_t disconnect() noexcept(false);
         /// @brief Drive backend progress for in-flight operations.
         /// @param timeout Backend-dependent iterate/poll timeout.
-        /// @return Task resolving to `std::expected<bool, std::error_code>`.
+        /// @return Task resolving to `expected_bool_t`.
         /// A `true` value indicates progress/continued activity, while `false` indicates no work.
-        [[nodiscard]] task<std::expected<bool, std::error_code>> iterate(std::chrono::milliseconds timeout) noexcept(false);
+        [[nodiscard]] task_returning_expected_bool_t iterate(std::chrono::milliseconds timeout) noexcept(false);
         /// @brief Submit asynchronous read request for a single node.
         /// @param node_id OPC UA node id string (for example, `ns=2;s=Demo.Static.Scalar.String`).
         /// @return Task resolving to read result payload or error.

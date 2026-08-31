@@ -327,11 +327,17 @@ namespace kmx::aio
         }
     }
 
-    /// @brief Task yielding a transferred byte count, or the error that stopped the operation.
-    /// @details The result type of every asynchronous read/write/send/receive in the library.
-    using task_returning_expected_size_t = task<expected_size_t>;
-
-    /// @brief Task yielding nothing on success, or the error that stopped the operation.
+    /// @brief Task yielding success or an error for operations that produce no payload.
     using task_returning_expected_void_t = task<expected_void_t>;
+
+    /// @brief Task yielding a boolean result or the error that stopped the operation.
+    using task_returning_expected_bool_t = task<expected_bool_t>;
+
+    /// @brief Task yielding an integer result or the error that stopped the operation.
+    using task_returning_expected_int_t = task<expected_int_t>;
+
+    /// @brief Task yielding a byte count or the error that stopped the operation.
+    /// @details This is the result type used by asynchronous read/write/send/receive operations.
+    using task_returning_expected_size_t = task<expected_size_t>;
 
 } // namespace kmx::aio
