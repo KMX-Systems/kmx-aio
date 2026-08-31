@@ -142,15 +142,14 @@ namespace kmx::aio::sample::avb::talker
 
             const auto now = clock_->now();
             const auto presentation_ns = now + 2'000'000ULL;
-            const auto frame_res =
-                kmx::aio::avb::avtp::build_am824_frame(stream_id, seq++, presentation_ns, std::span<const std::byte>(payload));
+            const auto frame_res = kmx::aio::avb::avtp::build_am824_frame(stream_id, seq++, presentation_ns, cspan_byte_t(payload));
             if (!frame_res)
             {
                 metrics_.errors.fetch_add(1u, mem_order);
                 continue;
             }
 
-            const auto send_res = co_await sock.send(config_.dest_mac, std::span<const std::byte>(*frame_res), presentation_ns);
+            const auto send_res = co_await sock.send(config_.dest_mac, cspan_byte_t(*frame_res), presentation_ns);
             if (!send_res)
             {
                 metrics_.errors.fetch_add(1u, mem_order);

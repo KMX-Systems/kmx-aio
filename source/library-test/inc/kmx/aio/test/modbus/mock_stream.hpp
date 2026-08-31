@@ -84,7 +84,7 @@ namespace kmx::aio::test::modbus
         }
 
         /// @brief Captures all bytes written; always reports full write success.
-        task_returning_expected_void_t write_all(std::span<const char> buffer) noexcept(false)
+        task_returning_expected_void_t write_all(cspan_char_t buffer) noexcept(false)
         {
             for (const char c: buffer)
                 written_.push_back(static_cast<std::uint8_t>(c));

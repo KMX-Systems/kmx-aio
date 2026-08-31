@@ -68,8 +68,7 @@ namespace kmx::aio::readiness::descriptor
         return static_cast<std::size_t>(ready);
     }
 
-    [[nodiscard]] expected_void_t epoll::wait_events(std::vector<epoll_event>& events, const int max_events,
-                                                            const int timeout_ms) noexcept
+    [[nodiscard]] expected_void_t epoll::wait_events(std::vector<epoll_event>& events, const int max_events, const int timeout_ms) noexcept
     {
         if (max_events <= 0)
             return std::unexpected(error_from_errno(EINVAL));

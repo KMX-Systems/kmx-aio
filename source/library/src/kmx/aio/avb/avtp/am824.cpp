@@ -29,7 +29,7 @@ namespace kmx::aio::avb::avtp
     [[nodiscard]] std::expected<std::vector<std::byte>, std::error_code> build_am824_frame(const stream_id_t& stream_id,
                                                                                            const std::uint8_t sequence_num,
                                                                                            const avb_timestamp_t presentation_time_ns,
-                                                                                           std::span<const std::byte> payload) noexcept
+                                                                                           cspan_byte_t payload) noexcept
     {
         if (payload.size() > 0xFFFFu)
             return std::unexpected(error_from_errno(EINVAL));
@@ -66,7 +66,7 @@ namespace kmx::aio::avb::avtp
         return out;
     }
 
-    [[nodiscard]] std::expected<am824_frame_view, std::error_code> parse_am824_frame(std::span<const std::byte> frame) noexcept
+    [[nodiscard]] std::expected<am824_frame_view, std::error_code> parse_am824_frame(cspan_byte_t frame) noexcept
     {
         if (frame.size() < header_size)
             return std::unexpected(error_from_errno(EINVAL));

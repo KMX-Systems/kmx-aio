@@ -8,6 +8,8 @@
     #include <string_view>
     #include <utility>
     #include <vector>
+
+    #include <kmx/aio/basic_types.hpp>
 #endif
 
 /// @brief HTTP/2 core protocol definitions and utilities
@@ -45,14 +47,14 @@ namespace kmx::aio::http2
         /// @param value The HTTP/2 header value (e.g., "GET")
         /// @return Number of bytes written
         /// @throws std::invalid_argument if buffer is too small
-        static std::size_t encode_literal(std::span<std::uint8_t> buffer, std::string_view name, std::string_view value) noexcept(false);
+        static std::size_t encode_literal(span_uint8_t buffer, std::string_view name, std::string_view value) noexcept(false);
 
         /// @brief Encodes multiple headers into a continuous HPACK block within a span
         /// @param buffer Destination buffer
         /// @param headers List of key/value pairs representing headers
         /// @return Number of bytes written
         /// @throws std::invalid_argument if buffer is too small
-        static std::size_t encode(std::span<std::uint8_t> buffer, const header_list& headers) noexcept(false);
+        static std::size_t encode(span_uint8_t buffer, const header_list& headers) noexcept(false);
     };
 
 } // namespace kmx::aio::http2

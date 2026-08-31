@@ -135,7 +135,7 @@ namespace kmx::aio::sample::avb::listener
             metrics_.frames_received.fetch_add(1u, mem_order);
 
             const auto& [frame, rx_ts] = *res;
-            const auto parse = kmx::aio::avb::avtp::parse_am824_frame(std::span<const std::byte>(frame));
+            const auto parse = kmx::aio::avb::avtp::parse_am824_frame(cspan_byte_t(frame));
             if (!parse)
             {
                 metrics_.errors.fetch_add(1u, mem_order);

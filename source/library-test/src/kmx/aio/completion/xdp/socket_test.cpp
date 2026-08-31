@@ -57,7 +57,7 @@ namespace kmx::aio::test::completion::xdp::socket_test
             std::byte {0x55u},
         };
 
-        const auto send_a = co_await sock.send(std::span<const std::byte>(payload_a));
+        const auto send_a = co_await sock.send(cspan_byte_t(payload_a));
         if (!send_a)
         {
             state->send_overflow_error = send_a.error();
@@ -65,7 +65,7 @@ namespace kmx::aio::test::completion::xdp::socket_test
             co_return;
         }
 
-        const auto send_b = co_await sock.send(std::span<const std::byte>(payload_b));
+        const auto send_b = co_await sock.send(cspan_byte_t(payload_b));
         if (!send_b)
         {
             state->send_overflow_error = send_b.error();
@@ -77,7 +77,7 @@ namespace kmx::aio::test::completion::xdp::socket_test
             std::byte {0x66u},
         };
 
-        const auto send_c = co_await sock.send(std::span<const std::byte>(payload_c));
+        const auto send_c = co_await sock.send(cspan_byte_t(payload_c));
         if (send_c)
         {
             exec.stop();

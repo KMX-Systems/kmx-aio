@@ -20,7 +20,7 @@ namespace kmx::aio
     ///          (HTTP, WebSocket, etc.) without knowledge of the underlying backend.
     /// @tparam T The type to check against the stream_reader concept.
     template <typename T>
-    concept stream_reader = requires(T& t, std::span<char> buf) {
+    concept stream_reader = requires(T& t, span_char_t buf) {
         { t.read(buf) } -> std::same_as<task_returning_expected_size_t>;
     };
 
@@ -29,7 +29,7 @@ namespace kmx::aio
     ///          this concept can be used as a sink by higher-level protocol encoders.
     /// @tparam T The type to check against the stream_writer concept.
     template <typename T>
-    concept stream_writer = requires(T& t, std::span<const char> buf) {
+    concept stream_writer = requires(T& t, cspan_char_t buf) {
         { t.write(buf) } -> std::same_as<task_returning_expected_size_t>;
     };
 

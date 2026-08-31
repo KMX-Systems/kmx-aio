@@ -80,8 +80,7 @@ namespace kmx::aio::completion
         co_return static_cast<std::size_t>(ctx.result);
     }
 
-    task_returning_expected_size_t executor::async_write(const fd_t fd, std::span<const char> buffer,
-                                                         const std::uint64_t offset) noexcept(false)
+    task_returning_expected_size_t executor::async_write(const fd_t fd, cspan_char_t buffer, const std::uint64_t offset) noexcept(false)
     {
         io_context ctx {};
         auto* sqe = ::io_uring_get_sqe(&ring_);
@@ -147,7 +146,7 @@ namespace kmx::aio::completion
         co_return static_cast<std::size_t>(ctx.result);
     }
 
-    task_returning_expected_size_t executor::async_write_fixed(const fd_t fd, std::span<const char> buffer, const std::uint64_t offset,
+    task_returning_expected_size_t executor::async_write_fixed(const fd_t fd, cspan_char_t buffer, const std::uint64_t offset,
                                                                const int buf_index) noexcept(false)
     {
         io_context ctx {};

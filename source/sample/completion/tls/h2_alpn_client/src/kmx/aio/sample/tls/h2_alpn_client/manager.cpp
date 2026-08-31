@@ -101,13 +101,13 @@ namespace kmx::aio::sample::tls::h2_alpn_client
             static constexpr std::array<char, 9u> settings_frame {0, 0, 0, 4, 0, 0, 0, 0, 0};
             preface_data.append(settings_frame.data(), settings_frame.size());
 
-            if (auto res = co_await stream_ptr->write_all(std::span<const char>(preface_data.data(), preface_data.size())); !res)
+            if (auto res = co_await stream_ptr->write_all(cspan_char_t(preface_data.data(), preface_data.size())); !res)
                 co_return;
 
             logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Sent Preface + SETTINGS", worker_id);
 
             std::array<char, 9u> recv_buf {};
-            auto r_res = co_await stream_ptr->read(std::span<char>(recv_buf.data(), recv_buf.size()));
+            auto r_res = co_await stream_ptr->read(span_char_t(recv_buf.data(), recv_buf.size()));
             if (!r_res || *r_res < recv_buf.size())
                 co_return;
 
@@ -115,12 +115,12 @@ namespace kmx::aio::sample::tls::h2_alpn_client
                 logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Received Server SETTINGS", worker_id);
 
             static constexpr std::array<char, 9u> ack_frame {0, 0, 0, 4, 1, 0, 0, 0, 0};
-            if (auto w_res = co_await stream_ptr->write_all(std::span<const char>(ack_frame)); !w_res)
+            if (auto w_res = co_await stream_ptr->write_all(cspan_char_t(ack_frame)); !w_res)
                 co_return;
 
             logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Sent SETTINGS ACK", worker_id);
 
-            r_res = co_await stream_ptr->read(std::span<char>(recv_buf.data(), recv_buf.size()));
+            r_res = co_await stream_ptr->read(span_char_t(recv_buf.data(), recv_buf.size()));
             if (r_res && *r_res >= recv_buf.size() && recv_buf[3] == 4 && recv_buf[4] == 1)
                 logger::log(logger::level::info, std::source_location::current(),
                             "Client [{}]: Received Server SETTINGS ACK. Handshake Complete!", worker_id);
@@ -153,7 +153,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
                 't',
             });
 
-            if (auto res = co_await stream_ptr->write_all(std::span<const char>(req_frame)); !res)
+            if (auto res = co_await stream_ptr->write_all(cspan_char_t(req_frame)); !res)
                 co_return;
 
             logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Sent GET Request (Stream 1)", worker_id);
@@ -162,7 +162,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
             std::size_t total {};
             while (total < resp_hdr.size())
             {
-                auto r = co_await stream_ptr->read(std::span<char>(resp_hdr.data() + total, resp_hdr.size() - total));
+                auto r = co_await stream_ptr->read(span_char_t(resp_hdr.data() + total, resp_hdr.size() - total));
                 if (!r || (*r == 0))
                     break;
                 total += *r;
@@ -176,7 +176,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
             total = {};
             while (total < data_hdr.size())
             {
-                auto r = co_await stream_ptr->read(std::span<char>(data_hdr.data() + total, data_hdr.size() - total));
+                auto r = co_await stream_ptr->read(span_char_t(data_hdr.data() + total, data_hdr.size() - total));
                 if (!r || (*r == 0))
                     break;
                 total += *r;
@@ -191,7 +191,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
                 total = {};
                 while (total < data_len)
                 {
-                    auto r = co_await stream_ptr->read(std::span<char>(data_payload.data() + total, data_len - total));
+                    auto r = co_await stream_ptr->read(span_char_t(data_payload.data() + total, data_len - total));
                     if (!r || (*r == 0))
                         break;
                     total += *r;

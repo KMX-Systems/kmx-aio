@@ -155,7 +155,7 @@ namespace kmx::aio::test::quic::transport_test
                 result->server_received.push_back(request);
 
                 const std::string response = "echo:" + request;
-                (void) co_await peer_stream.write_all(std::span<const char>(response.data(), response.size()));
+                (void) co_await peer_stream.write_all(cspan_char_t(response.data(), response.size()));
                 peer_stream.shutdown_write();
             }
         }
@@ -185,7 +185,7 @@ namespace kmx::aio::test::quic::transport_test
             }
 
             auto call = std::move(*opened);
-            const auto written = co_await call.write_all(std::span<const char>(payload.data(), payload.size()));
+            const auto written = co_await call.write_all(cspan_char_t(payload.data(), payload.size()));
             if (!written)
             {
                 result->failure = written.error();

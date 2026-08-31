@@ -142,7 +142,7 @@ namespace kmx::aio::sample::tls::echo_completion_server
 
             while (true)
             {
-                auto read_result = co_await stream.read(std::span<char>(buffer.data(), buffer.size()));
+                auto read_result = co_await stream.read(span_char_t(buffer.data(), buffer.size()));
                 if (!read_result)
                 {
                     if (read_result.error().value() != 0)
@@ -157,7 +157,7 @@ namespace kmx::aio::sample::tls::echo_completion_server
                 total_received += bytes_read;
                 metrics_.bytes_received.fetch_add(bytes_read, std::memory_order_relaxed);
 
-                std::span<const char> write_span(buffer.data(), bytes_read);
+                cspan_char_t write_span(buffer.data(), bytes_read);
                 auto write_result = co_await stream.write(write_span);
 
                 if (!write_result)

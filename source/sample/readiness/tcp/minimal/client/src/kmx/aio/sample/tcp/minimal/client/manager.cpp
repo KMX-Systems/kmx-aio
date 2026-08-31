@@ -129,7 +129,7 @@ namespace kmx::aio::sample::tcp::minimal::client
 
             // Asynchronously send message using write_all
             std::vector<char> message_buffer(config_.message.begin(), config_.message.end());
-            const std::span<const char> message_span {message_buffer.data(), message_buffer.size()};
+            const cspan_char_t message_span {message_buffer.data(), message_buffer.size()};
             if (auto send_result = co_await stream.write_all(message_span); !send_result)
             {
                 logger::log(logger::level::warn, std::source_location::current(), "Worker [{}]: Send failed: {}", worker_id,

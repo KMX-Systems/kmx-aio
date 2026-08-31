@@ -63,7 +63,7 @@ namespace kmx::aio::tls
         ::SSL_set_accept_state(ssl_);
     }
 
-    expected_void_t basic_stream::set_alpn_protocols(const std::span<const std::uint8_t> protocols) noexcept
+    expected_void_t basic_stream::set_alpn_protocols(const cspan_uint8_t protocols) noexcept
     {
         if (!ssl_ || protocols.empty())
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
@@ -189,7 +189,7 @@ namespace kmx::aio::tls
         }
     }
 
-    task_returning_expected_size_t basic_stream::write(const std::span<const char> buffer) noexcept(false)
+    task_returning_expected_size_t basic_stream::write(const cspan_char_t buffer) noexcept(false)
     {
         while (true)
         {
@@ -233,7 +233,7 @@ namespace kmx::aio::tls
         }
     }
 
-    basic_stream::status_task basic_stream::write_all(const std::span<const char> buffer) noexcept(false)
+    basic_stream::status_task basic_stream::write_all(const cspan_char_t buffer) noexcept(false)
     {
         std::size_t written {};
         while (written < buffer.size())

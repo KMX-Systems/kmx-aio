@@ -122,7 +122,7 @@ namespace kmx::aio::sample::tcp::minimal::server
                 logger::log(logger::level::debug, std::source_location::current(), "Client [{}]: Sending {} bytes...", client_id,
                             response.size());
 
-                const auto write_result = co_await stream.write(std::span<const char>(response.data(), response.size()));
+                const auto write_result = co_await stream.write(cspan_char_t(response.data(), response.size()));
 
                 if (!write_result)
                 {

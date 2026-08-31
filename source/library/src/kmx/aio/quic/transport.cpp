@@ -94,7 +94,7 @@ namespace kmx::aio::quic
         co_return count;
     }
 
-    task_returning_expected_void_t stream::write_all(const std::span<const char> in) noexcept(false)
+    task_returning_expected_void_t stream::write_all(const cspan_char_t in) noexcept(false)
     {
         if (state_->closed)
             co_return std::unexpected(state_->error ? state_->error : std::make_error_code(std::errc::broken_pipe));

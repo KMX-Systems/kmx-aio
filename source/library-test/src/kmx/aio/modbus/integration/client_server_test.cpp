@@ -164,17 +164,17 @@ namespace kmx::aio::test::modbus::integration::client_server_test
         test_state state {};
         const server_config config {.bind_address = "127.0.0.1", .port = test_port, .unit_id = test_unit_id};
 
-        auto serve = [exec, srv, config]() -> task<void> { co_await srv->serve(*exec, config); };
+        auto serve = [exec, srv, config]() -> task<void> { static_cast<void>(co_await srv->serve(*exec, config)); };
         exec->spawn(serve());
 
         auto exchange = [&state, exec, srv]() -> task<void>
         {
-            co_await exec->async_timeout(5'000'000u); // 5 ms
+            static_cast<void>(co_await exec->async_timeout(5'000'000u)); // 5 ms
             client c {{.host = "127.0.0.1", .port = test_port, .unit_id = test_unit_id}, *exec};
             const auto r = co_await c.connect();
             state.error = r ? std::optional<std::error_code> {} : std::optional {r.error()};
             state.completed = true;
-            co_await c.disconnect();
+            static_cast<void>(co_await c.disconnect());
             srv->stop();
         };
         exec->spawn(exchange());
@@ -203,12 +203,12 @@ namespace kmx::aio::test::modbus::integration::client_server_test
         std::optional<std::error_code> op_error;
 
         auto serve = [exec, srv]() -> task<void>
-        { co_await srv->serve(*exec, {.bind_address = "127.0.0.1", .port = test_port + 1u, .unit_id = test_unit_id}); };
+        { static_cast<void>(co_await srv->serve(*exec, {.bind_address = "127.0.0.1", .port = test_port + 1u, .unit_id = test_unit_id})); };
         exec->spawn(serve());
 
         auto exchange = [&, exec, srv]() -> task<void>
         {
-            co_await exec->async_timeout(5'000'000u);
+            static_cast<void>(co_await exec->async_timeout(5'000'000u));
             client c {{.host = "127.0.0.1", .port = test_port + 1u, .unit_id = test_unit_id}, *exec};
 
             if (const auto r = co_await c.connect(); !r)
@@ -246,7 +246,7 @@ namespace kmx::aio::test::modbus::integration::client_server_test
             }
 
             completed = true;
-            co_await c.disconnect();
+            static_cast<void>(co_await c.disconnect());
             srv->stop();
         };
         exec->spawn(exchange());
@@ -281,12 +281,12 @@ namespace kmx::aio::test::modbus::integration::client_server_test
         std::optional<std::error_code> op_error;
 
         auto serve = [exec, srv]() -> task<void>
-        { co_await srv->serve(*exec, {.bind_address = "127.0.0.1", .port = test_port + 2u, .unit_id = test_unit_id}); };
+        { static_cast<void>(co_await srv->serve(*exec, {.bind_address = "127.0.0.1", .port = test_port + 2u, .unit_id = test_unit_id})); };
         exec->spawn(serve());
 
         auto exchange = [&, exec, srv]() -> task<void>
         {
-            co_await exec->async_timeout(5'000'000u);
+            static_cast<void>(co_await exec->async_timeout(5'000'000u));
             client c {{.host = "127.0.0.1", .port = test_port + 2u, .unit_id = test_unit_id}, *exec};
 
             if (const auto r = co_await c.connect(); !r)
@@ -311,7 +311,7 @@ namespace kmx::aio::test::modbus::integration::client_server_test
                 op_error = r.error();
 
             completed = true;
-            co_await c.disconnect();
+            static_cast<void>(co_await c.disconnect());
             srv->stop();
         };
         exec->spawn(exchange());
@@ -343,12 +343,12 @@ namespace kmx::aio::test::modbus::integration::client_server_test
         std::optional<std::error_code> result_error;
 
         auto serve = [exec, srv]() -> task<void>
-        { co_await srv->serve(*exec, {.bind_address = "127.0.0.1", .port = test_port + 3u, .unit_id = test_unit_id}); };
+        { static_cast<void>(co_await srv->serve(*exec, {.bind_address = "127.0.0.1", .port = test_port + 3u, .unit_id = test_unit_id})); };
         exec->spawn(serve());
 
         auto exchange = [&, exec, srv]() -> task<void>
         {
-            co_await exec->async_timeout(5'000'000u);
+            static_cast<void>(co_await exec->async_timeout(5'000'000u));
             client c {{.host = "127.0.0.1", .port = test_port + 3u, .unit_id = test_unit_id}, *exec};
 
             if (const auto r = co_await c.connect(); !r)
@@ -363,7 +363,7 @@ namespace kmx::aio::test::modbus::integration::client_server_test
                 result_error = r.error();
 
             completed = true;
-            co_await c.disconnect();
+            static_cast<void>(co_await c.disconnect());
             srv->stop();
         };
         exec->spawn(exchange());

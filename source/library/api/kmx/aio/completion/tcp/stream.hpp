@@ -40,37 +40,37 @@ namespace kmx::aio::completion::tcp
         /// @param buffer Destination buffer; the kernel writes directly here.
         /// @return A task yielding the number of bytes read, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task_returning_expected_size_t read(std::span<char> buffer) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t read(span_char_t buffer) noexcept(false);
 
         /// @brief Asynchronously writes data from the buffer via io_uring.
         /// @param buffer Source buffer.
         /// @return A task yielding the number of bytes written, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task_returning_expected_size_t write(std::span<const char> buffer) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t write(cspan_char_t buffer) noexcept(false);
 
         /// @brief Asynchronously writes the whole buffer, reissuing writes until nothing is left.
         /// @param buffer Source buffer.
         /// @return A task yielding success once every byte was written, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task_returning_expected_void_t write_all(std::span<const char> buffer) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t write_all(cspan_char_t buffer) noexcept(false);
 
         /// @brief Asynchronously reads data into a pre-registered buffer via io_uring.
         /// @param buffer Destination buffer; must be part of the registered iovec.
         /// @param buf_index Index into the registered iovec array.
         /// @return A task yielding the number of bytes read, or an error.
-        [[nodiscard]] task_returning_expected_size_t read_fixed(std::span<char> buffer, const int buf_index) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t read_fixed(span_char_t buffer, const int buf_index) noexcept(false);
 
         /// @brief Asynchronously writes data from a pre-registered buffer via io_uring.
         /// @param buffer Source buffer; must be part of the registered iovec.
         /// @param buf_index Index into the registered iovec array.
         /// @return A task yielding the number of bytes written, or an error.
-        [[nodiscard]] task_returning_expected_size_t write_fixed(std::span<const char> buffer, const int buf_index) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t write_fixed(cspan_char_t buffer, const int buf_index) noexcept(false);
 
         /// @brief Writes all data from a pre-registered buffer, handling partial writes.
         /// @param buffer Source buffer; must be part of the registered iovec.
         /// @param buf_index Index into the registered iovec array.
         /// @return A task yielding success or an error.
-        [[nodiscard]] task_returning_expected_void_t write_all_fixed(std::span<const char> buffer, const int buf_index) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t write_all_fixed(cspan_char_t buffer, const int buf_index) noexcept(false);
     };
 
 } // namespace kmx::aio::completion::tcp

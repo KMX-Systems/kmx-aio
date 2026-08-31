@@ -94,7 +94,7 @@ namespace kmx::aio::tls
         /// @param protocols The protocol list, each entry a length byte followed by that many bytes.
         /// @return Nothing on success; std::errc::invalid_argument for an empty list or a stream with
         ///         no SSL, std::errc::protocol_error for a list OpenSSL rejects.
-        [[nodiscard]] expected_void_t set_alpn_protocols(std::span<const std::uint8_t> protocols) noexcept;
+        [[nodiscard]] expected_void_t set_alpn_protocols(cspan_uint8_t protocols) noexcept;
 
         /// @brief Returns the selected ALPN protocol after the handshake.
         /// @return The negotiated protocol, or an empty view when none was negotiated.
@@ -113,19 +113,19 @@ namespace kmx::aio::tls
         /// @param buffer Destination buffer.
         /// @return The number of bytes read, zero once the peer has closed the TLS session, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task_returning_expected_size_t read(std::span<char> buffer) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t read(span_char_t buffer) noexcept(false);
 
         /// @brief Encrypts a buffer and flushes the resulting records to the transport.
         /// @param buffer Source buffer.
         /// @return The number of bytes accepted by the TLS layer, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task_returning_expected_size_t write(std::span<const char> buffer) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t write(cspan_char_t buffer) noexcept(false);
 
         /// @brief Writes a whole buffer, repeating write() until nothing is left.
         /// @param buffer Source buffer.
         /// @return Nothing on success, or std::errc::connection_aborted when the peer stops accepting.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] status_task write_all(std::span<const char> buffer) noexcept(false);
+        [[nodiscard]] status_task write_all(cspan_char_t buffer) noexcept(false);
 
     protected:
         /// @brief Constructs a stream that owns nothing.
@@ -148,13 +148,13 @@ namespace kmx::aio::tls
         /// @param buffer Destination buffer.
         /// @return The number of bytes read, zero at end of stream, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] virtual task_returning_expected_size_t read_inner(std::span<char> buffer) noexcept(false) = 0;
+        [[nodiscard]] virtual task_returning_expected_size_t read_inner(span_char_t buffer) noexcept(false) = 0;
 
         /// @brief Hands the whole of what the write BIO produced to the transport.
         /// @param buffer Source buffer.
         /// @return Nothing on success, or the transport's error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] virtual status_task write_all_inner(std::span<const char> buffer) noexcept(false) = 0;
+        [[nodiscard]] virtual status_task write_all_inner(cspan_char_t buffer) noexcept(false) = 0;
 
     private:
         /// @brief Moves one transport read into the read BIO, for OpenSSL to decrypt from.

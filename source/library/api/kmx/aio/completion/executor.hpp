@@ -71,7 +71,7 @@ namespace kmx::aio::completion
         /// @param offset File offset (0 for sockets).
         /// @return A task yielding the number of bytes read, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task_returning_expected_size_t async_read(const fd_t fd, std::span<char> buffer,
+        [[nodiscard]] task_returning_expected_size_t async_read(const fd_t fd, span_char_t buffer,
                                                                 const std::uint64_t offset = 0u) noexcept(false);
 
         /// @brief Prepares an asynchronous write from the provided buffer.
@@ -80,7 +80,7 @@ namespace kmx::aio::completion
         /// @param offset File offset (0 for sockets).
         /// @return A task yielding the number of bytes written, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task_returning_expected_size_t async_write(const fd_t fd, std::span<const char> buffer,
+        [[nodiscard]] task_returning_expected_size_t async_write(const fd_t fd, cspan_char_t buffer,
                                                                  const std::uint64_t offset = 0u) noexcept(false);
 
         /// @brief Registers a set of memory buffers with the kernel for zero-copy I/O.
@@ -98,7 +98,7 @@ namespace kmx::aio::completion
         /// @param offset    File offset (0 for sockets).
         /// @param buf_index The index of the registered buffer.
         /// @return A task yielding the number of bytes read, or an error.
-        [[nodiscard]] task_returning_expected_size_t async_read_fixed(const fd_t fd, std::span<char> buffer, const std::uint64_t offset,
+        [[nodiscard]] task_returning_expected_size_t async_read_fixed(const fd_t fd, span_char_t buffer, const std::uint64_t offset,
                                                                       const int buf_index) noexcept(false);
 
         /// @brief Prepares an asynchronous write from a pre-registered buffer.
@@ -107,8 +107,8 @@ namespace kmx::aio::completion
         /// @param offset    File offset (0 for sockets).
         /// @param buf_index The index of the registered buffer.
         /// @return A task yielding the number of bytes written, or an error.
-        [[nodiscard]] task_returning_expected_size_t async_write_fixed(const fd_t fd, std::span<const char> buffer,
-                                                                       const std::uint64_t offset, const int buf_index) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t async_write_fixed(const fd_t fd, cspan_char_t buffer, const std::uint64_t offset,
+                                                                       const int buf_index) noexcept(false);
 
         /// @brief Prepares an asynchronous accept on a listening socket.
         /// @param listen_fd The listening socket file descriptor.

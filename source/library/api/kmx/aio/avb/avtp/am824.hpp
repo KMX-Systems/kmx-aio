@@ -10,6 +10,7 @@
     #include <system_error>
     #include <vector>
 
+    #include <kmx/aio/basic_types.hpp>
     #include <kmx/aio/avb/avb_types.hpp>
 #endif
 
@@ -32,7 +33,7 @@ namespace kmx::aio::avb::avtp
         /// @brief 32-bit AVTP presentation timestamp.
         std::uint32_t avtp_timestamp_32 {};
         /// @brief Payload bytes following the AM824 header.
-        std::span<const std::byte> payload {};
+        cspan_byte_t payload {};
     };
 
     /// @brief Converts a TAI timestamp in nanoseconds to the AVTP 32-bit timestamp field.
@@ -55,10 +56,10 @@ namespace kmx::aio::avb::avtp
     [[nodiscard]] std::expected<std::vector<std::byte>, std::error_code> build_am824_frame(const stream_id_t& stream_id,
                                                                                            std::uint8_t sequence_num,
                                                                                            avb_timestamp_t presentation_time_ns,
-                                                                                           std::span<const std::byte> payload) noexcept;
+                                                                                           cspan_byte_t payload) noexcept;
 
     /// @brief Parses an AM824 frame into a lightweight view.
     /// @param frame Encoded AM824 frame bytes.
     /// @return Parsed frame view or an error.
-    [[nodiscard]] std::expected<am824_frame_view, std::error_code> parse_am824_frame(std::span<const std::byte> frame) noexcept;
+    [[nodiscard]] std::expected<am824_frame_view, std::error_code> parse_am824_frame(cspan_byte_t frame) noexcept;
 } // namespace kmx::aio::avb::avtp

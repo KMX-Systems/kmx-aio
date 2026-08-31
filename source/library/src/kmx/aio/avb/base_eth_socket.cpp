@@ -98,7 +98,7 @@ namespace kmx::aio::avb
 
     // primary_eth_socket - send (synchronous, non-blocking — called only from completion TUs via base)
 
-    expected_void_t primary_eth_socket::do_send(const mac_address_t& dest_mac, const std::span<const std::byte> payload,
+    expected_void_t primary_eth_socket::do_send(const mac_address_t& dest_mac, const cspan_byte_t payload,
                                                 const std::optional<avb_timestamp_t> tx_time)
     {
         // Build sockaddr_ll destination

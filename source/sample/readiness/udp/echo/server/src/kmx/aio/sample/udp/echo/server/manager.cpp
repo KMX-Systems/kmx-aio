@@ -106,7 +106,7 @@ namespace kmx::aio::sample::udp::echo::server
                 auto bytes_recv = *recv_result;
                 metrics_.bytes_received.fetch_add(bytes_recv, mem_order);
 
-                std::span<const std::byte> send_buf {buffer.data(), (std::size_t) bytes_recv};
+                cspan_byte_t send_buf {buffer.data(), (std::size_t) bytes_recv};
                 auto send_result = co_await ep.send(send_buf, reinterpret_cast<const sockaddr*>(&peer), peer_len);
 
                 if (auto total = metrics_.messages_handled.load(mem_order); (total > 0) && ((total % 1000) == 0))

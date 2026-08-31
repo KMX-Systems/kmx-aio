@@ -36,8 +36,7 @@ namespace kmx::aio::modbus
     /// the raw response PDU (function code byte + data).  To return a
     /// Modbus exception, set the high bit of the function code and append a
     /// single exception code byte.
-    using request_handler =
-        std::function<task<std::vector<std::uint8_t>>(server_request)>;
+    using request_handler = std::function<task<std::vector<std::uint8_t>>(server_request)>;
 
     /// @brief Asynchronous Modbus TCP server.
     /// @details
@@ -72,8 +71,7 @@ namespace kmx::aio::modbus
         /// @param exec   Executor that drives the accept and connection coroutines.
         /// @param config Server bind address, port, and unit identifier.
         /// @return Task that completes when the server has stopped.
-        [[nodiscard]] task_returning_expected_void_t
-        serve(readiness::executor& exec, server_config config) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t serve(readiness::executor& exec, server_config config) noexcept(false);
 
         /// @brief Signal the server to stop accepting new connections.
         void stop() noexcept;

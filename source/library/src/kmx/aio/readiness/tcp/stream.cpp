@@ -81,7 +81,7 @@ namespace kmx::aio::readiness::tcp
         }
     }
 
-    task_returning_expected_size_t stream::write(const std::span<const char> buffer) noexcept(false)
+    task_returning_expected_size_t stream::write(const cspan_char_t buffer) noexcept(false)
     {
         const bool is_onload_accel = (exec_.get_active_backend() == active_backend::openonload) && openonload::is_accelerated_fd(fd_.get());
 
@@ -136,11 +136,11 @@ namespace kmx::aio::readiness::tcp
         }
     }
 
-    task_returning_expected_void_t stream::write_all(const std::span<const char> buffer) noexcept(false)
+    task_returning_expected_void_t stream::write_all(const cspan_char_t buffer) noexcept(false)
     {
         for (std::size_t offset {}; offset < buffer.size();)
         {
-            const std::span<const char> chunk {buffer.data() + offset, buffer.size() - offset};
+            const cspan_char_t chunk {buffer.data() + offset, buffer.size() - offset};
             const auto res = co_await write(chunk);
             if (!res)
                 co_return std::unexpected(res.error());

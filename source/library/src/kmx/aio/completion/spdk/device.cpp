@@ -242,7 +242,7 @@ namespace kmx::aio::completion::spdk
 #endif
     }
 
-    task_returning_expected_size_t device::read(const std::uint64_t lba, const std::span<std::byte> out) noexcept(false)
+    task_returning_expected_size_t device::read(const std::uint64_t lba, const span_byte_t out) noexcept(false)
     {
         if (!state_)
             co_return std::unexpected(to_std_error_code(error_code::bad_descriptor));
@@ -290,7 +290,7 @@ namespace kmx::aio::completion::spdk
         co_return out.size();
     }
 
-    task_returning_expected_size_t device::write(const std::uint64_t lba, const std::span<const std::byte> in) noexcept(false)
+    task_returning_expected_size_t device::write(const std::uint64_t lba, const cspan_byte_t in) noexcept(false)
     {
         if (!state_)
             co_return std::unexpected(to_std_error_code(error_code::bad_descriptor));

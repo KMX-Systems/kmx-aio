@@ -526,7 +526,7 @@ namespace kmx::aio::test::readiness::executor_api_test
         REQUIRE_FALSE(received.has_value());
         CHECK(received.error() == std::errc::function_not_supported);
 
-        const auto sent = openonload::zero_copy_send(0, std::span<const char>(buffer.data(), buffer.size()));
+        const auto sent = openonload::zero_copy_send(0, cspan_char_t(buffer.data(), buffer.size()));
         REQUIRE_FALSE(sent.has_value());
         CHECK(sent.error() == std::errc::function_not_supported);
     }

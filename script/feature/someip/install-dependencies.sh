@@ -401,6 +401,10 @@ ensure_dependencies() {
 }
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+
+# shellcheck source=../pic.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../pic.sh"
+
 BUILD_DIR="$ROOT_DIR/output/someip"
 SRC_DIR="$BUILD_DIR/src"
 INSTALL_DIR="$BUILD_DIR/install-local"
@@ -410,8 +414,13 @@ VSOMEIP_CMAKE_CXX_FLAGS="${VSOMEIP_CMAKE_CXX_FLAGS:--Wno-error}"
 ensure_dependencies
 
 if [[ -f "$INSTALL_DIR/lib/libvsomeip3.so" || -f "$INSTALL_DIR/lib/libvsomeip3.a" ]]; then
-	echo "vsomeip already installed into: $INSTALL_DIR"
-	exit 0
+	if library_needs_pic_rebuild "$INSTALL_DIR/lib/libvsomeip3.a"; then
+		echo "vsomeip in $INSTALL_DIR is not position-independent; rebuilding"
+		rm -rf "$BUILD_DIR/build" "$INSTALL_DIR"
+	else
+		echo "vsomeip already installed into: $INSTALL_DIR"
+		exit 0
+	fi
 fi
 
 mkdir -p "$BUILD_DIR"
@@ -425,10 +434,13 @@ fi
 
 apply_vsomeip_compat_patches
 
+# Position-independent code: see the note in script/feature/opc_ua/install-dependencies.sh. A static
+# archive without -fPIC cannot be linked into the PIE executables this project produces.
 cmake -S "$SRC_DIR" -B "$BUILD_DIR/build" \
 	-DCMAKE_BUILD_TYPE=Release \
 	-DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" \
 	-DCMAKE_CXX_FLAGS="$VSOMEIP_CMAKE_CXX_FLAGS" \
+	-DCMAKE_POSITION_INDEPENDENT_CODE=ON \
 	-DBUILD_SHARED_LIBS=OFF \
 	-DVSOMEIP_BUILD_TESTS=OFF \
 	-DVSOMEIP_BUILD_EXAMPLES=OFF

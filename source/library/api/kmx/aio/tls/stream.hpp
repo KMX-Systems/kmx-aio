@@ -23,8 +23,10 @@ namespace kmx::aio::tls
     ///         tolerate one read and one write at the same time - which a socket does.
     /// @note The threading contract is basic_stream's: one reader and one writer at a time, and the
     ///       handshake before either. See its documentation.
+    /// @note Final, because basic_stream's destructor is non-virtual by design: a further derived class
+    ///       would be destroyed as a stream and lose its own destructor. See basic_stream's class note.
     template <typename InnerStream>
-    class stream: public basic_stream
+    class stream final: public basic_stream
     {
     public:
         /// @brief Constructs a stream that owns neither an SSL nor a transport.
@@ -76,13 +78,13 @@ namespace kmx::aio::tls
 
     private:
         /// @brief Forwards a read to the transport.
-        [[nodiscard]] task_returning_expected_size_t read_inner(std::span<char> buffer) noexcept(false) override { return inner_->read(buffer); }
+        [[nodiscard]] task_returning_expected_size_t read_inner(span_char_t buffer) noexcept(false) override
+        {
+            return inner_->read(buffer);
+        }
 
         /// @brief Forwards a complete write to the transport.
-        [[nodiscard]] status_task write_all_inner(std::span<const char> buffer) noexcept(false) override
-        {
-            return inner_->write_all(buffer);
-        }
+        [[nodiscard]] status_task write_all_inner(cspan_char_t buffer) noexcept(false) override { return inner_->write_all(buffer); }
 
         /// @brief The transport, absent on a default-constructed stream.
         std::optional<InnerStream> inner_;

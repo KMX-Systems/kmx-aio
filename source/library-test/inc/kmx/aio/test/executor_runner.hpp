@@ -44,7 +44,12 @@ namespace kmx::aio::test
     public:
         explicit scoped_runner(readiness::executor& exec) noexcept(false):
             exec_(exec),
-            thread_([this]() { exec_.run(); finished_.store(true, std::memory_order_release); })
+            thread_(
+                [this]()
+                {
+                    exec_.run();
+                    finished_.store(true, std::memory_order_release);
+                })
         {
         }
 
@@ -78,7 +83,6 @@ namespace kmx::aio::test
         std::jthread thread_;
     };
 
-
     /// @brief Runs a completion executor's event loop on a separate thread for the lifetime of this
     ///        object, and stops it reliably on the way out.
     /// @details The same shape as scoped_runner above, and for the same reason. completion::executor
@@ -97,7 +101,12 @@ namespace kmx::aio::test
     public:
         explicit scoped_completion_runner(completion::executor& exec) noexcept(false):
             exec_(exec),
-            thread_([this]() { exec_.run(); finished_.store(true, std::memory_order_release); })
+            thread_(
+                [this]()
+                {
+                    exec_.run();
+                    finished_.store(true, std::memory_order_release);
+                })
         {
         }
 

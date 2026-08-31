@@ -40,8 +40,7 @@ namespace kmx::aio::modbus
         /// @param config    TCP connection and Modbus protocol parameters.
         /// @param tls       Certificate and verification settings.
         /// @param exec      Readiness executor owning the I/O event loop.
-        explicit tls_client(client_config config, tls_config tls,
-                            readiness::executor& exec) noexcept;
+        explicit tls_client(client_config config, tls_config tls, readiness::executor& exec) noexcept;
         ~tls_client() noexcept;
 
         tls_client(const tls_client&) = delete;
@@ -56,31 +55,26 @@ namespace kmx::aio::modbus
         /// @brief Close the TLS session and underlying TCP connection.
         [[nodiscard]] task_returning_expected_void_t disconnect() noexcept(false);
 
-        [[nodiscard]] task<std::expected<register_values, std::error_code>>
-        read_holding_registers(std::uint16_t address, std::uint16_t count) noexcept(false);
+        [[nodiscard]] task<std::expected<register_values, std::error_code>> read_holding_registers(std::uint16_t address,
+                                                                                                   std::uint16_t count) noexcept(false);
 
-        [[nodiscard]] task<std::expected<register_values, std::error_code>>
-        read_input_registers(std::uint16_t address, std::uint16_t count) noexcept(false);
+        [[nodiscard]] task<std::expected<register_values, std::error_code>> read_input_registers(std::uint16_t address,
+                                                                                                 std::uint16_t count) noexcept(false);
 
-        [[nodiscard]] task<std::expected<coil_values, std::error_code>>
-        read_coils(std::uint16_t address, std::uint16_t count) noexcept(false);
+        [[nodiscard]] task<std::expected<coil_values, std::error_code>> read_coils(std::uint16_t address,
+                                                                                   std::uint16_t count) noexcept(false);
 
-        [[nodiscard]] task<std::expected<coil_values, std::error_code>>
-        read_discrete_inputs(std::uint16_t address, std::uint16_t count) noexcept(false);
+        [[nodiscard]] task<std::expected<coil_values, std::error_code>> read_discrete_inputs(std::uint16_t address,
+                                                                                             std::uint16_t count) noexcept(false);
 
-        [[nodiscard]] task_returning_expected_void_t
-        write_single_register(std::uint16_t address, std::uint16_t value) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t write_single_register(std::uint16_t address, std::uint16_t value) noexcept(false);
 
-        [[nodiscard]] task_returning_expected_void_t
-        write_single_coil(std::uint16_t address, bool on) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t write_single_coil(std::uint16_t address, bool on) noexcept(false);
 
-        [[nodiscard]] task_returning_expected_void_t
-        write_multiple_registers(std::uint16_t address,
-                                 std::span<const std::uint16_t> values) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t write_multiple_registers(std::uint16_t address,
+                                                                              std::span<const std::uint16_t> values) noexcept(false);
 
-        [[nodiscard]] task_returning_expected_void_t
-        write_multiple_coils(std::uint16_t address,
-                             std::span<const std::uint8_t> values) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t write_multiple_coils(std::uint16_t address, cspan_uint8_t values) noexcept(false);
 
         /// @brief Check whether the client currently has an active TLS session.
         [[nodiscard]] bool is_connected() const noexcept;

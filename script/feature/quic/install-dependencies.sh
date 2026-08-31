@@ -3,6 +3,10 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 OUTPUT_DIR="${ROOT_DIR}/output"
+
+# shellcheck source=../pic.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../pic.sh"
+
 BORINGSSL_DIR="${OUTPUT_DIR}/boringssl"
 BORINGSSL_BUILD_DIR="${BORINGSSL_DIR}/build"
 LSQUIC_DIR="${OUTPUT_DIR}/lsquic"
@@ -255,7 +259,10 @@ build_vendored_boringssl() {
 
 	drop_relocated_cmake_cache "${BORINGSSL_BUILD_DIR}"
 	mkdir -p "${BORINGSSL_BUILD_DIR}"
-	cmake -S "${BORINGSSL_DIR}" -B "${BORINGSSL_BUILD_DIR}" -DCMAKE_BUILD_TYPE=Release
+	# Position-independent code: see the note in script/feature/opc_ua/install-dependencies.sh. Without
+	# it libssl.a and libcrypto.a cannot be linked into the PIE executables this project produces.
+	cmake -S "${BORINGSSL_DIR}" -B "${BORINGSSL_BUILD_DIR}" -DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_POSITION_INDEPENDENT_CODE=ON
 	cmake --build "${BORINGSSL_BUILD_DIR}" --parallel "${JOBS}"
 
 	if [[ ! -f "${boringssl_ssl_library}" || ! -f "${boringssl_crypto_library}" ]]; then
@@ -278,8 +285,10 @@ build_vendored_lsquic() {
 
 	drop_relocated_cmake_cache "${LSQUIC_BUILD_DIR}"
 	mkdir -p "${LSQUIC_BUILD_DIR}"
+	# Position-independent code: see the note in script/feature/opc_ua/install-dependencies.sh.
 	cmake -S "${LSQUIC_DIR}" -B "${LSQUIC_BUILD_DIR}" \
 		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_POSITION_INDEPENDENT_CODE=ON \
 		-DBORINGSSL_DIR="$(dirname "${boringssl_ssl_library}")" \
 		-DBORINGSSL_INCLUDE="${boringssl_include_dir}" \
 		-DSSLLIB_INCLUDE="${boringssl_include_dir}" \
@@ -340,21 +349,30 @@ fi
 
 if [[ "${boringssl_origin}" != "system" ]]; then
 	use_vendored_boringssl
-	if [[ -f "${boringssl_ssl_library}" && -f "${boringssl_crypto_library}" ]]; then
+	if [[ -f "${boringssl_ssl_library}" && -f "${boringssl_crypto_library}" ]] &&
+		! library_needs_pic_rebuild "${boringssl_crypto_library}"; then
 		echo "[bootstrap] boringssl already built under ${BORINGSSL_BUILD_DIR}"
 	else
+		if library_needs_pic_rebuild "${boringssl_crypto_library}"; then
+			echo "[bootstrap] boringssl under ${BORINGSSL_BUILD_DIR} is not position-independent; rebuilding"
+			rm -rf "${BORINGSSL_BUILD_DIR}"
+		fi
 		build_vendored_boringssl
 	fi
 fi
 
 if [[ "${lsquic_origin}" != "system" ]]; then
 	use_vendored_lsquic
-	if [[ -f "${lsquic_library}" ]]; then
+	if [[ -f "${lsquic_library}" ]] && ! library_needs_pic_rebuild "${lsquic_library}"; then
 		echo "[bootstrap] lsquic already built under ${LSQUIC_BUILD_DIR}"
 		lsquic_version="$(read_integer_define "${LSQUIC_DIR}/include/lsquic.h" LSQUIC_MAJOR_VERSION).$(
 			read_integer_define "${LSQUIC_DIR}/include/lsquic.h" LSQUIC_MINOR_VERSION).$(
 			read_integer_define "${LSQUIC_DIR}/include/lsquic.h" LSQUIC_PATCH_VERSION)"
 	else
+		if library_needs_pic_rebuild "${lsquic_library}"; then
+			echo "[bootstrap] lsquic under ${LSQUIC_BUILD_DIR} is not position-independent; rebuilding"
+			rm -rf "${LSQUIC_BUILD_DIR}"
+		fi
 		build_vendored_lsquic
 	fi
 fi

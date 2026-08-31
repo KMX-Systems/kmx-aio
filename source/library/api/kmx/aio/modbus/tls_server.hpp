@@ -12,8 +12,8 @@
         #include <vector>
     #endif
 
-    #include <kmx/aio/modbus/types.hpp>
     #include <kmx/aio/modbus/server.hpp>
+    #include <kmx/aio/modbus/types.hpp>
     #include <kmx/aio/task.hpp>
 
 namespace kmx::aio::readiness
@@ -47,9 +47,7 @@ namespace kmx::aio::modbus
         /// @param exec   Executor that drives accept and connection coroutines.
         /// @param config Server bind address, port, and unit identifier.
         /// @param tls    Certificate, key, and CA for TLS and optional mTLS.
-        [[nodiscard]] task_returning_expected_void_t
-        serve(readiness::executor& exec, server_config config,
-              tls_config tls) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t serve(readiness::executor& exec, server_config config, tls_config tls) noexcept(false);
 
         /// @brief Signal the server to stop accepting new connections.
         void stop() noexcept;

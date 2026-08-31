@@ -31,17 +31,17 @@ namespace kmx::aio::readiness::tcp
         /// @param buffer Destination buffer.
         /// @return A task yielding the number of bytes read, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        task_returning_expected_size_t read(std::span<char> buffer) noexcept(false);
+        task_returning_expected_size_t read(span_char_t buffer) noexcept(false);
         /// @brief Suspends until the socket is writable, then writes what it accepts.
         /// @param buffer Source buffer.
         /// @return A task yielding the number of bytes written, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        task_returning_expected_size_t write(std::span<const char> buffer) noexcept(false);
+        task_returning_expected_size_t write(cspan_char_t buffer) noexcept(false);
         /// @brief Writes the whole buffer, reissuing writes until nothing is left.
         /// @param buffer Source buffer.
         /// @return A task yielding success once every byte was written, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        task_returning_expected_void_t write_all(std::span<const char> buffer) noexcept(false);
+        task_returning_expected_void_t write_all(cspan_char_t buffer) noexcept(false);
     };
 
 } // namespace kmx::aio::readiness::tcp

@@ -47,7 +47,7 @@ namespace kmx::aio::completion::udp
         /// @param peer_addr Output socket address for the sender.
         /// @param out_peer_addr_len Output length of the sender address.
         /// @return A task yielding the received byte count or an error.
-        [[nodiscard]] task_returning_expected_size_t recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
+        [[nodiscard]] task_returning_expected_size_t recv(span_byte_t buffer, sockaddr_storage& peer_addr,
                                                           ::socklen_t& out_peer_addr_len) noexcept(false);
 
         /// @brief Receives a datagram and decodes the peer IP and port.
@@ -57,16 +57,15 @@ namespace kmx::aio::completion::udp
         /// @param out_peer_ip Output peer IP address.
         /// @param out_peer_port Output peer port.
         /// @return A task yielding the received byte count or an error.
-        [[nodiscard]] task_returning_expected_size_t recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
-                                                          ::socklen_t& out_peer_addr_len, ip_address_t& out_peer_ip,
-                                                          port_t& out_peer_port) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t recv(span_byte_t buffer, sockaddr_storage& peer_addr, ::socklen_t& out_peer_addr_len,
+                                                          ip_address_t& out_peer_ip, port_t& out_peer_port) noexcept(false);
 
         /// @brief Sends a datagram to a raw socket address.
         /// @param buffer Payload bytes to send.
         /// @param peer_addr Destination address.
         /// @param addr_len Length of the destination address.
         /// @return A task yielding the sent byte count or an error.
-        [[nodiscard]] task_returning_expected_size_t send(std::span<const std::byte> buffer, const sockaddr* peer_addr,
+        [[nodiscard]] task_returning_expected_size_t send(cspan_byte_t buffer, const sockaddr* peer_addr,
                                                           ::socklen_t addr_len) noexcept(false);
 
         /// @brief Sends a datagram to an IP/port destination.
@@ -74,8 +73,7 @@ namespace kmx::aio::completion::udp
         /// @param peer_ip Destination IP address.
         /// @param peer_port Destination port.
         /// @return A task yielding the sent byte count or an error.
-        [[nodiscard]] task_returning_expected_size_t send(std::span<const std::byte> buffer, ip_address_t peer_ip,
-                                                          port_t peer_port) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t send(cspan_byte_t buffer, ip_address_t peer_ip, port_t peer_port) noexcept(false);
 
     private:
         /// @brief Owned completion-model socket backing the endpoint.

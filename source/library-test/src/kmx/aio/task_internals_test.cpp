@@ -121,7 +121,7 @@ namespace kmx::aio::test::task_internals_test
         {
             try
             {
-                co_await detail::throwing_void_result_task();
+                static_cast<void>(co_await detail::throwing_void_result_task());
             }
             catch (const detail::task_error&)
             {

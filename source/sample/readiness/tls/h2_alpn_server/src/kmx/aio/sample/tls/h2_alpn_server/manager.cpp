@@ -103,7 +103,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
             }
 
             std::array<char, 33u> recv_buf {};
-            auto read_res = co_await stream.read(std::span<char>(recv_buf.data(), recv_buf.size()));
+            auto read_res = co_await stream.read(span_char_t(recv_buf.data(), recv_buf.size()));
             if (!read_res || (*read_res < recv_buf.size()))
             {
                 metrics_.errors.fetch_add(1u, std::memory_order_relaxed);
@@ -122,14 +122,14 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
                 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 4, 1, 0, 0, 0, 0,
             };
 
-            if (auto w_res = co_await stream.write_all(std::span<const char>(send_frames.data(), send_frames.size())); !w_res)
+            if (auto w_res = co_await stream.write_all(cspan_char_t(send_frames.data(), send_frames.size())); !w_res)
             {
                 metrics_.errors.fetch_add(1u, std::memory_order_relaxed);
                 co_return;
             }
 
             std::array<char, 9u> ack_buf {};
-            auto r_ack = co_await stream.read(std::span<char>(ack_buf.data(), ack_buf.size()));
+            auto r_ack = co_await stream.read(span_char_t(ack_buf.data(), ack_buf.size()));
             if (!r_ack || *r_ack < ack_buf.size() || ack_buf[3] != 4 || ack_buf[4] != 1)
             {
                 metrics_.failures.fetch_add(1u, std::memory_order_relaxed);
@@ -140,7 +140,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
             std::size_t total {};
             while (total < req_hdr.size())
             {
-                auto r = co_await stream.read(std::span<char>(req_hdr.data() + total, req_hdr.size() - total));
+                auto r = co_await stream.read(span_char_t(req_hdr.data() + total, req_hdr.size() - total));
                 if (!r || *r == 0u)
                     break;
                 total += *r;
@@ -156,7 +156,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
                 total = 0u;
                 while (total < payload_len)
                 {
-                    auto r = co_await stream.read(std::span<char>(payload.data() + total, payload_len - total));
+                    auto r = co_await stream.read(span_char_t(payload.data() + total, payload_len - total));
                     if (!r || *r == 0u)
                         break;
                     total += *r;
@@ -170,7 +170,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
                     'K',  'M',  'X',  ' ',  'H',  'T',  'T',  'P',  '/',  '2',
                 });
 
-                if (auto w_res = co_await stream.write_all(std::span<const char>(resp)); !w_res)
+                if (auto w_res = co_await stream.write_all(cspan_char_t(resp)); !w_res)
                 {
                     metrics_.errors.fetch_add(1u, std::memory_order_relaxed);
                     co_return;

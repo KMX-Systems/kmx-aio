@@ -3,11 +3,11 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
     #include <kmx/aio/http3/message.hpp>
 
     #include <expected>
     #include <optional>
-    #include <span>
     #include <system_error>
     #include <vector>
 #endif
@@ -51,6 +51,6 @@ namespace kmx::aio::http3::qpack
         /// @brief Decodes a demo literal header block.
         /// @param payload Encoded header block bytes.
         /// @return The decoded header list or a parsing error.
-        static std::expected<header_list, std::error_code> decode(std::span<const std::uint8_t> payload) noexcept;
+        static std::expected<header_list, std::error_code> decode(cspan_uint8_t payload) noexcept;
     };
 } // namespace kmx::aio::http3::qpack

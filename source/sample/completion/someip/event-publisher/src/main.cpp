@@ -23,9 +23,7 @@ int main() noexcept
                 .instance_id = 0x2222u,
                 .iterate_timeout = std::chrono::milliseconds(10),
             },
-            0x1001u,
-            10u
-        );
+            0x1001u, 10u);
 
         exec.spawn(mgr.run(exec, ok));
         exec.run();

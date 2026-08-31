@@ -37,10 +37,10 @@ namespace kmx::aio::test::avb::avtp::am824_test
         const std::uint8_t seq = 77u;
         const avb_timestamp_t presentation_ns = 0x1234'5678'9ABC'DEF0ULL;
 
-        const auto frame_res = build_am824_frame(sid, seq, presentation_ns, std::span<const std::byte>(payload));
+        const auto frame_res = build_am824_frame(sid, seq, presentation_ns, cspan_byte_t(payload));
         REQUIRE(frame_res.has_value());
 
-        const auto parse_res = parse_am824_frame(std::span<const std::byte>(*frame_res));
+        const auto parse_res = parse_am824_frame(cspan_byte_t(*frame_res));
         REQUIRE(parse_res.has_value());
 
         const auto& parsed = *parse_res;
@@ -61,7 +61,7 @@ namespace kmx::aio::test::avb::avtp::am824_test
         sid.unique_id = 1u;
 
         std::vector<std::byte> payload(0x1'0000u, std::byte {0x7Fu});
-        const auto frame_res = build_am824_frame(sid, 0u, 123u, std::span<const std::byte>(payload));
+        const auto frame_res = build_am824_frame(sid, 0u, 123u, cspan_byte_t(payload));
         REQUIRE_FALSE(frame_res.has_value());
         REQUIRE(frame_res.error().value() == EINVAL);
     }
@@ -69,13 +69,13 @@ namespace kmx::aio::test::avb::avtp::am824_test
     TEST_CASE("avtp am824 parse validates subtype and frame size", "[avb][avtp][am824]")
     {
         const std::array<std::byte, header_size - 1u> short_frame {};
-        const auto short_res = parse_am824_frame(std::span<const std::byte>(short_frame));
+        const auto short_res = parse_am824_frame(cspan_byte_t(short_frame));
         REQUIRE_FALSE(short_res.has_value());
         REQUIRE(short_res.error().value() == EINVAL);
 
         std::array<std::byte, header_size> wrong_subtype {};
         wrong_subtype[0] = std::byte {0x7Fu};
-        const auto subtype_res = parse_am824_frame(std::span<const std::byte>(wrong_subtype));
+        const auto subtype_res = parse_am824_frame(cspan_byte_t(wrong_subtype));
         REQUIRE_FALSE(subtype_res.has_value());
         REQUIRE(subtype_res.error().value() == EPROTO);
 
@@ -83,7 +83,7 @@ namespace kmx::aio::test::avb::avtp::am824_test
         wrong_len[0] = static_cast<std::byte>(subtype_aaf);
         wrong_len[16] = std::byte {0x00u};
         wrong_len[17] = std::byte {0x10u};
-        const auto len_res = parse_am824_frame(std::span<const std::byte>(wrong_len));
+        const auto len_res = parse_am824_frame(cspan_byte_t(wrong_len));
         REQUIRE_FALSE(len_res.has_value());
         REQUIRE(len_res.error().value() == EMSGSIZE);
     }

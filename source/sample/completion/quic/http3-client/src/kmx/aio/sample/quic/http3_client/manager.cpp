@@ -41,7 +41,7 @@ namespace kmx::aio::sample::quic::http3_client
     task<void> handle_stream(::lsquic_stream_t* stream, kmx::aio::quic::stream_payload payload)
     {
         auto data = payload.bytes();
-        const auto raw = std::span<const std::uint8_t>(reinterpret_cast<const std::uint8_t*>(data.data()), data.size());
+        const auto raw = cspan_uint8_t(reinterpret_cast<const std::uint8_t*>(data.data()), data.size());
 
         const auto control_state = kmx::aio::http3::control_stream_codec::decode(raw);
         if (control_state)

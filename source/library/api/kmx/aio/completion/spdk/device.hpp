@@ -59,12 +59,12 @@ namespace kmx::aio::completion::spdk
         /// @brief Reads contiguous blocks into a destination buffer.
         /// @param lba Starting logical block address.
         /// @param out Output byte span. Must be block-size aligned.
-        [[nodiscard]] task_returning_expected_size_t read(std::uint64_t lba, std::span<std::byte> out) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t read(std::uint64_t lba, span_byte_t out) noexcept(false);
 
         /// @brief Writes contiguous blocks from source buffer.
         /// @param lba Starting logical block address.
         /// @param in Input byte span. Must be block-size aligned.
-        [[nodiscard]] task_returning_expected_size_t write(std::uint64_t lba, std::span<const std::byte> in) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t write(std::uint64_t lba, cspan_byte_t in) noexcept(false);
 
         /// @brief Flushes any buffered writes.
         [[nodiscard]] task_returning_expected_void_t flush() noexcept(false);

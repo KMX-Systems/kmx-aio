@@ -51,7 +51,7 @@ namespace kmx::aio::sample::quic::http3_server
     task<void> handle_stream(::lsquic_stream_t* stream, kmx::aio::quic::stream_payload payload)
     {
         auto data = payload.bytes();
-        const auto raw = std::span<const std::uint8_t>(reinterpret_cast<const std::uint8_t*>(data.data()), data.size());
+        const auto raw = cspan_uint8_t(reinterpret_cast<const std::uint8_t*>(data.data()), data.size());
 
         const auto control_state = kmx::aio::http3::control_stream_codec::decode(raw);
         if (control_state)
@@ -112,7 +112,7 @@ namespace kmx::aio::sample::quic::http3_server
             {"Content-Type", "text/html"},
         };
         auto response_frames = kmx::aio::http3::headers_codec::encode_frame(response_headers);
-        const auto body_frame = kmx::aio::http3::data_codec::encode_frame(std::span<const std::uint8_t>(
+        const auto body_frame = kmx::aio::http3::data_codec::encode_frame(cspan_uint8_t(
             reinterpret_cast<const std::uint8_t*>("<html><body><h1>Hello from KMX AIO QUIC HTTP3 Server!</h1></body></html>\n"),
             sizeof("<html><body><h1>Hello from KMX AIO QUIC HTTP3 Server!</h1></body></html>\n") - 1u));
         response_frames.insert(response_frames.end(), body_frame.begin(), body_frame.end());
