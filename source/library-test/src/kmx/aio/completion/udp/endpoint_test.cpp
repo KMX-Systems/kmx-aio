@@ -47,7 +47,7 @@ namespace kmx::aio::completion::udp
             co_return;
         }
 
-        if (const auto bind_res = recv_endpoint->raw().bind(make_ipv4_address(any_ipv4), 0u); !bind_res)
+        if (const auto bind_res = recv_endpoint->raw().bind(ipv4::make_address(ipv4::any), 0u); !bind_res)
         {
             state->error = bind_res.error();
             exec.stop();
@@ -71,7 +71,7 @@ namespace kmx::aio::completion::udp
         };
 
         const auto send_res =
-            co_await send_endpoint->send(std::span<const std::byte>(payload), make_ipv4_address(localhost_ipv4), recv_port);
+            co_await send_endpoint->send(std::span<const std::byte>(payload), ipv4::make_address(ipv4::localhost), recv_port);
         if (!send_res)
         {
             state->error = send_res.error();
@@ -83,7 +83,7 @@ namespace kmx::aio::completion::udp
         std::array<std::byte, 32u> recv_buffer {};
         sockaddr_storage peer_addr {};
         socklen_t peer_addr_len = 0u;
-        ip_address_t peer_ip = make_ipv4_address(any_ipv4);
+        ip_address_t peer_ip = ipv4::make_address(ipv4::any);
         port_t peer_port = 0u;
 
         const auto recv_res = co_await recv_endpoint->recv(std::span<std::byte>(recv_buffer), peer_addr, peer_addr_len, peer_ip, peer_port);

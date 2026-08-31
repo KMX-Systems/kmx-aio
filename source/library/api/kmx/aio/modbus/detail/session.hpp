@@ -26,12 +26,12 @@ namespace kmx::aio::modbus::detail
     /// @brief Read exactly @p dest.size() bytes from @p stream.
     /// @details Loops on the stream's read() coroutine until all requested bytes
     ///          have been received, the stream reaches EOF, or an I/O error occurs.
-    /// @tparam StreamT Any stream providing `result_task read(std::span<char>)`.
+    /// @tparam StreamT Any stream providing `task_returning_expected_size_t read(std::span<char>)`.
     /// @param stream The stream to read from.
     /// @param dest   Output span of the exact size to fill.
     /// @return Success, or an error on EOF / I/O failure.
     template <typename StreamT>
-    [[nodiscard]] task<std::expected<void, std::error_code>>
+    [[nodiscard]] task_returning_expected_void_t
     read_exactly(StreamT& stream, std::span<char> dest) noexcept(false)
     {
         std::size_t total = 0u;
@@ -44,7 +44,7 @@ namespace kmx::aio::modbus::detail
                 co_return std::unexpected(make_error_code(error::disconnected));
             total += *result;
         }
-        co_return std::expected<void, std::error_code>();
+        co_return expected_void_t();
     }
 
     /// @brief Send a Modbus ADU and receive the response PDU.

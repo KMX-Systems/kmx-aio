@@ -17,15 +17,13 @@ namespace kmx::aio::readiness::tcp
     class listener: public io_base
     {
     public:
-        using result_t = std::expected<void, std::error_code>;
-
         listener(executor& exec, ip_address_t ip, port_t port) noexcept(false);
         ~listener() override = default;
         listener(listener&&) noexcept = default;
         listener& operator=(listener&&) noexcept = delete;
 
-        result_t listen(const int backlog = 128) noexcept;
-        task<std::expected<file_descriptor, std::error_code>> accept() noexcept(false);
+        expected_void_t listen(const int backlog = 128) noexcept;
+        task<file_descriptor::expected_t> accept() noexcept(false);
     };
 
 } // namespace kmx::aio::readiness::tcp

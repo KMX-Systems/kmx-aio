@@ -18,8 +18,7 @@ namespace kmx::aio::readiness::descriptor
         return timer(fd);
     }
 
-    std::expected<void, std::error_code> timer::set_time(const int flags, const struct itimerspec& new_value,
-                                                         struct itimerspec* old_value) noexcept
+    expected_void_t timer::set_time(const int flags, const struct itimerspec& new_value, struct itimerspec* old_value) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));

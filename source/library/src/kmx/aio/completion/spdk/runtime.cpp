@@ -54,10 +54,10 @@ namespace kmx::aio::completion::spdk::runtime
         init->done.store(true, std::memory_order_release);
     }
 
-    [[nodiscard]] std::expected<void, std::error_code> ensure_subsystem_initialized(runtime_state& state) noexcept
+    [[nodiscard]] expected_void_t ensure_subsystem_initialized(runtime_state& state) noexcept
     {
         if (state.subsystem_initialized)
-            return std::expected<void, std::error_code> {};
+            return expected_void_t {};
 
         if (!state.env_initialized)
         {
@@ -97,10 +97,10 @@ namespace kmx::aio::completion::spdk::runtime
             return std::unexpected(to_std_error_code(error_code::spdk_probe_failed));
 
         state.subsystem_initialized = true;
-        return std::expected<void, std::error_code> {};
+        return expected_void_t {};
     }
 
-    [[nodiscard]] std::expected<void, std::error_code> ensure_subsystem_finalized(runtime_state& state) noexcept
+    [[nodiscard]] expected_void_t ensure_subsystem_finalized(runtime_state& state) noexcept
     {
         if (!state.subsystem_initialized)
         {
@@ -139,11 +139,11 @@ namespace kmx::aio::completion::spdk::runtime
             state.env_initialized = false;
         }
 
-        return std::expected<void, std::error_code> {};
+        return expected_void_t {};
     }
 #endif
 
-    std::expected<void, std::error_code> initialize() noexcept
+    expected_void_t initialize() noexcept
     {
 #if !defined(KMX_AIO_FEATURE_SPDK)
         return std::unexpected(to_std_error_code(error_code::unsupported_operation));
@@ -154,7 +154,7 @@ namespace kmx::aio::completion::spdk::runtime
 #endif
     }
 
-    std::expected<void, std::error_code> finalize() noexcept
+    expected_void_t finalize() noexcept
     {
 #if !defined(KMX_AIO_FEATURE_SPDK)
         return std::unexpected(to_std_error_code(error_code::unsupported_operation));

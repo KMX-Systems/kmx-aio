@@ -31,12 +31,12 @@ namespace kmx::aio::completion::tcp
             throw std::system_error(res.error(), "bind failed");
     }
 
-    std::expected<void, std::error_code> listener::listen(const int backlog) noexcept
+    expected_void_t listener::listen(const int backlog) noexcept
     {
         return fd_.listen(backlog);
     }
 
-    task<std::expected<file_descriptor, std::error_code>> listener::accept() noexcept(false)
+    task<file_descriptor::expected_t> listener::accept() noexcept(false)
     {
         sockaddr_storage addr {};
         socklen_t addrlen = sizeof(addr);

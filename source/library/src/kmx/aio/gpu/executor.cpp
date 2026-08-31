@@ -77,13 +77,13 @@ namespace kmx::aio::gpu
     class task_queue
     {
     public:
-        void enqueue(std::coroutine_handle<> h) noexcept
+        void enqueue(coroutine_handle_t h) noexcept
         {
             std::lock_guard<std::mutex> lock(mutex_);
             pending_.push_back(h);
         }
 
-        std::vector<std::coroutine_handle<>> drain() noexcept
+        std::vector<coroutine_handle_t> drain() noexcept
         {
             std::lock_guard<std::mutex> lock(mutex_);
             return std::exchange(pending_, {});
@@ -91,7 +91,7 @@ namespace kmx::aio::gpu
 
     private:
         std::mutex mutex_;
-        std::vector<std::coroutine_handle<>> pending_;
+        std::vector<coroutine_handle_t> pending_;
     };
 
     /// Executor Implementation
@@ -186,14 +186,14 @@ namespace kmx::aio::gpu
         stats_.reset();
     }
 
-    void executor::register_waiting_coroutine(const event_handle event, const std::coroutine_handle<> h) noexcept
+    void executor::register_waiting_coroutine(const event_handle event, const coroutine_handle_t handle) noexcept
     {
-        if (!event || !h)
+        if (!event || !handle)
             return;
 
         {
             std::lock_guard<std::mutex> lock(queue_mutex_);
-            waiting_events_[event] = h;
+            waiting_events_[event] = handle;
         }
 
         stats_.total_events_created.fetch_add(1u, std::memory_order_release);
@@ -231,7 +231,7 @@ namespace kmx::aio::gpu
         bool work_done = false;
 
         // 1. Drain and resume pending tasks from spawn() queue.
-        std::deque<std::coroutine_handle<>> pending;
+        std::deque<coroutine_handle_t> pending;
         {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             pending = std::exchange(pending_tasks_, {});
@@ -495,7 +495,7 @@ namespace kmx::aio::gpu
 #endif
     }
 
-    void event::awaiter::await_suspend(std::coroutine_handle<> h) noexcept
+    void event::awaiter::await_suspend(coroutine_handle_t h) noexcept
     {
         auto* const exec = tls_current_gpu_executor;
         if (exec == nullptr)

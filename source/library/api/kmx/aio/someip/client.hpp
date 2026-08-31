@@ -41,11 +41,11 @@ namespace kmx::aio::someip
         /// @brief Initialises the vsomeip runtime and registers the application.
         /// @return void on success, or an error code on failure.
         /// @throws std::bad_alloc if runtime allocation fails.
-        [[nodiscard]] task<std::expected<void, std::error_code>> start() noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t start() noexcept(false);
 
         /// @brief Stops the runtime and deregisters the application.
         /// @return void on success, or @c error::stopped if already stopped.
-        [[nodiscard]] task<std::expected<void, std::error_code>> stop() noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t stop() noexcept(false);
 
         /// @brief Drives the internal dispatch loop for one time slot.
         /// @param timeout Maximum time to wait for pending events.
@@ -56,14 +56,14 @@ namespace kmx::aio::someip
         /// @param service_id Service identifier to track.
         /// @param instance_id Instance identifier to track.
         /// @return void on success, or an error code on failure.
-        [[nodiscard]] task<std::expected<void, std::error_code>> request_service(service_id_t service_id,
+        [[nodiscard]] task_returning_expected_void_t request_service(service_id_t service_id,
                                                                                  instance_id_t instance_id) noexcept(false);
 
         /// @brief Releases a previously requested service/instance pair.
         /// @param service_id Service identifier to release.
         /// @param instance_id Instance identifier to release.
         /// @return void on success, or an error code on failure.
-        [[nodiscard]] task<std::expected<void, std::error_code>> release_service(service_id_t service_id,
+        [[nodiscard]] task_returning_expected_void_t release_service(service_id_t service_id,
                                                                                  instance_id_t instance_id) noexcept(false);
 
         /// @brief Invokes a remote SOME/IP method and awaits the response.

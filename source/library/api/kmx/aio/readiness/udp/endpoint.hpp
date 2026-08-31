@@ -18,16 +18,15 @@ namespace kmx::aio::readiness::udp
     class endpoint
     {
     public:
-        using result_task = socket::result_task;
         /// @brief Result type returned by endpoint::create.
         /// @details Contains a fully initialized endpoint on success, or an error code on failure.
-        using create_result = std::expected<endpoint, std::error_code>;
+        using expected_t = std::expected<endpoint, std::error_code>;
 
         /// @brief Create a UDP endpoint bound to an executor.
         /// @param exec Executor that drives asynchronous readiness operations.
         /// @param domain Socket address family (for example AF_INET or AF_INET6).
         /// @return A ready-to-use endpoint on success, otherwise a system error code.
-        [[nodiscard]] static create_result create(executor& exec, const int domain = AF_INET) noexcept;
+        [[nodiscard]] static expected_t create(executor& exec, const int domain = AF_INET) noexcept;
 
         /// @brief Construct an endpoint from an existing readiness UDP socket.
         /// @param sock Socket instance to own.
@@ -49,7 +48,7 @@ namespace kmx::aio::readiness::udp
         /// @param out_peer_addr_len In/out address storage length populated by recv.
         /// @return Awaitable task producing bytes received or an error.
         /// @throws std::system_error If submission or await path fails.
-        [[nodiscard]] result_task recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
+        [[nodiscard]] task_returning_expected_size_t recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
                                        ::socklen_t& out_peer_addr_len) noexcept(false);
 
         /// @brief Receive a datagram and decode sender IP/port in addition to raw sockaddr data.
@@ -60,7 +59,7 @@ namespace kmx::aio::readiness::udp
         /// @param out_peer_port Parsed sender UDP port.
         /// @return Awaitable task producing bytes received or an error.
         /// @throws std::system_error If submission or await path fails.
-        [[nodiscard]] result_task recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr, ::socklen_t& out_peer_addr_len,
+        [[nodiscard]] task_returning_expected_size_t recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr, ::socklen_t& out_peer_addr_len,
                                        ip_address_t& out_peer_ip, port_t& out_peer_port) noexcept(false);
 
         /// @brief Send a datagram to a peer address represented as sockaddr.
@@ -69,7 +68,7 @@ namespace kmx::aio::readiness::udp
         /// @param addr_len Length of @p peer_addr.
         /// @return Awaitable task producing bytes sent or an error.
         /// @throws std::system_error If submission or await path fails.
-        [[nodiscard]] result_task send(std::span<const std::byte> buffer, const sockaddr* peer_addr, ::socklen_t addr_len) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t send(std::span<const std::byte> buffer, const sockaddr* peer_addr, ::socklen_t addr_len) noexcept(false);
 
         /// @brief Send a datagram to a peer address represented as IP and port.
         /// @param buffer Source byte span to transmit.
@@ -77,7 +76,7 @@ namespace kmx::aio::readiness::udp
         /// @param peer_port Destination UDP port.
         /// @return Awaitable task producing bytes sent or an error.
         /// @throws std::system_error If submission or await path fails.
-        [[nodiscard]] result_task send(std::span<const std::byte> buffer, ip_address_t peer_ip, port_t peer_port) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t send(std::span<const std::byte> buffer, ip_address_t peer_ip, port_t peer_port) noexcept(false);
 
     private:
         socket socket_;

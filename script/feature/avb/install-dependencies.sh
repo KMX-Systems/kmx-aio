@@ -1,20 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if ! command -v apt-get >/dev/null 2>&1; then
-	echo "This script currently supports Ubuntu/Debian only (apt-get required)." >&2
-	exit 1
-fi
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$script_dir/../apt.sh"
 
-if [[ "${EUID}" -ne 0 ]]; then
-	SUDO="sudo"
-else
-	SUDO=""
-fi
-
-echo "[avb] Installing AVB/PTP runtime dependencies (Ubuntu/Debian)..."
-${SUDO} apt-get update
-${SUDO} apt-get install -y \
+echo "[avb] Checking AVB/PTP runtime dependencies..."
+apt_install_missing avb \
 	linuxptp \
 	ethtool \
 	iproute2

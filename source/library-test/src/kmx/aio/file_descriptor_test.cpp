@@ -35,7 +35,7 @@ namespace kmx::aio
 
             const int reuse = 1;
             REQUIRE(result.fd.setsockopt(SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)).has_value());
-            REQUIRE(result.fd.bind(make_ip_address(localhost_ipv4), 0u).has_value());
+            REQUIRE(result.fd.bind(make_ip_address(ipv4::localhost), 0u).has_value());
             REQUIRE(result.fd.listen(4).has_value());
 
             ::sockaddr_in bound {};
@@ -260,8 +260,8 @@ namespace kmx::aio
         ip_address_owned_t peer_ip {};
         port_t peer_port {};
         CHECK(fd.accept(peer_ip, peer_port).error() == bad);
-        CHECK(fd.bind(make_ip_address(localhost_ipv4), 0u).error() == bad);
-        CHECK(fd.connect(make_ip_address(localhost_ipv4), 0u).error() == bad);
+        CHECK(fd.bind(make_ip_address(ipv4::localhost), 0u).error() == bad);
+        CHECK(fd.connect(make_ip_address(ipv4::localhost), 0u).error() == bad);
     }
 
     TEST_CASE("fcntl reads and writes descriptor flags", "[core][file_descriptor][fcntl]")
@@ -342,7 +342,7 @@ namespace kmx::aio
     {
         auto created = file_descriptor::create_socket(AF_INET, SOCK_DGRAM, 0);
         REQUIRE(created.has_value());
-        CHECK(created->bind(make_ip_address(localhost_ipv4), 0u).has_value());
+        CHECK(created->bind(make_ip_address(ipv4::localhost), 0u).has_value());
     }
 
     TEST_CASE("bind rejects an address the host does not own", "[core][file_descriptor][bind][error]")
@@ -351,7 +351,7 @@ namespace kmx::aio
         REQUIRE(created.has_value());
 
         // 192.0.2.0/24 is the reserved documentation range: never a local address.
-        constexpr ipv4_storage_t unroutable {192u, 0u, 2u, 33u};
+        constexpr ipv4::storage_t unroutable {192u, 0u, 2u, 33u};
         const auto result = created->bind(make_ip_address(unroutable), 0u);
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error() == std::errc::address_not_available);
@@ -362,7 +362,7 @@ namespace kmx::aio
         auto created = file_descriptor::create_socket(AF_INET, SOCK_DGRAM, 0);
         REQUIRE(created.has_value());
 
-        constexpr ipv6_storage_t loopback6 {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 1u};
+        constexpr ipv6::storage_t loopback6 {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 1u};
         const auto result = created->bind(make_ip_address(loopback6), 0u);
         REQUIRE_FALSE(result.has_value());
     }
@@ -371,7 +371,7 @@ namespace kmx::aio
     {
         auto created = file_descriptor::create_socket(AF_INET, SOCK_DGRAM, 0);
         REQUIRE(created.has_value());
-        REQUIRE(created->bind(make_ip_address(localhost_ipv4), 0u).has_value());
+        REQUIRE(created->bind(make_ip_address(ipv4::localhost), 0u).has_value());
 
         const auto result = created->listen(4);
         REQUIRE_FALSE(result.has_value());
@@ -383,7 +383,7 @@ namespace kmx::aio
 
         auto client = file_descriptor::create_socket(AF_INET, SOCK_STREAM, 0);
         REQUIRE(client.has_value());
-        REQUIRE(client->connect(make_ip_address(localhost_ipv4), listener.port).has_value());
+        REQUIRE(client->connect(make_ip_address(ipv4::localhost), listener.port).has_value());
 
         ::sockaddr_storage peer {};
         ::socklen_t length = sizeof(peer);
@@ -399,7 +399,7 @@ namespace kmx::aio
 
         auto client = file_descriptor::create_socket(AF_INET, SOCK_STREAM, 0);
         REQUIRE(client.has_value());
-        REQUIRE(client->connect(make_ip_address(localhost_ipv4), listener.port).has_value());
+        REQUIRE(client->connect(make_ip_address(ipv4::localhost), listener.port).has_value());
 
         ip_address_owned_t peer_ip {};
         port_t peer_port {};
@@ -407,8 +407,8 @@ namespace kmx::aio
         REQUIRE(accepted.has_value());
         CHECK(accepted->is_valid());
 
-        REQUIRE(std::holds_alternative<ipv4_address_owned_t>(peer_ip));
-        CHECK(std::get<ipv4_address_owned_t>(peer_ip) == localhost_ipv4);
+        REQUIRE(std::holds_alternative<ipv4::address_owned_t>(peer_ip));
+        CHECK(std::get<ipv4::address_owned_t>(peer_ip) == ipv4::localhost);
         CHECK(peer_port != 0u);
     }
 
@@ -421,7 +421,7 @@ namespace kmx::aio
         const int reuse = 1;
         REQUIRE(listener_fd->setsockopt(SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)).has_value());
 
-        constexpr ipv6_storage_t loopback6 {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 1u};
+        constexpr ipv6::storage_t loopback6 {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 1u};
         REQUIRE(listener_fd->bind(make_ip_address(loopback6), 0u).has_value());
         REQUIRE(listener_fd->listen(4).has_value());
 
@@ -438,8 +438,8 @@ namespace kmx::aio
         auto accepted = listener_fd->accept(peer_ip, peer_port);
         REQUIRE(accepted.has_value());
 
-        REQUIRE(std::holds_alternative<ipv6_address_owned_t>(peer_ip));
-        CHECK(std::get<ipv6_address_owned_t>(peer_ip) == loopback6);
+        REQUIRE(std::holds_alternative<ipv6::address_owned_t>(peer_ip));
+        CHECK(std::get<ipv6::address_owned_t>(peer_ip) == loopback6);
         CHECK(peer_port != 0u);
     }
 
@@ -465,7 +465,7 @@ namespace kmx::aio
         REQUIRE(client.has_value());
         REQUIRE(client->set_as_non_blocking().has_value());
 
-        CHECK(client->connect(make_ip_address(localhost_ipv4), listener.port).has_value());
+        CHECK(client->connect(make_ip_address(ipv4::localhost), listener.port).has_value());
     }
 
     TEST_CASE("connect reports a refused port", "[core][file_descriptor][connect][error]")
@@ -481,7 +481,7 @@ namespace kmx::aio
         auto client = file_descriptor::create_socket(AF_INET, SOCK_STREAM, 0);
         REQUIRE(client.has_value());
 
-        const auto result = client->connect(make_ip_address(localhost_ipv4), closed_port);
+        const auto result = client->connect(make_ip_address(ipv4::localhost), closed_port);
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error() == std::errc::connection_refused);
     }
@@ -491,7 +491,7 @@ namespace kmx::aio
         ::in_addr addr {};
         REQUIRE(aio::inet_pton(AF_INET, "192.0.2.33", &addr).has_value());
 
-        constexpr ipv4_storage_t expected {192u, 0u, 2u, 33u};
+        constexpr ipv4::storage_t expected {192u, 0u, 2u, 33u};
         CHECK(std::memcmp(&addr, expected.data(), expected.size()) == 0);
     }
 
@@ -500,7 +500,7 @@ namespace kmx::aio
         ::in6_addr addr {};
         REQUIRE(aio::inet_pton(AF_INET6, "2001:db8::1", &addr).has_value());
 
-        constexpr ipv6_storage_t expected {0x20u, 0x01u, 0x0du, 0xb8u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0x01u};
+        constexpr ipv6::storage_t expected {0x20u, 0x01u, 0x0du, 0xb8u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0x01u};
         CHECK(std::memcmp(&addr, expected.data(), expected.size()) == 0);
     }
 

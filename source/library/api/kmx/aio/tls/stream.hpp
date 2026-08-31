@@ -76,7 +76,7 @@ namespace kmx::aio::tls
 
     private:
         /// @brief Forwards a read to the transport.
-        [[nodiscard]] result_task read_inner(std::span<char> buffer) noexcept(false) override { return inner_->read(buffer); }
+        [[nodiscard]] task_returning_expected_size_t read_inner(std::span<char> buffer) noexcept(false) override { return inner_->read(buffer); }
 
         /// @brief Forwards a complete write to the transport.
         [[nodiscard]] status_task write_all_inner(std::span<const char> buffer) noexcept(false) override

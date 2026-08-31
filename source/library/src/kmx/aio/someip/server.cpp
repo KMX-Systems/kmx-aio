@@ -33,7 +33,7 @@ namespace kmx::aio::someip
     server::server(server&&) noexcept = default;
     server& server::operator=(server&&) noexcept = default;
 
-    task<std::expected<void, std::error_code>> server::start() noexcept(false)
+    task_returning_expected_void_t server::start() noexcept(false)
     {
         if (impl_->config.application_name.empty())
             co_return std::unexpected(make_error_code(error::invalid_configuration));
@@ -47,10 +47,10 @@ namespace kmx::aio::someip
 
         impl_->started = true;
         ++impl_->stats.successful_starts;
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
-    task<std::expected<void, std::error_code>> server::stop() noexcept(false)
+    task_returning_expected_void_t server::stop() noexcept(false)
     {
         if (!impl_->started)
             co_return std::unexpected(make_error_code(error::stopped));
@@ -58,7 +58,7 @@ namespace kmx::aio::someip
         (void) impl_->runtime.stop();
         impl_->started = false;
         impl_->offered_services.clear();
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     task<std::expected<bool, std::error_code>> server::iterate(const std::chrono::milliseconds timeout) noexcept(false)
@@ -69,7 +69,7 @@ namespace kmx::aio::someip
         co_return impl_->started;
     }
 
-    task<std::expected<void, std::error_code>> server::offer_service(const service_id_t service_id,
+    task_returning_expected_void_t server::offer_service(const service_id_t service_id,
                                                                      const instance_id_t instance_id) noexcept(false)
     {
         if (!impl_->started)
@@ -79,10 +79,10 @@ namespace kmx::aio::someip
             co_return std::unexpected(make_error_code(error::request_failed));
 
         impl_->offered_services.insert(service_key(service_id, instance_id));
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
-    task<std::expected<void, std::error_code>> server::stop_offer_service(const service_id_t service_id,
+    task_returning_expected_void_t server::stop_offer_service(const service_id_t service_id,
                                                                           const instance_id_t instance_id) noexcept(false)
     {
         if (!impl_->started)
@@ -92,7 +92,7 @@ namespace kmx::aio::someip
             co_return std::unexpected(make_error_code(error::request_failed));
 
         impl_->offered_services.erase(service_key(service_id, instance_id));
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     task<std::expected<method_request, std::error_code>> server::next_request() noexcept(false)
@@ -115,7 +115,7 @@ namespace kmx::aio::someip
         co_return std::unexpected(make_error_code(error::timed_out));
     }
 
-    task<std::expected<void, std::error_code>> server::send_response(const request_id_t request_id,
+    task_returning_expected_void_t server::send_response(const request_id_t request_id,
                                                                      std::vector<std::uint8_t> payload) noexcept(false)
     {
         if (!impl_->started)
@@ -128,10 +128,10 @@ namespace kmx::aio::someip
             co_return std::unexpected(make_error_code(error::response_failed));
 
         ++impl_->stats.calls_sent;
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
-    task<std::expected<void, std::error_code>> server::notify(const service_id_t service_id, const instance_id_t instance_id,
+    task_returning_expected_void_t server::notify(const service_id_t service_id, const instance_id_t instance_id,
                                                               const event_id_t event_id, std::vector<std::uint8_t> payload) noexcept(false)
     {
         if (!impl_->started)
@@ -144,7 +144,7 @@ namespace kmx::aio::someip
             co_return std::unexpected(make_error_code(error::request_failed));
 
         ++impl_->stats.events_sent;
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     const server_config& server::config() const noexcept

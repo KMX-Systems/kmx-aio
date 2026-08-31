@@ -23,10 +23,10 @@
 namespace kmx::aio::modbus
 {
     // Type aliases for common async result types
-    using async_result = task<std::expected<void, std::error_code>>;
+    using async_result = task_returning_expected_void_t;
     using async_register_result = task<std::expected<register_values, std::error_code>>;
     using async_coil_result = task<std::expected<coil_values, std::error_code>>;
-    using async_fd_result = task<std::expected<file_descriptor, std::error_code>>;
+    using async_fd_result = task<file_descriptor::expected_t>;
 
     struct tls_client::impl : detail::client_ops<tls_client::impl, readiness::tls::stream>
     {
@@ -134,7 +134,7 @@ namespace kmx::aio::modbus
             if (((::getsockopt(fd.get(), SOL_SOCKET, SO_ERROR, &so_error, &so_len) != 0) || (so_error != 0)))
                 co_return std::unexpected(make_error_code(error::connection_failed));
 
-            co_return std::expected<void, std::error_code>();
+            co_return expected_void_t();
         }
 
         [[nodiscard]] async_result perform_tls_handshake(readiness::tls::stream& tls_stream) noexcept(false)
@@ -148,13 +148,13 @@ namespace kmx::aio::modbus
             if (auto r = co_await tls_stream.handshake(); !r)
                 co_return std::unexpected(make_error_code(error::tls_handshake_failed));
 
-            co_return std::expected<void, std::error_code>();
+            co_return expected_void_t();
         }
 
         [[nodiscard]] async_result connect() noexcept(false)
         {
             if (stream_.has_value())
-                co_return std::expected<void, std::error_code>();
+                co_return expected_void_t();
 
             // Build SSL_CTX
             if (!ssl_ctx_)
@@ -166,11 +166,11 @@ namespace kmx::aio::modbus
             }
 
             // Parse IPv4 host
-            ipv4_storage_t ip_storage {};
-            if (!parse_ipv4_address(config_.host, ip_storage))
+            ipv4::storage_t ip_storage {};
+            if (!ipv4::parse_address(config_.host, ip_storage))
                 co_return std::unexpected(make_error_code(error::invalid_configuration));
 
-            const auto ip = make_ipv4_address(ip_storage);
+            const auto ip = ipv4::make_address(ip_storage);
 
             // Prepare socket (create, configure, register)
             auto fd_result = co_await prepare_socket();
@@ -196,13 +196,13 @@ namespace kmx::aio::modbus
                 co_return std::unexpected(tls_result.error());
 
             stream_.emplace(std::move(tls_stream));
-            co_return std::expected<void, std::error_code>();
+            co_return expected_void_t();
         }
 
         [[nodiscard]] async_result disconnect() noexcept(false)
         {
             stream_.reset();
-            co_return std::expected<void, std::error_code>();
+            co_return expected_void_t();
         }
     };
 

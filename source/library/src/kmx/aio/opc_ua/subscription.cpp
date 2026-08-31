@@ -47,7 +47,7 @@ namespace kmx::aio::opc_ua
     subscription::subscription(subscription&&) noexcept = default;
     subscription& subscription::operator=(subscription&&) noexcept = default;
 
-    task<std::expected<void, std::error_code>> subscription::open() noexcept(false)
+    task_returning_expected_void_t subscription::open() noexcept(false)
     {
         if (!is_valid(impl_->config))
             co_return std::unexpected(make_error_code(error::invalid_configuration));
@@ -64,16 +64,16 @@ namespace kmx::aio::opc_ua
         impl_->opened = true;
         impl_->heartbeat_sequence = 0u;
         impl_->next_heartbeat_due = std::chrono::steady_clock::now();
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
-    task<std::expected<void, std::error_code>> subscription::close() noexcept(false)
+    task_returning_expected_void_t subscription::close() noexcept(false)
     {
         if (!impl_->opened)
             co_return std::unexpected(make_error_code(error::subscription_closed));
 
         impl_->opened = false;
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     task<std::expected<notification, std::error_code>> subscription::next() noexcept(false)
@@ -112,7 +112,7 @@ namespace kmx::aio::opc_ua
         co_return std::move(*queued);
     }
 
-    std::expected<void, std::error_code> subscription::bind(client& bound_client) noexcept
+    expected_void_t subscription::bind(client& bound_client) noexcept
     {
         if (impl_->opened)
             return std::unexpected(make_error_code(error::invalid_configuration));

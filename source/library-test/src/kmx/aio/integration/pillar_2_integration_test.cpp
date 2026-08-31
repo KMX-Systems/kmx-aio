@@ -19,7 +19,7 @@ namespace kmx::aio::tls::test::integration
 {
     template <typename Stream>
     concept alpn_api_surface = requires(Stream s, std::span<const std::uint8_t> p) {
-        { s.set_alpn_protocols(p) } -> std::same_as<std::expected<void, std::error_code>>;
+        { s.set_alpn_protocols(p) } -> std::same_as<expected_void_t>;
         { s.selected_alpn() } -> std::convertible_to<std::string_view>;
     };
 

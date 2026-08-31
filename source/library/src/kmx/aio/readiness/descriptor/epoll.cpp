@@ -12,7 +12,7 @@ namespace kmx::aio::readiness::descriptor
         return epoll(fd);
     }
 
-    [[nodiscard]] epoll::result_t epoll::add_monitored_fd(const fd_t fd, const event_mask_t events) noexcept
+    [[nodiscard]] expected_void_t epoll::add_monitored_fd(const fd_t fd, const event_mask_t events) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -27,7 +27,7 @@ namespace kmx::aio::readiness::descriptor
         return {};
     }
 
-    [[nodiscard]] epoll::result_t epoll::modify_events(const fd_t fd, const event_mask_t events) noexcept
+    [[nodiscard]] expected_void_t epoll::modify_events(const fd_t fd, const event_mask_t events) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -42,7 +42,7 @@ namespace kmx::aio::readiness::descriptor
         return {};
     }
 
-    [[nodiscard]] epoll::result_t epoll::remove_monitored_fd(const fd_t fd) noexcept
+    [[nodiscard]] expected_void_t epoll::remove_monitored_fd(const fd_t fd) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -53,8 +53,7 @@ namespace kmx::aio::readiness::descriptor
         return {};
     }
 
-    [[nodiscard]] std::expected<std::size_t, std::error_code> epoll::wait_events(std::span<epoll_event> buffer,
-                                                                                 const int timeout_ms) noexcept
+    [[nodiscard]] expected_size_t epoll::wait_events(std::span<epoll_event> buffer, const int timeout_ms) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -69,7 +68,8 @@ namespace kmx::aio::readiness::descriptor
         return static_cast<std::size_t>(ready);
     }
 
-    [[nodiscard]] epoll::result_t epoll::wait_events(std::vector<epoll_event>& events, const int max_events, const int timeout_ms) noexcept
+    [[nodiscard]] expected_void_t epoll::wait_events(std::vector<epoll_event>& events, const int max_events,
+                                                            const int timeout_ms) noexcept
     {
         if (max_events <= 0)
             return std::unexpected(error_from_errno(EINVAL));

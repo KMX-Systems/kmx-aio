@@ -12,7 +12,7 @@ namespace kmx::aio
     {
         workers_.reserve(thread_count);
         for (; thread_count > 0u; --thread_count)
-            workers_.emplace_back([this](std::stop_token st) noexcept { run_worker(st); });
+            workers_.emplace_back([this](std::stop_token token) noexcept { run_worker(token); });
     }
 
     scheduler::~scheduler() noexcept
@@ -23,7 +23,7 @@ namespace kmx::aio
 
         // request_stop() under the queue lock, not outside it. A worker evaluates
         //
-        //     !queue_.empty() || st.stop_requested()
+        //     !queue_.empty() || token.stop_requested()
         //
         // while holding this mutex, and then releases it and blocks inside cv_.wait(). Requesting the
         // stop without the lock lets the whole change land in the gap between those two steps: the
@@ -75,12 +75,12 @@ namespace kmx::aio
         idle_cv_.wait(lock, [this]() noexcept { return queue_.empty() && (active_ == 0u); });
     }
 
-    void scheduler::run_worker(std::stop_token st) noexcept
+    void scheduler::run_worker(std::stop_token token) noexcept
     {
-        while (!st.stop_requested())
+        while (!token.stop_requested())
         {
             std::unique_lock lock(queue_mutex_);
-            cv_.wait(lock, [this, &st]() noexcept { return !queue_.empty() || st.stop_requested(); });
+            cv_.wait(lock, [this, &token]() noexcept { return !queue_.empty() || token.stop_requested(); });
 
             if (queue_.empty())
                 continue;

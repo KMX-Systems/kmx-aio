@@ -32,7 +32,11 @@ namespace kmx::aio
         }
     } // namespace detail
 
-    bool parse_ipv4_address(std::string_view text, ipv4_storage_t& out) noexcept
+} // namespace kmx::aio
+
+namespace kmx::aio::ipv4
+{
+    bool parse_address(std::string_view text, storage_t& out) noexcept
     {
         std::array<std::uint8_t, 4u> buf {};
         const char* p = text.data();
@@ -68,7 +72,11 @@ namespace kmx::aio
         return true;
     }
 
-    bool parse_ipv6_address(std::string_view text, ipv6_storage_t& out) noexcept
+} // namespace kmx::aio::ipv4
+
+namespace kmx::aio::ipv6
+{
+    bool parse_address(std::string_view text, storage_t& out) noexcept
     {
         // Simplified IPv6 parser: only supports fully expanded format (8 groups of 4 hex digits)
         // Format: xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
@@ -128,7 +136,11 @@ namespace kmx::aio
         return true;
     }
 
-    bool parse_mac_address(std::string_view text, mac_storage_t& out) noexcept
+} // namespace kmx::aio::ipv6
+
+namespace kmx::aio::mac
+{
+    bool parse_address(std::string_view text, storage_t& out) noexcept
     {
         const char* p = text.data();
         const char* const end = p + text.size();
@@ -170,4 +182,4 @@ namespace kmx::aio
         return true;
     }
 
-} // namespace kmx::aio
+} // namespace kmx::aio::mac

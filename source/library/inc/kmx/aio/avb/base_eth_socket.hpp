@@ -62,7 +62,7 @@ namespace kmx::aio::avb
 
         // Setup
 
-        [[nodiscard]] std::expected<void, std::error_code> open_socket(const std::string_view iface, std::uint16_t ethertype)
+        [[nodiscard]] expected_void_t open_socket(const std::string_view iface, std::uint16_t ethertype)
         {
             ethertype_ = ethertype;
 
@@ -118,7 +118,7 @@ namespace kmx::aio::avb
 
         // Send (synchronous, non-blocking — called only from completion TUs via base)
 
-        [[nodiscard]] std::expected<void, std::error_code> do_send(const mac_address_t& dest_mac, std::span<const std::byte> payload,
+        [[nodiscard]] expected_void_t do_send(const mac_address_t& dest_mac, std::span<const std::byte> payload,
                                                                    std::optional<avb_timestamp_t> tx_time)
         {
             // Build sockaddr_ll destination
@@ -142,7 +142,7 @@ namespace kmx::aio::avb
             {
                 msg.msg_control = ctrl_buf.data();
                 msg.msg_controllen = ctrl_buf.size();
-                auto* cmsg = CMSG_FIRSTHDR(&msg);
+                auto* const cmsg = CMSG_FIRSTHDR(&msg);
                 cmsg->cmsg_level = SOL_SOCKET;
                 cmsg->cmsg_type = SCM_TXTIME;
                 cmsg->cmsg_len = CMSG_LEN(sizeof(std::uint64_t));
@@ -197,7 +197,7 @@ namespace kmx::aio::avb
         }
 
     private:
-        [[nodiscard]] std::expected<void, std::error_code> resolve_iface(const std::string_view iface)
+        [[nodiscard]] expected_void_t resolve_iface(const std::string_view iface)
         {
             // Get interface index
             ::ifreq ifr {};

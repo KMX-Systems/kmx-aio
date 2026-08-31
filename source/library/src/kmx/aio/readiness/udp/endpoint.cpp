@@ -8,7 +8,7 @@
 
 namespace kmx::aio::readiness::udp
 {
-    endpoint::create_result endpoint::create(executor& exec, const int domain) noexcept
+    endpoint::expected_t endpoint::create(executor& exec, const int domain) noexcept
     {
         auto sock = socket::create(exec, domain);
         if (!sock)
@@ -17,7 +17,7 @@ namespace kmx::aio::readiness::udp
         return endpoint(std::move(*sock));
     }
 
-    endpoint::result_task endpoint::recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
+    task_returning_expected_size_t endpoint::recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
                                          ::socklen_t& out_peer_addr_len) noexcept(false)
     {
         iovec iov {};
@@ -37,7 +37,7 @@ namespace kmx::aio::readiness::udp
         co_return result;
     }
 
-    endpoint::result_task endpoint::recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr, ::socklen_t& out_peer_addr_len,
+    task_returning_expected_size_t endpoint::recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr, ::socklen_t& out_peer_addr_len,
                                          ip_address_t& out_peer_ip, port_t& out_peer_port) noexcept(false)
     {
         auto result = co_await recv(buffer, peer_addr, out_peer_addr_len);
@@ -56,7 +56,7 @@ namespace kmx::aio::readiness::udp
                     co_return std::unexpected(error_from_errno(EINVAL));
 
                 const auto* addr4 = reinterpret_cast<const ::sockaddr_in*>(&peer_addr);
-                out_peer_ip = ipv4_address_t {reinterpret_cast<const std::uint8_t*>(&addr4->sin_addr), 4u};
+                out_peer_ip = ipv4::address_t {reinterpret_cast<const std::uint8_t*>(&addr4->sin_addr), 4u};
                 out_peer_port = ::ntohs(addr4->sin_port);
                 co_return result;
             }
@@ -66,7 +66,7 @@ namespace kmx::aio::readiness::udp
                     co_return std::unexpected(error_from_errno(EINVAL));
 
                 const auto* addr6 = reinterpret_cast<const sockaddr_in6*>(&peer_addr);
-                out_peer_ip = ipv6_address_t {reinterpret_cast<const std::uint8_t*>(&addr6->sin6_addr), 16u};
+                out_peer_ip = ipv6::address_t {reinterpret_cast<const std::uint8_t*>(&addr6->sin6_addr), 16u};
                 out_peer_port = ::ntohs(addr6->sin6_port);
                 co_return result;
             }
@@ -75,7 +75,7 @@ namespace kmx::aio::readiness::udp
         }
     }
 
-    endpoint::result_task endpoint::send(std::span<const std::byte> buffer, const sockaddr* peer_addr,
+    task_returning_expected_size_t endpoint::send(std::span<const std::byte> buffer, const sockaddr* peer_addr,
                                          const ::socklen_t addr_len) noexcept(false)
     {
         if (peer_addr == nullptr)
@@ -95,7 +95,7 @@ namespace kmx::aio::readiness::udp
         co_return co_await socket_.sendmsg(&msg);
     }
 
-    endpoint::result_task endpoint::send(std::span<const std::byte> buffer, const ip_address_t peer_ip,
+    task_returning_expected_size_t endpoint::send(std::span<const std::byte> buffer, const ip_address_t peer_ip,
                                          const port_t peer_port) noexcept(false)
     {
         const auto peer_addr = make_socket_address(peer_ip, peer_port);

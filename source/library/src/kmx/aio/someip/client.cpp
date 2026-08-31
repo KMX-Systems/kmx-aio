@@ -37,7 +37,7 @@ namespace kmx::aio::someip
     client::client(client&&) noexcept = default;
     client& client::operator=(client&&) noexcept = default;
 
-    task<std::expected<void, std::error_code>> client::start() noexcept(false)
+    task_returning_expected_void_t client::start() noexcept(false)
     {
         if (impl_->config.application_name.empty())
             co_return std::unexpected(make_error_code(error::invalid_configuration));
@@ -51,10 +51,10 @@ namespace kmx::aio::someip
 
         impl_->started = true;
         ++impl_->stats.successful_starts;
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
-    task<std::expected<void, std::error_code>> client::stop() noexcept(false)
+    task_returning_expected_void_t client::stop() noexcept(false)
     {
         if (!impl_->started)
             co_return std::unexpected(make_error_code(error::stopped));
@@ -62,7 +62,7 @@ namespace kmx::aio::someip
         (void) impl_->runtime.stop();
         impl_->started = false;
         impl_->available_services.clear();
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     task<std::expected<bool, std::error_code>> client::iterate(const std::chrono::milliseconds timeout) noexcept(false)
@@ -76,7 +76,7 @@ namespace kmx::aio::someip
         co_return true;
     }
 
-    task<std::expected<void, std::error_code>> client::request_service(const service_id_t service_id,
+    task_returning_expected_void_t client::request_service(const service_id_t service_id,
                                                                        const instance_id_t instance_id) noexcept(false)
     {
         if (!impl_->started)
@@ -86,10 +86,10 @@ namespace kmx::aio::someip
             co_return std::unexpected(make_error_code(error::request_failed));
 
         impl_->available_services.insert(service_key(service_id, instance_id));
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
-    task<std::expected<void, std::error_code>> client::release_service(const service_id_t service_id,
+    task_returning_expected_void_t client::release_service(const service_id_t service_id,
                                                                        const instance_id_t instance_id) noexcept(false)
     {
         if (!impl_->started)
@@ -99,7 +99,7 @@ namespace kmx::aio::someip
             co_return std::unexpected(make_error_code(error::request_failed));
 
         impl_->available_services.erase(service_key(service_id, instance_id));
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     task<std::expected<call_result, std::error_code>> client::call_method(const service_id_t service_id, const instance_id_t instance_id,

@@ -35,10 +35,10 @@ namespace kmx::aio::opc_ua
 
         /// @brief Start server runtime/listening endpoints asynchronously.
         /// @return Task resolving to success or error.
-        [[nodiscard]] task<std::expected<void, std::error_code>> start() noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t start() noexcept(false);
         /// @brief Stop server runtime asynchronously.
         /// @return Task resolving to success or error.
-        [[nodiscard]] task<std::expected<void, std::error_code>> stop() noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t stop() noexcept(false);
         /// @brief Drive backend server iteration once.
         /// @param timeout Backend-dependent iterate/poll timeout.
         /// @return Task resolving to backend iterate work/result count.

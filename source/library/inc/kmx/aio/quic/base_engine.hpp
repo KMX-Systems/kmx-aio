@@ -313,7 +313,7 @@ namespace kmx::aio::quic
 
         /// @brief Configures lsquic callbacks, settings, and creates the lsquic_engine.
         /// @return Success or an error code.
-        [[nodiscard]] std::expected<void, std::error_code> init_lsquic(const kmx::aio::quic::settings& config, unsigned lsquic_flags)
+        [[nodiscard]] expected_void_t init_lsquic(const kmx::aio::quic::settings& config, unsigned lsquic_flags)
         {
             detail::maybe_enable_lsquic_debug_logging();
 
@@ -346,7 +346,7 @@ namespace kmx::aio::quic
 
         /// @brief Binds the UDP socket and stores the local address.
         /// @return Success or an error code.
-        [[nodiscard]] std::expected<void, std::error_code> bind_socket(const ip_address_t ip, const port_t port)
+        [[nodiscard]] expected_void_t bind_socket(const ip_address_t ip, const port_t port)
         {
             auto sock_addr_result = make_socket_address(ip, port);
             if (!sock_addr_result)
@@ -364,7 +364,7 @@ namespace kmx::aio::quic
         }
 
         /// @brief Shared initialisation logic called after model-specific socket creation.
-        [[nodiscard]] std::expected<void, std::error_code> setup(std::expected<UdpSocket, std::error_code>&& sock_res,
+        [[nodiscard]] expected_void_t setup(std::expected<UdpSocket, std::error_code>&& sock_res,
                                                                  const ip_address_t ip, const port_t port, void* ssl_ctx,
                                                                  const kmx::aio::quic::settings& config)
         {
@@ -383,7 +383,7 @@ namespace kmx::aio::quic
             return {};
         }
 
-        [[nodiscard]] std::expected<void, std::error_code> connect_setup(std::expected<UdpSocket, std::error_code>&& sock_res,
+        [[nodiscard]] expected_void_t connect_setup(std::expected<UdpSocket, std::error_code>&& sock_res,
                                                                          const ip_address_t peer_ip, const port_t peer_port,
                                                                          const std::string& hostname, const std::string& client_payload,
                                                                          void* ssl_ctx, const kmx::aio::quic::settings& config)
@@ -395,7 +395,7 @@ namespace kmx::aio::quic
             return connect_setup_common(std::move(sock_res), peer_ip, peer_port, hostname, ssl_ctx, config);
         }
 
-        [[nodiscard]] std::expected<void, std::error_code> connect_setup(std::expected<UdpSocket, std::error_code>&& sock_res,
+        [[nodiscard]] expected_void_t connect_setup(std::expected<UdpSocket, std::error_code>&& sock_res,
                                                                          const ip_address_t peer_ip, const port_t peer_port,
                                                                          const std::string& hostname,
                                                                          const std::vector<std::string>& client_payloads, void* ssl_ctx,
@@ -417,7 +417,7 @@ namespace kmx::aio::quic
                 client_payloads_.pop();
         }
 
-        [[nodiscard]] std::expected<void, std::error_code> connect_setup_common(std::expected<UdpSocket, std::error_code>&& sock_res,
+        [[nodiscard]] expected_void_t connect_setup_common(std::expected<UdpSocket, std::error_code>&& sock_res,
                                                                                 const ip_address_t peer_ip, const port_t peer_port,
                                                                                 const std::string& hostname, void* ssl_ctx,
                                                                                 const kmx::aio::quic::settings& config)
@@ -499,7 +499,7 @@ namespace kmx::aio::quic
                 drive_engine_once();
         }
 
-        [[nodiscard]] std::expected<void, std::error_code> setup_readiness_timer_if_needed(
+        [[nodiscard]] expected_void_t setup_readiness_timer_if_needed(
             std::optional<kmx::aio::readiness::descriptor::timer>& readiness_tick)
         {
             if constexpr (requires(Executor& e) { e.async_timeout(std::uint64_t {}); })
@@ -518,7 +518,7 @@ namespace kmx::aio::quic
             }
         }
 
-        [[nodiscard]] std::expected<void, std::error_code> feed_packet_to_engine(const std::array<std::byte, 4096u>& packet_buf,
+        [[nodiscard]] expected_void_t feed_packet_to_engine(const std::array<std::byte, 4096u>& packet_buf,
                                                                                  const ssize_t recv_n, const ::sockaddr_storage& peer_addr)
         {
             const int packet_in_res = ::lsquic_engine_packet_in(
@@ -535,16 +535,16 @@ namespace kmx::aio::quic
             return {};
         }
 
-        task<std::expected<void, std::error_code>> wait_completion_idle_tick()
+        task_returning_expected_void_t wait_completion_idle_tick()
         {
             auto timeout_res = co_await exec_.async_timeout(1'000'000ULL); // 1 ms
             if (!timeout_res)
                 co_return std::unexpected(timeout_res.error());
 
-            co_return std::expected<void, std::error_code> {};
+            co_return expected_void_t {};
         }
 
-        task<std::expected<void, std::error_code>> wait_readiness_idle_tick(kmx::aio::readiness::descriptor::timer& readiness_tick)
+        task_returning_expected_void_t wait_readiness_idle_tick(kmx::aio::readiness::descriptor::timer& readiness_tick)
         {
             ::itimerspec one_ms {};
             one_ms.it_value.tv_nsec = readiness_idle_tick_ns_;
@@ -556,10 +556,10 @@ namespace kmx::aio::quic
             if (!tick_res)
                 co_return std::unexpected(tick_res.error());
 
-            co_return std::expected<void, std::error_code> {};
+            co_return expected_void_t {};
         }
 
-        task<std::expected<void, std::error_code>> process_completion_receive_iteration(std::array<std::byte, 4096u>& packet_buf,
+        task_returning_expected_void_t process_completion_receive_iteration(std::array<std::byte, 4096u>& packet_buf,
                                                                                         ::msghdr& msg, const ::sockaddr_storage& peer_addr)
         {
             const ssize_t recv_n = ::recvmsg(socket_->get_fd(), &msg, MSG_DONTWAIT);
@@ -571,7 +571,7 @@ namespace kmx::aio::quic
                     if (!idle_res)
                         co_return std::unexpected(idle_res.error());
 
-                    co_return std::expected<void, std::error_code> {};
+                    co_return expected_void_t {};
                 }
 
                 co_return std::unexpected(error_from_errno());
@@ -581,10 +581,10 @@ namespace kmx::aio::quic
                 if (auto packet_res = feed_packet_to_engine(packet_buf, recv_n, peer_addr); !packet_res)
                     co_return std::unexpected(packet_res.error());
 
-            co_return std::expected<void, std::error_code> {};
+            co_return expected_void_t {};
         }
 
-        task<std::expected<void, std::error_code>> process_readiness_receive_iteration(
+        task_returning_expected_void_t process_readiness_receive_iteration(
             std::array<std::byte, 4096u>& packet_buf, ::msghdr& msg, const ::sockaddr_storage& peer_addr,
             kmx::aio::readiness::descriptor::timer& readiness_tick)
         {
@@ -597,7 +597,7 @@ namespace kmx::aio::quic
                     if (!idle_res)
                         co_return std::unexpected(idle_res.error());
 
-                    co_return std::expected<void, std::error_code> {};
+                    co_return expected_void_t {};
                 }
 
                 co_return std::unexpected(error_from_errno());
@@ -607,12 +607,12 @@ namespace kmx::aio::quic
                 if (auto packet_res = feed_packet_to_engine(packet_buf, recv_n, peer_addr); !packet_res)
                     co_return std::unexpected(packet_res.error());
 
-            co_return std::expected<void, std::error_code> {};
+            co_return expected_void_t {};
         }
 
     public:
         /// @brief Shared event processing loop.
-        task<std::expected<void, std::error_code>> process()
+        task_returning_expected_void_t process()
         {
             running_ = true;
             std::array<std::byte, 4096u> packet_buf {};
@@ -647,7 +647,7 @@ namespace kmx::aio::quic
                 }
             }
 
-            co_return std::expected<void, std::error_code> {};
+            co_return expected_void_t {};
         }
     };
 

@@ -18,7 +18,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
     struct config
     {
         std::uint32_t num_workers = 1u;
-        kmx::aio::ip_address_t server_addr = kmx::aio::make_ip_address(kmx::aio::localhost_ipv4);
+        kmx::aio::ip_address_t server_addr = kmx::aio::make_ip_address(kmx::aio::ipv4::localhost);
         port_t server_port = 8446u;
         std::uint32_t scheduler_threads = 2u;
         port_t max_events = 1024u;

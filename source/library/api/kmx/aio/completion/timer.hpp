@@ -32,8 +32,9 @@ namespace kmx::aio::completion
 
         /// @brief Move constructor.
         timer(timer&&) noexcept = default;
-        /// @brief Move assignment.
-        timer& operator=(timer&&) noexcept = default;
+        /// @brief Not move-assignable: exec_ is a reference and cannot be reseated. Defaulting this
+        ///        made it implicitly deleted anyway.
+        timer& operator=(timer&&) = delete;
 
         ~timer() noexcept = default;
 
@@ -42,7 +43,7 @@ namespace kmx::aio::completion
         /// @return Success or an error if the wait was cancelled.
         /// @throws std::bad_alloc (coroutine frame allocation).
         template <typename Rep, typename Period>
-        [[nodiscard]] task<std::expected<void, std::error_code>> wait(const std::chrono::duration<Rep, Period> duration) noexcept(false)
+        [[nodiscard]] task_returning_expected_void_t wait(const std::chrono::duration<Rep, Period> duration) noexcept(false)
         {
             const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(duration);
             co_return co_await wait_ns(static_cast<std::uint64_t>(ns.count()));
@@ -52,7 +53,7 @@ namespace kmx::aio::completion
         /// @brief Internal: submits a timeout SQE with the given nanosecond duration.
         /// @param ns Nanoseconds to wait.
         /// @return A task yielding success or an error.
-        [[nodiscard]] task<std::expected<void, std::error_code>> wait_ns(std::uint64_t ns) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t wait_ns(std::uint64_t ns) noexcept(false);
 
         executor& exec_;
     };

@@ -13,17 +13,17 @@ namespace kmx::aio::completion::udp
         return socket(exec, std::move(*res));
     }
 
-    socket::result_task socket::recvmsg(::msghdr* msg, const unsigned flags) noexcept(false)
+    task_returning_expected_size_t socket::recvmsg(::msghdr* msg, const unsigned flags) noexcept(false)
     {
         co_return co_await exec_.async_recvmsg(fd_.get(), msg, flags);
     }
 
-    socket::result_task socket::sendmsg(const ::msghdr* msg, const unsigned flags) noexcept(false)
+    task_returning_expected_size_t socket::sendmsg(const ::msghdr* msg, const unsigned flags) noexcept(false)
     {
         co_return co_await exec_.async_sendmsg(fd_.get(), msg, flags);
     }
 
-    std::expected<void, std::error_code> socket::bind(const ip_address_t ip, const port_t port) noexcept
+    expected_void_t socket::bind(const ip_address_t ip, const port_t port) noexcept
     {
         return fd_.bind(ip, port);
     }

@@ -60,7 +60,7 @@ namespace kmx::aio::readiness::openonload
     }
 
     /// @brief Tries to read from zero-copy accelerated payload and store into managed buffer safely.
-    inline std::expected<std::size_t, std::error_code> zero_copy_receive(int fd, std::span<char> buffer) noexcept
+    inline expected_size_t zero_copy_receive(int fd, std::span<char> buffer) noexcept
     {
 #if KMX_AIO_OPENONLOAD_EXTENSIONS_AVAILABLE
         onload_zc_recv_args args {};
@@ -105,7 +105,7 @@ namespace kmx::aio::readiness::openonload
     }
 
     /// @brief Tries to send a payload via zero-copy fast path directly to the NIC hardware queues.
-    inline std::expected<std::size_t, std::error_code> zero_copy_send(int fd, std::span<const char> buffer) noexcept
+    inline expected_size_t zero_copy_send(int fd, std::span<const char> buffer) noexcept
     {
 #if KMX_AIO_OPENONLOAD_EXTENSIONS_AVAILABLE
         if (buffer.empty())

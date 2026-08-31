@@ -1,20 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if ! command -v apt-get >/dev/null 2>&1; then
-	echo "This script currently supports Ubuntu/Debian only (apt-get required)." >&2
-	exit 1
-fi
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$script_dir/../apt.sh"
 
-if [[ "${EUID}" -ne 0 ]]; then
-	SUDO="sudo"
-else
-	SUDO=""
-fi
-
-echo "[af_xdp] Installing AF_XDP toolchain dependencies (Ubuntu/Debian)..."
-${SUDO} apt-get update
-${SUDO} apt-get install -y \
+echo "[af_xdp] Checking AF_XDP toolchain dependencies..."
+apt_install_missing af_xdp \
 	libbpf-dev \
 	libxdp-dev \
 	libelf-dev \

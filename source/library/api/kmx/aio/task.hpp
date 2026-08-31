@@ -4,8 +4,11 @@
 #ifndef PCH
     #include <concepts>
     #include <coroutine>
+    #include <cstddef>
     #include <exception>
+    #include <expected>
     #include <stop_token>
+    #include <system_error>
     #include <type_traits>
     #include <utility>
     #include <variant>
@@ -23,6 +26,11 @@ namespace kmx::aio
 
     /// @brief Custom awaitable token that resolves to the current coroutine's stop token.
     constexpr get_stop_token_t get_stop_token {};
+
+    /// @brief Type-erased handle to a suspended coroutine, whatever its promise type.
+    /// @details What awaiters and schedulers pass around: enough to resume or destroy a coroutine,
+    ///          without naming the frame it belongs to.
+    using coroutine_handle_t = std::coroutine_handle<>;
 
     /// @brief Forward declaration of the lazy coroutine task wrapper.
     /// @tparam T The task result type.
@@ -47,7 +55,7 @@ namespace kmx::aio
         struct promise_base
         {
             /// @brief Continuation to resume when the coroutine reaches final suspend.
-            std::coroutine_handle<> continuation_;
+            coroutine_handle_t continuation_;
             /// @brief Stored exception captured from the coroutine body.
             std::exception_ptr exception_;
             /// @brief Stop source associated with the coroutine instance.
@@ -82,7 +90,7 @@ namespace kmx::aio
                 /// @return The continuation handle or `std::noop_coroutine()`.
                 template <typename P>
                     requires std::is_base_of_v<promise_base, P>
-                std::coroutine_handle<> await_suspend(std::coroutine_handle<P> h) const noexcept
+                coroutine_handle_t await_suspend(std::coroutine_handle<P> h) const noexcept
                 {
                     if (h.promise().continuation_) // LCOV_EXCL_BR_LINE: see below
                         return h.promise().continuation_;
@@ -128,7 +136,7 @@ namespace kmx::aio
                     /// @note Never called: await_ready() above returns true, so the coroutine takes the
                     ///       token without suspending. It exists because the awaiter concept asks for
                     ///       it.
-                    void await_suspend(std::coroutine_handle<>) const noexcept {} // LCOV_EXCL_LINE
+                    void await_suspend(coroutine_handle_t) const noexcept {} // LCOV_EXCL_LINE
                     /// @brief Returns the captured stop token.
                     /// @return The coroutine stop token.
                     std::stop_token await_resume() const noexcept { return token; }
@@ -271,7 +279,7 @@ namespace kmx::aio
         /// @param continuation The coroutine that will resume after this task finishes.
         /// @return The coroutine handle to resume for symmetric transfer.
         template <typename P>
-        std::coroutine_handle<> await_suspend(std::coroutine_handle<P> continuation) noexcept
+        coroutine_handle_t await_suspend(std::coroutine_handle<P> continuation) noexcept
         {
             // Inherit the awaiting coroutine's stop token, so cancelling the outermost task reaches every task
             // it is waiting on. An explicit token already set on this task wins, so a sub-task can be given a
@@ -317,5 +325,12 @@ namespace kmx::aio
             return task<void>(std::coroutine_handle<promise<void>>::from_promise(*this));
         }
     }
+
+    /// @brief Task yielding a transferred byte count, or the error that stopped the operation.
+    /// @details The result type of every asynchronous read/write/send/receive in the library.
+    using task_returning_expected_size_t = task<expected_size_t>;
+
+    /// @brief Task yielding nothing on success, or the error that stopped the operation.
+    using task_returning_expected_void_t = task<expected_void_t>;
 
 } // namespace kmx::aio

@@ -29,7 +29,7 @@ namespace kmx::aio::avb
     // open
 
     template <typename Executor>
-    task<std::expected<void, std::error_code>> generic_eth_socket<Executor>::open(const std::string_view iface,
+    task_returning_expected_void_t generic_eth_socket<Executor>::open(const std::string_view iface,
                                                                                   std::uint16_t ethertype) noexcept(false)
     {
         co_return impl_->open_socket(iface, ethertype);
@@ -38,7 +38,7 @@ namespace kmx::aio::avb
     // send
 
     template <typename Executor>
-    task<std::expected<void, std::error_code>> generic_eth_socket<Executor>::send(const mac_address_t& dest_mac,
+    task_returning_expected_void_t generic_eth_socket<Executor>::send(const mac_address_t& dest_mac,
                                                                                   std::span<const std::byte> frame,
                                                                                   std::optional<avb_timestamp_t> tx_time) noexcept(false)
     {
@@ -72,7 +72,7 @@ namespace kmx::aio::avb
         const auto res = co_await impl_->exec_.async_sendmsg(impl_->fd_.get(), &msg, 0);
         if (!res)
             co_return std::unexpected(res.error());
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     // recv

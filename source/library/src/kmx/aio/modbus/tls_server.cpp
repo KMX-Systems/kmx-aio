@@ -19,7 +19,7 @@
 namespace kmx::aio::modbus
 {
     // Type alias for common async result type
-    using async_result = task<std::expected<void, std::error_code>>;
+    using async_result = task_returning_expected_void_t;
 
     struct tls_server::impl : detail::server_ops<tls_server::impl>
     {
@@ -124,18 +124,18 @@ namespace kmx::aio::modbus
 
         ::SSL_CTX* ssl_ctx = *ctx_result;
 
-        ipv4_storage_t bind_ip = any_ipv4;
+        ipv4::storage_t bind_ip = ipv4::any;
         if (!config.bind_address.empty())
         {
-            bind_ip = ipv4_storage_t {};
-            if (!parse_ipv4_address(config.bind_address, bind_ip))
+            bind_ip = ipv4::storage_t {};
+            if (!ipv4::parse_address(config.bind_address, bind_ip))
             {
                 ::SSL_CTX_free(ssl_ctx);
                 co_return std::unexpected(make_error_code(error::invalid_configuration));
             }
         }
 
-        readiness::tcp::listener listener {exec, make_ipv4_address(bind_ip), config.port};
+        readiness::tcp::listener listener {exec, ipv4::make_address(bind_ip), config.port};
         if (const auto r = listener.listen(); !r)
         {
             ::SSL_CTX_free(ssl_ctx);
@@ -166,7 +166,7 @@ namespace kmx::aio::modbus
         }
 
         ::SSL_CTX_free(ssl_ctx);
-        co_return std::expected<void, std::error_code>();
+        co_return expected_void_t();
     }
 
     void tls_server::stop() noexcept

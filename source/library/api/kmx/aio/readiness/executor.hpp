@@ -96,17 +96,17 @@ namespace kmx::aio::readiness
         ~executor() noexcept;
 
         /// @brief Registers a file descriptor for edge-triggered events.
-        [[nodiscard]] std::expected<void, std::error_code> register_fd(fd_t fd) noexcept;
+        [[nodiscard]] expected_void_t register_fd(const fd_t fd) noexcept;
 
         /// @brief Unregisters a file descriptor.
-        void unregister_fd(fd_t fd) noexcept;
+        void unregister_fd(const fd_t fd) noexcept;
 
         /// @brief Awaits a specific event on a file descriptor.
         /// @return True when the event fired, false when the wait was cancelled - by cancel_io() or by
         ///         unregister_fd() taking the descriptor away. A caller that ignores a false result
         ///         retries the operation that just reported EAGAIN and suspends again, which is how a
         ///         cancelled wait turns into a coroutine that never finishes.
-        [[nodiscard]] auto wait_io(fd_t fd, event_type type) noexcept
+        [[nodiscard]] auto wait_io(const fd_t fd, const event_type type) noexcept
         {
             struct io_awaiter
             {
@@ -125,7 +125,7 @@ namespace kmx::aio::readiness
                 // the descriptor was already cancelled: deciding that inside subscribe(), under the lock
                 // cancellation itself takes, is what stops a cancel that lands between the caller's own
                 // check and this subscription from being lost.
-                bool await_suspend(std::coroutine_handle<> h) noexcept(false) { return exec.subscribe(fd, type, h, &cancelled); }
+                bool await_suspend(coroutine_handle_t h) noexcept(false) { return exec.subscribe(fd, type, h, &cancelled); }
 
                 [[nodiscard]] bool await_resume() const noexcept { return !cancelled; }
             };
@@ -138,28 +138,26 @@ namespace kmx::aio::readiness
         ///          the task holding it complete. Use this to interrupt an operation that is parked on a
         ///          descriptor which will never see another event - an accept() on a listener that is
         ///          being shut down, for instance.
-        void cancel_io(fd_t fd) noexcept;
+        void cancel_io(const fd_t fd) noexcept;
 
         /// @brief Asynchronously receives a message from a socket using readiness notifications.
         /// @param fd Socket file descriptor.
         /// @param msg Message descriptor for buffers/ancillary data.
         /// @param flags Flags forwarded to recvmsg.
         /// @return Number of bytes received or an error.
-        [[nodiscard]] task<std::expected<std::size_t, std::error_code>> async_recvmsg(fd_t fd, ::msghdr* msg,
-                                                                                      unsigned flags = 0u) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t async_recvmsg(const fd_t fd, ::msghdr* msg, const unsigned flags = 0u) noexcept(false);
 
         /// @brief Asynchronously sends a message on a socket using readiness notifications.
         /// @param fd Socket file descriptor.
         /// @param msg Message descriptor for buffers/ancillary data.
         /// @param flags Flags forwarded to sendmsg.
         /// @return Number of bytes sent or an error.
-        [[nodiscard]] task<std::expected<std::size_t, std::error_code>> async_sendmsg(fd_t fd, const ::msghdr* msg,
-                                                                                      unsigned flags = 0u) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t async_sendmsg(const fd_t fd, const ::msghdr* msg, const unsigned flags = 0u) noexcept(false);
 
         /// @brief Asynchronously waits for a relative timeout duration.
         /// @param duration_ns Timeout duration in nanoseconds.
         /// @return Success or an error.
-        [[nodiscard]] task<std::expected<void, std::error_code>> async_timeout(std::uint64_t duration_ns) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t async_timeout(const std::uint64_t duration_ns) noexcept(false);
 
         /// @brief Submits a root task to the system.
         /// @throws std::bad_alloc if scheduling fails.
@@ -220,7 +218,7 @@ namespace kmx::aio::readiness
         // worker - and therefore cannot join the I/O thread.
         [[nodiscard]] bool on_owned_thread() const noexcept;
 
-        [[nodiscard]] bool subscribe(fd_t fd, event_type type, std::coroutine_handle<> handle, bool* cancelled) noexcept(false);
+        [[nodiscard]] bool subscribe(fd_t fd, event_type type, coroutine_handle_t handle, bool* cancelled) noexcept(false);
 
         // Resumes every waiter on fd, flagging each as cancelled first.
         // @param remember Keep the descriptor marked so a subscription arriving afterwards is refused
@@ -252,7 +250,7 @@ namespace kmx::aio::readiness
 
         /// @brief Resumes a coroutine, either here or on a scheduler worker, as configured.
         /// @param handle The coroutine to resume.
-        void resume_waiter(std::coroutine_handle<> handle) noexcept;
+        void resume_waiter(coroutine_handle_t handle) noexcept;
 
         // Helper for executing tasks and updating statistics.
         struct detached_task_wrapper
@@ -302,7 +300,7 @@ namespace kmx::aio::readiness
         /// @brief A coroutine suspended in wait_io(), and the flag telling it why it was resumed.
         struct waiter
         {
-            std::coroutine_handle<> handle;
+            coroutine_handle_t handle;
             bool* cancelled;
         };
 

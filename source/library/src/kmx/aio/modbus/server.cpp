@@ -18,7 +18,7 @@
 namespace kmx::aio::modbus
 {
     // Type alias for common async result type
-    using async_result = task<std::expected<void, std::error_code>>;
+    using async_result = task_returning_expected_void_t;
 
     struct server::impl : detail::server_ops<server::impl>
     {
@@ -61,15 +61,15 @@ namespace kmx::aio::modbus
     async_result
     server::serve(readiness::executor& exec, server_config config) noexcept(false)
     {
-        ipv4_storage_t bind_ip = any_ipv4;
+        ipv4::storage_t bind_ip = ipv4::any;
         if (!config.bind_address.empty())
         {
-            bind_ip = ipv4_storage_t {};
-            if (!parse_ipv4_address(config.bind_address, bind_ip))
+            bind_ip = ipv4::storage_t {};
+            if (!ipv4::parse_address(config.bind_address, bind_ip))
                 co_return std::unexpected(make_error_code(error::invalid_configuration));
         }
 
-        readiness::tcp::listener listener {exec, make_ipv4_address(bind_ip), config.port};
+        readiness::tcp::listener listener {exec, ipv4::make_address(bind_ip), config.port};
         if (const auto r = listener.listen(); !r)
             co_return std::unexpected(r.error());
 
@@ -95,7 +95,7 @@ namespace kmx::aio::modbus
                 impl_->handle_connection(exec, std::move(*fd_result), config));
         }
 
-        co_return std::expected<void, std::error_code>();
+        co_return expected_void_t();
     }
 
     void server::stop() noexcept

@@ -49,7 +49,7 @@ namespace kmx::aio::avb
         /// @param ethertype EtherType to filter on receive (e.g. avb::ethertype::avtp).
         ///                  Use 0 or ETH_P_ALL to receive all frames.
         /// @return Success or an error code.
-        [[nodiscard]] task<std::expected<void, std::error_code>> open(const std::string_view iface,
+        [[nodiscard]] task_returning_expected_void_t open(const std::string_view iface,
                                                                       std::uint16_t ethertype) noexcept(false);
 
         /// @brief Send a raw Layer 2 frame.
@@ -58,7 +58,7 @@ namespace kmx::aio::avb
         /// @param tx_time   Optional TAI transmission timestamp for scheduled TX (SO_TXTIME).
         ///                  If empty, frame is sent immediately.
         /// @return Success or an error code.
-        [[nodiscard]] task<std::expected<void, std::error_code>> send(const mac_address_t& dest_mac, std::span<const std::byte> frame,
+        [[nodiscard]] task_returning_expected_void_t send(const mac_address_t& dest_mac, std::span<const std::byte> frame,
                                                                       std::optional<avb_timestamp_t> tx_time = {}) noexcept(false);
 
         /// @brief Receive the next frame matching the bound EtherType.

@@ -20,24 +20,31 @@
 namespace kmx::aio
 {
     /// @brief Owned IP address variant covering IPv4 and IPv6.
-    using ip_address_owned_t = std::variant<ipv4_address_owned_t, ipv6_address_owned_t>;
+    using ip_address_owned_t = std::variant<ipv4::address_owned_t, ipv6::address_owned_t>;
     /// @brief Non-owning IP address view variant.
-    using ip_address_t = std::variant<ipv4_address_t, ipv6_address_t>;
+    using ip_address_t = std::variant<ipv4::address_t, ipv6::address_t>;
+
+    /// @brief Result of an operation yielding an integer, or an error code.
+    using expected_int_t = std::expected<int, std::error_code>;
+    /// @brief Result of an operation yielding a byte count, or an error code.
+    using expected_size_t = std::expected<std::size_t, std::error_code>;
+    /// @brief Result of an operation yielding nothing, or an error code.
+    using expected_void_t = std::expected<void, std::error_code>;
 
     /// @brief Creates a non-owning IP address view from IPv4 storage.
     /// @param ip The owned IPv4 bytes.
     /// @return An IPv4 address variant view.
-    [[nodiscard]] constexpr ip_address_t make_ip_address(const ipv4_storage_t& ip) noexcept
+    [[nodiscard]] constexpr ip_address_t make_ip_address(const ipv4::storage_t& ip) noexcept
     {
-        return make_ipv4_address(ip);
+        return ipv4::make_address(ip);
     }
 
     /// @brief Creates a non-owning IP address view from IPv6 storage.
     /// @param ip The owned IPv6 bytes.
     /// @return An IPv6 address variant view.
-    [[nodiscard]] constexpr ip_address_t make_ip_address(const ipv6_storage_t& ip) noexcept
+    [[nodiscard]] constexpr ip_address_t make_ip_address(const ipv6::storage_t& ip) noexcept
     {
-        return make_ipv6_address(ip);
+        return ipv6::make_address(ip);
     }
 
     /// @brief File descriptor alias used throughout the library.
@@ -54,6 +61,8 @@ namespace kmx::aio
         port_t port {};
     };
 
+    using expected_endpoint_address_t = std::expected<endpoint_address, std::error_code>;
+
     /// @brief Binary socket address storage plus length.
     struct socket_address
     {
@@ -62,6 +71,8 @@ namespace kmx::aio
         /// @brief Valid length of the stored address.
         ::socklen_t length {};
     };
+
+    using expected_socket_address_t = std::expected<socket_address, std::error_code>;
 
     /// @brief Helper to check if an error code represents a non-blocking operation that would block.
     /// @param ec The error code to inspect.
@@ -104,7 +115,7 @@ namespace kmx::aio
     /// @return `AF_INET` for IPv4 or `AF_INET6` for IPv6.
     [[nodiscard]] inline int ip_family(const ip_address_t ip) noexcept
     {
-        return std::holds_alternative<ipv4_address_t>(ip) ? AF_INET : AF_INET6;
+        return std::holds_alternative<ipv4::address_t>(ip) ? AF_INET : AF_INET6;
     }
 
     /// @brief Returns the address family for owned IP storage.
@@ -112,7 +123,7 @@ namespace kmx::aio
     /// @return `AF_INET` for IPv4 or `AF_INET6` for IPv6.
     [[nodiscard]] inline int ip_family(const ip_address_owned_t& ip) noexcept
     {
-        return std::holds_alternative<ipv4_address_owned_t>(ip) ? AF_INET : AF_INET6;
+        return std::holds_alternative<ipv4::address_owned_t>(ip) ? AF_INET : AF_INET6;
     }
 
     /// @brief Copies a view IP address into owned storage.
@@ -134,18 +145,18 @@ namespace kmx::aio
     /// @param ip The IP address view.
     /// @param port The port number.
     /// @return A socket address or an error.
-    [[nodiscard]] std::expected<socket_address, std::error_code> make_socket_address(const ip_address_t ip, const port_t port) noexcept;
+    [[nodiscard]] expected_socket_address_t make_socket_address(const ip_address_t ip, const port_t port) noexcept;
 
     /// @brief Builds a socket address from owned IP storage and port.
     /// @param ip The owned IP address.
     /// @param port The port number.
     /// @return A socket address or an error.
-    [[nodiscard]] std::expected<socket_address, std::error_code> make_socket_address(const ip_address_owned_t& ip,
+    [[nodiscard]] expected_socket_address_t make_socket_address(const ip_address_owned_t& ip,
                                                                                      const port_t port) noexcept;
 
     /// @brief Parses a socket address into owned endpoint storage.
     /// @param address The socket address to parse.
     /// @return An owned endpoint representation or an error.
-    [[nodiscard]] std::expected<endpoint_address, std::error_code> parse_socket_address(const socket_address& address) noexcept;
+    [[nodiscard]] expected_endpoint_address_t parse_socket_address(const socket_address& address) noexcept;
 
 } // namespace kmx::aio

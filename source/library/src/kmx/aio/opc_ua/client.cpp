@@ -34,7 +34,7 @@ namespace kmx::aio::opc_ua
             std::uint64_t id = 0u;
             std::string node_id;
             std::optional<std::expected<read_result, std::error_code>> outcome;
-            std::coroutine_handle<> continuation {};
+            coroutine_handle_t continuation {};
         };
 
         struct write_request_state
@@ -42,8 +42,8 @@ namespace kmx::aio::opc_ua
             std::uint64_t id = 0u;
             std::string node_id;
             std::string value;
-            std::optional<std::expected<void, std::error_code>> outcome;
-            std::coroutine_handle<> continuation {};
+            std::optional<expected_void_t> outcome;
+            coroutine_handle_t continuation {};
         };
 
         struct call_request_state
@@ -53,7 +53,7 @@ namespace kmx::aio::opc_ua
             std::string method_node_id;
             std::vector<std::string> input_arguments;
             std::optional<std::expected<method_call_result, std::error_code>> outcome;
-            std::coroutine_handle<> continuation {};
+            coroutine_handle_t continuation {};
         };
 
         template <typename State, typename Result>
@@ -64,7 +64,7 @@ namespace kmx::aio::opc_ua
 
             [[nodiscard]] bool await_ready() const noexcept { return state_->outcome.has_value(); }
 
-            bool await_suspend(std::coroutine_handle<> continuation) noexcept
+            bool await_suspend(coroutine_handle_t continuation) noexcept
             {
                 state_->continuation = continuation;
                 return true;
@@ -79,7 +79,7 @@ namespace kmx::aio::opc_ua
         template <typename HandleContainer>
         void resume_pending_continuations(HandleContainer& handles)
         {
-            for (const std::coroutine_handle<> handle: handles)
+            for (const coroutine_handle_t handle: handles)
             {
                 if (handle)
                     handle.resume();
@@ -148,7 +148,7 @@ namespace kmx::aio::opc_ua
         }
 
         template <typename Map>
-        void fail_pending_requests(Map& requests, const std::error_code error_code, std::vector<std::coroutine_handle<>>& continuations)
+        void fail_pending_requests(Map& requests, const std::error_code error_code, std::vector<coroutine_handle_t>& continuations)
         {
             for (auto& [_, request]: requests)
             {
@@ -201,7 +201,7 @@ namespace kmx::aio::opc_ua
                 return;
             }
 
-            request->outcome.emplace(std::expected<void, std::error_code> {});
+            request->outcome.emplace(expected_void_t {});
         }
 
         void on_call_request_complete(void* user_data, const UA_UInt32 request_id, const UA_StatusCode status,
@@ -265,7 +265,7 @@ namespace kmx::aio::opc_ua
     client::client(client&&) noexcept = default;
     client& client::operator=(client&&) noexcept = default;
 
-    task<std::expected<void, std::error_code>> client::connect() noexcept(false)
+    task_returning_expected_void_t client::connect() noexcept(false)
     {
         if (impl_->config.endpoint_url.empty())
             co_return std::unexpected(make_error_code(error::invalid_configuration));
@@ -294,15 +294,15 @@ namespace kmx::aio::opc_ua
 
         impl_->state = lifecycle_state::connecting;
         impl_->delete_after_disconnect = false;
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
-    task<std::expected<void, std::error_code>> client::disconnect() noexcept(false)
+    task_returning_expected_void_t client::disconnect() noexcept(false)
     {
         if (impl_->native_client == nullptr)
             co_return std::unexpected(make_error_code(error::not_initialized));
 
-        std::vector<std::coroutine_handle<>> continuations;
+        std::vector<coroutine_handle_t> continuations;
 
         const UA_StatusCode status = UA_Client_disconnect(impl_->native_client);
         if (status != UA_STATUSCODE_GOOD)
@@ -316,7 +316,7 @@ namespace kmx::aio::opc_ua
 
         impl_->state = lifecycle_state::disconnecting;
         impl_->delete_after_disconnect = true;
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     task<std::expected<bool, std::error_code>> client::iterate(const std::chrono::milliseconds timeout) noexcept(false)
@@ -327,7 +327,7 @@ namespace kmx::aio::opc_ua
         if (timeout.count() < 0)
             co_return std::unexpected(make_error_code(error::invalid_configuration));
 
-        std::vector<std::coroutine_handle<>> continuations;
+        std::vector<coroutine_handle_t> continuations;
 
         const UA_StatusCode status = UA_Client_run_iterate(impl_->native_client, static_cast<UA_UInt32>(timeout.count()));
         if (status != UA_STATUSCODE_GOOD)
@@ -428,7 +428,7 @@ namespace kmx::aio::opc_ua
         co_return outcome;
     }
 
-    task<std::expected<void, std::error_code>> client::write_node(std::string node_id, std::string value) noexcept(false)
+    task_returning_expected_void_t client::write_node(std::string node_id, std::string value) noexcept(false)
     {
         if (node_id.empty() || value.empty())
             co_return std::unexpected(make_error_code(error::invalid_configuration));

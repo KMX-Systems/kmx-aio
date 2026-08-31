@@ -70,7 +70,7 @@ namespace kmx::aio::completion
         /// @param offset File offset (0 for sockets).
         /// @return A task yielding the number of bytes read, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task<std::expected<std::size_t, std::error_code>> async_read(const fd_t fd, std::span<char> buffer,
+        [[nodiscard]] task_returning_expected_size_t async_read(const fd_t fd, std::span<char> buffer,
                                                                                    const std::uint64_t offset = 0u) noexcept(false);
 
         /// @brief Prepares an asynchronous write from the provided buffer.
@@ -79,17 +79,17 @@ namespace kmx::aio::completion
         /// @param offset File offset (0 for sockets).
         /// @return A task yielding the number of bytes written, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task<std::expected<std::size_t, std::error_code>> async_write(const fd_t fd, std::span<const char> buffer,
+        [[nodiscard]] task_returning_expected_size_t async_write(const fd_t fd, std::span<const char> buffer,
                                                                                     const std::uint64_t offset = 0u) noexcept(false);
 
         /// @brief Registers a set of memory buffers with the kernel for zero-copy I/O.
         /// @param iovecs Array of iovec structures describing the buffers.
         /// @return Success or error.
-        [[nodiscard]] std::expected<void, std::error_code> register_buffers(std::span<const ::iovec> iovecs) noexcept;
+        [[nodiscard]] expected_void_t register_buffers(std::span<const ::iovec> iovecs) noexcept;
 
         /// @brief Unregisters previously registered memory buffers.
         /// @return Success or error.
-        [[nodiscard]] std::expected<void, std::error_code> unregister_buffers() noexcept;
+        [[nodiscard]] expected_void_t unregister_buffers() noexcept;
 
         /// @brief Prepares an asynchronous read into a pre-registered buffer.
         /// @param fd        File descriptor to read from.
@@ -97,7 +97,7 @@ namespace kmx::aio::completion
         /// @param offset    File offset (0 for sockets).
         /// @param buf_index The index of the registered buffer.
         /// @return A task yielding the number of bytes read, or an error.
-        [[nodiscard]] task<std::expected<std::size_t, std::error_code>> async_read_fixed(const fd_t fd, std::span<char> buffer,
+        [[nodiscard]] task_returning_expected_size_t async_read_fixed(const fd_t fd, std::span<char> buffer,
                                                                                          const std::uint64_t offset,
                                                                                          const int buf_index) noexcept(false);
 
@@ -107,7 +107,7 @@ namespace kmx::aio::completion
         /// @param offset    File offset (0 for sockets).
         /// @param buf_index The index of the registered buffer.
         /// @return A task yielding the number of bytes written, or an error.
-        [[nodiscard]] task<std::expected<std::size_t, std::error_code>> async_write_fixed(const fd_t fd, std::span<const char> buffer,
+        [[nodiscard]] task_returning_expected_size_t async_write_fixed(const fd_t fd, std::span<const char> buffer,
                                                                                           const std::uint64_t offset,
                                                                                           const int buf_index) noexcept(false);
 
@@ -126,7 +126,7 @@ namespace kmx::aio::completion
         /// @param addrlen Address length.
         /// @return A task yielding success or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task<std::expected<void, std::error_code>> async_connect(const fd_t fd, const sockaddr* addr,
+        [[nodiscard]] task_returning_expected_void_t async_connect(const fd_t fd, const sockaddr* addr,
                                                                                const socklen_t addrlen) noexcept(false);
 
         /// @brief Prepares an asynchronous recvmsg.
@@ -135,7 +135,7 @@ namespace kmx::aio::completion
         /// @param flags Flags forwarded to recvmsg.
         /// @return A task yielding the number of bytes received, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task<std::expected<std::size_t, std::error_code>> async_recvmsg(const fd_t fd, msghdr* msg,
+        [[nodiscard]] task_returning_expected_size_t async_recvmsg(const fd_t fd, msghdr* msg,
                                                                                       const unsigned flags = 0u) noexcept(false);
 
         /// @brief Prepares an asynchronous sendmsg.
@@ -144,20 +144,20 @@ namespace kmx::aio::completion
         /// @param flags Flags forwarded to sendmsg.
         /// @return A task yielding the number of bytes sent, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task<std::expected<std::size_t, std::error_code>> async_sendmsg(const fd_t fd, const msghdr* msg,
+        [[nodiscard]] task_returning_expected_size_t async_sendmsg(const fd_t fd, const msghdr* msg,
                                                                                       const unsigned flags = 0u) noexcept(false);
 
         /// @brief Prepares an asynchronous cancellation of an in-flight operation.
         /// @param user_data The user_data of the SQE to cancel.
         /// @return A task yielding success or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task<std::expected<void, std::error_code>> async_cancel(const std::uint64_t user_data) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t async_cancel(const std::uint64_t user_data) noexcept(false);
 
         /// @brief Waits for a relative timeout using io_uring's native timeout support.
         /// @param duration_ns Timeout duration in nanoseconds.
         /// @return A task yielding success or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task<std::expected<void, std::error_code>> async_timeout(std::uint64_t duration_ns) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t async_timeout(std::uint64_t duration_ns) noexcept(false);
 
         /// @brief Submits a one-shot poll for events on a file descriptor via io_uring.
         /// @details Issues `IORING_OP_POLL_ADD` to the ring, suspends the coroutine, and resumes
@@ -219,7 +219,7 @@ namespace kmx::aio::completion
         /// @brief Per-operation context passed through io_uring user_data.
         struct io_context
         {
-            std::coroutine_handle<> continuation {}; ///< Coroutine to resume on completion.
+            coroutine_handle_t continuation {}; ///< Coroutine to resume on completion.
             int result {};                           ///< Result from the CQE (bytes or -errno).
         };
 
@@ -232,7 +232,7 @@ namespace kmx::aio::completion
 
             bool await_ready() const noexcept { return false; }
 
-            void await_suspend(std::coroutine_handle<> h) noexcept { ctx.continuation = h; }
+            void await_suspend(coroutine_handle_t h) noexcept { ctx.continuation = h; }
 
             void await_resume() const noexcept {}
         };
@@ -252,7 +252,7 @@ namespace kmx::aio::completion
         ///          coming, and the loop may be asleep.
         /// @return Number of entries handed to the kernel - zero when the submission was left for the
         ///         loop - or an error.
-        [[nodiscard]] std::expected<std::size_t, std::error_code> submit() noexcept;
+        [[nodiscard]] expected_size_t submit() noexcept;
 
         /// @brief True when the calling thread is this executor's event-loop thread.
         [[nodiscard]] bool on_loop_thread() const noexcept;

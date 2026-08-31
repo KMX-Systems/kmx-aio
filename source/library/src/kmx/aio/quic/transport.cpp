@@ -41,6 +41,23 @@ namespace kmx::aio::quic
         }
     }
 
+    void byte_buffer::consume(const std::size_t count) noexcept
+    {
+        read_pos_ += count;
+        if (read_pos_ == data_.size())
+        {
+            // Everything taken, so start again at the front rather than compacting. The capacity stays,
+            // which is what makes a stream read to exhaustion and refilled cost no allocation at all.
+            data_.clear();
+            read_pos_ = 0u;
+        }
+        else if ((read_pos_ * 2u) >= data_.size())
+        {
+            data_.erase(data_.begin(), data_.begin() + static_cast<std::ptrdiff_t>(read_pos_));
+            read_pos_ = 0u;
+        }
+    }
+
     std::uint64_t stream::id() const noexcept
     {
         return (state_ && state_->handle) ? static_cast<std::uint64_t>(::lsquic_stream_id(state_->handle)) : 0u;
@@ -52,7 +69,7 @@ namespace kmx::aio::quic
             ::lsquic_stream_shutdown(state_->handle, 1);
     }
 
-    task<std::expected<std::size_t, std::error_code>> stream::read(const std::span<char> out) noexcept(false)
+    task_returning_expected_size_t stream::read(const std::span<char> out) noexcept(false)
     {
         co_await readable {*state_};
 
@@ -76,7 +93,7 @@ namespace kmx::aio::quic
         co_return count;
     }
 
-    task<std::expected<void, std::error_code>> stream::write_all(const std::span<const char> in) noexcept(false)
+    task_returning_expected_void_t stream::write_all(const std::span<const char> in) noexcept(false)
     {
         if (state_->closed)
             co_return std::unexpected(state_->error ? state_->error : std::make_error_code(std::errc::broken_pipe));
@@ -93,10 +110,10 @@ namespace kmx::aio::quic
         if (!state_->outgoing.empty())
             co_return std::unexpected(std::make_error_code(std::errc::broken_pipe));
 
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
-    std::expected<void, std::error_code> basic_endpoint::connect(const ip_address_t ip, const port_t port, const std::string& sni,
+    expected_void_t basic_endpoint::connect(const ip_address_t ip, const port_t port, const std::string& sni,
                                                                  void* const ssl_ctx) noexcept
     {
         // Bind to an ephemeral local port; the peer address is where packets go.
@@ -300,7 +317,7 @@ namespace kmx::aio::quic
         return ::ntohs(reinterpret_cast<const ::sockaddr_in*>(&addr)->sin_port);
     }
 
-    std::expected<void, std::error_code> basic_endpoint::setup(const ip_address_t ip, const port_t port, void* const ssl_ctx,
+    expected_void_t basic_endpoint::setup(const ip_address_t ip, const port_t port, void* const ssl_ctx,
                                                                const bool server) noexcept
     {
         is_server_ = server;
@@ -380,7 +397,7 @@ namespace kmx::aio::quic
         ready_.clear();
     }
 
-    void basic_endpoint::park(std::vector<std::coroutine_handle<>>& ready, std::coroutine_handle<>& slot) noexcept
+    void basic_endpoint::park(std::vector<coroutine_handle_t>& ready, coroutine_handle_t& slot) noexcept
     {
         if (!slot)
             return;

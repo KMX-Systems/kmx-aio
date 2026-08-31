@@ -62,7 +62,7 @@ namespace kmx::aio::tls
         ::SSL_set_accept_state(ssl_);
     }
 
-    std::expected<void, std::error_code> basic_stream::set_alpn_protocols(const std::span<const std::uint8_t> protocols) noexcept
+    expected_void_t basic_stream::set_alpn_protocols(const std::span<const std::uint8_t> protocols) noexcept
     {
         if (!ssl_ || protocols.empty())
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
@@ -72,7 +72,7 @@ namespace kmx::aio::tls
         if (rc != 0)
             return std::unexpected(std::make_error_code(std::errc::protocol_error));
 
-        return std::expected<void, std::error_code> {};
+        return expected_void_t {};
     }
 
     std::string_view basic_stream::selected_alpn() const noexcept
@@ -106,9 +106,14 @@ namespace kmx::aio::tls
 
             if (completed)
             {
-                // Handshake success, pump any remaining output writes
-                co_await pump_write();
-                co_return std::expected<void, std::error_code> {};
+                // Handshake success, pump any remaining output writes. The flush is checked like
+                // every other one here: it carries the last handshake record, and dropping its error
+                // would report a completed handshake whose final flight never reached the transport.
+                auto w_res = co_await pump_write();
+                if (!w_res)
+                    co_return std::unexpected(w_res.error());
+
+                co_return expected_void_t {};
             }
 
             switch (err)
@@ -138,7 +143,7 @@ namespace kmx::aio::tls
         }
     }
 
-    basic_stream::result_task basic_stream::read(const std::span<char> buffer) noexcept(false)
+    task_returning_expected_size_t basic_stream::read(const std::span<char> buffer) noexcept(false)
     {
         while (true)
         {
@@ -182,7 +187,7 @@ namespace kmx::aio::tls
         }
     }
 
-    basic_stream::result_task basic_stream::write(const std::span<const char> buffer) noexcept(false)
+    task_returning_expected_size_t basic_stream::write(const std::span<const char> buffer) noexcept(false)
     {
         while (true)
         {
@@ -238,7 +243,7 @@ namespace kmx::aio::tls
                 co_return std::unexpected(std::make_error_code(std::errc::connection_aborted));
             written += *res;
         }
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     basic_stream::status_task basic_stream::pump_read(const std::uint64_t seen_fills) noexcept(false)
@@ -258,7 +263,7 @@ namespace kmx::aio::tls
         {
             const std::lock_guard lock(engine_mutex_);
             if (read_bio_fills_ != seen_fills)
-                co_return std::expected<void, std::error_code> {};
+                co_return expected_void_t {};
         }
 
         char buf[buffer_size];
@@ -277,7 +282,7 @@ namespace kmx::aio::tls
             co_return std::unexpected(std::make_error_code(std::errc::connection_aborted));
         }
 
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     basic_stream::status_task basic_stream::pump_write() noexcept(false)
@@ -309,7 +314,7 @@ namespace kmx::aio::tls
                 co_return std::unexpected(res.error());
         }
 
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
 } // namespace kmx::aio::tls

@@ -211,7 +211,7 @@ namespace kmx::aio::modbus::test::integration
 
             tls_client c {cl_cfg, cl_tls, *exec};
 
-            std::expected<void, std::error_code> connect_result =
+            expected_void_t connect_result =
                 std::unexpected(make_error_code(error::connection_failed));
             for (int attempt = 0; attempt < 10; ++attempt)
             {

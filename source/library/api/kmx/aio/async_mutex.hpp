@@ -19,6 +19,8 @@
 
 namespace kmx::aio
 {
+    using coroutine_handle_t = std::coroutine_handle<>;
+
     /// @brief A mutex acquired by co_await rather than by blocking.
     /// @details Ownership is handed straight from the releasing holder to the first waiter in line, so
     ///          waiters are served in the order they arrived and none of them is woken only to find the
@@ -98,7 +100,7 @@ namespace kmx::aio
             /// @param handle The coroutine to resume once ownership passes to it.
             /// @return True to stay suspended, false when the mutex fell free in the meantime.
             /// @throws std::bad_alloc if the waiter queue cannot grow.
-            [[nodiscard]] bool await_suspend(std::coroutine_handle<> handle) noexcept(false) { return owner_.enqueue(handle); }
+            [[nodiscard]] bool await_suspend(coroutine_handle_t handle) noexcept(false) { return owner_.enqueue(handle); }
 
             /// @brief Hands the caller the ownership it now holds.
             /// @return A guard that releases the mutex.
@@ -142,14 +144,14 @@ namespace kmx::aio
         /// @param handle The coroutine to queue.
         /// @return True when the coroutine was queued and must stay suspended.
         /// @throws std::bad_alloc if the waiter queue cannot grow.
-        [[nodiscard]] bool enqueue(std::coroutine_handle<> handle) noexcept(false);
+        [[nodiscard]] bool enqueue(coroutine_handle_t handle) noexcept(false);
 
         /// @brief Guards @c held_ and @c waiters_.
         std::mutex state_mutex_;
         /// @brief Whether the mutex is owned by anybody.
         bool held_ {};
         /// @brief Coroutines waiting for ownership, in arrival order.
-        std::deque<std::coroutine_handle<>> waiters_;
+        std::deque<coroutine_handle_t> waiters_;
     };
 
 } // namespace kmx::aio

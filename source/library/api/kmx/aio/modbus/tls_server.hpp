@@ -47,7 +47,7 @@ namespace kmx::aio::modbus
         /// @param exec   Executor that drives accept and connection coroutines.
         /// @param config Server bind address, port, and unit identifier.
         /// @param tls    Certificate, key, and CA for TLS and optional mTLS.
-        [[nodiscard]] task<std::expected<void, std::error_code>>
+        [[nodiscard]] task_returning_expected_void_t
         serve(readiness::executor& exec, server_config config,
               tls_config tls) noexcept(false);
 

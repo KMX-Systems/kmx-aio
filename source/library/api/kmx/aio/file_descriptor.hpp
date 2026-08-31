@@ -24,6 +24,9 @@ namespace kmx::aio
     class file_descriptor
     {
     public:
+        /// @brief Result of an operation yielding a descriptor wrapper, or an error code.
+        using expected_t = std::expected<file_descriptor, std::error_code>;
+
         /// @brief Sentinel value representing an invalid or empty descriptor.
         static constexpr int invalid_fd = -1;
 
@@ -70,38 +73,37 @@ namespace kmx::aio
         /// @param type The socket type.
         /// @param protocol The protocol value.
         /// @return The created socket wrapper or an error.
-        [[nodiscard]] static std::expected<file_descriptor, std::error_code> create_socket(const int domain, const int type,
-                                                                                           const int protocol) noexcept;
+        [[nodiscard]] static expected_t create_socket(const int domain, const int type, const int protocol) noexcept;
 
         /// @brief Wrapper for ::fcntl
         /// @param cmd The fcntl command.
         /// @param arg The optional command argument.
         /// @return The command result or an error.
-        [[nodiscard]] std::expected<int, std::error_code> fcntl(const int cmd, const int arg = 0) noexcept;
+        [[nodiscard]] expected_int_t fcntl(const int cmd, const int arg = 0) noexcept;
 
         /// @brief Wrapper for ::read
         /// @param buffer Destination buffer for read data.
         /// @param size Maximum number of bytes to read.
         /// @return The number of bytes read or an error.
-        [[nodiscard]] std::expected<std::size_t, std::error_code> read(void* const buffer, const size_t size) noexcept;
+        [[nodiscard]] expected_size_t read(void* const buffer, const size_t size) noexcept;
 
         /// @brief Wrapper for ::write
         /// @param buffer Source buffer containing bytes to write.
         /// @param size Number of bytes to write.
         /// @return The number of bytes written or an error.
-        [[nodiscard]] std::expected<std::size_t, std::error_code> write(const void* const buffer, const size_t size) noexcept;
+        [[nodiscard]] expected_size_t write(const void* const buffer, const size_t size) noexcept;
 
         /// @brief Wrapper for ::bind
         /// @param addr The socket address to bind to.
         /// @param addrlen The size of the socket address.
         /// @return Empty on success or an error.
-        [[nodiscard]] std::expected<void, std::error_code> bind(const ::sockaddr* const addr, const ::socklen_t addrlen) noexcept;
+        [[nodiscard]] expected_void_t bind(const ::sockaddr* const addr, const ::socklen_t addrlen) noexcept;
 
         /// @brief Wrapper for ::bind, convenient overload
         /// @param ip The local IP address to bind.
         /// @param port The local port to bind.
         /// @return Empty on success or an error.
-        [[nodiscard]] std::expected<void, std::error_code> bind(const ip_address_t ip, const port_t port) noexcept;
+        [[nodiscard]] expected_void_t bind(const ip_address_t ip, const port_t port) noexcept;
 
         /// @brief Wrapper for ::setsockopt
         /// @param level The socket option level.
@@ -109,37 +111,36 @@ namespace kmx::aio
         /// @param optval The socket option value.
         /// @param optlen The size of the socket option value.
         /// @return Empty on success or an error.
-        [[nodiscard]] std::expected<void, std::error_code> setsockopt(const int level, const int optname, const void* optval,
-                                                                      const ::socklen_t optlen) noexcept;
+        [[nodiscard]] expected_void_t setsockopt(const int level, const int optname, const void* optval, const ::socklen_t optlen) noexcept;
 
         /// @brief Wrapper for ::listen
         /// @param backlog The listen backlog.
         /// @return Empty on success or an error.
-        [[nodiscard]] std::expected<void, std::error_code> listen(const int backlog) noexcept;
+        [[nodiscard]] expected_void_t listen(const int backlog) noexcept;
 
         /// @brief Wrapper for ::accept
         /// @param addr Optional output socket address.
         /// @param addrlen Optional output address length.
         /// @return The accepted descriptor or an error.
-        [[nodiscard]] std::expected<file_descriptor, std::error_code> accept(sockaddr* const addr, ::socklen_t* const addrlen) noexcept;
+        [[nodiscard]] expected_t accept(sockaddr* const addr, ::socklen_t* const addrlen) noexcept;
 
         /// @brief Wrapper for ::accept, convenient overload
         /// @param out_ip Receives the accepted peer IP address.
         /// @param out_port Receives the accepted peer port.
         /// @return The accepted descriptor or an error.
-        [[nodiscard]] std::expected<file_descriptor, std::error_code> accept(ip_address_owned_t& out_ip, port_t& out_port) noexcept;
+        [[nodiscard]] expected_t accept(ip_address_owned_t& out_ip, port_t& out_port) noexcept;
 
         /// @brief Wrapper for ::connect
         /// @param addr The remote socket address.
         /// @param addrlen The size of the socket address.
         /// @return Empty on success or an error.
-        [[nodiscard]] std::expected<void, std::error_code> connect(const ::sockaddr* const addr, const ::socklen_t addrlen) noexcept;
+        [[nodiscard]] expected_void_t connect(const ::sockaddr* const addr, const ::socklen_t addrlen) noexcept;
 
         /// @brief Wrapper for ::connect, convenient overload
         /// @param ip The remote IP address.
         /// @param port The remote port.
         /// @return Empty on success or an error.
-        [[nodiscard]] std::expected<void, std::error_code> connect(const ip_address_t ip, const port_t port) noexcept;
+        [[nodiscard]] expected_void_t connect(const ip_address_t ip, const port_t port) noexcept;
 
         /// @brief Wrapper for ::getsockopt
         /// @param level The socket option level.
@@ -147,12 +148,12 @@ namespace kmx::aio
         /// @param optval Output buffer for the option value.
         /// @param optlen In/out size of the option value buffer.
         /// @return Empty on success or an error.
-        [[nodiscard]] std::expected<void, std::error_code> getsockopt(const int level, const int optname, void* const optval,
-                                                                      ::socklen_t* const optlen) noexcept;
+        [[nodiscard]] expected_void_t getsockopt(const int level, const int optname, void* const optval,
+                                                 ::socklen_t* const optlen) noexcept;
 
         /// @brief Set file descriptor to non-blocking mode
         /// @return Empty on success or an error.
-        [[nodiscard]] std::expected<void, std::error_code> set_as_non_blocking() noexcept;
+        [[nodiscard]] expected_void_t set_as_non_blocking() noexcept;
 
     private:
         /// @brief The currently owned file descriptor, or `invalid_fd` when empty.
@@ -172,5 +173,5 @@ namespace kmx::aio
     /// @param src The textual IP address.
     /// @param codst Destination storage for the parsed binary address.
     /// @return Empty on success or an error.
-    [[nodiscard]] std::expected<void, std::error_code> inet_pton(const int af, const char* const src, void* const codst) noexcept;
-} // namespace kmx
+    [[nodiscard]] expected_void_t inet_pton(const int af, const char* const src, void* const codst) noexcept;
+} // namespace kmx::aio

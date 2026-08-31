@@ -140,7 +140,7 @@ namespace kmx::aio::gpu
 
         /// @brief Registers a coroutine waiting on a GPU event.
         /// @details Intended for internal use by GPU event awaiters.
-        void register_waiting_coroutine(event_handle event, std::coroutine_handle<> h) noexcept;
+        void register_waiting_coroutine(event_handle event, coroutine_handle_t h) noexcept;
 
         /// @brief Gets the GPU device ID this executor is bound to.
         [[nodiscard]] int gpu_device() const noexcept { return config_.gpu_device; }
@@ -183,8 +183,8 @@ namespace kmx::aio::gpu
 
         executor_config config_;
         statistics stats_;
-        std::deque<std::coroutine_handle<>> pending_tasks_;
-        std::unordered_map<void*, std::coroutine_handle<>> waiting_events_;
+        std::deque<coroutine_handle_t> pending_tasks_;
+        std::unordered_map<void*, coroutine_handle_t> waiting_events_;
         std::atomic_bool stop_requested_ {false};
         std::mutex queue_mutex_;
 
@@ -215,7 +215,7 @@ namespace kmx::aio::gpu
             event& event_;
 
             bool await_ready() const noexcept;
-            void await_suspend(std::coroutine_handle<> h) noexcept;
+            void await_suspend(coroutine_handle_t h) noexcept;
             void await_resume() const noexcept {}
         };
 

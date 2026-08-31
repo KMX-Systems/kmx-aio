@@ -9,30 +9,30 @@
     #include <string_view>
 #endif
 
-namespace kmx::aio
+namespace kmx::aio::mac
 {
     /// @brief Owned MAC address storage container.
-    using mac_storage_t = std::array<std::uint8_t, 6u>;
+    using storage_t = std::array<std::uint8_t, 6u>;
     /// @brief Owned MAC address alias.
-    using mac_address_owned_t = mac_storage_t;
+    using address_owned_t = storage_t;
     /// @brief Non-owning MAC address view.
-    using mac_address_t = std::span<const std::uint8_t, 6u>;
+    using address_t = std::span<const std::uint8_t, 6u>;
 
     /// @brief Broadcast MAC address (FF:FF:FF:FF:FF:FF).
-    inline constexpr mac_storage_t broadcast_mac {0xFFu, 0xFFu, 0xFFu, 0xFFu, 0xFFu, 0xFFu};
+    inline constexpr storage_t broadcast {0xFFu, 0xFFu, 0xFFu, 0xFFu, 0xFFu, 0xFFu};
 
     /// @brief Creates a non-owning MAC address view.
-    /// @param mac The owned MAC address bytes.
+    /// @param address The owned MAC address bytes.
     /// @return A view over the MAC address storage.
-    [[nodiscard]] constexpr mac_address_t make_mac_address(const mac_storage_t& mac) noexcept
+    [[nodiscard]] constexpr address_t make_address(const storage_t& address) noexcept
     {
-        return mac_address_t {mac};
+        return address_t {address};
     }
 
     /// @brief Parse a MAC address from string format (e.g., "AA:BB:CC:DD:EE:FF").
     /// @param text Input string in colon-separated hex format.
     /// @param out Output MAC address storage on success.
     /// @return true if parsing succeeded, false otherwise.
-    [[nodiscard]] bool parse_mac_address(std::string_view text, mac_storage_t& out) noexcept;
+    [[nodiscard]] bool parse_address(std::string_view text, storage_t& out) noexcept;
 
-} // namespace kmx::aio
+} // namespace kmx::aio::mac

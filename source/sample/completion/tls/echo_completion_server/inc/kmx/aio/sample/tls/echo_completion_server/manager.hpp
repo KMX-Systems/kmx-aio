@@ -20,7 +20,7 @@ namespace kmx::aio::sample::tls::echo_completion_server
     struct config
     {
         std::uint32_t executor_threads = 4u;
-        kmx::aio::ip_address_t bind_address = kmx::aio::make_ip_address(kmx::aio::localhost_ipv4);
+        kmx::aio::ip_address_t bind_address = kmx::aio::make_ip_address(kmx::aio::ipv4::localhost);
         port_t bind_port = 8444u;
         port_t max_events = 1024u;
         port_t timeout_ms = 200u;

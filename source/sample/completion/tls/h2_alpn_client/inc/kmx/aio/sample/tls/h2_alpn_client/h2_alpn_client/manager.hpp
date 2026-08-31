@@ -27,7 +27,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
     struct config
     {
         std::uint32_t num_workers = 1000u;
-        kmx::aio::ip_address_t server_addr = kmx::aio::make_ip_address(kmx::aio::localhost_ipv4);
+        kmx::aio::ip_address_t server_addr = kmx::aio::make_ip_address(kmx::aio::ipv4::localhost);
         port_t server_port = 8443u;
         std::string_view message = "Is there anybody out there?";
         std::uint32_t scheduler_threads = 4u;

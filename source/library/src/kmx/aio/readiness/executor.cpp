@@ -156,7 +156,7 @@ namespace kmx::aio::readiness
         stop();
     }
 
-    std::expected<void, std::error_code> executor::register_fd(const fd_t fd) noexcept
+    expected_void_t executor::register_fd(const fd_t fd) noexcept
     {
         metrics_.total_registrations.fetch_add(1u, mem_order);
 
@@ -200,7 +200,7 @@ namespace kmx::aio::readiness
 
     void executor::cancel_waiters(const fd_t fd, const bool remember) noexcept
     {
-        std::vector<std::coroutine_handle<>> handles;
+        std::vector<coroutine_handle_t> handles;
 
         {
             const std::lock_guard lock(subscribers_mutex_);
@@ -244,8 +244,7 @@ namespace kmx::aio::readiness
         }
     }
 
-    bool executor::subscribe(const fd_t fd, const event_type type, std::coroutine_handle<> handle,
-                             bool* const cancelled) noexcept(false)
+    bool executor::subscribe(const fd_t fd, const event_type type, coroutine_handle_t handle, bool* const cancelled) noexcept(false)
     {
         const std::lock_guard lock(subscribers_mutex_);
 
@@ -283,8 +282,7 @@ namespace kmx::aio::readiness
         resume_waiter(dt.handle);
     }
 
-    task<std::expected<std::size_t, std::error_code>> executor::async_recvmsg(const fd_t fd, ::msghdr* msg,
-                                                                              const unsigned flags) noexcept(false)
+    task_returning_expected_size_t executor::async_recvmsg(const fd_t fd, ::msghdr* msg, const unsigned flags) noexcept(false)
     {
         if (fd < 0)
             co_return std::unexpected(std::make_error_code(std::errc::bad_file_descriptor));
@@ -308,8 +306,7 @@ namespace kmx::aio::readiness
         }
     }
 
-    task<std::expected<std::size_t, std::error_code>> executor::async_sendmsg(const fd_t fd, const ::msghdr* msg,
-                                                                              const unsigned flags) noexcept(false)
+    task_returning_expected_size_t executor::async_sendmsg(const fd_t fd, const ::msghdr* msg, const unsigned flags) noexcept(false)
     {
         if (fd < 0)
             co_return std::unexpected(std::make_error_code(std::errc::bad_file_descriptor));
@@ -333,10 +330,10 @@ namespace kmx::aio::readiness
         }
     }
 
-    task<std::expected<void, std::error_code>> executor::async_timeout(const std::uint64_t duration_ns) noexcept(false)
+    task_returning_expected_void_t executor::async_timeout(const std::uint64_t duration_ns) noexcept(false)
     {
         if (duration_ns == 0u)
-            co_return std::expected<void, std::error_code> {};
+            co_return expected_void_t {};
 
         auto timer_res = descriptor::timer::create();
         if (!timer_res)
@@ -369,7 +366,7 @@ namespace kmx::aio::readiness
         if (!wait)
             co_return std::unexpected(wait.error());
 
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     executor::detached_task_wrapper executor::execute_task(task<void> tsk, std::shared_ptr<executor> self) noexcept
@@ -562,7 +559,7 @@ namespace kmx::aio::readiness
 
     void executor::resume_if_found(const fd_t fd, const event_type type)
     {
-        std::coroutine_handle<> handle {};
+        coroutine_handle_t handle {};
         {
             const std::lock_guard lock(subscribers_mutex_);
             const auto it = subscribers_.find({fd, type});
@@ -589,7 +586,7 @@ namespace kmx::aio::readiness
         return t_current_io_executor == this;
     }
 
-    void executor::resume_waiter(const std::coroutine_handle<> handle) noexcept
+    void executor::resume_waiter(const coroutine_handle_t handle) noexcept
     {
         // The resumed coroutine is part of a larger task whose lifetime is already tracked by the
         // wrapper in spawn(). What is not tracked is this executor: a resumed coroutine may drop the
@@ -630,9 +627,7 @@ namespace kmx::aio::readiness
         // the number of events it received, which means the next wait grows it back - and a vector
         // grown value-initializes what it adds, memsetting the whole buffer for values epoll_wait is
         // about to write. At the default max_events that is twelve kilobytes of zeroing per iteration.
-        std::vector<epoll_event> events(config_.max_events);
-
-        for (;;)
+        for (std::vector<epoll_event> events(config_.max_events);;)
         {
             metrics_.total_epoll_waits.fetch_add(1u, mem_order);
             const auto events_result = epoll_fd_.wait_events(std::span(events), config_.timeout_ms);

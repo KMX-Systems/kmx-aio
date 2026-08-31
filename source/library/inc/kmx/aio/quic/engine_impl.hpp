@@ -45,7 +45,7 @@ namespace kmx::aio::quic
     }
 
     template <typename Executor, typename UdpSocket>
-    task<std::expected<void, std::error_code>> generic_engine<Executor, UdpSocket>::start(const ip_address_t ip, const port_t port,
+    task_returning_expected_void_t generic_engine<Executor, UdpSocket>::start(const ip_address_t ip, const port_t port,
                                                                                           void* ssl_ctx,
                                                                                           const settings& config) noexcept(false)
     {
@@ -56,7 +56,7 @@ namespace kmx::aio::quic
     }
 
     template <typename Executor, typename UdpSocket>
-    task<std::expected<void, std::error_code>> generic_engine<Executor, UdpSocket>::connect(const ip_address_t peer_ip,
+    task_returning_expected_void_t generic_engine<Executor, UdpSocket>::connect(const ip_address_t peer_ip,
                                                                                             const port_t peer_port,
                                                                                             const std::string& hostname,
                                                                                             const std::string& payload, void* ssl_ctx,
@@ -71,7 +71,7 @@ namespace kmx::aio::quic
     }
 
     template <typename Executor, typename UdpSocket>
-    task<std::expected<void, std::error_code>> generic_engine<Executor, UdpSocket>::connect(
+    task_returning_expected_void_t generic_engine<Executor, UdpSocket>::connect(
         const ip_address_t peer_ip, const port_t peer_port, const std::string& hostname, const std::vector<std::string>& payloads,
         void* ssl_ctx, const settings& config) noexcept(false)
     {
@@ -84,7 +84,7 @@ namespace kmx::aio::quic
     }
 
     template <typename Executor, typename UdpSocket>
-    task<std::expected<void, std::error_code>> generic_engine<Executor, UdpSocket>::process() noexcept(false)
+    task_returning_expected_void_t generic_engine<Executor, UdpSocket>::process() noexcept(false)
     {
         co_return co_await impl_->process();
     }

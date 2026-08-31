@@ -8,14 +8,14 @@ namespace kmx::aio
             [](const auto& bytes) noexcept -> ip_address_owned_t
             {
                 using ip_t = std::decay_t<decltype(bytes)>;
-                if constexpr (std::is_same_v<ip_t, ipv4_address_t>)
+                if constexpr (std::is_same_v<ip_t, ipv4::address_t>)
                 {
-                    ipv4_address_owned_t ip4 {};
+                    ipv4::address_owned_t ip4 {};
                     std::memcpy(ip4.data(), bytes.data(), ip4.size());
                     return ip4;
                 }
 
-                ipv6_address_owned_t ip6 {};
+                ipv6::address_owned_t ip6 {};
                 std::memcpy(ip6.data(), bytes.data(), ip6.size());
                 return ip6;
             },
@@ -28,10 +28,10 @@ namespace kmx::aio
             [](const auto& bytes) noexcept -> ip_address_t
             {
                 using ip_t = std::decay_t<decltype(bytes)>;
-                if constexpr (std::is_same_v<ip_t, ipv4_address_owned_t>)
-                    return ipv4_address_t {bytes};
+                if constexpr (std::is_same_v<ip_t, ipv4::address_owned_t>)
+                    return ipv4::address_t {bytes};
                 else
-                    return ipv6_address_t {bytes};
+                    return ipv6::address_t {bytes};
             },
             ip);
     }
@@ -44,7 +44,7 @@ namespace kmx::aio
             [&buffer](const auto& bytes) noexcept
             {
                 using ip_t = std::decay_t<decltype(bytes)>;
-                if constexpr (std::is_same_v<ip_t, ipv4_address_t>)
+                if constexpr (std::is_same_v<ip_t, ipv4::address_t>)
                 {
                     in_addr addr {};
                     std::memcpy(&addr, bytes.data(), bytes.size());
@@ -63,7 +63,7 @@ namespace kmx::aio
         return ok ? std::string(buffer) : std::string {}; // LCOV_EXCL_BR_LINE
     }
 
-    std::expected<socket_address, std::error_code> make_socket_address(const ip_address_t ip, const port_t port) noexcept
+    expected_socket_address_t make_socket_address(const ip_address_t ip, const port_t port) noexcept
     {
         socket_address result {};
 
@@ -71,9 +71,9 @@ namespace kmx::aio
             [&result, port](const auto& bytes) noexcept
             {
                 using ip_t = std::decay_t<decltype(bytes)>;
-                if constexpr (std::is_same_v<ip_t, ipv4_address_t>)
+                if constexpr (std::is_same_v<ip_t, ipv4::address_t>)
                 {
-                    auto* addr = reinterpret_cast<::sockaddr_in*>(&result.storage);
+                    auto* const addr = reinterpret_cast<::sockaddr_in*>(&result.storage);
                     addr->sin_family = AF_INET;
                     addr->sin_port = ::htons(port);
                     std::memcpy(&addr->sin_addr, bytes.data(), bytes.size());
@@ -81,7 +81,7 @@ namespace kmx::aio
                 }
                 else
                 {
-                    auto* addr = reinterpret_cast<sockaddr_in6*>(&result.storage);
+                    auto* const addr = reinterpret_cast<sockaddr_in6*>(&result.storage);
                     addr->sin6_family = AF_INET6;
                     addr->sin6_port = ::htons(port);
                     std::memcpy(&addr->sin6_addr, bytes.data(), bytes.size());
@@ -93,17 +93,17 @@ namespace kmx::aio
         return result;
     }
 
-    std::expected<socket_address, std::error_code> make_socket_address(const ip_address_owned_t& ip, const port_t port) noexcept
+    expected_socket_address_t make_socket_address(const ip_address_owned_t& ip, const port_t port) noexcept
     {
         return make_socket_address(to_ip_address_view(ip), port);
     }
 
-    std::expected<endpoint_address, std::error_code> parse_socket_address(const socket_address& address) noexcept
+    expected_endpoint_address_t parse_socket_address(const socket_address& address) noexcept
     {
         if (address.length < sizeof(sockaddr))
             return std::unexpected(error_from_errno(EINVAL));
 
-        const auto* addr = reinterpret_cast<const sockaddr*>(&address.storage);
+        const auto* const addr = reinterpret_cast<const sockaddr*>(&address.storage);
         endpoint_address result {};
         switch (addr->sa_family)
         {
@@ -121,7 +121,7 @@ namespace kmx::aio
                 // LCOV_EXCL_STOP
 
                 const auto* addr4 = reinterpret_cast<const ::sockaddr_in*>(&address.storage);
-                auto& ip4 = result.ip.emplace<ipv4_address_owned_t>();
+                auto& ip4 = result.ip.emplace<ipv4::address_owned_t>();
                 std::memcpy(ip4.data(), &addr4->sin_addr, ip4.size());
                 result.port = ::ntohs(addr4->sin_port);
                 return result;
@@ -131,8 +131,8 @@ namespace kmx::aio
                 if (address.length < sizeof(sockaddr_in6))
                     return std::unexpected(error_from_errno(EINVAL));
 
-                const auto* addr6 = reinterpret_cast<const sockaddr_in6*>(&address.storage);
-                auto& ip6 = result.ip.emplace<ipv6_address_owned_t>();
+                const auto* const addr6 = reinterpret_cast<const sockaddr_in6*>(&address.storage);
+                auto& ip6 = result.ip.emplace<ipv6::address_owned_t>();
                 std::memcpy(ip6.data(), &addr6->sin6_addr, ip6.size());
                 result.port = ::ntohs(addr6->sin6_port);
                 return result;

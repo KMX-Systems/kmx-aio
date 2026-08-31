@@ -37,12 +37,12 @@ namespace kmx::aio::opc_ua
         client& operator=(client&&) noexcept;
 
         /// @brief Begin asynchronous connect/session activation.
-        /// @return Task resolving to `std::expected<void, std::error_code>`.
+        /// @return Task resolving to `expected_void_t`.
         /// Success indicates the session is established and usable for service requests.
-        [[nodiscard]] task<std::expected<void, std::error_code>> connect() noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t connect() noexcept(false);
         /// @brief Begin asynchronous disconnect/session close.
-        /// @return Task resolving to `std::expected<void, std::error_code>`.
-        [[nodiscard]] task<std::expected<void, std::error_code>> disconnect() noexcept(false);
+        /// @return Task resolving to `expected_void_t`.
+        [[nodiscard]] task_returning_expected_void_t disconnect() noexcept(false);
         /// @brief Drive backend progress for in-flight operations.
         /// @param timeout Backend-dependent iterate/poll timeout.
         /// @return Task resolving to `std::expected<bool, std::error_code>`.
@@ -56,7 +56,7 @@ namespace kmx::aio::opc_ua
         /// @param node_id OPC UA node id string.
         /// @param value Value converted and forwarded to backend.
         /// @return Task resolving to success or error.
-        [[nodiscard]] task<std::expected<void, std::error_code>> write_node(std::string node_id, std::string value) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t write_node(std::string node_id, std::string value) noexcept(false);
         /// @brief Submit asynchronous method call request.
         /// @param object_node_id OPC UA object node id used as call context.
         /// @param method_node_id OPC UA method node id to invoke.
