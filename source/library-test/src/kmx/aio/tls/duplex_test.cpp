@@ -24,7 +24,6 @@
 #include <vector>
 
 #include <sys/socket.h>
-#include <unistd.h>
 
 #if defined(KMX_AIO_FEATURE_READINESS)
     #include <openssl/ssl.h>
@@ -36,9 +35,11 @@
     #include <kmx/aio/test/executor_runner.hpp>
     #include <kmx/aio/tls/stream.hpp>
 
-namespace kmx::aio::tls
+namespace kmx::aio::test::tls::duplex_test
 {
-    namespace
+    using namespace kmx::aio::tls;
+
+    namespace detail
     {
         using kmx::aio::test::scoped_runner;
         using kmx::aio::test::wait_for_flag;
@@ -211,16 +212,16 @@ namespace kmx::aio::tls
 
             finished.store(true, std::memory_order_release);
         }
-    }
+    } // namespace detail
 
     TEST_CASE("a TLS session carries a read and a write at the same time", "[readiness][tls][stream][duplex][slow]")
     {
-        const auto& credentials = shared_credentials();
+        const auto& credentials = detail::shared_credentials();
         if (!credentials.usable)
             SKIP("openssl(1) could not generate a server certificate");
 
-        const scoped_ctx server_ctx {::SSL_CTX_new(::TLS_server_method())};
-        const scoped_ctx client_ctx {::SSL_CTX_new(::TLS_client_method())};
+        const detail::scoped_ctx server_ctx {::SSL_CTX_new(::TLS_server_method())};
+        const detail::scoped_ctx client_ctx {::SSL_CTX_new(::TLS_client_method())};
         REQUIRE(server_ctx.get() != nullptr);
         REQUIRE(client_ctx.get() != nullptr);
 
@@ -251,14 +252,14 @@ namespace kmx::aio::tls
         REQUIRE(exec->register_fd(fds[1]).has_value());
 
         {
-            auto server = std::make_shared<tls_stream>(readiness::tcp::stream {*exec, file_descriptor {fds[0]}}, server_ctx.get());
-            auto client = std::make_shared<tls_stream>(readiness::tcp::stream {*exec, file_descriptor {fds[1]}}, client_ctx.get());
+            auto server = std::make_shared<detail::tls_stream>(readiness::tcp::stream {*exec, file_descriptor {fds[0]}}, server_ctx.get());
+            auto client = std::make_shared<detail::tls_stream>(readiness::tcp::stream {*exec, file_descriptor {fds[1]}}, client_ctx.get());
 
-            exec->spawn(echo_side(std::move(server), server_handshaken, server_finished));
-            exec->spawn(duplex_side(std::move(client), *exec, sent, received, client_handshaken, client_finished));
+            exec->spawn(detail::echo_side(std::move(server), server_handshaken, server_finished));
+            exec->spawn(detail::duplex_side(std::move(client), *exec, sent, received, client_handshaken, client_finished));
 
             const scoped_runner runner {*exec};
-            CHECK(wait_for_flag(client_finished, transfer_deadline));
+            CHECK(wait_for_flag(client_finished, detail::transfer_deadline));
         }
 
         CHECK(server_handshaken.load(std::memory_order_acquire));
@@ -266,8 +267,8 @@ namespace kmx::aio::tls
 
         // Every byte written came back. A session that lost the race inside OpenSSL either dies here or
         // returns short, and both are failures rather than flakes.
-        CHECK(sent.load(std::memory_order_relaxed) == total_bytes);
-        CHECK(received.load(std::memory_order_relaxed) == total_bytes);
+        CHECK(sent.load(std::memory_order_relaxed) == detail::total_bytes);
+        CHECK(received.load(std::memory_order_relaxed) == detail::total_bytes);
     }
-}
+} // namespace kmx::aio::test::tls::duplex_test
 #endif // KMX_AIO_FEATURE_READINESS

@@ -29,12 +29,12 @@ Arguments after the script name go to the binary unchanged (`--filter`, `--scale
 | Case | What it exercises |
 | :--- | :--- |
 | `core/task_await (heap frames)` | One `co_await` of a leaf `task<T>`: frame allocation, symmetric transfer, result retrieval. |
-| `core/task_await (slab frames)` | The same, with a `slab_allocator` installed on the thread. |
+| `core/task_await (slab frames)` | The same, with an `allocator::slab` installed on the thread. |
 | `core/task_await_chain8 (slab)` | An eight-deep await chain, so the per-await cost is measured away from loop overhead. |
 | `core/slab_allocate+deallocate` | The slab's own allocate/deallocate pair, with no coroutine around it. |
 | `core/channel_push+pop (same thread)` | `channel<T>` ring mechanics without contention. |
 | `core/channel_transfer (2 threads)` | One element crossing a real thread boundary through the channel. |
-| `core/buffer_pool_acquire+release` | One `buffer_pool` lease and its RAII return. |
+| `core/buffer_pool_acquire+release` | One `buffer::pool` lease and its RAII return. |
 | `core/scheduler_spawn+run` | Handing a callable to a worker thread and having it run. |
 | `baseline/operator_new+delete (256 B)` | The heap the slab is supposed to beat. |
 | `baseline/socketpair_rtt (epoll, 1 thread)` | The floor for a thread-per-core reactor: `write` + `epoll_wait` + `read`, both ways, no hand-off. |
@@ -110,7 +110,7 @@ every other descriptor that executor serves.
 Both are recorded here because the reasoning that suggested them is sound, and only a measurement says
 otherwise.
 
-**A lock-free `buffer_pool`.** The pool's free list is guarded by a mutex, which looks like an obvious
+**A lock-free `buffer::pool`.** The pool's free list is guarded by a mutex, which looks like an obvious
 thing to replace with a compare-and-swap stack on a latency-sensitive path. Measured against it on an
 index-plus-counter stack, the mutex won twice: roughly 2 ns per lease faster with a single thread, and
 three to four times faster with four threads on one pool (35 ns against 156 ns per lease). Under

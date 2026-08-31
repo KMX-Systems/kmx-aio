@@ -41,6 +41,7 @@ namespace kmx::aio
         /// @brief Move assignment.
         channel& operator=(channel&&) noexcept = default;
 
+        /// @brief Destroys the channel and every element still queued in it.
         ~channel() noexcept = default;
 
         /// @brief Attempts to enqueue an element (producer side).
@@ -73,6 +74,7 @@ namespace kmx::aio
     private:
         // Own cache line: the producer reads these pointers on every push, and they must not
         // share a line with the consumer-written tail index at the end of the base.
+        /// @brief The element storage backing the ring; sized to the base class's slot count.
         alignas(cache_line_size) std::vector<T> storage_;
     };
 

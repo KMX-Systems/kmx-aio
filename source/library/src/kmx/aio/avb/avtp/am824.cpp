@@ -3,6 +3,8 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 
 #include <kmx/aio/avb/avtp/am824.hpp>
+#include <kmx/aio/basic_types.hpp>
+#include <kmx/aio/error_code.hpp>
 
 #include <cerrno>
 

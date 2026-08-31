@@ -1,6 +1,5 @@
 #include <kmx/aio/sample/avb/listener/manager.hpp>
 
-#include <algorithm>
 #include <chrono>
 #include <csignal>
 #include <print>

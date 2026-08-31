@@ -1,3 +1,4 @@
+#include <kmx/aio/channel.hpp>
 #include <kmx/aio/sample/hft/order_router/manager.hpp>
 
 #include <atomic>

@@ -8,7 +8,7 @@
 
 #include <kmx/aio/sample/v4l2/completion_capture/manager_model.hpp>
 
-namespace kmx::aio::sample::v4l2::completion_capture
+namespace kmx::aio::test::v4l2::completion_capture_model_test
 {
     using kmx::aio::sample::v4l2::completion_capture::capture_frame_result;
     using kmx::aio::sample::v4l2::completion_capture::capture_step_results;
@@ -69,4 +69,4 @@ namespace kmx::aio::sample::v4l2::completion_capture
         REQUIRE(out.frames_captured == 0u);
         REQUIRE(out.timer_ticks == 0u);
     }
-}
+} // namespace kmx::aio::test::v4l2::completion_capture_model_test

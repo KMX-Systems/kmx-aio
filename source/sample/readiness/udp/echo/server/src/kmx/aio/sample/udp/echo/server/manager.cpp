@@ -1,5 +1,8 @@
+#include <kmx/aio/readiness/udp/endpoint.hpp>
+#include <kmx/aio/readiness/udp/socket.hpp>
 #include <kmx/aio/sample/udp/echo/server/manager.hpp>
 
+#include <array>
 #include <csignal>
 #include <print>
 #include <source_location>
@@ -151,8 +154,8 @@ namespace kmx::aio::sample::udp::echo::server
     {
         if ((signum == SIGINT) || (signum == SIGTERM))
         {
-            const char msg[] = "\n[SIGNAL] Stopping UDP Echo Server executor...\n";
-            [[maybe_unused]] auto res = ::write(STDERR_FILENO, msg, sizeof(msg) - 1);
+            static constexpr auto msg = std::to_array("\n[SIGNAL] Stopping UDP Echo Server executor...\n");
+            [[maybe_unused]] auto res = ::write(STDERR_FILENO, msg.data(), msg.size() - 1u);
 
             auto* exec = g_executor_ptr.load(std::memory_order_acquire);
             if (exec)

@@ -9,68 +9,72 @@
 #include <kmx/aio/sample/v4l2/capture/manager_model.hpp>
 #include <kmx/aio/sample/v4l2/completion_capture/manager_model.hpp>
 
-namespace readiness_v4l2 = kmx::aio::sample::v4l2::capture;
-namespace completion_v4l2 = kmx::aio::sample::v4l2::completion_capture;
-
-using readiness_v4l2::capture_frame_result;
-using readiness_v4l2::capture_step_results;
-
-TEST_CASE("readiness and completion v4l2 models agree on frame accounting", "[v4l2][readiness][completion][model]")
+namespace kmx::aio::test::v4l2::readiness_capture_model_test
 {
-    static constexpr std::array<capture_frame_result, 4u> readiness_frames {
-        capture_frame_result {.recv_ok = true, .frame_ok = true, .bytes_used = 512u},
-        capture_frame_result {.recv_ok = true, .frame_ok = false, .bytes_used = 1024u},
-        capture_frame_result {.recv_ok = false, .frame_ok = true, .bytes_used = 2048u},
-        capture_frame_result {.recv_ok = true, .frame_ok = true, .bytes_used = 1536u},
-    };
+    namespace readiness_v4l2 = kmx::aio::sample::v4l2::capture;
+    namespace completion_v4l2 = kmx::aio::sample::v4l2::completion_capture;
 
-    static constexpr std::array<completion_v4l2::capture_frame_result, 4u> completion_frames {
-        completion_v4l2::capture_frame_result {.recv_ok = true, .frame_ok = true, .bytes_used = 512u},
-        completion_v4l2::capture_frame_result {.recv_ok = true, .frame_ok = false, .bytes_used = 1024u},
-        completion_v4l2::capture_frame_result {.recv_ok = false, .frame_ok = true, .bytes_used = 2048u},
-        completion_v4l2::capture_frame_result {.recv_ok = true, .frame_ok = true, .bytes_used = 1536u},
-    };
+    using readiness_v4l2::capture_frame_result;
+    using readiness_v4l2::capture_step_results;
 
-    capture_step_results readiness_step {};
-    readiness_step.device_open_ok = true;
-    readiness_step.capture_create_ok = true;
-    readiness_step.frames = readiness_frames;
+    TEST_CASE("readiness and completion v4l2 models agree on frame accounting", "[v4l2][readiness][completion][model]")
+    {
+        static constexpr std::array<capture_frame_result, 4u> readiness_frames {
+            capture_frame_result {.recv_ok = true, .frame_ok = true, .bytes_used = 512u},
+            capture_frame_result {.recv_ok = true, .frame_ok = false, .bytes_used = 1024u},
+            capture_frame_result {.recv_ok = false, .frame_ok = true, .bytes_used = 2048u},
+            capture_frame_result {.recv_ok = true, .frame_ok = true, .bytes_used = 1536u},
+        };
 
-    completion_v4l2::capture_step_results completion_step {};
-    completion_step.device_open_ok = true;
-    completion_step.capture_create_ok = true;
-    completion_step.timer_create_ok = true;
-    completion_step.frames = completion_frames;
+        static constexpr std::array<completion_v4l2::capture_frame_result, 4u> completion_frames {
+            completion_v4l2::capture_frame_result {.recv_ok = true, .frame_ok = true, .bytes_used = 512u},
+            completion_v4l2::capture_frame_result {.recv_ok = true, .frame_ok = false, .bytes_used = 1024u},
+            completion_v4l2::capture_frame_result {.recv_ok = false, .frame_ok = true, .bytes_used = 2048u},
+            completion_v4l2::capture_frame_result {.recv_ok = true, .frame_ok = true, .bytes_used = 1536u},
+        };
 
-    const auto readiness_out = readiness_v4l2::simulate_manager(readiness_step);
-    const auto completion_out = completion_v4l2::simulate_manager(completion_step);
+        capture_step_results readiness_step {};
+        readiness_step.device_open_ok = true;
+        readiness_step.capture_create_ok = true;
+        readiness_step.frames = readiness_frames;
 
-    REQUIRE(readiness_out.capture_started);
-    REQUIRE(completion_out.capture_started);
-    REQUIRE(completion_out.timer_started);
-    REQUIRE(completion_out.shared_executor);
-    REQUIRE(readiness_out.frames_captured == completion_out.frames_captured);
-    REQUIRE(readiness_out.bytes_captured == completion_out.bytes_captured);
-    REQUIRE(readiness_out.errors == completion_out.errors);
-}
+        completion_v4l2::capture_step_results completion_step {};
+        completion_step.device_open_ok = true;
+        completion_step.capture_create_ok = true;
+        completion_step.timer_create_ok = true;
+        completion_step.frames = completion_frames;
 
-TEST_CASE("readiness and completion v4l2 models share startup failure behavior", "[v4l2][readiness][completion][model]")
-{
-    capture_step_results readiness_step {};
-    readiness_step.device_open_ok = false;
+        const auto readiness_out = readiness_v4l2::simulate_manager(readiness_step);
+        const auto completion_out = completion_v4l2::simulate_manager(completion_step);
 
-    completion_v4l2::capture_step_results completion_step {};
-    completion_step.device_open_ok = false;
-    completion_step.capture_create_ok = true;
-    completion_step.timer_create_ok = true;
+        REQUIRE(readiness_out.capture_started);
+        REQUIRE(completion_out.capture_started);
+        REQUIRE(completion_out.timer_started);
+        REQUIRE(completion_out.shared_executor);
+        REQUIRE(readiness_out.frames_captured == completion_out.frames_captured);
+        REQUIRE(readiness_out.bytes_captured == completion_out.bytes_captured);
+        REQUIRE(readiness_out.errors == completion_out.errors);
+    }
 
-    const auto readiness_out = readiness_v4l2::simulate_manager(readiness_step);
-    const auto completion_out = completion_v4l2::simulate_manager(completion_step);
+    TEST_CASE("readiness and completion v4l2 models share startup failure behavior", "[v4l2][readiness][completion][model]")
+    {
+        capture_step_results readiness_step {};
+        readiness_step.device_open_ok = false;
 
-    REQUIRE(readiness_out.error == readiness_v4l2::startup_error::device_open);
-    REQUIRE(completion_out.error == completion_v4l2::startup_error::device_open);
-    REQUIRE(readiness_out.errors == 1u);
-    REQUIRE(completion_out.errors == 1u);
-    REQUIRE_FALSE(readiness_out.capture_started);
-    REQUIRE_FALSE(completion_out.capture_started);
-}
+        completion_v4l2::capture_step_results completion_step {};
+        completion_step.device_open_ok = false;
+        completion_step.capture_create_ok = true;
+        completion_step.timer_create_ok = true;
+
+        const auto readiness_out = readiness_v4l2::simulate_manager(readiness_step);
+        const auto completion_out = completion_v4l2::simulate_manager(completion_step);
+
+        REQUIRE(readiness_out.error == readiness_v4l2::startup_error::device_open);
+        REQUIRE(completion_out.error == completion_v4l2::startup_error::device_open);
+        REQUIRE(readiness_out.errors == 1u);
+        REQUIRE(completion_out.errors == 1u);
+        REQUIRE_FALSE(readiness_out.capture_started);
+        REQUIRE_FALSE(completion_out.capture_started);
+    }
+
+} // namespace kmx::aio::test::v4l2::readiness_capture_model_test

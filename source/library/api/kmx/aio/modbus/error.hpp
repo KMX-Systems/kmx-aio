@@ -55,6 +55,7 @@ namespace kmx::aio::modbus
 
 namespace std
 {
+    /// @brief Registers @ref kmx::aio::modbus::error as a `std::error_code` enum.
     template <>
     struct is_error_code_enum<kmx::aio::modbus::error>: true_type
     {

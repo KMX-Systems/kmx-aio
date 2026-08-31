@@ -1,11 +1,12 @@
 #pragma once
+#ifndef PCH
+    #include <atomic>
+    #include <memory>
 
-#include <atomic>
-#include <memory>
-
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/someip/client.hpp>
-#include <kmx/aio/task.hpp>
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/someip/client.hpp>
+    #include <kmx/aio/task.hpp>
+#endif
 
 namespace kmx::aio::sample::someip::echo_client
 {
@@ -14,8 +15,7 @@ namespace kmx::aio::sample::someip::echo_client
     public:
         explicit manager(kmx::aio::someip::client_config config) noexcept;
 
-        kmx::aio::task<void> run(kmx::aio::completion::executor& exec,
-                                 std::shared_ptr<std::atomic_bool> ok) noexcept(false);
+        kmx::aio::task<void> run(kmx::aio::completion::executor& exec, std::shared_ptr<std::atomic_bool> ok) noexcept(false);
 
     private:
         kmx::aio::someip::client client_;

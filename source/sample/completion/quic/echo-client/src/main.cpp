@@ -1,9 +1,9 @@
 #include <kmx/aio/sample/quic/echo_client/manager.hpp>
 
+#include <kmx/aio/completion/executor.hpp>
+
 #include <exception>
 #include <iostream>
-#include <kmx/aio/completion/executor.hpp>
-#include <memory>
 
 using namespace kmx::aio;
 using namespace kmx::aio::completion;

@@ -1,7 +1,7 @@
 /// @file aio/benchmark/completion_cases.cpp
 /// @brief Completion-executor (io_uring) benchmarks.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/benchmark/cases.hpp"
+#include <kmx/aio/benchmark/cases.hpp>
 
 #if defined(KMX_AIO_FEATURE_COMPLETION)
 

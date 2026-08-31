@@ -1,25 +1,17 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
-#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
 #include <optional>
-#include <sstream>
-#include <thread>
 #include <vector>
 
-namespace kmx::aio::tls::test::integration
+namespace kmx::aio::test::integration::tls_mtls_client_server_test
 {
-
     using namespace std::literals::chrono_literals;
 
-    // ============================================================================
     // Utility Functions
-    // ============================================================================
-
     static inline std::string shell_quote(const std::string& arg)
     {
         if (arg.find_first_of(" \t\n\"'$`\\!*?&|;()[]{}") == std::string::npos)
@@ -154,10 +146,7 @@ namespace kmx::aio::tls::test::integration
         return {server_cert, server_key, client_cert, client_key};
     }
 
-    // ============================================================================
     // Integration Tests
-    // ============================================================================
-
     TEST_CASE("mTLS integration: TLS echo server with mutual authentication", "[tls][mtls][integration][slow]")
     {
         const auto repo_root = find_repo_root();
@@ -244,4 +233,4 @@ namespace kmx::aio::tls::test::integration
         REQUIRE(std::filesystem::is_regular_file(client_bin_opt.value()));
     }
 
-} // namespace kmx::aio::tls::test::integration
+} // namespace kmx::aio::test::integration::tls_mtls_client_server_test

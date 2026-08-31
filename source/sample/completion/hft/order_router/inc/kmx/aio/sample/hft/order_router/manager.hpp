@@ -1,10 +1,7 @@
 #pragma once
-
-#include <atomic>
-#include <cstdint>
-#include <thread>
-
-#include <kmx/aio/channel.hpp>
+#ifndef PCH
+    #include <cstdint>
+#endif
 
 namespace kmx::aio::sample::hft::order_router
 {

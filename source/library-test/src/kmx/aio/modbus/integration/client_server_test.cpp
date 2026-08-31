@@ -9,43 +9,33 @@
     #include <kmx/aio/task.hpp>
 
     #include <array>
-    #include <atomic>
     #include <cstdint>
     #include <expected>
     #include <memory>
     #include <optional>
-    #include <string>
     #include <system_error>
-    #include <utility>
     #include <vector>
 
-namespace kmx::aio::modbus::test::integration
+namespace kmx::aio::test::modbus::integration::client_server_test
 {
+    using namespace kmx::aio::modbus;
+
     using namespace std::literals::chrono_literals;
 
-    // =========================================================================
     // Constants
-    // =========================================================================
+    static constexpr std::uint16_t test_port = 15502u;
+    static constexpr std::uint8_t test_unit_id = 0x01u;
 
-    static constexpr std::uint16_t test_port    = 15502u;
-    static constexpr std::uint8_t  test_unit_id = 0x01u;
-
-    // =========================================================================
     // In-memory register / coil banks for the test server
-    // =========================================================================
-
     struct register_bank
     {
         std::array<std::uint16_t, 65536u> holding {};
-        std::array<std::uint16_t, 65536u> input   {};
-        std::array<std::uint8_t,  65536u> coils   {};
-        std::array<std::uint8_t,  65536u> discrete{};
+        std::array<std::uint16_t, 65536u> input {};
+        std::array<std::uint8_t, 65536u> coils {};
+        std::array<std::uint8_t, 65536u> discrete {};
     };
 
-    // =========================================================================
     // Server handler factories
-    // =========================================================================
-
     [[nodiscard]] static request_handler make_read_holding_handler(register_bank& bank)
     {
         return [&bank](server_request req) -> task<std::vector<std::uint8_t>>
@@ -56,10 +46,8 @@ namespace kmx::aio::modbus::test::integration
                     static_cast<std::uint8_t>(static_cast<std::uint8_t>(function_code::read_holding_registers) | 0x80u),
                     static_cast<std::uint8_t>(exception_code::illegal_data_value)};
 
-            const std::uint16_t address = static_cast<std::uint16_t>(
-                (static_cast<std::uint16_t>(req.pdu[1]) << 8u) | req.pdu[2]);
-            const std::uint16_t count = static_cast<std::uint16_t>(
-                (static_cast<std::uint16_t>(req.pdu[3]) << 8u) | req.pdu[4]);
+            const std::uint16_t address = static_cast<std::uint16_t>((static_cast<std::uint16_t>(req.pdu[1]) << 8u) | req.pdu[2]);
+            const std::uint16_t count = static_cast<std::uint16_t>((static_cast<std::uint16_t>(req.pdu[3]) << 8u) | req.pdu[4]);
 
             if (count == 0u || count > 125u || static_cast<std::size_t>(address) + count > 65536u)
                 co_return std::vector<std::uint8_t> {
@@ -91,18 +79,16 @@ namespace kmx::aio::modbus::test::integration
                     static_cast<std::uint8_t>(static_cast<std::uint8_t>(function_code::write_multiple_registers) | 0x80u),
                     static_cast<std::uint8_t>(exception_code::illegal_data_value)};
 
-            const std::uint16_t address = static_cast<std::uint16_t>(
-                (static_cast<std::uint16_t>(req.pdu[1]) << 8u) | req.pdu[2]);
-            const std::uint16_t count = static_cast<std::uint16_t>(
-                (static_cast<std::uint16_t>(req.pdu[3]) << 8u) | req.pdu[4]);
+            const std::uint16_t address = static_cast<std::uint16_t>((static_cast<std::uint16_t>(req.pdu[1]) << 8u) | req.pdu[2]);
+            const std::uint16_t count = static_cast<std::uint16_t>((static_cast<std::uint16_t>(req.pdu[3]) << 8u) | req.pdu[4]);
 
             for (std::uint16_t i = 0u; i < count; ++i)
             {
                 const std::size_t offset = 6u + static_cast<std::size_t>(i) * 2u;
                 if (offset + 1u >= req.pdu.size())
                     break;
-                const std::uint16_t v = static_cast<std::uint16_t>(
-                    (static_cast<std::uint16_t>(req.pdu[offset]) << 8u) | req.pdu[offset + 1u]);
+                const std::uint16_t v =
+                    static_cast<std::uint16_t>((static_cast<std::uint16_t>(req.pdu[offset]) << 8u) | req.pdu[offset + 1u]);
                 bank.holding[address + i] = v;
             }
 
@@ -126,10 +112,8 @@ namespace kmx::aio::modbus::test::integration
                     static_cast<std::uint8_t>(static_cast<std::uint8_t>(function_code::read_coils) | 0x80u),
                     static_cast<std::uint8_t>(exception_code::illegal_data_value)};
 
-            const std::uint16_t address = static_cast<std::uint16_t>(
-                (static_cast<std::uint16_t>(req.pdu[1]) << 8u) | req.pdu[2]);
-            const std::uint16_t count = static_cast<std::uint16_t>(
-                (static_cast<std::uint16_t>(req.pdu[3]) << 8u) | req.pdu[4]);
+            const std::uint16_t address = static_cast<std::uint16_t>((static_cast<std::uint16_t>(req.pdu[1]) << 8u) | req.pdu[2]);
+            const std::uint16_t count = static_cast<std::uint16_t>((static_cast<std::uint16_t>(req.pdu[3]) << 8u) | req.pdu[4]);
 
             const auto byte_count = static_cast<std::uint8_t>((count + 7u) / 8u);
             std::vector<std::uint8_t> pdu(2u + byte_count, 0u);
@@ -153,8 +137,7 @@ namespace kmx::aio::modbus::test::integration
                     static_cast<std::uint8_t>(static_cast<std::uint8_t>(function_code::write_single_coil) | 0x80u),
                     static_cast<std::uint8_t>(exception_code::illegal_data_value)};
 
-            const std::uint16_t address = static_cast<std::uint16_t>(
-                (static_cast<std::uint16_t>(req.pdu[1]) << 8u) | req.pdu[2]);
+            const std::uint16_t address = static_cast<std::uint16_t>((static_cast<std::uint16_t>(req.pdu[1]) << 8u) | req.pdu[2]);
             const bool on = (req.pdu[3] == 0xFFu);
             bank.coils[address] = on ? 1u : 0u;
 
@@ -163,20 +146,14 @@ namespace kmx::aio::modbus::test::integration
         };
     }
 
-    // =========================================================================
     // Test fixture helpers
-    // =========================================================================
-
     struct test_state
     {
         bool completed = false;
         std::optional<std::error_code> error;
     };
 
-    // =========================================================================
     // Integration Tests
-    // =========================================================================
-
     TEST_CASE("modbus integration: client connects and disconnects", "[modbus][integration][slow]")
     {
         register_bank bank {};
@@ -185,9 +162,7 @@ namespace kmx::aio::modbus::test::integration
 
         auto exec = std::make_shared<readiness::executor>();
         test_state state {};
-        const server_config config {.bind_address = "127.0.0.1",
-                                    .port         = test_port,
-                                    .unit_id      = test_unit_id};
+        const server_config config {.bind_address = "127.0.0.1", .port = test_port, .unit_id = test_unit_id};
 
         auto serve = [exec, srv, config]() -> task<void> { co_await srv->serve(*exec, config); };
         exec->spawn(serve());
@@ -228,10 +203,7 @@ namespace kmx::aio::modbus::test::integration
         std::optional<std::error_code> op_error;
 
         auto serve = [exec, srv]() -> task<void>
-        {
-            co_await srv->serve(*exec,
-                                {.bind_address = "127.0.0.1", .port = test_port + 1u, .unit_id = test_unit_id});
-        };
+        { co_await srv->serve(*exec, {.bind_address = "127.0.0.1", .port = test_port + 1u, .unit_id = test_unit_id}); };
         exec->spawn(serve());
 
         auto exchange = [&, exec, srv]() -> task<void>
@@ -298,7 +270,7 @@ namespace kmx::aio::modbus::test::integration
         bank.coils[2] = 1u;
 
         auto srv = std::make_shared<server>();
-        srv->set_handler(function_code::read_coils,       make_read_coils_handler(bank));
+        srv->set_handler(function_code::read_coils, make_read_coils_handler(bank));
         srv->set_handler(function_code::write_single_coil, make_write_single_coil_handler(bank));
 
         auto exec = std::make_shared<readiness::executor>();
@@ -309,10 +281,7 @@ namespace kmx::aio::modbus::test::integration
         std::optional<std::error_code> op_error;
 
         auto serve = [exec, srv]() -> task<void>
-        {
-            co_await srv->serve(*exec,
-                                {.bind_address = "127.0.0.1", .port = test_port + 2u, .unit_id = test_unit_id});
-        };
+        { co_await srv->serve(*exec, {.bind_address = "127.0.0.1", .port = test_port + 2u, .unit_id = test_unit_id}); };
         exec->spawn(serve());
 
         auto exchange = [&, exec, srv]() -> task<void>
@@ -374,10 +343,7 @@ namespace kmx::aio::modbus::test::integration
         std::optional<std::error_code> result_error;
 
         auto serve = [exec, srv]() -> task<void>
-        {
-            co_await srv->serve(*exec,
-                                {.bind_address = "127.0.0.1", .port = test_port + 3u, .unit_id = test_unit_id});
-        };
+        { co_await srv->serve(*exec, {.bind_address = "127.0.0.1", .port = test_port + 3u, .unit_id = test_unit_id}); };
         exec->spawn(serve());
 
         auto exchange = [&, exec, srv]() -> task<void>
@@ -409,5 +375,5 @@ namespace kmx::aio::modbus::test::integration
         CHECK(*result_error == make_error_code(error::exception_response));
     }
 
-} // namespace kmx::aio::modbus::test::integration
+} // namespace kmx::aio::test::modbus::integration::client_server_test
 #endif // KMX_AIO_FEATURE_MODBUS

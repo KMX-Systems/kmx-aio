@@ -1,4 +1,5 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#include <kmx/aio/opc_ua/error.hpp>
 #include <kmx/aio/opc_ua/open62541_compat.hpp>
 #include <kmx/aio/opc_ua/server.hpp>
 

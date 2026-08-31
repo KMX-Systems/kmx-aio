@@ -6,8 +6,10 @@
 #include <string>
 #include <system_error>
 
-namespace kmx::aio::modbus
+namespace kmx::aio::test::modbus::error_test
 {
+    using namespace kmx::aio::modbus;
+
     TEST_CASE("modbus error category exposes stable name", "[modbus][error][unit]")
     {
         const std::error_code ec = make_error_code(error::connection_failed);
@@ -22,8 +24,10 @@ namespace kmx::aio::modbus
         CHECK(make_error_code(error::connection_failed).message() == std::string("Modbus connection failed"));
         CHECK(make_error_code(error::disconnected).message() == std::string("Modbus peer is disconnected"));
         CHECK(make_error_code(error::exception_response).message() == std::string("Modbus server returned an exception response"));
-        CHECK(make_error_code(error::unexpected_function_code).message() == std::string("Modbus response function code does not match request"));
-        CHECK(make_error_code(error::unexpected_transaction_id).message() == std::string("Modbus response transaction identifier does not match request"));
+        CHECK(make_error_code(error::unexpected_function_code).message() ==
+              std::string("Modbus response function code does not match request"));
+        CHECK(make_error_code(error::unexpected_transaction_id).message() ==
+              std::string("Modbus response transaction identifier does not match request"));
         CHECK(make_error_code(error::frame_too_large).message() == std::string("Modbus request PDU exceeds the 253-byte protocol limit"));
         CHECK(make_error_code(error::malformed_frame).message() == std::string("Modbus frame is malformed or truncated"));
         CHECK(make_error_code(error::invalid_unit_id).message() == std::string("Modbus response unit identifier does not match request"));
@@ -45,4 +49,4 @@ namespace kmx::aio::modbus
         CHECK(&make_error_code(error::disconnected).category() == &error_category());
     }
 
-} // namespace kmx::aio::modbus
+} // namespace kmx::aio::test::modbus::error_test

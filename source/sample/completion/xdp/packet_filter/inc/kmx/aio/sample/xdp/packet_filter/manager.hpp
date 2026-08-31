@@ -1,11 +1,12 @@
 #pragma once
+#ifndef PCH
+    #include <atomic>
+    #include <memory>
+    #include <string>
 
-#include <atomic>
-#include <memory>
-#include <string>
-
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/task.hpp>
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/task.hpp>
+#endif
 
 namespace kmx::aio::sample::xdp::packet_filter
 {

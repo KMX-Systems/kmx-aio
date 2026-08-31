@@ -42,7 +42,7 @@
     #include <kmx/aio/test/executor_runner.hpp>
     #include <kmx/aio/tls/stream.hpp>
 
-namespace kmx::aio
+namespace kmx::aio::test::fault_injection_test
 {
     using namespace std::literals::chrono_literals;
     using detail::scoped_fault;
@@ -50,7 +50,7 @@ namespace kmx::aio
     using kmx::aio::test::scoped_runner;
     using kmx::aio::test::wait_for_flag;
 
-    namespace
+    namespace detail
     {
         /// @brief A connected pair of non-blocking sockets, closed on destruction.
         class socket_pair
@@ -131,12 +131,9 @@ namespace kmx::aio
 
             return false;
         }
-    }
+    } // namespace detail
 
-    // =========================================================================
     // the seam itself
-    // =========================================================================
-
     TEST_CASE("the production seam carries no fault-checking code", "[fault][seam]")
     {
         // The property that makes the seam acceptable in this library: the production specialization is
@@ -183,10 +180,7 @@ namespace kmx::aio
         CHECK(readiness::descriptor::epoll::create().has_value());
     }
 
-    // =========================================================================
     // epoll
-    // =========================================================================
-
     TEST_CASE("epoll::create reports a descriptor-table exhaustion", "[fault][readiness][epoll]")
     {
         const scoped_fault fault {syscall_id::epoll_create1, EMFILE, 1u};
@@ -217,10 +211,7 @@ namespace kmx::aio
         CHECK(result.error() == std::errc::bad_file_descriptor);
     }
 
-    // =========================================================================
     // the readiness event loop
-    // =========================================================================
-
     TEST_CASE("the readiness loop retries an interrupted epoll_wait", "[fault][readiness][executor]")
     {
         // EINTR is not a failure: a signal landing on the I/O thread must not cost the loop an
@@ -294,10 +285,7 @@ namespace kmx::aio
         exec->cancel_io(sockets.local());
     }
 
-    // =========================================================================
     // file_descriptor
-    // =========================================================================
-
     TEST_CASE("set_as_non_blocking reports a failing F_SETFL", "[fault][core][file_descriptor]")
     {
         // Two fcntl calls happen here, and only the second one's failure reaches the branch under test,
@@ -324,10 +312,7 @@ namespace kmx::aio
         CHECK(result.error() == std::errc::permission_denied);
     }
 
-    // =========================================================================
     // io_uring
-    // =========================================================================
-
     TEST_CASE("the completion executor refuses to construct without a ring", "[fault][completion][executor]")
     {
         const scoped_fault fault {syscall_id::io_uring_queue_init, ENOMEM, 1u};
@@ -409,10 +394,7 @@ namespace kmx::aio
         ::close(fds[1]);
     }
 
-    // =========================================================================
     // core pinning
-    // =========================================================================
-
     TEST_CASE("an interrupted completion wait is retried", "[fault][completion][executor]")
     {
         // ETIME and EINTR are the two answers the loop treats as ordinary: the first is the timeout it
@@ -601,10 +583,7 @@ namespace kmx::aio
         exec->cancel_io(sockets.local());
     }
 
-    // =========================================================================
     // allocation failures during setup
-    // =========================================================================
-
     TEST_CASE("create_socket reports a failing socket call", "[fault][core][file_descriptor]")
     {
         const scoped_fault fault {syscall_id::socket, EMFILE, 1u};
@@ -680,12 +659,8 @@ namespace kmx::aio
         ::SSL_CTX_free(ctx);
     }
 
-    // =========================================================================
     // shutdown that cannot cancel what is in flight
-    // =========================================================================
-
-    TEST_CASE("a shutdown whose cancellation cannot be submitted gives up at the deadline",
-              "[fault][completion][executor][shutdown][slow]")
+    TEST_CASE("a shutdown whose cancellation cannot be submitted gives up at the deadline", "[fault][completion][executor][shutdown][slow]")
     {
         // The completion loop will not abandon a suspended coroutine: on stop it submits a cancel-all
         // and keeps draining until the work count reaches zero. That drain cannot be unbounded, or one
@@ -733,6 +708,6 @@ namespace kmx::aio
 
         CHECK(exec.get_stats().error_count.load() > errors_before);
     }
-}
+} // namespace kmx::aio::test::fault_injection_test
 
 #endif // KMX_AIO_FAULT_INJECTION

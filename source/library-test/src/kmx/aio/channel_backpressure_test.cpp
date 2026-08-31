@@ -8,7 +8,7 @@
 #include <atomic>
 #include <thread>
 
-namespace kmx::aio
+namespace kmx::aio::test::channel_backpressure_test
 {
     TEST_CASE("channel occupancy tracks push/pop", "[channel][backpressure]")
     {
@@ -220,4 +220,4 @@ namespace kmx::aio
             REQUIRE(ch.try_push(5));
         }
     }
-}
+} // namespace kmx::aio::test::channel_backpressure_test

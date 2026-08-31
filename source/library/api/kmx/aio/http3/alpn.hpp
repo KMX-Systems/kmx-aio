@@ -2,9 +2,10 @@
 /// @brief HTTP/3 ALPN definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-
-#include <array>
-#include <string_view>
+#ifndef PCH
+    #include <array>
+    #include <string_view>
+#endif
 
 namespace kmx::aio::http3::alpn
 {

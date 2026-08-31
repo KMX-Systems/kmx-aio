@@ -1,6 +1,7 @@
 import qbs 1.0
 
 Project {
+    name: "kmx-aio-library"
     references: [
         "core/core.qbs",
         "readiness/readiness.qbs",

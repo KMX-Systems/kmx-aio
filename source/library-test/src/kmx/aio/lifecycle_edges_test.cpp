@@ -6,11 +6,11 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
-#include <cstring>
-#include <string>
 #include <chrono>
+#include <cstring>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -30,13 +30,13 @@
 #include <kmx/aio/task.hpp>
 #include <kmx/aio/test/executor_runner.hpp>
 
-namespace kmx::aio
+namespace kmx::aio::test::lifecycle_edges_test
 {
     using namespace std::literals::chrono_literals;
     using kmx::aio::test::scoped_runner;
     using kmx::aio::test::wait_for_flag;
 
-    namespace
+    namespace detail
     {
         /// @brief A connected pair of non-blocking sockets, closed on destruction unless released.
         class socket_pair
@@ -65,18 +65,15 @@ namespace kmx::aio
             int fds_[2] {-1, -1};
             bool valid_ = false;
         };
-    }
+    } // namespace detail
 
-    // =========================================================================
     // io_base teardown, through the two stream types that derive from it
-    // =========================================================================
-
 #if defined(KMX_AIO_FEATURE_READINESS)
     TEST_CASE("a readiness stream unregisters its descriptor on destruction", "[readiness][io_base][lifetime]")
     {
         // ~io_base() is what keeps a closed descriptor from staying in epoll: the fd number is reused by
         // the next open, and a stale registration would then deliver that descriptor's events here.
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         readiness::executor exec;
@@ -108,7 +105,7 @@ namespace kmx::aio
 
     TEST_CASE("a completion stream tears down without an executor round-trip", "[completion][io_base][lifetime]")
     {
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         completion::executor exec;
@@ -125,7 +122,7 @@ namespace kmx::aio
     {
         // io_base holds a weak lifetime token precisely so that this ordering is safe: the destructor
         // must notice the executor is gone rather than call unregister_fd on freed memory.
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_unique<readiness::executor>();
@@ -138,10 +135,7 @@ namespace kmx::aio
     }
 #endif // KMX_AIO_FEATURE_READINESS
 
-    // =========================================================================
     // scheduler
-    // =========================================================================
-
     TEST_CASE("the scheduler survives a task that throws", "[core][scheduler][exception]")
     {
         // A worker that let an exception escape would take the thread with it and silently shrink the
@@ -177,10 +171,7 @@ namespace kmx::aio
         CHECK(completed.load(std::memory_order_acquire) == 8);
     }
 
-    // =========================================================================
     // shutdown from a thread the executor owns
-    // =========================================================================
-
 #if defined(KMX_AIO_FEATURE_READINESS)
     TEST_CASE("a readiness executor stopped from its own task is not leaked", "[readiness][executor][lifecycle]")
     {
@@ -244,10 +235,7 @@ namespace kmx::aio
     }
 #endif // KMX_AIO_FEATURE_READINESS
 
-    // =========================================================================
     // deferred executor joins - stop() called from inside the I/O thread
-    // =========================================================================
-
     TEST_CASE("a completion executor stopped from its own thread is joined by the caller", "[completion][executor][lifecycle]")
     {
         // stop() cannot join the thread it is running on, so it leaves the join to whoever calls next.
@@ -294,10 +282,7 @@ namespace kmx::aio
         SUCCEED("the deferred join completed");
     }
 
-    // =========================================================================
     // descriptor failures that need a wrongly-typed file descriptor
-    // =========================================================================
-
     TEST_CASE("epoll_wait fails on a descriptor that is not an epoll instance", "[readiness][epoll][wait][error]")
     {
         // Both wait_events overloads guard on is_valid() and on max_events, and then have a third
@@ -352,4 +337,4 @@ namespace kmx::aio
 
         ::unlink(path.c_str());
     }
-}
+} // namespace kmx::aio::test::lifecycle_edges_test

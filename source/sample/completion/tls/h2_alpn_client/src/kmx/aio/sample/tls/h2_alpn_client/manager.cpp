@@ -1,10 +1,8 @@
-#include "kmx/aio/sample/tls/h2_alpn_client/manager.hpp"
-#include "kmx/aio/sample/tcp/echo/common.hpp"
+#include <kmx/aio/sample/tls/h2_alpn_client/manager.hpp>
 
-#include <algorithm>
 #include <array>
+#include <csignal>
 #include <span>
-#include <string_view>
 #include <sys/socket.h>
 #include <thread>
 #include <vector>
@@ -100,87 +98,91 @@ namespace kmx::aio::sample::tls::h2_alpn_client
             logger::log(logger::level::info, std::source_location::current(), "Client [{}]: ALPN h2 negotiated", worker_id);
 
             std::string preface_data = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
-            const char settings_frame[9] = {0, 0, 0, 4, 0, 0, 0, 0, 0};
-            preface_data.append(settings_frame, 9);
+            static constexpr std::array<char, 9u> settings_frame {0, 0, 0, 4, 0, 0, 0, 0, 0};
+            preface_data.append(settings_frame.data(), settings_frame.size());
 
             if (auto res = co_await stream_ptr->write_all(std::span<const char>(preface_data.data(), preface_data.size())); !res)
                 co_return;
 
             logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Sent Preface + SETTINGS", worker_id);
 
-            char recv_buf[9];
-            auto r_res = co_await stream_ptr->read(std::span<char>(recv_buf, 9));
-            if (!r_res || *r_res < 9)
+            std::array<char, 9u> recv_buf {};
+            auto r_res = co_await stream_ptr->read(std::span<char>(recv_buf.data(), recv_buf.size()));
+            if (!r_res || *r_res < recv_buf.size())
                 co_return;
 
             if (recv_buf[3] == 4 && recv_buf[4] == 0)
                 logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Received Server SETTINGS", worker_id);
 
-            const char ack_frame[9] = {0, 0, 0, 4, 1, 0, 0, 0, 0};
-            if (auto w_res = co_await stream_ptr->write_all(std::span<const char>(ack_frame, 9)); !w_res)
+            static constexpr std::array<char, 9u> ack_frame {0, 0, 0, 4, 1, 0, 0, 0, 0};
+            if (auto w_res = co_await stream_ptr->write_all(std::span<const char>(ack_frame)); !w_res)
                 co_return;
 
             logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Sent SETTINGS ACK", worker_id);
 
-            r_res = co_await stream_ptr->read(std::span<char>(recv_buf, 9));
-            if (r_res && *r_res >= 9 && recv_buf[3] == 4 && recv_buf[4] == 1)
+            r_res = co_await stream_ptr->read(std::span<char>(recv_buf.data(), recv_buf.size()));
+            if (r_res && *r_res >= recv_buf.size() && recv_buf[3] == 4 && recv_buf[4] == 1)
                 logger::log(logger::level::info, std::source_location::current(),
                             "Client [{}]: Received Server SETTINGS ACK. Handshake Complete!", worker_id);
 
-            const char req_frame[] = {0x00,
-                                      0x00,
-                                      0x0e,
-                                      0x01,
-                                      0x05,
-                                      0x00,
-                                      0x00,
-                                      0x00,
-                                      0x01,
-                                      static_cast<char>(0x82),
-                                      static_cast<char>(0x87),
-                                      static_cast<char>(0x84),
-                                      0x41,
-                                      0x09,
-                                      'l',
-                                      'o',
-                                      'c',
-                                      'a',
-                                      'l',
-                                      'h',
-                                      'o',
-                                      's',
-                                      't'};
+            // HEADERS frame: length 14, END_HEADERS | END_STREAM, stream 1, then the indexed
+            // :method GET / :scheme https / :path / fields and a literal :authority of "localhost".
+            static constexpr auto req_frame = std::to_array<char>({
+                0x00,
+                0x00,
+                0x0e,
+                0x01,
+                0x05,
+                0x00,
+                0x00,
+                0x00,
+                0x01,
+                static_cast<char>(0x82),
+                static_cast<char>(0x87),
+                static_cast<char>(0x84),
+                0x41,
+                0x09,
+                'l',
+                'o',
+                'c',
+                'a',
+                'l',
+                'h',
+                'o',
+                's',
+                't',
+            });
 
-            if (auto res = co_await stream_ptr->write_all(std::span<const char>(req_frame, sizeof(req_frame))); !res)
+            if (auto res = co_await stream_ptr->write_all(std::span<const char>(req_frame)); !res)
                 co_return;
 
             logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Sent GET Request (Stream 1)", worker_id);
 
-            char resp_hdr[10];
+            std::array<char, 10u> resp_hdr {};
             std::size_t total {};
-            while (total < 10)
+            while (total < resp_hdr.size())
             {
-                auto r = co_await stream_ptr->read(std::span<char>(resp_hdr + total, 10 - total));
+                auto r = co_await stream_ptr->read(std::span<char>(resp_hdr.data() + total, resp_hdr.size() - total));
                 if (!r || (*r == 0))
                     break;
                 total += *r;
             }
 
-            if (total == 10)
+            if (total == resp_hdr.size())
                 logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Received Response HEADERS. Status: {}",
                             worker_id, (resp_hdr[9] == static_cast<char>(0x88) ? "200 OK" : "Unknown"));
 
-            char data_hdr[9];
+            std::array<char, 9u> data_hdr {};
             total = {};
-            while (total < 9)
+            while (total < data_hdr.size())
             {
-                auto r = co_await stream_ptr->read(std::span<char>(data_hdr + total, 9 - total));
+                auto r = co_await stream_ptr->read(std::span<char>(data_hdr.data() + total, data_hdr.size() - total));
                 if (!r || (*r == 0))
                     break;
                 total += *r;
             }
 
-            if ((total == 9) && (data_hdr[3] == 0x00))
+            if ((total == data_hdr.size()) && (data_hdr[3] == 0x00))
             {
                 const std::uint32_t data_len = (static_cast<std::uint8_t>(data_hdr[0]) << 16u) |
                                                (static_cast<std::uint8_t>(data_hdr[1]) << 8u) | static_cast<std::uint8_t>(data_hdr[2]);

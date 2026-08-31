@@ -17,8 +17,11 @@
 #include <kmx/aio/completion/udp/endpoint.hpp>
 #include <kmx/aio/task.hpp>
 
-namespace kmx::aio::completion::udp
+namespace kmx::aio::test::completion::udp::endpoint_test
 {
+    using namespace kmx::aio::completion;
+    using namespace kmx::aio::completion::udp;
+
     struct endpoint_roundtrip_state
     {
         bool ok {};
@@ -134,4 +137,4 @@ namespace kmx::aio::completion::udp
         REQUIRE(state->peer_ip == "127.0.0.1");
         REQUIRE(state->peer_port != 0u);
     }
-} // namespace kmx::aio::completion::udp
+} // namespace kmx::aio::test::completion::udp::endpoint_test

@@ -1,11 +1,12 @@
 /// @file aio/completion/executor.cpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/completion/executor.hpp"
 #include <kmx/aio/completion/detail/uring_syscalls.hpp>
+#include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/detail/syscalls.hpp>
 
-#include "kmx/aio/allocator.hpp"
-#include "kmx/logger.hpp"
+#include <kmx/aio/allocator/slab.hpp>
+#include <kmx/logger.hpp>
+
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
@@ -54,8 +55,7 @@ namespace kmx::aio::completion
         ::io_uring_queue_exit(&ring_);
     }
 
-    task_returning_expected_size_t executor::async_read(const fd_t fd, std::span<char> buffer,
-                                                                           const std::uint64_t offset) noexcept(false)
+    task_returning_expected_size_t executor::async_read(const fd_t fd, std::span<char> buffer, const std::uint64_t offset) noexcept(false)
     {
         io_context ctx {};
         auto* const sqe = ::io_uring_get_sqe(&ring_);
@@ -81,7 +81,7 @@ namespace kmx::aio::completion
     }
 
     task_returning_expected_size_t executor::async_write(const fd_t fd, std::span<const char> buffer,
-                                                                            const std::uint64_t offset) noexcept(false)
+                                                         const std::uint64_t offset) noexcept(false)
     {
         io_context ctx {};
         auto* sqe = ::io_uring_get_sqe(&ring_);
@@ -123,9 +123,8 @@ namespace kmx::aio::completion
         return expected_void_t {};
     }
 
-    task_returning_expected_size_t executor::async_read_fixed(const fd_t fd, std::span<char> buffer,
-                                                                                 const std::uint64_t offset,
-                                                                                 const int buf_index) noexcept(false)
+    task_returning_expected_size_t executor::async_read_fixed(const fd_t fd, std::span<char> buffer, const std::uint64_t offset,
+                                                              const int buf_index) noexcept(false)
     {
         io_context ctx {};
         auto* const sqe = ::io_uring_get_sqe(&ring_);
@@ -148,9 +147,8 @@ namespace kmx::aio::completion
         co_return static_cast<std::size_t>(ctx.result);
     }
 
-    task_returning_expected_size_t executor::async_write_fixed(const fd_t fd, std::span<const char> buffer,
-                                                                                  const std::uint64_t offset,
-                                                                                  const int buf_index) noexcept(false)
+    task_returning_expected_size_t executor::async_write_fixed(const fd_t fd, std::span<const char> buffer, const std::uint64_t offset,
+                                                               const int buf_index) noexcept(false)
     {
         io_context ctx {};
         auto* const sqe = ::io_uring_get_sqe(&ring_);
@@ -199,8 +197,7 @@ namespace kmx::aio::completion
         co_return ctx.result;
     }
 
-    task_returning_expected_void_t executor::async_connect(const fd_t fd, const sockaddr* addr,
-                                                                       const socklen_t addrlen) noexcept(false)
+    task_returning_expected_void_t executor::async_connect(const fd_t fd, const sockaddr* addr, const socklen_t addrlen) noexcept(false)
     {
         const auto result =
             co_await await_uring_result([fd, addr, addrlen](auto* sqe, auto&) { ::io_uring_prep_connect(sqe, fd, addr, addrlen); });
@@ -211,8 +208,7 @@ namespace kmx::aio::completion
         co_return expected_void_t {};
     }
 
-    task_returning_expected_size_t executor::async_recvmsg(const fd_t fd, msghdr* msg,
-                                                                              const unsigned flags) noexcept(false)
+    task_returning_expected_size_t executor::async_recvmsg(const fd_t fd, msghdr* msg, const unsigned flags) noexcept(false)
     {
         const auto result =
             co_await await_uring_result([fd, msg, flags](auto* sqe, auto&) { ::io_uring_prep_recvmsg(sqe, fd, msg, flags); });
@@ -223,8 +219,7 @@ namespace kmx::aio::completion
         co_return static_cast<std::size_t>(*result);
     }
 
-    task_returning_expected_size_t executor::async_sendmsg(const fd_t fd, const msghdr* msg,
-                                                                              const unsigned flags) noexcept(false)
+    task_returning_expected_size_t executor::async_sendmsg(const fd_t fd, const msghdr* msg, const unsigned flags) noexcept(false)
     {
         const auto result =
             co_await await_uring_result([fd, msg, flags](auto* sqe, auto&) { ::io_uring_prep_sendmsg(sqe, fd, msg, flags); });
@@ -545,7 +540,7 @@ namespace kmx::aio::completion
         // Initialize coroutine slab allocator for this event loop thread.
         // E.g. allocating 1024-byte frames for up to the maximum ring entries.
         // Adjust sizes according to actual task frame requirements.
-        slab_allocator coro_allocator {1024u, std::max(1024u, config_.ring_entries * 4u)};
+        allocator::slab coro_allocator {1024u, std::max(1024u, config_.ring_entries * 4u)};
         set_thread_allocator(&coro_allocator);
 
         // Once stop() has been requested, spawned tasks may still be suspended

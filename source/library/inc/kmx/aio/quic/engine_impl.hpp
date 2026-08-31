@@ -1,11 +1,15 @@
 /// @file aio/quic/engine_impl.hpp
 /// @brief Private generic QUIC engine template definitions shared by model-specific instantiation units.
 #pragma once
-
-#include "kmx/aio/quic/base_engine.hpp"
+#ifndef PCH
+    #include <kmx/aio/quic/base_engine.hpp>
+#endif
 
 namespace kmx::aio::quic
 {
+    /// @brief The generic engine's hidden implementation: @ref base_impl with nothing added.
+    /// @tparam Executor  The executor type (readiness::executor or completion::executor).
+    /// @tparam UdpSocket The UDP socket type matching @p Executor.
     template <typename Executor, typename UdpSocket>
     struct generic_engine<Executor, UdpSocket>::impl: base_impl<Executor, UdpSocket>
     {
@@ -45,9 +49,8 @@ namespace kmx::aio::quic
     }
 
     template <typename Executor, typename UdpSocket>
-    task_returning_expected_void_t generic_engine<Executor, UdpSocket>::start(const ip_address_t ip, const port_t port,
-                                                                                          void* ssl_ctx,
-                                                                                          const settings& config) noexcept(false)
+    task_returning_expected_void_t generic_engine<Executor, UdpSocket>::start(const ip_address_t ip, const port_t port, void* ssl_ctx,
+                                                                              const settings& config) noexcept(false)
     {
         if constexpr (requires { UdpSocket::create(impl_->exec_, ip_family(ip)); })
             co_return impl_->setup(UdpSocket::create(impl_->exec_, ip_family(ip)), ip, port, ssl_ctx, config);
@@ -56,11 +59,9 @@ namespace kmx::aio::quic
     }
 
     template <typename Executor, typename UdpSocket>
-    task_returning_expected_void_t generic_engine<Executor, UdpSocket>::connect(const ip_address_t peer_ip,
-                                                                                            const port_t peer_port,
-                                                                                            const std::string& hostname,
-                                                                                            const std::string& payload, void* ssl_ctx,
-                                                                                            const settings& config) noexcept(false)
+    task_returning_expected_void_t generic_engine<Executor, UdpSocket>::connect(const ip_address_t peer_ip, const port_t peer_port,
+                                                                                const std::string& hostname, const std::string& payload,
+                                                                                void* ssl_ctx, const settings& config) noexcept(false)
     {
         if constexpr (requires { UdpSocket::create(impl_->exec_, ip_family(peer_ip)); })
             co_return impl_->connect_setup(UdpSocket::create(impl_->exec_, ip_family(peer_ip)), peer_ip, peer_port, hostname, payload,
@@ -71,9 +72,10 @@ namespace kmx::aio::quic
     }
 
     template <typename Executor, typename UdpSocket>
-    task_returning_expected_void_t generic_engine<Executor, UdpSocket>::connect(
-        const ip_address_t peer_ip, const port_t peer_port, const std::string& hostname, const std::vector<std::string>& payloads,
-        void* ssl_ctx, const settings& config) noexcept(false)
+    task_returning_expected_void_t generic_engine<Executor, UdpSocket>::connect(const ip_address_t peer_ip, const port_t peer_port,
+                                                                                const std::string& hostname,
+                                                                                const std::vector<std::string>& payloads, void* ssl_ctx,
+                                                                                const settings& config) noexcept(false)
     {
         if constexpr (requires { UdpSocket::create(impl_->exec_, ip_family(peer_ip)); })
             co_return impl_->connect_setup(UdpSocket::create(impl_->exec_, ip_family(peer_ip)), peer_ip, peer_port, hostname, payloads,

@@ -48,6 +48,7 @@ namespace kmx::aio::opc_ua
 
 namespace std
 {
+    /// @brief Registers @ref kmx::aio::opc_ua::error as a `std::error_code` enum.
     template <>
     struct is_error_code_enum<kmx::aio::opc_ua::error>: true_type
     {

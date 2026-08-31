@@ -2,15 +2,16 @@
 /// @brief Completion-model V4L2 capture sample manager.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#include <atomic>
-#include <memory>
-#include <string>
+#ifndef PCH
+    #include <atomic>
+    #include <memory>
+    #include <string>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/timer.hpp>
-#include <kmx/aio/completion/v4l2/capture.hpp>
-#include <kmx/aio/task.hpp>
-#include <kmx/logger.hpp>
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/v4l2/capture.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/logger.hpp>
+#endif
 
 namespace kmx::aio::sample::v4l2::completion_capture
 {

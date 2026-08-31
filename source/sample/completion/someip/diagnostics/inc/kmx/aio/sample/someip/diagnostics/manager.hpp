@@ -1,23 +1,22 @@
 #pragma once
+#ifndef PCH
+    #include <atomic>
+    #include <memory>
 
-#include <atomic>
-#include <memory>
-
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/someip/client.hpp>
-#include <kmx/aio/someip/subscription.hpp>
-#include <kmx/aio/task.hpp>
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/someip/client.hpp>
+    #include <kmx/aio/someip/subscription.hpp>
+    #include <kmx/aio/task.hpp>
+#endif
 
 namespace kmx::aio::sample::someip::diagnostics
 {
     class manager final
     {
     public:
-        manager(kmx::aio::someip::client_config client_config,
-                kmx::aio::someip::subscription_config subscription_config) noexcept;
+        manager(kmx::aio::someip::client_config client_config, kmx::aio::someip::subscription_config subscription_config) noexcept;
 
-        kmx::aio::task<void> run(kmx::aio::completion::executor& exec,
-                                 std::shared_ptr<std::atomic_bool> ok) noexcept(false);
+        kmx::aio::task<void> run(kmx::aio::completion::executor& exec, std::shared_ptr<std::atomic_bool> ok) noexcept(false);
 
     private:
         kmx::aio::someip::client client_;

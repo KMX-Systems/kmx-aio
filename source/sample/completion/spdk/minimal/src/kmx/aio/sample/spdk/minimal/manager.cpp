@@ -5,7 +5,6 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
 #include <fstream>
 #include <memory>
 #include <source_location>
@@ -14,7 +13,6 @@
 
 #include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/completion/spdk/device.hpp>
-#include <kmx/aio/completion/spdk/runtime.hpp>
 #include <kmx/aio/task.hpp>
 #include <kmx/logger.hpp>
 
@@ -45,8 +43,7 @@ namespace kmx::aio::sample::spdk::minimal
                          "`LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH`.");
     }
 
-    kmx::aio::task<void> run_spdk_probe(kmx::aio::completion::executor& exec, std::shared_ptr<std::atomic_bool> ok,
-                                        std::string bdev_name)
+    kmx::aio::task<void> run_spdk_probe(kmx::aio::completion::executor& exec, std::shared_ptr<std::atomic_bool> ok, std::string bdev_name)
     {
         kmx::aio::completion::spdk::device_config config {
             .bdev_name = bdev_name,

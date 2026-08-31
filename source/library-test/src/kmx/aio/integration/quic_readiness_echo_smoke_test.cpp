@@ -5,8 +5,6 @@
 
     #include <catch2/catch_test_macros.hpp>
 
-    #include <sys/wait.h>
-
     #include <chrono>
     #include <cstdlib>
     #include <filesystem>
@@ -16,7 +14,7 @@
     #include <string_view>
     #include <vector>
 
-namespace kmx::aio::quic::test::integration
+namespace kmx::aio::test::integration::quic_readiness_echo_smoke_test
 {
     namespace fs = std::filesystem;
 
@@ -143,8 +141,7 @@ namespace kmx::aio::quic::test::integration
         for (int attempt = 0; attempt < max_attempts; ++attempt)
         {
             const auto attempt_seed = now_ns + attempt;
-            const std::uint16_t test_port =
-                static_cast<std::uint16_t>(20000u + static_cast<std::uint16_t>(attempt_seed % 10000u));
+            const std::uint16_t test_port = static_cast<std::uint16_t>(20000u + static_cast<std::uint16_t>(attempt_seed % 10000u));
             const fs::path server_log =
                 fs::path("/tmp") / ("kmx_quic_readiness_echo_server_smoke_" + std::to_string(attempt_seed) + ".log");
             const fs::path client_log =
@@ -158,31 +155,36 @@ namespace kmx::aio::quic::test::integration
                 " KMX_QUIC_ECHO_CLIENT_CLOSE_AFTER_RESPONSES=2 LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} stdbuf -oL -eL " +
                 shell_quote(client_bin_opt->string()) + " > " + shell_quote(client_log.string()) + " 2>&1";
 
-            const std::string script = "set -u -o pipefail; " + server_cmd + " & " +
-                                       "srv=$!; "
-                                       "port_dec=" + std::to_string(test_port) + "; "
-                                       "port_hex=$(printf '%04X' " + std::to_string(test_port) + "); "
-                                       "ready=0; "
-                                       "deadline=$((SECONDS+15)); "
-                                       "while (( SECONDS < deadline )); do "
-                                       "  if ! kill -0 \"$srv\" >/dev/null 2>&1; then break; fi; "
-                                       "  if command -v ss >/dev/null 2>&1; then "
-                                       "    if ss -lunp 2>/dev/null | grep -F \":$port_dec\" | grep -Fq \"pid=$srv,\"; then ready=1; break; fi; "
-                                       "  else "
-                                       "    if grep -qi \":$port_hex \" /proc/net/udp /proc/net/udp6 2>/dev/null; then ready=1; break; fi; "
-                                       "  fi; "
-                                       "  sleep 0.1; "
-                                       "done; "
-                                       "if (( ready == 0 )); then "
-                                       "  client_rc=124; "
-                                       "else "
-                                       "  sleep 1; " +
-                                       client_cmd +
-                                       "; client_rc=$?; "
-                                       "fi; "
-                                       "kill \"$srv\" >/dev/null 2>&1 || true; "
-                                       "wait \"$srv\" >/dev/null 2>&1 || true; "
-                                       "exit \"$client_rc\"";
+            const std::string script =
+                "set -u -o pipefail; " + server_cmd + " & " +
+                "srv=$!; "
+                "port_dec=" +
+                std::to_string(test_port) +
+                "; "
+                "port_hex=$(printf '%04X' " +
+                std::to_string(test_port) +
+                "); "
+                "ready=0; "
+                "deadline=$((SECONDS+15)); "
+                "while (( SECONDS < deadline )); do "
+                "  if ! kill -0 \"$srv\" >/dev/null 2>&1; then break; fi; "
+                "  if command -v ss >/dev/null 2>&1; then "
+                "    if ss -lunp 2>/dev/null | grep -F \":$port_dec\" | grep -Fq \"pid=$srv,\"; then ready=1; break; fi; "
+                "  else "
+                "    if grep -qi \":$port_hex \" /proc/net/udp /proc/net/udp6 2>/dev/null; then ready=1; break; fi; "
+                "  fi; "
+                "  sleep 0.1; "
+                "done; "
+                "if (( ready == 0 )); then "
+                "  client_rc=124; "
+                "else "
+                "  sleep 1; " +
+                client_cmd +
+                "; client_rc=$?; "
+                "fi; "
+                "kill \"$srv\" >/dev/null 2>&1 || true; "
+                "wait \"$srv\" >/dev/null 2>&1 || true; "
+                "exit \"$client_rc\"";
 
             const std::string full_cmd = "bash -lc " + shell_quote(script);
             const int run_rc = std::system(full_cmd.c_str());
@@ -195,27 +197,27 @@ namespace kmx::aio::quic::test::integration
             last_attempt.server_text = read_file_text(server_log);
 
             const bool client_ok = last_attempt.client_exit == 0;
-            const bool client_markers_ok = contains_markers_in_order(last_attempt.client_text,
-                                                                     {
-                                                                         "on_hsk_done called",
-                                                                         "[QUIC Readiness Echo Client] Response #1",
-                                                                         "[QUIC Readiness Echo Client] Response #2",
-                                                                         "on_conn_closed called, status=8 (LSCONN_ST_CLOSED)",
-                                                                     });
-            const bool server_markers_ok = contains_markers_in_order(last_attempt.server_text,
-                                                                     {
-                                                                         "Received QUIC stream data:",
-                                                                         "on_conn_closed called, status=8 (LSCONN_ST_CLOSED)",
-                                                                     });
+            const bool client_markers_ok =
+                contains_markers_in_order(last_attempt.client_text, {
+                                                                        "on_hsk_done called",
+                                                                        "[QUIC Readiness Echo Client] Response #1",
+                                                                        "[QUIC Readiness Echo Client] Response #2",
+                                                                        "on_conn_closed called, status=8 (LSCONN_ST_CLOSED)",
+                                                                    });
+            const bool server_markers_ok =
+                contains_markers_in_order(last_attempt.server_text, {
+                                                                        "Received QUIC stream data:",
+                                                                        "on_conn_closed called, status=8 (LSCONN_ST_CLOSED)",
+                                                                    });
 
             if (!attempt_summary.empty())
                 attempt_summary += "\n\n";
 
-            attempt_summary += "attempt #" + std::to_string(attempt + 1) + ": exit=" + std::to_string(last_attempt.client_exit) +
-                               ", client_markers=" + (client_markers_ok ? "yes" : "no") + ", server_markers=" +
-                               (server_markers_ok ? "yes" : "no") + "\nclient log path: " + last_attempt.client_log.string() +
-                               "\nserver log path: " + last_attempt.server_log.string() + "\nclient log:\n" + last_attempt.client_text +
-                               "\nserver log:\n" + last_attempt.server_text;
+            attempt_summary +=
+                "attempt #" + std::to_string(attempt + 1) + ": exit=" + std::to_string(last_attempt.client_exit) +
+                ", client_markers=" + (client_markers_ok ? "yes" : "no") + ", server_markers=" + (server_markers_ok ? "yes" : "no") +
+                "\nclient log path: " + last_attempt.client_log.string() + "\nserver log path: " + last_attempt.server_log.string() +
+                "\nclient log:\n" + last_attempt.client_text + "\nserver log:\n" + last_attempt.server_text;
 
             if (client_ok && client_markers_ok && server_markers_ok)
             {
@@ -227,6 +229,6 @@ namespace kmx::aio::quic::test::integration
         INFO(attempt_summary);
         REQUIRE(success);
     }
-} // namespace kmx::aio::quic::test::integration
+} // namespace kmx::aio::test::integration::quic_readiness_echo_smoke_test
 
 #endif // KMX_AIO_FEATURE_QUIC

@@ -2,9 +2,7 @@
 #include <kmx/aio/modbus/tls_server.hpp>
 #if defined(KMX_AIO_FEATURE_MODBUS)
     #include <kmx/aio/modbus/detail/server_ops.hpp>
-    #include <kmx/aio/modbus/detail/session.hpp>
     #include <kmx/aio/modbus/error.hpp>
-    #include <kmx/aio/modbus/frame.hpp>
     #include <kmx/aio/readiness/executor.hpp>
     #include <kmx/aio/readiness/tcp/listener.hpp>
     #include <kmx/aio/readiness/tcp/stream.hpp>
@@ -21,13 +19,12 @@ namespace kmx::aio::modbus
     // Type alias for common async result type
     using async_result = task_returning_expected_void_t;
 
-    struct tls_server::impl : detail::server_ops<tls_server::impl>
+    struct tls_server::impl: detail::server_ops<tls_server::impl>
     {
         std::unordered_map<std::uint8_t, request_handler> handlers_;
         std::stop_source stop_source_;
 
-        [[nodiscard]] static std::expected<::SSL_CTX*, std::error_code>
-        create_ssl_ctx(const tls_config& tls) noexcept
+        [[nodiscard]] static std::expected<::SSL_CTX*, std::error_code> create_ssl_ctx(const tls_config& tls) noexcept
         {
             ::SSL_CTX* ctx = ::SSL_CTX_new(::TLS_server_method());
             if (!ctx)
@@ -37,14 +34,12 @@ namespace kmx::aio::modbus
 
             if (!tls.cert_path.empty())
             {
-                if (::SSL_CTX_use_certificate_file(ctx, tls.cert_path.c_str(),
-                                                   SSL_FILETYPE_PEM) != 1)
+                if (::SSL_CTX_use_certificate_file(ctx, tls.cert_path.c_str(), SSL_FILETYPE_PEM) != 1)
                 {
                     ::SSL_CTX_free(ctx);
                     return std::unexpected(make_error_code(error::tls_handshake_failed));
                 }
-                if (::SSL_CTX_use_PrivateKey_file(ctx, tls.key_path.c_str(),
-                                                  SSL_FILETYPE_PEM) != 1)
+                if (::SSL_CTX_use_PrivateKey_file(ctx, tls.key_path.c_str(), SSL_FILETYPE_PEM) != 1)
                 {
                     ::SSL_CTX_free(ctx);
                     return std::unexpected(make_error_code(error::tls_handshake_failed));
@@ -53,29 +48,25 @@ namespace kmx::aio::modbus
 
             if (!tls.ca_cert_path.empty())
             {
-                if (::SSL_CTX_load_verify_locations(ctx, tls.ca_cert_path.c_str(),
-                                                    nullptr) != 1)
+                if (::SSL_CTX_load_verify_locations(ctx, tls.ca_cert_path.c_str(), nullptr) != 1)
                 {
                     ::SSL_CTX_free(ctx);
                     return std::unexpected(make_error_code(error::tls_handshake_failed));
                 }
                 // Use the same CA as trusted client CA list
-                ::SSL_CTX_set_client_CA_list(
-                    ctx, ::SSL_load_client_CA_file(tls.ca_cert_path.c_str()));
+                ::SSL_CTX_set_client_CA_list(ctx, ::SSL_load_client_CA_file(tls.ca_cert_path.c_str()));
             }
 
             if (tls.verify_peer)
-                ::SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
-                                    nullptr);
+                ::SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
             else
                 ::SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, nullptr);
 
             return ctx;
         }
 
-        [[nodiscard]] task<void>
-        handle_connection(readiness::executor& exec, file_descriptor fd,
-                          const server_config& config, ::SSL_CTX* ssl_ctx) noexcept(false)
+        [[nodiscard]] task<void> handle_connection(readiness::executor& exec, file_descriptor fd, const server_config& config,
+                                                   ::SSL_CTX* ssl_ctx) noexcept(false)
         {
             const auto connection_fd = fd.get();
 
@@ -92,8 +83,7 @@ namespace kmx::aio::modbus
             // The read this connection parks in between requests has no timeout, so an idle peer would
             // otherwise keep the task - and the executor's run() - alive for as long as it stays
             // connected. stop() has to reach here as well as the accept loop.
-            const std::stop_callback cancel_on_stop {stop_token, [&exec, connection_fd]() noexcept
-                                                     { exec.cancel_io(connection_fd); }};
+            const std::stop_callback cancel_on_stop {stop_token, [&exec, connection_fd]() noexcept { exec.cancel_io(connection_fd); }};
 
             while (!stop_token.stop_requested())
             {
@@ -103,7 +93,9 @@ namespace kmx::aio::modbus
         }
     };
 
-    tls_server::tls_server() noexcept: impl_(std::make_unique<impl>()) {}
+    tls_server::tls_server() noexcept: impl_(std::make_unique<impl>())
+    {
+    }
 
     tls_server::~tls_server() noexcept = default;
     tls_server::tls_server(tls_server&&) noexcept = default;
@@ -114,9 +106,7 @@ namespace kmx::aio::modbus
         impl_->handlers_[static_cast<std::uint8_t>(fc)] = std::move(handler);
     }
 
-    async_result
-    tls_server::serve(readiness::executor& exec, server_config config,
-                      tls_config tls) noexcept(false)
+    async_result tls_server::serve(readiness::executor& exec, server_config config, tls_config tls) noexcept(false)
     {
         const auto ctx_result = impl::create_ssl_ctx(tls);
         if (!ctx_result)
@@ -147,8 +137,7 @@ namespace kmx::aio::modbus
         // stop() only sets a flag that the loop below reads between connections. The accept it is
         // suspended in has to be woken too, or serve() stays outstanding for good - and an executor
         // whose run() returns once its work drains then never returns at all.
-        const std::stop_callback cancel_on_stop {stop_token, [&exec, fd = listener.get_fd()]() noexcept
-                                                 { exec.cancel_io(fd); }};
+        const std::stop_callback cancel_on_stop {stop_token, [&exec, fd = listener.get_fd()]() noexcept { exec.cancel_io(fd); }};
 
         while (!stop_token.stop_requested())
         {
@@ -161,8 +150,7 @@ namespace kmx::aio::modbus
                 co_return std::unexpected(fd_result.error());
             }
 
-            exec.spawn(
-                impl_->handle_connection(exec, std::move(*fd_result), config, ssl_ctx));
+            exec.spawn(impl_->handle_connection(exec, std::move(*fd_result), config, ssl_ctx));
         }
 
         ::SSL_CTX_free(ssl_ctx);

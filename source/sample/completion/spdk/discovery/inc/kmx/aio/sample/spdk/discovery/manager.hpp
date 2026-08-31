@@ -1,7 +1,8 @@
 #pragma once
-
-#include <string>
-#include <vector>
+#ifndef PCH
+    #include <string>
+    #include <vector>
+#endif
 
 namespace kmx::aio::sample::spdk::discovery
 {

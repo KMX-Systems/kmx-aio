@@ -1,3 +1,5 @@
+#include <kmx/aio/readiness/udp/endpoint.hpp>
+#include <kmx/aio/readiness/udp/socket.hpp>
 #include <kmx/aio/sample/udp/echo/client/manager.hpp>
 
 #include <sys/socket.h>

@@ -1,12 +1,13 @@
 #pragma once
-#include <kmx/aio/readiness/executor.hpp>
-#include <kmx/aio/readiness/tcp/listener.hpp>
-#include <kmx/aio/readiness/tcp/stream.hpp>
-#include <kmx/logger.hpp>
+#ifndef PCH
+    #include <kmx/aio/readiness/executor.hpp>
+    #include <kmx/aio/readiness/tcp/stream.hpp>
+    #include <kmx/logger.hpp>
+    #include <unistd.h>
 
-#include <atomic>
-#include <memory>
-#include <unistd.h>
+    #include <atomic>
+    #include <memory>
+#endif
 
 namespace kmx::aio::sample::tcp::minimal::server
 {

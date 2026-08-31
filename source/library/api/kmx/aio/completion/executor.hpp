@@ -57,6 +57,7 @@ namespace kmx::aio::completion
         /// @throws std::bad_alloc if internal allocations fail.
         explicit executor(const executor_config& config = {}) noexcept(false);
 
+        /// @brief Stops the event loop, joins the I/O thread, and tears down the io_uring ring.
         ~executor() noexcept;
 
         /// @brief Non-copyable.
@@ -71,7 +72,7 @@ namespace kmx::aio::completion
         /// @return A task yielding the number of bytes read, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] task_returning_expected_size_t async_read(const fd_t fd, std::span<char> buffer,
-                                                                                   const std::uint64_t offset = 0u) noexcept(false);
+                                                                const std::uint64_t offset = 0u) noexcept(false);
 
         /// @brief Prepares an asynchronous write from the provided buffer.
         /// @param fd     File descriptor to write to.
@@ -80,7 +81,7 @@ namespace kmx::aio::completion
         /// @return A task yielding the number of bytes written, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] task_returning_expected_size_t async_write(const fd_t fd, std::span<const char> buffer,
-                                                                                    const std::uint64_t offset = 0u) noexcept(false);
+                                                                 const std::uint64_t offset = 0u) noexcept(false);
 
         /// @brief Registers a set of memory buffers with the kernel for zero-copy I/O.
         /// @param iovecs Array of iovec structures describing the buffers.
@@ -97,9 +98,8 @@ namespace kmx::aio::completion
         /// @param offset    File offset (0 for sockets).
         /// @param buf_index The index of the registered buffer.
         /// @return A task yielding the number of bytes read, or an error.
-        [[nodiscard]] task_returning_expected_size_t async_read_fixed(const fd_t fd, std::span<char> buffer,
-                                                                                         const std::uint64_t offset,
-                                                                                         const int buf_index) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t async_read_fixed(const fd_t fd, std::span<char> buffer, const std::uint64_t offset,
+                                                                      const int buf_index) noexcept(false);
 
         /// @brief Prepares an asynchronous write from a pre-registered buffer.
         /// @param fd        File descriptor to write to.
@@ -108,8 +108,7 @@ namespace kmx::aio::completion
         /// @param buf_index The index of the registered buffer.
         /// @return A task yielding the number of bytes written, or an error.
         [[nodiscard]] task_returning_expected_size_t async_write_fixed(const fd_t fd, std::span<const char> buffer,
-                                                                                          const std::uint64_t offset,
-                                                                                          const int buf_index) noexcept(false);
+                                                                       const std::uint64_t offset, const int buf_index) noexcept(false);
 
         /// @brief Prepares an asynchronous accept on a listening socket.
         /// @param listen_fd The listening socket file descriptor.
@@ -127,7 +126,7 @@ namespace kmx::aio::completion
         /// @return A task yielding success or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] task_returning_expected_void_t async_connect(const fd_t fd, const sockaddr* addr,
-                                                                               const socklen_t addrlen) noexcept(false);
+                                                                   const socklen_t addrlen) noexcept(false);
 
         /// @brief Prepares an asynchronous recvmsg.
         /// @param fd   Socket file descriptor.
@@ -135,8 +134,7 @@ namespace kmx::aio::completion
         /// @param flags Flags forwarded to recvmsg.
         /// @return A task yielding the number of bytes received, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task_returning_expected_size_t async_recvmsg(const fd_t fd, msghdr* msg,
-                                                                                      const unsigned flags = 0u) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t async_recvmsg(const fd_t fd, msghdr* msg, const unsigned flags = 0u) noexcept(false);
 
         /// @brief Prepares an asynchronous sendmsg.
         /// @param fd   Socket file descriptor.
@@ -145,7 +143,7 @@ namespace kmx::aio::completion
         /// @return A task yielding the number of bytes sent, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] task_returning_expected_size_t async_sendmsg(const fd_t fd, const msghdr* msg,
-                                                                                      const unsigned flags = 0u) noexcept(false);
+                                                                   const unsigned flags = 0u) noexcept(false);
 
         /// @brief Prepares an asynchronous cancellation of an in-flight operation.
         /// @param user_data The user_data of the SQE to cancel.
@@ -220,7 +218,7 @@ namespace kmx::aio::completion
         struct io_context
         {
             coroutine_handle_t continuation {}; ///< Coroutine to resume on completion.
-            int result {};                           ///< Result from the CQE (bytes or -errno).
+            int result {};                      ///< Result from the CQE (bytes or -errno).
         };
 
         /// @brief Awaiter that suspends a coroutine until an io_uring CQE arrives.
@@ -228,12 +226,18 @@ namespace kmx::aio::completion
         ///          process_completions() can resume it when the kernel signals completion.
         struct io_awaiter
         {
+            /// @brief The io_context whose continuation slot receives the suspended coroutine.
             io_context& ctx;
 
+            /// @brief Never completes synchronously; the CQE always arrives later.
+            /// @return Always `false`.
             bool await_ready() const noexcept { return false; }
 
+            /// @brief Parks the coroutine in the io_context so process_completions() can resume it.
+            /// @param h The coroutine to resume once the CQE arrives.
             void await_suspend(coroutine_handle_t h) noexcept { ctx.continuation = h; }
 
+            /// @brief Completes the await; the CQE result is read from the io_context by the caller.
             void await_resume() const noexcept {}
         };
 
@@ -269,33 +273,49 @@ namespace kmx::aio::completion
         /// @brief Detached wrapper for spawned top-level tasks.
         struct detached_task_wrapper
         {
+            /// @brief Promise type of @ref detached_task_wrapper; destroys its own frame on completion.
             struct promise_type
             {
+                /// @brief Builds the wrapper handed back to @ref execute_task.
+                /// @return A wrapper owning the coroutine handle for this promise.
                 detached_task_wrapper get_return_object() noexcept
                 {
                     return detached_task_wrapper {std::coroutine_handle<promise_type>::from_promise(*this)};
                 }
 
+                /// @brief Suspends before the body runs, so the caller decides when to start it.
+                /// @return An always-suspending awaiter.
                 std::suspend_always initial_suspend() const noexcept { return {}; }
 
+                /// @brief Final awaiter that destroys the coroutine frame instead of resuming anyone.
                 struct final_awaiter
                 {
+                    /// @brief Never completes synchronously, so @ref await_suspend always runs.
+                    /// @return Always `false`.
                     bool await_ready() const noexcept { return false; }
+                    /// @brief Destroys the finished coroutine frame.
+                    /// @param h The handle of the coroutine that just completed.
                     void await_suspend(std::coroutine_handle<promise_type> h) const noexcept { h.destroy(); }
                     // LCOV_EXCL_LINE: await_suspend above destroys the frame, so nothing resumes to
                     // run this. It exists because the awaiter concept asks for it.
+                    /// @brief Required by the awaiter concept; never reached because the frame is destroyed above.
                     void await_resume() const noexcept {} // LCOV_EXCL_LINE
                 };
 
+                /// @brief Returns the awaiter that tears the frame down.
+                /// @return The @ref final_awaiter.
                 final_awaiter final_suspend() const noexcept { return {}; }
                 // LCOV_EXCL_LINE: reaching this ends the process, so no test can take it and return.
                 // execute_task() catches std::exception around the whole body, which leaves only a
                 // throw of something not derived from it - and there is no sane way to continue from
                 // that inside a detached task whose frame is about to be destroyed.
+                /// @brief Terminates: a detached task whose frame is about to be destroyed cannot propagate.
                 void unhandled_exception() noexcept { std::terminate(); } // LCOV_EXCL_LINE
+                /// @brief Completes the coroutine; the task itself returns nothing.
                 void return_void() const noexcept {}
             };
 
+            /// @brief Handle of the wrapped coroutine.
             std::coroutine_handle<promise_type> handle;
         };
 
@@ -306,11 +326,15 @@ namespace kmx::aio::completion
         ///          completion bookkeeping is skipped rather than touching a dangling `executor*`.
         detached_task_wrapper execute_task(task<void> t, executor* self, std::weak_ptr<void> lifetime) noexcept;
 
+        /// @brief The configuration this executor was constructed with.
         executor_config config_;
+        /// @brief The io_uring instance every operation is submitted through.
         ::io_uring ring_ {};
 
+        /// @brief Counters reported by the executor's statistics accessor.
         mutable statistics metrics_;
         // Guards all access to io_thread_ inherited from executor_base.
+        /// @brief Guards all access to io_thread_ inherited from executor_base.
         mutable std::mutex io_thread_mutex_;
     };
 

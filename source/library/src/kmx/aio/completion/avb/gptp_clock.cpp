@@ -7,7 +7,6 @@
 #include <cstring>
 #include <ctime>
 #include <optional>
-#include <type_traits>
 
 #include <kmx/aio/avb/eth_socket.hpp>
 #include <kmx/aio/avb/gptp/clock.hpp>

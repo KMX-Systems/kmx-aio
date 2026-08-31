@@ -14,9 +14,9 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-namespace kmx::aio
+namespace kmx::aio::test::file_descriptor_test
 {
-    namespace
+    namespace detail
     {
         // A bound, listening loopback socket on a kernel-chosen port. Port 0 keeps the tests from
         // colliding with each other or with whatever else is running on the machine.
@@ -45,7 +45,7 @@ namespace kmx::aio
 
             return result;
         }
-    }
+    } // namespace detail
 
     TEST_CASE("a default-constructed descriptor owns nothing", "[core][file_descriptor][lifetime]")
     {
@@ -379,7 +379,7 @@ namespace kmx::aio
 
     TEST_CASE("connect and accept complete a loopback handshake", "[core][file_descriptor][accept]")
     {
-        auto listener = make_listener();
+        auto listener = detail::make_listener();
 
         auto client = file_descriptor::create_socket(AF_INET, SOCK_STREAM, 0);
         REQUIRE(client.has_value());
@@ -395,7 +395,7 @@ namespace kmx::aio
 
     TEST_CASE("accept reports the peer through the address overload", "[core][file_descriptor][accept]")
     {
-        auto listener = make_listener();
+        auto listener = detail::make_listener();
 
         auto client = file_descriptor::create_socket(AF_INET, SOCK_STREAM, 0);
         REQUIRE(client.has_value());
@@ -445,7 +445,7 @@ namespace kmx::aio
 
     TEST_CASE("accept on an idle non-blocking listener would block", "[core][file_descriptor][accept][error]")
     {
-        auto listener = make_listener();
+        auto listener = detail::make_listener();
         REQUIRE(listener.fd.set_as_non_blocking().has_value());
 
         ip_address_owned_t peer_ip {};
@@ -459,7 +459,7 @@ namespace kmx::aio
     {
         // EINPROGRESS is the expected answer for a non-blocking connect and the wrapper deliberately
         // swallows it, so the caller can go straight to waiting for writability.
-        auto listener = make_listener();
+        auto listener = detail::make_listener();
 
         auto client = file_descriptor::create_socket(AF_INET, SOCK_STREAM, 0);
         REQUIRE(client.has_value());
@@ -474,7 +474,7 @@ namespace kmx::aio
         // blocking connect to loopback fails immediately rather than hanging.
         port_t closed_port {};
         {
-            auto listener = make_listener();
+            auto listener = detail::make_listener();
             closed_port = listener.port;
         }
 
@@ -525,4 +525,4 @@ namespace kmx::aio
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error() == error_from_errno(EAFNOSUPPORT));
     }
-}
+} // namespace kmx::aio::test::file_descriptor_test

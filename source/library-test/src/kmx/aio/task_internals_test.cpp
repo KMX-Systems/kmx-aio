@@ -10,7 +10,6 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <coroutine>
-#include <cstddef>
 #include <expected>
 #include <stdexcept>
 #include <stop_token>
@@ -18,13 +17,14 @@
 #include <utility>
 #include <vector>
 
-#include <kmx/aio/allocator.hpp>
+#include <kmx/aio/allocator/slab.hpp>
+#include <kmx/aio/allocator/statistics.hpp>
 #include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/task.hpp>
 
-namespace kmx::aio
+namespace kmx::aio::test::task_internals_test
 {
-    namespace
+    namespace detail
     {
         struct task_error: std::runtime_error
         {
@@ -51,7 +51,10 @@ namespace kmx::aio
             co_return expected_void_t {};
         }
 
-        task<int> int_task(const int value) { co_return value; }
+        task<int> int_task(const int value)
+        {
+            co_return value;
+        }
 
         task<int> awaits_int_task(const int value)
         {
@@ -67,7 +70,7 @@ namespace kmx::aio
             exec.spawn(body(exec));
             exec.run();
         }
-    }
+    } // namespace detail
 
     TEST_CASE("a throwing expected<size_t> task reports through its own promise", "[core][task][exception]")
     {
@@ -76,17 +79,17 @@ namespace kmx::aio
         {
             try
             {
-                const auto result = co_await throwing_size_task();
+                const auto result = co_await detail::throwing_size_task();
                 (void) result;
             }
-            catch (const task_error&)
+            catch (const detail::task_error&)
             {
                 caught = true;
             }
 
             exec.stop();
         };
-        run_one(body);
+        detail::run_one(body);
         CHECK(caught);
     }
 
@@ -97,17 +100,17 @@ namespace kmx::aio
         {
             try
             {
-                const auto result = co_await throwing_int_result_task();
+                const auto result = co_await detail::throwing_int_result_task();
                 (void) result;
             }
-            catch (const task_error&)
+            catch (const detail::task_error&)
             {
                 caught = true;
             }
 
             exec.stop();
         };
-        run_one(body);
+        detail::run_one(body);
         CHECK(caught);
     }
 
@@ -118,16 +121,16 @@ namespace kmx::aio
         {
             try
             {
-                co_await throwing_void_result_task();
+                co_await detail::throwing_void_result_task();
             }
-            catch (const task_error&)
+            catch (const detail::task_error&)
             {
                 caught = true;
             }
 
             exec.stop();
         };
-        run_one(body);
+        detail::run_one(body);
         CHECK(caught);
     }
 
@@ -138,10 +141,10 @@ namespace kmx::aio
         int observed = 0;
         auto body = [&observed](completion::executor& exec) -> task<void>
         {
-            observed = co_await awaits_int_task(41);
+            observed = co_await detail::awaits_int_task(41);
             exec.stop();
         };
-        run_one(body);
+        detail::run_one(body);
         CHECK(observed == 42);
     }
 
@@ -156,7 +159,7 @@ namespace kmx::aio
             resumed = true;
             exec.stop();
         };
-        run_one(body);
+        detail::run_one(body);
         CHECK(resumed);
     }
 
@@ -222,7 +225,7 @@ namespace kmx::aio
         // promise_base::operator new prefers the thread-local slab and drops to ::operator new when it
         // cannot serve the frame. The existing slab test covers a frame too large for a slot; this is
         // the other arm - a frame that fits, arriving when every slot is already handed out.
-        slab_allocator slab {1024u, 2u};
+        allocator::slab slab {1024u, 2u};
         set_thread_allocator(&slab);
 
         const auto before = get_allocator_statistics().heap_allocations.load(std::memory_order_relaxed);
@@ -231,7 +234,7 @@ namespace kmx::aio
         std::vector<task<int>> tasks;
         tasks.reserve(32u);
         for (int i = 0; i < 32; ++i)
-            tasks.push_back(int_task(i));
+            tasks.push_back(detail::int_task(i));
 
         const auto after = get_allocator_statistics().heap_allocations.load(std::memory_order_relaxed);
         const auto slab_used = get_allocator_statistics().slab_allocations.load(std::memory_order_relaxed);
@@ -243,7 +246,7 @@ namespace kmx::aio
         tasks.clear();
         set_thread_allocator(nullptr);
 
-        CHECK(slab_used > 0u);  // the slab served what it could
-        CHECK(after > before);  // and the rest spilled to the heap
+        CHECK(slab_used > 0u); // the slab served what it could
+        CHECK(after > before); // and the rest spilled to the heap
     }
-}
+} // namespace kmx::aio::test::task_internals_test

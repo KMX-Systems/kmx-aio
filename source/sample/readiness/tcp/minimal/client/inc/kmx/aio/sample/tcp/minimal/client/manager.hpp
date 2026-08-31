@@ -1,16 +1,18 @@
-#include <kmx/aio/file_descriptor.hpp>
-#include <kmx/aio/readiness/executor.hpp>
-#include <kmx/aio/readiness/tcp/listener.hpp>
-#include <kmx/aio/readiness/tcp/stream.hpp>
-#include <kmx/aio/task.hpp>
-#include <kmx/logger.hpp>
+#pragma once
+#ifndef PCH
+    #include <arpa/inet.h>
+    #include <fcntl.h>
+    #include <kmx/aio/file_descriptor.hpp>
+    #include <kmx/aio/readiness/executor.hpp>
+    #include <kmx/aio/readiness/tcp/stream.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/logger.hpp>
+    #include <sys/socket.h>
 
-#include <arpa/inet.h>
-#include <atomic>
-#include <chrono>
-#include <expected>
-#include <fcntl.h>
-#include <sys/socket.h>
+    #include <atomic>
+    #include <chrono>
+    #include <expected>
+#endif
 
 namespace kmx::aio::sample::tcp::minimal::client
 {

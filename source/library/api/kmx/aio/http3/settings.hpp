@@ -2,8 +2,9 @@
 /// @brief HTTP/3 settings definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-
-#include <cstdint>
+#ifndef PCH
+    #include <cstdint>
+#endif
 
 namespace kmx::aio::http3
 {

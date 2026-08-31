@@ -3,15 +3,17 @@
 
 #include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/someip/client.hpp>
+#include <kmx/aio/someip/error.hpp>
 #include <kmx/aio/someip/subscription.hpp>
 
-#include <chrono>
 #include <memory>
 #include <optional>
 #include <system_error>
 
-namespace kmx::aio::someip
+namespace kmx::aio::test::someip::subscription_test
 {
+    using namespace kmx::aio::someip;
+
     namespace detail
     {
         template <typename Result>
@@ -346,4 +348,4 @@ namespace kmx::aio::someip
         CHECK(s.dropped_events() == 1u);
     }
 #endif
-}
+} // namespace kmx::aio::test::someip::subscription_test

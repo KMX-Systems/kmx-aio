@@ -6,9 +6,8 @@
 #include <array>
 #include <atomic>
 #include <cerrno>
-#include <cstdlib>
 #include <chrono>
-#include <cstring>
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <system_error>
@@ -18,7 +17,6 @@
 #include <pthread.h>
 #include <sched.h>
 #include <sys/socket.h>
-#include <sys/uio.h>
 #include <unistd.h>
 
 #include <kmx/aio/error_code.hpp>
@@ -27,13 +25,15 @@
 #include <kmx/aio/task.hpp>
 #include <kmx/aio/test/executor_runner.hpp>
 
-namespace kmx::aio::readiness
+namespace kmx::aio::test::readiness::executor_api_test
 {
+    using namespace kmx::aio::readiness;
+
     using namespace std::literals::chrono_literals;
     using kmx::aio::test::scoped_runner;
     using kmx::aio::test::wait_for_flag;
 
-    namespace
+    namespace detail
     {
         /// @brief A connected pair of non-blocking sockets, closed on destruction.
         class socket_pair
@@ -70,12 +70,9 @@ namespace kmx::aio::readiness
             std::atomic_size_t value {0u};
             std::error_code error {};
         };
-    }
+    } // namespace detail
 
-    // =========================================================================
     // statistics
-    // =========================================================================
-
     TEST_CASE("statistics::reset zeroes every counter", "[readiness][executor][statistics]")
     {
         statistics stats;
@@ -102,7 +99,7 @@ namespace kmx::aio::readiness
 
     TEST_CASE("reset_stats clears counters the executor accumulated", "[readiness][executor][statistics]")
     {
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         executor exec;
@@ -116,7 +113,7 @@ namespace kmx::aio::readiness
 
     TEST_CASE("register_fd and unregister_fd move the counters", "[readiness][executor][registration]")
     {
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         executor exec;
@@ -138,7 +135,7 @@ namespace kmx::aio::readiness
 
     TEST_CASE("unregister_fd of an unknown descriptor is harmless", "[readiness][executor][registration]")
     {
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         executor exec;
@@ -147,10 +144,7 @@ namespace kmx::aio::readiness
         SUCCEED("unregistering a descriptor that was never registered does not fault");
     }
 
-    // =========================================================================
     // backend selection
-    // =========================================================================
-
     TEST_CASE("epoll_only selects the epoll backend", "[readiness][executor][backend]")
     {
         const executor_config config {.backend = backend_mode::epoll_only};
@@ -158,7 +152,7 @@ namespace kmx::aio::readiness
         CHECK(exec.get_active_backend() == active_backend::epoll);
     }
 
-    namespace
+    namespace detail
     {
         /// @brief Sets an environment variable for the duration of a test and restores it after.
         /// @details The OpenOnload runtime is detected purely from the environment, which is how a test
@@ -204,19 +198,19 @@ namespace kmx::aio::readiness
             return false;
 #endif
         }
-    }
+    } // namespace detail
 
     TEST_CASE("ONLOAD_STACKNAME selects the accelerated backend", "[readiness][executor][backend][openonload]")
     {
         // Detection is environment-only: the executor never dlopens or probes hardware, so setting the
         // hint is enough to drive the accelerated selection arm on a machine with no Onload installed.
-        if constexpr (!openonload_detection_compiled())
+        if constexpr (!detail::openonload_detection_compiled())
         {
             SUCCEED("built without KMX_AIO_FEATURE_OPENONLOAD; detection is a constexpr false");
             return;
         }
 
-        const scoped_env stackname {"ONLOAD_STACKNAME", "kmxaio_test"};
+        const detail::scoped_env stackname {"ONLOAD_STACKNAME", "kmxaio_test"};
 
         const executor_config config {.backend = backend_mode::openonload_preferred};
         executor exec {config};
@@ -225,13 +219,13 @@ namespace kmx::aio::readiness
 
     TEST_CASE("EF_POLL_USEC selects the accelerated backend", "[readiness][executor][backend][openonload]")
     {
-        if constexpr (!openonload_detection_compiled())
+        if constexpr (!detail::openonload_detection_compiled())
         {
             SUCCEED("built without KMX_AIO_FEATURE_OPENONLOAD");
             return;
         }
 
-        const scoped_env poll_usec {"EF_POLL_USEC", "50"};
+        const detail::scoped_env poll_usec {"EF_POLL_USEC", "50"};
 
         const executor_config config {.backend = backend_mode::openonload_preferred};
         executor exec {config};
@@ -242,13 +236,13 @@ namespace kmx::aio::readiness
     {
         // This is the substring arm rather than a plain presence check: LD_PRELOAD routinely carries
         // several libraries, and only one of them being Onload is what counts.
-        if constexpr (!openonload_detection_compiled())
+        if constexpr (!detail::openonload_detection_compiled())
         {
             SUCCEED("built without KMX_AIO_FEATURE_OPENONLOAD");
             return;
         }
 
-        const scoped_env preload {"LD_PRELOAD", "/usr/lib/libsomething.so:/usr/lib/libonload.so"};
+        const detail::scoped_env preload {"LD_PRELOAD", "/usr/lib/libsomething.so:/usr/lib/libonload.so"};
 
         const executor_config config {.backend = backend_mode::openonload_preferred};
         executor exec {config};
@@ -258,7 +252,7 @@ namespace kmx::aio::readiness
     TEST_CASE("an LD_PRELOAD without onload does not select the accelerated backend", "[readiness][executor][backend][openonload]")
     {
         // The negative half of the substring check: an unrelated preload must not be mistaken for Onload.
-        const scoped_env preload {"LD_PRELOAD", "/usr/lib/libsomething.so"};
+        const detail::scoped_env preload {"LD_PRELOAD", "/usr/lib/libsomething.so"};
 
         const executor_config config {.backend = backend_mode::openonload_preferred};
         executor exec {config};
@@ -267,13 +261,13 @@ namespace kmx::aio::readiness
 
     TEST_CASE("openonload_required is satisfied when the runtime is advertised", "[readiness][executor][backend][openonload]")
     {
-        if constexpr (!openonload_detection_compiled())
+        if constexpr (!detail::openonload_detection_compiled())
         {
             SUCCEED("built without KMX_AIO_FEATURE_OPENONLOAD");
             return;
         }
 
-        const scoped_env stackname {"ONLOAD_STACKNAME", "kmxaio_test"};
+        const detail::scoped_env stackname {"ONLOAD_STACKNAME", "kmxaio_test"};
 
         const executor_config config {.backend = backend_mode::openonload_required};
         executor exec {config};
@@ -285,9 +279,9 @@ namespace kmx::aio::readiness
         // "preferred" has to degrade rather than fail when no runtime is advertised: that fallback is
         // the whole difference between preferred and required. The hints are cleared explicitly so the
         // test does not depend on the shell it was launched from.
-        const scoped_env stackname {"ONLOAD_STACKNAME", ""};
-        const scoped_env poll_usec {"EF_POLL_USEC", ""};
-        const scoped_env preload {"LD_PRELOAD", ""};
+        const detail::scoped_env stackname {"ONLOAD_STACKNAME", ""};
+        const detail::scoped_env poll_usec {"EF_POLL_USEC", ""};
+        const detail::scoped_env preload {"LD_PRELOAD", ""};
         ::unsetenv("ONLOAD_STACKNAME");
         ::unsetenv("EF_POLL_USEC");
 
@@ -298,9 +292,9 @@ namespace kmx::aio::readiness
 
     TEST_CASE("openonload_required fails construction when the runtime is absent", "[readiness][executor][backend][error]")
     {
-        const scoped_env stackname {"ONLOAD_STACKNAME", ""};
-        const scoped_env poll_usec {"EF_POLL_USEC", ""};
-        const scoped_env preload {"LD_PRELOAD", ""};
+        const detail::scoped_env stackname {"ONLOAD_STACKNAME", ""};
+        const detail::scoped_env poll_usec {"EF_POLL_USEC", ""};
+        const detail::scoped_env preload {"LD_PRELOAD", ""};
         ::unsetenv("ONLOAD_STACKNAME");
         ::unsetenv("EF_POLL_USEC");
 
@@ -318,21 +312,18 @@ namespace kmx::aio::readiness
         }
     }
 
-    // =========================================================================
     // async_recvmsg / async_sendmsg / async_timeout
-    // =========================================================================
-
     TEST_CASE("async_sendmsg and async_recvmsg move a datagram", "[readiness][executor][msg]")
     {
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<executor>();
         REQUIRE(exec->register_fd(sockets.local()).has_value());
         REQUIRE(exec->register_fd(sockets.peer()).has_value());
 
-        outcome sent;
-        outcome received;
+        detail::outcome sent;
+        detail::outcome received;
         std::string payload {"readiness"};
         std::array<char, 64> buffer {};
 
@@ -384,13 +375,13 @@ namespace kmx::aio::readiness
     {
         // The socket is empty when the receive starts, so the first recvmsg returns EAGAIN and the
         // coroutine parks on the executor - the readiness path proper, rather than the fast path.
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<executor>();
         REQUIRE(exec->register_fd(sockets.local()).has_value());
 
-        outcome received;
+        detail::outcome received;
         std::atomic_bool started {false};
         std::array<char, 64> buffer {};
 
@@ -431,7 +422,7 @@ namespace kmx::aio::readiness
     {
         auto exec = std::make_shared<executor>();
 
-        outcome sent;
+        detail::outcome sent;
         std::string payload {"x"};
 
         auto body = [&sent, &payload, exec]() -> task<void>
@@ -461,7 +452,7 @@ namespace kmx::aio::readiness
     {
         auto exec = std::make_shared<executor>();
 
-        outcome waited;
+        detail::outcome waited;
         std::chrono::steady_clock::time_point start {};
         std::chrono::steady_clock::time_point end {};
 
@@ -485,10 +476,7 @@ namespace kmx::aio::readiness
         CHECK(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() >= 25);
     }
 
-    // =========================================================================
     // lifecycle accessors
-    // =========================================================================
-
     TEST_CASE("is_io_thread_affined_to rejects a negative core", "[readiness][executor][affinity][error]")
     {
         executor exec;
@@ -525,10 +513,7 @@ namespace kmx::aio::readiness
         CHECK(token.expired());
     }
 
-    // =========================================================================
     // OpenOnload shims, in their without-the-runtime form
-    // =========================================================================
-
     TEST_CASE("the OpenOnload shims degrade without the runtime", "[readiness][openonload]")
     {
         // Built without the vendor headers these are the fallback definitions, and what they promise is
@@ -546,11 +531,8 @@ namespace kmx::aio::readiness
         CHECK(sent.error() == std::errc::function_not_supported);
     }
 
-    // =========================================================================
     // core pinning
-    // =========================================================================
-
-    namespace
+    namespace detail
     {
         /// @brief The first CPU this thread is allowed to run on.
         /// @details Pinning to a core outside the process's own affinity mask fails, and on a machine
@@ -570,14 +552,14 @@ namespace kmx::aio::readiness
 
             return std::unexpected(std::make_error_code(std::errc::no_such_device));
         }
-    }
+    } // namespace detail
 
     TEST_CASE("a configured core pins the I/O thread", "[readiness][executor][affinity]")
     {
-        const auto core = first_allowed_cpu();
+        const auto core = detail::first_allowed_cpu();
         REQUIRE(core.has_value());
 
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         executor_config config {};
@@ -619,7 +601,7 @@ namespace kmx::aio::readiness
 
     TEST_CASE("a negative core leaves the I/O thread unpinned", "[readiness][executor][affinity]")
     {
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         executor_config config {};
@@ -641,7 +623,7 @@ namespace kmx::aio::readiness
         REQUIRE(wait_for_flag(parked, 2s));
         std::this_thread::sleep_for(50ms);
 
-        const auto core = first_allowed_cpu();
+        const auto core = detail::first_allowed_cpu();
         REQUIRE(core.has_value());
         const auto affined = exec->is_io_thread_affined_to(*core);
 
@@ -656,8 +638,8 @@ namespace kmx::aio::readiness
     {
         // cancel_waiters walks every subscription and has to skip the ones belonging to a different
         // descriptor rather than resuming the lot.
-        socket_pair first;
-        socket_pair second;
+        detail::socket_pair first;
+        detail::socket_pair second;
         REQUIRE(first.valid());
         REQUIRE(second.valid());
 
@@ -720,8 +702,7 @@ namespace kmx::aio::readiness
         std::jthread runner {[exec]() { exec->run(); }};
 
         const auto deadline = std::chrono::steady_clock::now() + 5s;
-        while ((exec->get_stats().total_epoll_waits.load(std::memory_order_relaxed) == 0u) &&
-               (std::chrono::steady_clock::now() < deadline))
+        while ((exec->get_stats().total_epoll_waits.load(std::memory_order_relaxed) == 0u) && (std::chrono::steady_clock::now() < deadline))
             std::this_thread::sleep_for(1ms);
 
         REQUIRE(exec->get_stats().total_epoll_waits.load(std::memory_order_relaxed) > 0u);
@@ -736,10 +717,7 @@ namespace kmx::aio::readiness
         CHECK(elapsed < 2s);
     }
 
-    // =========================================================================
     // Where a ready coroutine continues
-    // =========================================================================
-
     /// @brief Records the threads a parked coroutine started on and woke up on.
     struct wake_up_record
     {
@@ -754,7 +732,7 @@ namespace kmx::aio::readiness
         // The default, and the reference point for the inline case below: with a single worker, the
         // coroutine starts and resumes on that same worker, and the I/O thread only hands the
         // resumption over.
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<executor>(executor_config {.thread_count = 1u, .timeout_ms = 20u});
@@ -789,7 +767,7 @@ namespace kmx::aio::readiness
         // The thread-per-core arrangement: the event is observed on the I/O thread and the coroutine
         // continues there, so the wake-up lands on a thread that is neither the one that started the
         // task - a scheduler worker, because spawn() still goes through the scheduler - nor the test's.
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         const executor_config config {.thread_count = 1u, .timeout_ms = 20u, .resumption = resumption_mode::inline_on_io_thread};
@@ -826,7 +804,7 @@ namespace kmx::aio::readiness
         // must not run the coroutine. The waiter is handed to the scheduler instead, and what matters
         // is that it is resumed at all - a cancellation that took the inline path would either run
         // application code on the caller's thread or, worse, not run it.
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         const executor_config config {.thread_count = 1u, .timeout_ms = 20u, .resumption = resumption_mode::inline_on_io_thread};
@@ -859,7 +837,7 @@ namespace kmx::aio::readiness
         // Two coroutines on one executor, each waiting on its own end of a socket pair, taking turns.
         // Every resumption after the first happens inside the event loop, so this is the arrangement
         // running under the loop rather than a single wake-up observed from outside it.
-        socket_pair sockets;
+        detail::socket_pair sockets;
         REQUIRE(sockets.valid());
 
         const executor_config config {.thread_count = 1u, .timeout_ms = 20u, .resumption = resumption_mode::inline_on_io_thread};
@@ -925,4 +903,4 @@ namespace kmx::aio::readiness
         REQUIRE(wait_for_flag(client_done, 10s));
         CHECK(echoed.load(std::memory_order_acquire) == exchanges);
     }
-}
+} // namespace kmx::aio::test::readiness::executor_api_test

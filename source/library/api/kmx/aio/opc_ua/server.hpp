@@ -8,7 +8,6 @@
     #include <memory>
     #include <system_error>
 
-    #include <kmx/aio/opc_ua/error.hpp>
     #include <kmx/aio/opc_ua/types.hpp>
     #include <kmx/aio/task.hpp>
 #endif
@@ -28,9 +27,13 @@ namespace kmx::aio::opc_ua
         /// @brief Destroy the server and release backend resources.
         ~server() noexcept;
 
+        /// @brief Non-copyable: the server owns its backend runtime.
         server(const server&) = delete;
+        /// @brief Non-copyable: the server owns its backend runtime.
         server& operator=(const server&) = delete;
+        /// @brief Move constructor — transfers ownership of the backend runtime.
         server(server&&) noexcept;
+        /// @brief Move assignment — transfers ownership of the backend runtime.
         server& operator=(server&&) noexcept;
 
         /// @brief Start server runtime/listening endpoints asynchronously.
@@ -53,6 +56,7 @@ namespace kmx::aio::opc_ua
 
     private:
         struct impl;
+        /// @brief The backend implementation, kept opaque so the public header stays free of backend types.
         std::unique_ptr<impl> impl_;
     };
 

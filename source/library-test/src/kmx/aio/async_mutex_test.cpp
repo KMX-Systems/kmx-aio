@@ -15,9 +15,9 @@
 
 #include <kmx/aio/async_mutex.hpp>
 
-namespace kmx::aio
+namespace kmx::aio::test::async_mutex_test
 {
-    namespace
+    namespace detail
     {
         /// @brief A coroutine that starts on call and cleans itself up when it ends.
         /// @details task<T> is lazy - it does nothing until awaited - and awaiting it needs an
@@ -40,7 +40,7 @@ namespace kmx::aio
                 void unhandled_exception() const noexcept {}
             };
         };
-    }
+    } // namespace detail
 
     TEST_CASE("try_lock takes an unheld async_mutex and refuses a held one", "[core][async_mutex]")
     {
@@ -59,7 +59,7 @@ namespace kmx::aio
         async_mutex mutex;
         bool reached_body = false;
 
-        const auto enter = [&]() -> fire_and_forget
+        const auto enter = [&]() -> detail::fire_and_forget
         {
             const async_mutex::guard guard = co_await mutex.lock();
             reached_body = true;
@@ -81,7 +81,7 @@ namespace kmx::aio
         async_mutex mutex;
         std::vector<int> entered;
 
-        const auto enter = [&](const int id) -> fire_and_forget
+        const auto enter = [&](const int id) -> detail::fire_and_forget
         {
             const async_mutex::guard guard = co_await mutex.lock();
             entered.push_back(id);
@@ -166,4 +166,4 @@ namespace kmx::aio
         CHECK(second.try_lock());
         second.unlock();
     }
-}
+} // namespace kmx::aio::test::async_mutex_test

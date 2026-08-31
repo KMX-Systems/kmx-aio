@@ -2,19 +2,19 @@
 /// @brief HTTP/3 codec definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
+#ifndef PCH
+    #include <kmx/aio/http3/control.hpp>
+    #include <kmx/aio/http3/frame.hpp>
+    #include <kmx/aio/http3/message.hpp>
+    #include <kmx/aio/http3/settings.hpp>
 
-#include <kmx/aio/http3/control.hpp>
-#include <kmx/aio/http3/frame.hpp>
-#include <kmx/aio/http3/message.hpp>
-#include <kmx/aio/http3/qpack.hpp>
-#include <kmx/aio/http3/settings.hpp>
-
-#include <expected>
-#include <span>
-#include <string>
-#include <string_view>
-#include <system_error>
-#include <vector>
+    #include <expected>
+    #include <span>
+    #include <string>
+    #include <string_view>
+    #include <system_error>
+    #include <vector>
+#endif
 
 namespace kmx::aio::http3
 {
@@ -103,6 +103,7 @@ namespace kmx::aio::http3
         static std::expected<settings, std::error_code> decode_frame(std::span<const std::uint8_t> payload) noexcept;
     };
 
+    /// @brief Encodes and decodes HTTP/3 GOAWAY payloads and frames.
     class goaway_codec
     {
     public:
@@ -124,6 +125,7 @@ namespace kmx::aio::http3
         static std::expected<goaway_frame, std::error_code> decode_frame(std::span<const std::uint8_t> payload) noexcept;
     };
 
+    /// @brief Builds and extends the byte stream of an HTTP/3 control stream.
     class control_stream_codec
     {
     public:

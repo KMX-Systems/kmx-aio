@@ -6,9 +6,7 @@
     #include <coroutine>
     #include <cstddef>
     #include <exception>
-    #include <expected>
     #include <stop_token>
-    #include <system_error>
     #include <type_traits>
     #include <utility>
     #include <variant>
@@ -20,12 +18,12 @@
 namespace kmx::aio
 {
     /// @brief Tag type used to request the coroutine stop token via `co_await`.
-    struct get_stop_token_t
+    struct stop_token_t
     {
     };
 
     /// @brief Custom awaitable token that resolves to the current coroutine's stop token.
-    constexpr get_stop_token_t get_stop_token {};
+    constexpr stop_token_t get_stop_token {};
 
     /// @brief Type-erased handle to a suspended coroutine, whatever its promise type.
     /// @details What awaiters and schedulers pass around: enough to resume or destroy a coroutine,
@@ -50,8 +48,8 @@ namespace kmx::aio
         ///   1. Attempts O(1) allocation from thread-local slab allocator.
         ///   2. Falls back to ::operator new if slab is exhausted or frame is oversized.
         ///
-        /// See kmx/aio/task.cpp for full implementation and kmx/aio/allocator.hpp
-        /// for slab_allocator design.
+        /// See kmx/aio/task.cpp for full implementation and kmx/aio/allocator/slab.hpp
+        /// for allocator::slab design.
         struct promise_base
         {
             /// @brief Continuation to resume when the coroutine reaches final suspend.
@@ -122,7 +120,7 @@ namespace kmx::aio
             /// @brief Special await transform that yields the coroutine stop token.
             /// @param get_stop_token The stop-token tag.
             /// @return An awaiter that resolves to the coroutine's stop token.
-            auto await_transform(get_stop_token_t) noexcept
+            auto await_transform(stop_token_t) noexcept
             {
                 struct awaiter
                 {
@@ -150,6 +148,8 @@ namespace kmx::aio
             }
         };
 
+        /// @brief Promise type for a task producing a value.
+        /// @tparam T The type the coroutine returns.
         template <typename T>
         struct promise: promise_base
         {
@@ -184,6 +184,7 @@ namespace kmx::aio
             }
         };
 
+        /// @brief Promise type for a task producing no value.
         template <>
         struct promise<void>: promise_base
         {

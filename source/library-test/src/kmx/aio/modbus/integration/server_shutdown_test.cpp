@@ -23,7 +23,6 @@
 
 #if defined(KMX_AIO_FEATURE_MODBUS)
     #include <kmx/aio/modbus/client.hpp>
-    #include <kmx/aio/modbus/error.hpp>
     #include <kmx/aio/modbus/server.hpp>
     #include <kmx/aio/readiness/executor.hpp>
     #include <kmx/aio/task.hpp>
@@ -36,14 +35,16 @@
     #include <optional>
     #include <vector>
 
-namespace kmx::aio::modbus::test::integration
+namespace kmx::aio::test::modbus::integration::server_shutdown_test
 {
+    using namespace kmx::aio::modbus;
+
     using namespace std::literals::chrono_literals;
     using kmx::aio::test::scoped_runner;
     using kmx::aio::test::wait_for_flag;
 
     static constexpr std::uint16_t shutdown_base_port = 15910u;
-    static constexpr std::uint8_t  shutdown_unit_id   = 0x01u;
+    static constexpr std::uint8_t shutdown_unit_id = 0x01u;
 
     /// @brief Answers every read of holding registers with a fixed value, so a test can confirm that a
     ///        request really was served before shutdown is examined.
@@ -65,15 +66,12 @@ namespace kmx::aio::modbus::test::integration
         return server_config {.bind_address = "127.0.0.1", .port = port, .unit_id = shutdown_unit_id};
     }
 
-    // =========================================================================
     // 1. stop() while the server is waiting for a connection
-    // =========================================================================
-
     TEST_CASE("modbus server: stop ends an idle accept loop", "[modbus][server][shutdown][integration]")
     {
         constexpr std::uint16_t port = shutdown_base_port;
 
-        auto srv  = std::make_shared<server>();
+        auto srv = std::make_shared<server>();
         auto exec = std::make_shared<readiness::executor>();
         srv->set_handler(function_code::read_holding_registers, make_constant_holding_handler());
 
@@ -101,15 +99,12 @@ namespace kmx::aio::modbus::test::integration
         CHECK_FALSE(serve_error.has_value());
     }
 
-    // =========================================================================
     // 2. stop() while a peer is connected but sending nothing
-    // =========================================================================
-
     TEST_CASE("modbus server: stop ends a connected idle session", "[modbus][server][shutdown][integration]")
     {
         constexpr std::uint16_t port = shutdown_base_port + 1u;
 
-        auto srv  = std::make_shared<server>();
+        auto srv = std::make_shared<server>();
         auto exec = std::make_shared<readiness::executor>();
         srv->set_handler(function_code::read_holding_registers, make_constant_holding_handler());
 
@@ -123,10 +118,7 @@ namespace kmx::aio::modbus::test::integration
         // session on the server side stays parked in the read it performs between requests - without a
         // task of its own being left outstanding. A coroutine holding the socket open by sleeping would
         // have to be waited for as well, and would then be measuring its own sleep rather than stop().
-        auto peer = std::make_shared<client>(client_config {.host    = "127.0.0.1",
-                                                            .port    = port,
-                                                            .unit_id = shutdown_unit_id},
-                                             *exec);
+        auto peer = std::make_shared<client>(client_config {.host = "127.0.0.1", .port = port, .unit_id = shutdown_unit_id}, *exec);
 
         auto connect_only = [exec, peer, &connected, &connect_error]() -> task<void>
         {
@@ -149,15 +141,12 @@ namespace kmx::aio::modbus::test::integration
         REQUIRE(runner.wait_until_drained(5s));
     }
 
-    // =========================================================================
     // 3. a peer that disconnects must not leave its session behind
-    // =========================================================================
-
     TEST_CASE("modbus server: a disconnected peer leaves no session behind", "[modbus][server][shutdown][integration]")
     {
         constexpr std::uint16_t port = shutdown_base_port + 2u;
 
-        auto srv  = std::make_shared<server>();
+        auto srv = std::make_shared<server>();
         auto exec = std::make_shared<readiness::executor>();
         srv->set_handler(function_code::read_holding_registers, make_constant_holding_handler());
 
@@ -206,5 +195,5 @@ namespace kmx::aio::modbus::test::integration
         REQUIRE(runner.wait_until_drained(5s));
     }
 
-} // namespace kmx::aio::modbus::test::integration
+} // namespace kmx::aio::test::modbus::integration::server_shutdown_test
 #endif // KMX_AIO_FEATURE_MODBUS

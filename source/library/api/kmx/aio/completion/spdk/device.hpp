@@ -34,11 +34,14 @@ namespace kmx::aio::completion::spdk
     class device
     {
     public:
+        /// @brief A constructed @ref device, or the error code explaining why one could not be created.
+        using expected_t = std::expected<device, std::error_code>;
+
         /// @brief Creates a block device abstraction.
         /// @param exec Completion executor used for I/O scheduling context.
         /// @param config Device configuration.
         /// @return Configured device or an error code.
-        [[nodiscard]] static std::expected<device, std::error_code> create(executor& exec, const device_config& config) noexcept;
+        [[nodiscard]] static expected_t create(executor& exec, const device_config& config) noexcept;
 
         /// @brief Creates an empty device handle.
         device() noexcept = default;
@@ -61,8 +64,7 @@ namespace kmx::aio::completion::spdk
         /// @brief Writes contiguous blocks from source buffer.
         /// @param lba Starting logical block address.
         /// @param in Input byte span. Must be block-size aligned.
-        [[nodiscard]] task_returning_expected_size_t write(std::uint64_t lba,
-                                                                              std::span<const std::byte> in) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t write(std::uint64_t lba, std::span<const std::byte> in) noexcept(false);
 
         /// @brief Flushes any buffered writes.
         [[nodiscard]] task_returning_expected_void_t flush() noexcept(false);
@@ -82,14 +84,12 @@ namespace kmx::aio::completion::spdk
         /// @param exec Completion executor used by the device.
         /// @param config Device configuration.
         /// @return Success or an error code.
-        [[nodiscard]] static expected_void_t initialize_state(device& out, executor& exec,
-                                                                                   const device_config& config) noexcept;
+        [[nodiscard]] static expected_void_t initialize_state(device& out, executor& exec, const device_config& config) noexcept;
         /// @brief Initializes the fallback in-memory storage backend.
         /// @param state Device state being initialized.
         /// @param total_bytes_u64 Total storage size in bytes.
         /// @return Success or an error code.
-        [[nodiscard]] static expected_void_t initialize_fallback_storage(state& state,
-                                                                                              std::uint64_t total_bytes_u64) noexcept;
+        [[nodiscard]] static expected_void_t initialize_fallback_storage(state& state, std::uint64_t total_bytes_u64) noexcept;
 
 #if defined(KMX_AIO_FEATURE_SPDK)
         /// @brief Initializes the SPDK backend for the device.

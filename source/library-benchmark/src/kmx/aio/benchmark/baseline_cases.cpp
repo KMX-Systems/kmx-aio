@@ -1,11 +1,10 @@
 /// @file aio/benchmark/baseline_cases.cpp
 /// @brief Raw-syscall reference points the executor numbers are read against.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/benchmark/cases.hpp"
+#include <kmx/aio/benchmark/cases.hpp>
 
 #include <cerrno>
 #include <cstddef>
-#include <cstdint>
 #include <cstdlib>
 #include <new>
 #include <sys/epoll.h>

@@ -54,17 +54,29 @@ namespace kmx::aio::detail
     ///       that has no failure path would add a seam with nothing behind it.
     enum class syscall_id : std::uint8_t
     {
+        /// @brief `epoll_create1` — creating the readiness executor's epoll instance.
         epoll_create1,
+        /// @brief `epoll_wait` — reaping readiness events.
         epoll_wait,
+        /// @brief `fcntl` — querying or changing descriptor flags.
         fcntl,
+        /// @brief `io_uring_queue_init` — creating the completion executor's ring.
         io_uring_queue_init,
+        /// @brief `io_uring_submit` — handing prepared SQEs to the kernel.
         io_uring_submit,
+        /// @brief `io_uring_wait_cqe_timeout` — waiting for a completion with a deadline.
         io_uring_wait_cqe_timeout,
+        /// @brief `io_uring_submit_and_wait_timeout` — the event loop's combined submit-and-wait.
         io_uring_submit_and_wait_timeout,
+        /// @brief `pthread_setaffinity_np` — pinning a thread to its configured core.
         pthread_setaffinity_np,
+        /// @brief `pthread_getaffinity_np` — reading back a thread's core affinity.
         pthread_getaffinity_np,
+        /// @brief `socket` — creating a socket descriptor.
         socket,
+        /// @brief `BIO_new` — creating an OpenSSL BIO for the TLS streams.
         bio_new,
+        /// @brief Number of wrappable calls; not a call itself.
         count
     };
 
@@ -185,7 +197,8 @@ namespace kmx::aio::detail
             {
                 // LCOV_EXCL_BR_LINE: the retry arm needs two threads consuming the same armed slot at
                 // once. A test arms a fault from one thread, so the exchange succeeds first time.
-                if (slot.skip.compare_exchange_weak(skip, skip - 1u, std::memory_order_acq_rel, std::memory_order_acquire)) // LCOV_EXCL_BR_LINE
+                if (slot.skip.compare_exchange_weak(skip, skip - 1u, std::memory_order_acq_rel,
+                                                    std::memory_order_acquire)) // LCOV_EXCL_BR_LINE
                     return 0;
             }
 

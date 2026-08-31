@@ -1,6 +1,6 @@
 #include <iostream>
+
 #include <kmx/aio/completion/executor.hpp>
-#include <memory>
 
 #include <kmx/aio/sample/quic/http3_server/manager.hpp>
 

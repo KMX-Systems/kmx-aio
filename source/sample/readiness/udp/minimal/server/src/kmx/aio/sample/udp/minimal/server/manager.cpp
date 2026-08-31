@@ -1,4 +1,7 @@
-#include "kmx/aio/sample/udp/minimal/server/manager.hpp"
+#include <csignal>
+#include <kmx/aio/readiness/udp/endpoint.hpp>
+#include <kmx/aio/readiness/udp/socket.hpp>
+#include <kmx/aio/sample/udp/minimal/server/manager.hpp>
 
 #include <sys/socket.h>
 

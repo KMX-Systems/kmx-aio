@@ -4,51 +4,52 @@
 ///          spanning root primitives, readiness (epoll), and completion (io_uring) models.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
+#ifndef PCH
+    #include <kmx/aio/allocator/slab.hpp>
+    #include <kmx/aio/allocator/statistics.hpp>
+    #include <kmx/aio/basic_channel.hpp>
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/buffer/view/item.hpp>
+    #include <kmx/aio/channel.hpp>
+    #include <kmx/aio/error_code.hpp>
+    #include <kmx/aio/executor_base.hpp>
+    #include <kmx/aio/scheduler.hpp>
+    #include <kmx/aio/stream_concepts.hpp>
+    #include <kmx/aio/task.hpp>
 
-// Root Primitives (kmx::aio)
-#include <kmx/aio/allocator.hpp>
-#include <kmx/aio/basic_channel.hpp>
-#include <kmx/aio/basic_types.hpp>
-#include <kmx/aio/buffer.hpp>
-#include <kmx/aio/channel.hpp>
-#include <kmx/aio/error_code.hpp>
-#include <kmx/aio/executor_base.hpp>
-#include <kmx/aio/scheduler.hpp>
-#include <kmx/aio/stream_concepts.hpp>
-#include <kmx/aio/task.hpp>
+    // Readiness Model (kmx::aio::readiness)
+    #include <kmx/aio/readiness/executor.hpp>
+    #include <kmx/aio/readiness/io_base.hpp>
+    #include <kmx/aio/readiness/tcp/listener.hpp>
+    #include <kmx/aio/readiness/tcp/stream.hpp>
+    #include <kmx/aio/readiness/timer.hpp>
+    #include <kmx/aio/readiness/udp/socket.hpp>
+    #include <kmx/aio/readiness/v4l2/capture.hpp>
 
-// Readiness Model (kmx::aio::readiness)
-#include <kmx/aio/readiness/executor.hpp>
-#include <kmx/aio/readiness/io_base.hpp>
-#include <kmx/aio/readiness/tcp/listener.hpp>
-#include <kmx/aio/readiness/tcp/stream.hpp>
-#include <kmx/aio/readiness/timer.hpp>
-#include <kmx/aio/readiness/udp/socket.hpp>
-#include <kmx/aio/readiness/v4l2/capture.hpp>
+    // Readiness Model Security/Protocol Overlays
+    #include <kmx/aio/readiness/quic/engine.hpp>
+    #include <kmx/aio/readiness/tls/stream.hpp>
 
-// Readiness Model Security/Protocol Overlays
-#include <kmx/aio/readiness/quic/engine.hpp>
-#include <kmx/aio/readiness/tls/stream.hpp>
+    // Completion Model (kmx::aio::completion)
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/io_base.hpp>
+    #include <kmx/aio/completion/tcp/listener.hpp>
+    #include <kmx/aio/completion/tcp/stream.hpp>
+    #include <kmx/aio/completion/timer.hpp>
+    #include <kmx/aio/completion/udp/socket.hpp>
 
-// Completion Model (kmx::aio::completion)
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/io_base.hpp>
-#include <kmx/aio/completion/tcp/listener.hpp>
-#include <kmx/aio/completion/tcp/stream.hpp>
-#include <kmx/aio/completion/timer.hpp>
-#include <kmx/aio/completion/udp/socket.hpp>
+    // Completion Model Security/Protocol/HW Overlays
+    #include <kmx/aio/completion/quic/engine.hpp>
+    #include <kmx/aio/completion/spdk/device.hpp>
+    #include <kmx/aio/completion/tls/stream.hpp>
+    #include <kmx/aio/completion/v4l2/capture.hpp>
+    #include <kmx/aio/completion/xdp/socket.hpp>
 
-// Completion Model Security/Protocol/HW Overlays
-#include <kmx/aio/completion/quic/engine.hpp>
-#include <kmx/aio/completion/spdk/device.hpp>
-#include <kmx/aio/completion/tls/stream.hpp>
-#include <kmx/aio/completion/v4l2/capture.hpp>
-#include <kmx/aio/completion/xdp/socket.hpp>
+    // Descriptors (Internal / Low-Level)
+    #include <kmx/aio/file_descriptor.hpp>
+    #include <kmx/aio/readiness/descriptor/epoll.hpp>
+    #include <kmx/aio/readiness/descriptor/timer.hpp>
 
-// Descriptors (Internal / Low-Level)
-#include <kmx/aio/file_descriptor.hpp>
-#include <kmx/aio/readiness/descriptor/epoll.hpp>
-#include <kmx/aio/readiness/descriptor/timer.hpp>
-
-// Logging
-#include <kmx/logger.hpp>
+    // Logging
+    #include <kmx/logger.hpp>
+#endif

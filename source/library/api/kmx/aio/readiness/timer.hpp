@@ -11,6 +11,6 @@ namespace kmx::aio::readiness
     /// @brief The readiness-model timer is the existing timerfd-based timer.
     /// @details Uses timerfd + epoll readiness notification to suspend a coroutine
     ///          until the timer fires. Exposes `co_await timer.wait(exec)`.
-    using timer = kmx::aio::descriptor::timer;
+    using timer = kmx::aio::readiness::descriptor::timer;
 
 } // namespace kmx::aio::readiness

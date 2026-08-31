@@ -1,6 +1,7 @@
-#include "kmx/aio/sample/tls/echo_readiness_server/manager.hpp"
-#include <exception>
+#include <kmx/aio/sample/tls/echo_readiness_server/manager.hpp>
 #include <kmx/logger.hpp>
+
+#include <exception>
 #include <source_location>
 
 int main() noexcept

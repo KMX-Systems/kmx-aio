@@ -10,7 +10,6 @@
     #include <string>
     #include <sys/socket.h>
     #include <system_error>
-    #include <type_traits>
     #include <variant>
 
     #include <kmx/aio/ipv4.hpp>
@@ -61,6 +60,7 @@ namespace kmx::aio
         port_t port {};
     };
 
+    /// @brief An @ref endpoint_address, or the error code explaining why one could not be produced.
     using expected_endpoint_address_t = std::expected<endpoint_address, std::error_code>;
 
     /// @brief Binary socket address storage plus length.
@@ -72,12 +72,13 @@ namespace kmx::aio
         ::socklen_t length {};
     };
 
+    /// @brief A @ref socket_address, or the error code explaining why one could not be produced.
     using expected_socket_address_t = std::expected<socket_address, std::error_code>;
 
     /// @brief Helper to check if an error code represents a non-blocking operation that would block.
     /// @param ec The error code to inspect.
     /// @return `true` if the error represents a would-block condition.
-    [[nodiscard]] inline constexpr bool would_block(const std::error_code& ec) noexcept
+    [[nodiscard]] constexpr bool would_block(const std::error_code& ec) noexcept
     {
         const auto value = ec.value();
         // LCOV_EXCL_BR_LINE: EAGAIN and EWOULDBLOCK are the same number on Linux, so the second
@@ -89,7 +90,7 @@ namespace kmx::aio
     /// @brief Helper to check if an error code represents a non-blocking operation that would block.
     /// @param err The errno value to inspect.
     /// @return `true` if the errno represents a would-block condition.
-    [[nodiscard]] inline constexpr bool would_block(const int err) noexcept
+    [[nodiscard]] constexpr bool would_block(const int err) noexcept
     {
         // LCOV_EXCL_BR_LINE: as above - one value, two names, on this platform.
         return (err == EAGAIN) || (err == EWOULDBLOCK); // LCOV_EXCL_BR_LINE
@@ -113,7 +114,7 @@ namespace kmx::aio
     /// @brief Returns the address family for an IP view.
     /// @param ip The IP address view.
     /// @return `AF_INET` for IPv4 or `AF_INET6` for IPv6.
-    [[nodiscard]] inline int ip_family(const ip_address_t ip) noexcept
+    [[nodiscard]] constexpr int ip_family(const ip_address_t ip) noexcept
     {
         return std::holds_alternative<ipv4::address_t>(ip) ? AF_INET : AF_INET6;
     }
@@ -121,7 +122,7 @@ namespace kmx::aio
     /// @brief Returns the address family for owned IP storage.
     /// @param ip The owned IP address.
     /// @return `AF_INET` for IPv4 or `AF_INET6` for IPv6.
-    [[nodiscard]] inline int ip_family(const ip_address_owned_t& ip) noexcept
+    [[nodiscard]] constexpr int ip_family(const ip_address_owned_t& ip) noexcept
     {
         return std::holds_alternative<ipv4::address_owned_t>(ip) ? AF_INET : AF_INET6;
     }
@@ -151,8 +152,7 @@ namespace kmx::aio
     /// @param ip The owned IP address.
     /// @param port The port number.
     /// @return A socket address or an error.
-    [[nodiscard]] expected_socket_address_t make_socket_address(const ip_address_owned_t& ip,
-                                                                                     const port_t port) noexcept;
+    [[nodiscard]] expected_socket_address_t make_socket_address(const ip_address_owned_t& ip, const port_t port) noexcept;
 
     /// @brief Parses a socket address into owned endpoint storage.
     /// @param address The socket address to parse.

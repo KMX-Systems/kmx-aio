@@ -1,13 +1,11 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <catch2/catch_test_macros.hpp>
 
-#include <kmx/aio/someip/vsomeip_compat.hpp>
-
-#include <chrono>
-
-namespace kmx::aio::someip::compat
+namespace kmx::aio::test::someip::compat_queue_test
 {
 #if defined(KMX_AIO_FEATURE_SOMEIP) && (!__has_include(<vsomeip/vsomeip.hpp>) && !__has_include(<vsomeip3/vsomeip.hpp>))
+
+    using namespace kmx::aio::someip::compat;
 
     TEST_CASE("someip compat queue drops oldest on capacity overflow", "[someip][compat][queue]")
     {
@@ -68,4 +66,4 @@ namespace kmx::aio::someip::compat
     }
 
 #endif
-} // namespace kmx::aio::someip::compat
+} // namespace kmx::aio::test::someip::compat_queue_test

@@ -1,4 +1,4 @@
-/// @file kmx/aio/modbus/mock_stream.hpp
+/// @file kmx/aio/test/modbus/mock_stream.hpp
 /// @brief In-memory mock stream for unit-testing Modbus session framing.
 /// @details
 /// `mock_stream` satisfies the stream concept expected by
@@ -26,7 +26,7 @@
 
     #include <kmx/aio/task.hpp>
 
-namespace kmx::aio::modbus::test
+namespace kmx::aio::test::modbus
 {
     /// @brief Simple coroutine-compatible in-memory stream for framing unit tests.
     class mock_stream
@@ -41,16 +41,10 @@ namespace kmx::aio::modbus::test
         /// @brief Pre-load bytes that will be returned from subsequent `read()` calls.
         /// @details Multiple calls enqueue additional byte sequences that are
         ///          consumed in the order they were pushed.
-        void push_read_bytes(std::vector<std::uint8_t> bytes)
-        {
-            read_queue_.push_back(std::move(bytes));
-        }
+        void push_read_bytes(std::vector<std::uint8_t> bytes) { read_queue_.push_back(std::move(bytes)); }
 
         /// @brief Return all bytes that have been written via `write_all()`.
-        [[nodiscard]] const std::vector<std::uint8_t>& written_bytes() const noexcept
-        {
-            return written_;
-        }
+        [[nodiscard]] const std::vector<std::uint8_t>& written_bytes() const noexcept { return written_; }
 
         /// @brief Clear written bytes and reset the read queue.
         void reset() noexcept
@@ -74,7 +68,7 @@ namespace kmx::aio::modbus::test
 
             auto& front = read_queue_.front();
             const std::size_t available = front.size() - read_offset_;
-            const std::size_t to_copy   = std::min(available, buffer.size());
+            const std::size_t to_copy = std::min(available, buffer.size());
 
             for (std::size_t i = 0u; i < to_copy; ++i)
                 buffer[i] = static_cast<char>(front[read_offset_ + i]);
@@ -90,8 +84,7 @@ namespace kmx::aio::modbus::test
         }
 
         /// @brief Captures all bytes written; always reports full write success.
-        task_returning_expected_void_t write_all(
-            std::span<const char> buffer) noexcept(false)
+        task_returning_expected_void_t write_all(std::span<const char> buffer) noexcept(false)
         {
             for (const char c: buffer)
                 written_.push_back(static_cast<std::uint8_t>(c));
@@ -104,5 +97,5 @@ namespace kmx::aio::modbus::test
         std::vector<std::uint8_t> written_;
     };
 
-} // namespace kmx::aio::modbus::test
+} // namespace kmx::aio::test::modbus
 #endif // KMX_AIO_FEATURE_MODBUS

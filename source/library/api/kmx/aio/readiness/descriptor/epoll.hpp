@@ -15,16 +15,23 @@ namespace kmx::aio::readiness::descriptor
     class epoll: public file_descriptor
     {
     public:
+        /// @brief Creates an invalid epoll object.
         epoll() noexcept = default;
 
+        /// @brief Wraps an existing epoll file descriptor.
+        /// @param fd Epoll file descriptor.
         explicit epoll(const fd_t fd) noexcept: file_descriptor(fd) {}
 
         // Non-copyable
+        /// @brief Non-copyable: the object owns its descriptor.
         epoll(const epoll&) = delete;
+        /// @brief Non-copyable: the object owns its descriptor.
         epoll& operator=(const epoll&) = delete;
 
         // Move-only
+        /// @brief Move constructor — transfers ownership of the descriptor.
         epoll(epoll&&) noexcept = default;
+        /// @brief Move assignment — transfers ownership of the descriptor.
         epoll& operator=(epoll&&) noexcept = default;
 
         /// @brief Creates a new epoll instance.

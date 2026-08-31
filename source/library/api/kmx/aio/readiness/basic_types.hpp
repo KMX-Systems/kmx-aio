@@ -5,30 +5,39 @@
     #include <cstdint>
     #include <sys/epoll.h>
 
-    #include <kmx/aio/basic_types.hpp>
 #endif
 
 namespace kmx::aio::readiness
 {
+    /// @brief Raw epoll event mask, as passed to and returned by the epoll syscalls.
     using event_mask_t = std::uint32_t;
 
     /// @brief Represents the type of I/O event to wait for in coroutine suspension.
     /// @note Only read and write are used; errors are handled implicitly via epoll masks.
     enum class event_type : std::uint8_t
     {
+        /// @brief Wait until the descriptor has data to read.
         read,
+        /// @brief Wait until the descriptor can accept a write.
         write
     };
 
     /// @brief Type-safe epoll event mask enumeration.
     enum class epoll_event_mask : event_mask_t
     {
+        /// @brief The descriptor has data to read (`EPOLLIN`).
         read = EPOLLIN,
+        /// @brief The descriptor can accept a write (`EPOLLOUT`).
         write = EPOLLOUT,
+        /// @brief An error occurred on the descriptor (`EPOLLERR`).
         error = EPOLLERR,
+        /// @brief The descriptor was hung up (`EPOLLHUP`).
         hang_up = EPOLLHUP,
+        /// @brief Deliver events edge-triggered rather than level-triggered (`EPOLLET`).
         edge_triggered = EPOLLET,
+        /// @brief Deliver at most one event, then disarm the descriptor (`EPOLLONESHOT`).
         one_shot = EPOLLONESHOT,
+        /// @brief The peer closed its writing half (`EPOLLRDHUP`).
         remote_hang_up = EPOLLRDHUP
     };
 

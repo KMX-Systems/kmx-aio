@@ -8,7 +8,6 @@
     #include <memory>
     #include <system_error>
 
-    #include <kmx/aio/someip/error.hpp>
     #include <kmx/aio/someip/types.hpp>
     #include <kmx/aio/task.hpp>
 #endif
@@ -28,11 +27,16 @@ namespace kmx::aio::someip
         /// @brief Constructs a server with the given configuration.
         /// @param config Application name, service coordinates, and timing settings.
         explicit server(server_config config) noexcept;
+        /// @brief Stops offering the service and releases the vsomeip runtime.
         ~server() noexcept;
 
+        /// @brief Non-copyable: the server owns its backend runtime.
         server(const server&) = delete;
+        /// @brief Non-copyable: the server owns its backend runtime.
         server& operator=(const server&) = delete;
+        /// @brief Move constructor — transfers ownership of the backend runtime.
         server(server&&) noexcept;
+        /// @brief Move assignment — transfers ownership of the backend runtime.
         server& operator=(server&&) noexcept;
 
         /// @brief Initialises the vsomeip runtime and registers the application.
@@ -53,15 +57,13 @@ namespace kmx::aio::someip
         /// @param service_id  Identifier of the service to offer.
         /// @param instance_id Instance of the service to offer.
         /// @return void on success, or an error code on failure.
-        [[nodiscard]] task_returning_expected_void_t offer_service(service_id_t service_id,
-                                                                               instance_id_t instance_id) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t offer_service(service_id_t service_id, instance_id_t instance_id) noexcept(false);
 
         /// @brief Withdraws a previously advertised service from Service Discovery.
         /// @param service_id  Identifier of the service to withdraw.
         /// @param instance_id Instance of the service to withdraw.
         /// @return void on success, or an error code on failure.
-        [[nodiscard]] task_returning_expected_void_t stop_offer_service(service_id_t service_id,
-                                                                                    instance_id_t instance_id) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t stop_offer_service(service_id_t service_id, instance_id_t instance_id) noexcept(false);
 
         /// @brief Dequeues the next incoming method request.
         /// @return The oldest pending request, or @c error::timed_out if none is available.
@@ -72,7 +74,7 @@ namespace kmx::aio::someip
         /// @param payload    Response payload bytes.
         /// @return void on success, or an error code on failure.
         [[nodiscard]] task_returning_expected_void_t send_response(request_id_t request_id,
-                                                                               std::vector<std::uint8_t> payload) noexcept(false);
+                                                                   std::vector<std::uint8_t> payload) noexcept(false);
 
         /// @brief Broadcasts an event notification to all active subscribers.
         /// @param service_id  Service that is publishing the event.
@@ -80,9 +82,8 @@ namespace kmx::aio::someip
         /// @param event_id    Event identifier.
         /// @param payload     Event payload bytes.
         /// @return void on success, or an error code if the service is not offered.
-        [[nodiscard]] task_returning_expected_void_t notify(service_id_t service_id, instance_id_t instance_id,
-                                                                        event_id_t event_id,
-                                                                        std::vector<std::uint8_t> payload) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t notify(service_id_t service_id, instance_id_t instance_id, event_id_t event_id,
+                                                            std::vector<std::uint8_t> payload) noexcept(false);
 
         /// @brief Returns the configuration supplied at construction.
         [[nodiscard]] const server_config& config() const noexcept;
@@ -92,6 +93,7 @@ namespace kmx::aio::someip
 
     private:
         struct impl;
+        /// @brief The backend implementation, kept opaque so the public header stays free of backend types.
         std::unique_ptr<impl> impl_;
     };
 

@@ -1,7 +1,6 @@
 #include <kmx/aio/sample/spdk/discovery/manager.hpp>
 
 #include <cstddef>
-#include <memory>
 #include <source_location>
 #include <string>
 #include <string_view>

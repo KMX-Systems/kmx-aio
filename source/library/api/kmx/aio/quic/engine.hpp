@@ -14,7 +14,7 @@
         #include <vector>
 
         #include <kmx/aio/basic_types.hpp>
-        #include <kmx/aio/buffer_pool.hpp>
+        #include <kmx/aio/buffer/handle.hpp>
         #include <kmx/aio/quic/settings.hpp>
         #include <kmx/aio/task.hpp>
     #endif
@@ -30,7 +30,7 @@ namespace kmx::aio::quic
     /// @brief Move-only payload view backed by preallocated storage.
     struct stream_payload
     {
-        buffer_handle<stream_payload_buffer> storage;
+        buffer::handle<stream_payload_buffer> storage;
         std::size_t size {};
 
         [[nodiscard]] std::span<char> bytes() noexcept(false) { return {storage->data(), size}; }
@@ -89,7 +89,7 @@ namespace kmx::aio::quic
         /// @param config  QUIC protocol settings.
         /// @return Success or an error code.
         [[nodiscard]] task_returning_expected_void_t start(ip_address_t ip, port_t port, void* ssl_ctx = nullptr,
-                                                                       const settings& config = settings {}) noexcept(false);
+                                                           const settings& config = settings {}) noexcept(false);
 
         /// @brief Processes pending QUIC events (called from the event loop).
         /// @return Success or an error code.
@@ -103,10 +103,9 @@ namespace kmx::aio::quic
         /// @param ssl_ctx   BoringSSL SSL_CTX pointer.
         /// @param config    QUIC protocol settings.
         /// @return Success or an error code once connection is established.
-        [[nodiscard]] task_returning_expected_void_t connect(ip_address_t peer_ip, port_t peer_port,
-                                                                         const std::string& hostname = "", const std::string& payload = "",
-                                                                         void* ssl_ctx = nullptr,
-                                                                         const settings& config = settings {}) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t connect(ip_address_t peer_ip, port_t peer_port, const std::string& hostname = "",
+                                                             const std::string& payload = "", void* ssl_ctx = nullptr,
+                                                             const settings& config = settings {}) noexcept(false);
 
         /// @brief Connects to a peer and creates one client-initiated stream per payload.
         /// @param peer_ip   IP address to connect to.
@@ -116,10 +115,9 @@ namespace kmx::aio::quic
         /// @param ssl_ctx   BoringSSL SSL_CTX pointer.
         /// @param config    QUIC protocol settings.
         /// @return Success or an error code once connection is established.
-        [[nodiscard]] task_returning_expected_void_t connect(ip_address_t peer_ip, port_t peer_port,
-                                                                         const std::string& hostname,
-                                                                         const std::vector<std::string>& payloads, void* ssl_ctx = nullptr,
-                                                                         const settings& config = {}) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t connect(ip_address_t peer_ip, port_t peer_port, const std::string& hostname,
+                                                             const std::vector<std::string>& payloads, void* ssl_ctx = nullptr,
+                                                             const settings& config = {}) noexcept(false);
 
     private:
         struct impl;

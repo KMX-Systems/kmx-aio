@@ -6,8 +6,10 @@
 #include <string>
 #include <system_error>
 
-namespace kmx::aio::someip
+namespace kmx::aio::test::someip::error_test
 {
+    using namespace kmx::aio::someip;
+
     TEST_CASE("someip error category exposes stable name", "[someip][error]")
     {
         const std::error_code ec = make_error_code(error::feature_disabled);
@@ -19,4 +21,4 @@ namespace kmx::aio::someip
         const std::error_code ec = make_error_code(error::timed_out);
         CHECK(ec.message() == std::string("SOME/IP operation timed out"));
     }
-}
+} // namespace kmx::aio::test::someip::error_test

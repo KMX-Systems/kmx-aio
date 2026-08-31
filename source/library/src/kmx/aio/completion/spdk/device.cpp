@@ -210,7 +210,7 @@ namespace kmx::aio::completion::spdk
     }
 #endif
 
-    std::expected<device, std::error_code> device::create(executor& exec, const device_config& config) noexcept
+    device::expected_t device::create(executor& exec, const device_config& config) noexcept
     {
         const auto total_bytes_u64 = validate_create_config(exec, config);
         if (!total_bytes_u64)
@@ -290,8 +290,7 @@ namespace kmx::aio::completion::spdk
         co_return out.size();
     }
 
-    task_returning_expected_size_t device::write(const std::uint64_t lba,
-                                                                    const std::span<const std::byte> in) noexcept(false)
+    task_returning_expected_size_t device::write(const std::uint64_t lba, const std::span<const std::byte> in) noexcept(false)
     {
         if (!state_)
             co_return std::unexpected(to_std_error_code(error_code::bad_descriptor));

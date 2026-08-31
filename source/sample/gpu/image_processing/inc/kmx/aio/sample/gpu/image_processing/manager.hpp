@@ -1,10 +1,11 @@
 #pragma once
+#ifndef PCH
+    #include <cstdint>
+    #include <string>
+    #include <utility>
 
-#include <cstdint>
-#include <string>
-#include <utility>
-
-#include <kmx/aio/completion/v4l2/capture.hpp>
+    #include <kmx/aio/completion/v4l2/capture.hpp>
+#endif
 
 namespace kmx::aio::sample::gpu::image_processing
 {

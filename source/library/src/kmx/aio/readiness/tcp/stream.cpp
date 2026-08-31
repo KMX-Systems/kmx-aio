@@ -1,13 +1,11 @@
 /// @file aio/readiness/tcp/stream.cpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/readiness/tcp/stream.hpp"
+#include <kmx/aio/readiness/tcp/stream.hpp>
 
-#include "kmx/aio/error_code.hpp"
+#include <kmx/aio/error_code.hpp>
 
-#include "kmx/aio/readiness/openonload/extensions.hpp"
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <netinet/in.h>
+#include <kmx/aio/readiness/openonload/extensions.hpp>
+
 #include <sys/socket.h>
 #include <system_error>
 

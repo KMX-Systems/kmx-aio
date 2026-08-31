@@ -12,14 +12,11 @@
 ///      when data is available (requires CAP_NET_RAW on loopback; skipped otherwise).
 
 #include <array>
-#include <cerrno>
-#include <chrono>
 #include <cstring>
 #include <memory>
 #include <optional>
 
 #include <linux/if_ether.h>
-#include <net/ethernet.h>
 #include <net/if.h>
 #include <netpacket/packet.h>
 #include <sys/ioctl.h>
@@ -32,7 +29,7 @@
 #include <kmx/aio/readiness/executor.hpp>
 #include <kmx/aio/task.hpp>
 
-namespace kmx::aio::avb::test
+namespace kmx::aio::test::avb::eth_socket_epoll_registration_test
 {
     // -----------------------------------------------------------------------
     // Helpers
@@ -197,4 +194,4 @@ namespace kmx::aio::avb::test
         REQUIRE(*result->bytes > 0u);
     }
 
-} // namespace kmx::aio::avb::test
+} // namespace kmx::aio::test::avb::eth_socket_epoll_registration_test

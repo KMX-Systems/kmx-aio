@@ -1,17 +1,18 @@
 #pragma once
-#include <kmx/aio/file_descriptor.hpp>
-#include <kmx/aio/readiness/executor.hpp>
-#include <kmx/aio/readiness/tcp/stream.hpp>
-#include <kmx/aio/readiness/tls/stream.hpp>
-#include <kmx/aio/task.hpp>
-#include <kmx/logger.hpp>
-#include <openssl/ssl.h>
+#ifndef PCH
+    #include <kmx/aio/file_descriptor.hpp>
+    #include <kmx/aio/readiness/executor.hpp>
+    #include <kmx/aio/readiness/tls/stream.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/logger.hpp>
 
-#include <atomic>
-#include <expected>
-#include <memory>
-#include <string_view>
-#include <system_error>
+    #include <openssl/ssl.h>
+
+    #include <atomic>
+    #include <expected>
+    #include <memory>
+    #include <system_error>
+#endif
 
 namespace kmx::aio::sample::tls::h2_alpn_readiness_client
 {

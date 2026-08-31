@@ -1,12 +1,13 @@
 /// @file aio/readiness/executor.cpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/detail/syscalls.hpp>
-#include "kmx/aio/readiness/executor.hpp"
+#include <kmx/aio/readiness/executor.hpp>
 
-#include "kmx/aio/error_code.hpp"
-#include "kmx/aio/readiness/descriptor/timer.hpp"
-#include "kmx/aio/readiness/openonload/extensions.hpp"
-#include "kmx/logger.hpp"
+#include <kmx/aio/error_code.hpp>
+#include <kmx/aio/readiness/descriptor/timer.hpp>
+#include <kmx/aio/readiness/openonload/extensions.hpp>
+#include <kmx/logger.hpp>
+
 #include <cerrno>
 #include <cstdint>
 #include <cstdlib>
@@ -14,12 +15,11 @@
 #include <pthread.h>
 #include <sched.h>
 #include <span>
-#include <string_view>
-#include <vector>
 #include <sys/eventfd.h>
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
+#include <vector>
 
 namespace kmx::aio::readiness
 {
@@ -441,12 +441,12 @@ namespace kmx::aio::readiness
             const std::lock_guard thread_lock(io_thread_mutex_);
             if (io_thread_.joinable() && !on_owned_thread()) // LCOV_EXCL_BR_LINE
             {
-            // request_stop() here and not only in stop(). stop() asks the I/O thread to finish only on
-            // the call that wins running_.exchange(false), and run() publishes running_ = true before it
-            // takes this mutex to create the thread. A stop landing in that gap therefore finds no
-            // thread to ask, and the run() that creates it a moment later sees running_ already false
-            // and skips its own stop() - leaving a thread nobody has asked to finish, and this join
-            // waiting on it for good. Asking again costs nothing when the stop was already requested.
+                // request_stop() here and not only in stop(). stop() asks the I/O thread to finish only on
+                // the call that wins running_.exchange(false), and run() publishes running_ = true before it
+                // takes this mutex to create the thread. A stop landing in that gap therefore finds no
+                // thread to ask, and the run() that creates it a moment later sees running_ already false
+                // and skips its own stop() - leaving a thread nobody has asked to finish, and this join
+                // waiting on it for good. Asking again costs nothing when the stop was already requested.
                 io_thread_.request_stop();
                 thread_to_join = std::move(io_thread_);
             }

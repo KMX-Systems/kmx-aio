@@ -1,6 +1,8 @@
-#include "kmx/aio/sample/tls/h2_alpn_server/manager.hpp"
+#include <kmx/aio/readiness/tcp/listener.hpp>
+#include <kmx/aio/sample/tls/h2_alpn_server/manager.hpp>
 
 #include <array>
+#include <csignal>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <span>
@@ -160,15 +162,15 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
                     total += *r;
                 }
 
-                const char resp[] = {
+                static constexpr auto resp = std::to_array<char>({
                     0x00, 0x00, 0x01, 0x01, 0x04, 0x00, 0x00, 0x00, 0x01, static_cast<char>(0x88),
 
                     0x00, 0x00, 0x15, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 'H',
                     'e',  'l',  'l',  'o',  ' ',  'f',  'r',  'o',  'm',  ' ',
                     'K',  'M',  'X',  ' ',  'H',  'T',  'T',  'P',  '/',  '2',
-                };
+                });
 
-                if (auto w_res = co_await stream.write_all(std::span<const char>(resp, sizeof(resp))); !w_res)
+                if (auto w_res = co_await stream.write_all(std::span<const char>(resp)); !w_res)
                 {
                     metrics_.errors.fetch_add(1u, std::memory_order_relaxed);
                     co_return;

@@ -1,10 +1,10 @@
 /// @file aio/completion/udp/socket.cpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/completion/udp/socket.hpp"
+#include <kmx/aio/completion/udp/socket.hpp>
 
 namespace kmx::aio::completion::udp
 {
-    socket::create_result socket::create(executor& exec, const int domain, const int type, const int protocol) noexcept
+    socket::expected_t socket::create(executor& exec, const int domain, const int type, const int protocol) noexcept
     {
         auto res = file_descriptor::create_socket(domain, type, protocol);
         if (!res)

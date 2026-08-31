@@ -6,7 +6,7 @@ The library is built around a small set of core async primitives:
 - `kmx::aio::executor_base`: shared executor lifecycle/synchronization base
 - `kmx::aio::allocator`: thread-local slab allocator for coroutine frame storage
 - `kmx::aio::file_descriptor`: RAII wrapper for Linux file descriptors
-- `kmx::aio::buffer_pool` and `kmx::aio::buffer_handle`: fixed-capacity buffer leasing
+- `kmx::aio::buffer::pool` and `kmx::aio::buffer::handle`: fixed-capacity buffer leasing
 - `kmx::aio::channel`: SPSC channel with watermark/credit backpressure
 - `kmx::aio::async_mutex`: a mutex acquired with `co_await`, holdable across a suspension
 - `kmx::aio::error_code`: error propagation with `std::expected`
@@ -41,7 +41,7 @@ thread what slab it happens to have installed.
 
 A frame freed on its own thread goes straight back onto that slab's free list. A frame freed anywhere
 else is pushed onto the slab's lock-free remote list, which the owning thread collects the next time it
-needs a slot; until then the slab still counts the slot as allocated. `slab_allocator::allocate()` and
+needs a slot; until then the slab still counts the slot as allocated. `allocator::slab::allocate()` and
 `deallocate()` remain single-threaded, and `set_thread_allocator()` still installs one slab per thread -
 what changed is that a frame crossing a thread boundary is now safe rather than a corrupted heap.
 

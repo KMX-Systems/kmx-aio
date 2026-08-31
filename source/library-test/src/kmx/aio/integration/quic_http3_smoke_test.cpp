@@ -6,8 +6,6 @@
     #include <catch2/catch_test_macros.hpp>
     #include <catch2/generators/catch_generators.hpp>
 
-    #include <sys/wait.h>
-
     #include <chrono>
     #include <cstdlib>
     #include <filesystem>
@@ -17,7 +15,7 @@
     #include <string_view>
     #include <vector>
 
-namespace kmx::aio::quic::test::integration
+namespace kmx::aio::test::integration::quic_http3_smoke_test
 {
     namespace fs = std::filesystem;
 
@@ -177,7 +175,7 @@ namespace kmx::aio::quic::test::integration
 
         const auto now_ns = std::chrono::steady_clock::now().time_since_epoch().count();
         const std::uint16_t test_port = is_completion ? static_cast<std::uint16_t>(28000u + static_cast<std::uint16_t>(now_ns % 2000u)) :
-                                static_cast<std::uint16_t>(20000u + static_cast<std::uint16_t>(now_ns % 2000u));
+                                                        static_cast<std::uint16_t>(20000u + static_cast<std::uint16_t>(now_ns % 2000u));
         const fs::path server_log =
             fs::path("/tmp") /
             ((is_completion ? "kmx_http3_server_smoke_" : "kmx_quic_readiness_echo_server_smoke_") + std::to_string(now_ns) + ".log");
@@ -192,35 +190,39 @@ namespace kmx::aio::quic::test::integration
         const std::string server_cmd = "env " + port_env + " " + ld_library_path + " stdbuf -oL -eL " +
                                        shell_quote(server_bin_opt->string()) + " > " + shell_quote(server_log.string()) + " 2>&1";
         const std::string readiness_client_env = is_completion ? "" : " KMX_QUIC_ECHO_CLIENT_CLOSE_AFTER_RESPONSES=2";
-        const std::string client_cmd = "timeout 30s env " + port_env + readiness_client_env + " " +
-                                       ld_library_path + " stdbuf -oL -eL " + shell_quote(client_bin_opt->string()) + " > " +
-                                       shell_quote(client_log.string()) + " 2>&1";
+        const std::string client_cmd = "timeout 30s env " + port_env + readiness_client_env + " " + ld_library_path + " stdbuf -oL -eL " +
+                                       shell_quote(client_bin_opt->string()) + " > " + shell_quote(client_log.string()) + " 2>&1";
 
-        const std::string script = "set -u -o pipefail; " + server_cmd + " & " +
-                                   "srv=$!; "
-                                   "port_dec=" + std::to_string(test_port) + "; "
-                                   "port_hex=$(printf '%04X' " + std::to_string(test_port) + "); "
-                                   "ready=0; "
-                                   "deadline=$((SECONDS+15)); "
-                                   "while (( SECONDS < deadline )); do "
-                                   "  if ! kill -0 \"$srv\" >/dev/null 2>&1; then break; fi; "
-                                   "  if command -v ss >/dev/null 2>&1; then "
-                                   "    if ss -lunp 2>/dev/null | grep -F \":$port_dec\" | grep -Fq \"pid=$srv,\"; then ready=1; break; fi; "
-                                   "  else "
-                                   "    if grep -qi \":$port_hex \" /proc/net/udp /proc/net/udp6 2>/dev/null; then ready=1; break; fi; "
-                                   "  fi; "
-                                   "  sleep 0.1; "
-                                   "done; "
-                                   "if (( ready == 0 )); then "
-                                   "  client_rc=124; "
-                                   "else "
-                                   "  sleep 1; " +
-                                   client_cmd +
-                                   "; client_rc=$?; "
-                                   "fi; "
-                                   "kill \"$srv\" >/dev/null 2>&1 || true; "
-                                   "wait \"$srv\" >/dev/null 2>&1 || true; "
-                                   "exit \"$client_rc\"";
+        const std::string script =
+            "set -u -o pipefail; " + server_cmd + " & " +
+            "srv=$!; "
+            "port_dec=" +
+            std::to_string(test_port) +
+            "; "
+            "port_hex=$(printf '%04X' " +
+            std::to_string(test_port) +
+            "); "
+            "ready=0; "
+            "deadline=$((SECONDS+15)); "
+            "while (( SECONDS < deadline )); do "
+            "  if ! kill -0 \"$srv\" >/dev/null 2>&1; then break; fi; "
+            "  if command -v ss >/dev/null 2>&1; then "
+            "    if ss -lunp 2>/dev/null | grep -F \":$port_dec\" | grep -Fq \"pid=$srv,\"; then ready=1; break; fi; "
+            "  else "
+            "    if grep -qi \":$port_hex \" /proc/net/udp /proc/net/udp6 2>/dev/null; then ready=1; break; fi; "
+            "  fi; "
+            "  sleep 0.1; "
+            "done; "
+            "if (( ready == 0 )); then "
+            "  client_rc=124; "
+            "else "
+            "  sleep 1; " +
+            client_cmd +
+            "; client_rc=$?; "
+            "fi; "
+            "kill \"$srv\" >/dev/null 2>&1 || true; "
+            "wait \"$srv\" >/dev/null 2>&1 || true; "
+            "exit \"$client_rc\"";
 
         const std::string full_cmd = "bash -lc " + shell_quote(script);
         const int run_rc = std::system(full_cmd.c_str());
@@ -269,6 +271,6 @@ namespace kmx::aio::quic::test::integration
                                                            }));
         }
     }
-} // namespace kmx::aio::quic::test::integration
+} // namespace kmx::aio::test::integration::quic_http3_smoke_test
 
 #endif // KMX_AIO_FEATURE_QUIC

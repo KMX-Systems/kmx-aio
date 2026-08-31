@@ -1,6 +1,6 @@
 /// @file aio/file_descriptor.cpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include "kmx/aio/readiness/descriptor/epoll.hpp"
+#include <kmx/aio/file_descriptor.hpp>
 
 #include <kmx/aio/detail/syscalls.hpp>
 
@@ -114,7 +114,7 @@ namespace kmx::aio
     }
 
     expected_void_t file_descriptor::setsockopt(const int level, const int optname, const void* const optval,
-                                                                 const ::socklen_t optlen) noexcept
+                                                const ::socklen_t optlen) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -214,8 +214,7 @@ namespace kmx::aio
         return connect(reinterpret_cast<const sockaddr*>(&addr->storage), addr->length);
     }
 
-    expected_void_t file_descriptor::getsockopt(const int level, const int optname, void* const optval,
-                                                                 ::socklen_t* const optlen) noexcept
+    expected_void_t file_descriptor::getsockopt(const int level, const int optname, void* const optval, ::socklen_t* const optlen) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));

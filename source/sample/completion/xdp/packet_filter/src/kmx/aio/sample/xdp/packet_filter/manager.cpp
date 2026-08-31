@@ -1,8 +1,6 @@
 #include <kmx/aio/sample/xdp/packet_filter/manager.hpp>
 
 #include <atomic>
-#include <cstddef>
-#include <exception>
 #include <filesystem>
 #include <memory>
 #include <source_location>

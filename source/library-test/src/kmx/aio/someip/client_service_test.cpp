@@ -3,16 +3,17 @@
 
 #include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/someip/client.hpp>
+#include <kmx/aio/someip/error.hpp>
 
-#include <chrono>
 #include <memory>
 #include <optional>
 #include <system_error>
-#include <utility>
 #include <vector>
 
-namespace kmx::aio::someip
+namespace kmx::aio::test::someip::client_service_test
 {
+    using namespace kmx::aio::someip;
+
     namespace detail
     {
         [[nodiscard]] client_config make_test_config()
@@ -32,8 +33,7 @@ namespace kmx::aio::someip
             bool completed = false;
         };
 
-        task<void> run_start(client& c, std::shared_ptr<coroutine_result_state<expected_void_t>> state,
-                             completion::executor& exec)
+        task<void> run_start(client& c, std::shared_ptr<coroutine_result_state<expected_void_t>> state, completion::executor& exec)
         {
             state->result.emplace(co_await c.start());
             state->completed = true;
@@ -41,8 +41,7 @@ namespace kmx::aio::someip
             co_return;
         }
 
-        task<void> run_stop(client& c, std::shared_ptr<coroutine_result_state<expected_void_t>> state,
-                            completion::executor& exec)
+        task<void> run_stop(client& c, std::shared_ptr<coroutine_result_state<expected_void_t>> state, completion::executor& exec)
         {
             state->result.emplace(co_await c.stop());
             state->completed = true;
@@ -162,4 +161,4 @@ namespace kmx::aio::someip
             CHECK(stats.dropped_events == 0u);
         }
     }
-}
+} // namespace kmx::aio::test::someip::client_service_test

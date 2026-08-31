@@ -2,9 +2,10 @@
 /// @brief Deterministic AVB manager control-flow model for unit tests and helper math.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-
-#include <cstdint>
-#include <span>
+#ifndef PCH
+    #include <cstdint>
+    #include <span>
+#endif
 
 namespace kmx::aio::sample::avb
 {

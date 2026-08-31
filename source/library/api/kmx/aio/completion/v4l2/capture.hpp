@@ -6,7 +6,6 @@
     #include <expected>
     #include <memory>
     #include <span>
-    #include <system_error>
     #include <vector>
 
     #include <kmx/aio/basic_types.hpp>
@@ -66,7 +65,7 @@ namespace kmx::aio::completion::v4l2
         friend class capture;
 
         /// @brief Creates a frame view for the provided device buffer.
-        frame_view(fd_t device_fd, std::uint32_t index, const std::byte* ptr, std::size_t length, frame_metadata metadata,
+        frame_view(const fd_t device_fd, std::uint32_t index, const std::byte* ptr, std::size_t length, frame_metadata metadata,
                    std::weak_ptr<void> device_lifetime) noexcept;
 
         /// @brief Device file descriptor used to requeue the buffer.
@@ -128,8 +127,12 @@ namespace kmx::aio::completion::v4l2
     class capture: public io_base
     {
     public:
+        /// @brief Result type for asynchronous frame retrieval.
         using frame_result = task<std::expected<frame_view, kmx::aio::error_code>>;
-        using create_result = std::expected<capture, kmx::aio::error_code>;
+        /// @brief Result type returned by device creation.
+        using expected_t = std::expected<capture, kmx::aio::error_code>;
+        /// @brief Result type used for operations returning no payload.
+        using expected_void_t = std::expected<void, kmx::aio::error_code>;
 
         /// @brief Opens and configures a V4L2 capture device.
         ///
@@ -146,10 +149,13 @@ namespace kmx::aio::completion::v4l2
         /// @param exec  Completion executor to drive io_uring poll events.
         /// @param cfg   Device configuration (device path, format, size, buffer count).
         /// @return A fully initialised `capture` ready for `next_frame()`, or an error.
-        [[nodiscard]] static create_result create(executor& exec, capture_config cfg) noexcept;
+        [[nodiscard]] static expected_t create(executor& exec, capture_config cfg) noexcept;
 
+        /// @brief Move constructor — transfers ownership of the device and its mapped buffers.
         capture(capture&&) noexcept;
+        /// @brief Move assignment is disabled to keep ownership unambiguous.
         capture& operator=(capture&&) noexcept = delete;
+        /// @brief Stops streaming, unmaps every buffer, and closes the device.
         ~capture() noexcept;
 
         /// @brief Suspends via io_uring poll until the driver has a filled frame, then returns it.
@@ -163,10 +169,10 @@ namespace kmx::aio::completion::v4l2
         [[nodiscard]] const capture_config& config() const noexcept { return config_; }
 
         /// @brief Stops streaming (VIDIOC_STREAMOFF). Idempotent.
-        [[nodiscard]] std::expected<void, kmx::aio::error_code> stream_off() noexcept;
+        [[nodiscard]] expected_void_t stream_off() noexcept;
 
         /// @brief Restarts streaming after `stream_off()`.
-        [[nodiscard]] std::expected<void, kmx::aio::error_code> stream_on() noexcept;
+        [[nodiscard]] expected_void_t stream_on() noexcept;
 
     private:
         /// @brief Describes one MMAP buffer mapped from the V4L2 driver.
@@ -178,28 +184,32 @@ namespace kmx::aio::completion::v4l2
             std::size_t length {};
         };
 
+        /// @brief Result type for opening and validating the V4L2 device descriptor.
+        using expected_file_descriptor = std::expected<file_descriptor, kmx::aio::error_code>;
+        /// @brief Sequence of V4L2 MMAP buffers owned by the capture instance.
+        using mmap_buffers = std::vector<mmap_buffer>;
+        /// @brief Result type for buffer allocation and mapping operations.
+        using expected_mmap_buffers = std::expected<mmap_buffers, kmx::aio::error_code>;
+
         /// @brief Creates an initialized capture object.
-        capture(executor& exec, file_descriptor&& fd, capture_config cfg, std::vector<mmap_buffer> buffers) noexcept;
+        capture(executor& exec, file_descriptor&& fd, capture_config cfg, mmap_buffers buffers) noexcept;
 
         /// @brief Opens the V4L2 device described by the configuration.
-        [[nodiscard]] static std::expected<file_descriptor, kmx::aio::error_code> open_device(const capture_config& cfg) noexcept;
+        [[nodiscard]] static expected_file_descriptor open_device(const capture_config& cfg) noexcept;
         /// @brief Verifies the device supports the required capture capabilities.
-        [[nodiscard]] static std::expected<void, kmx::aio::error_code> validate_capabilities(fd_t device_fd) noexcept;
+        [[nodiscard]] static expected_void_t validate_capabilities(const fd_t device_fd) noexcept;
         /// @brief Negotiates the device format and dimensions.
-        [[nodiscard]] static std::expected<void, kmx::aio::error_code> negotiate_format(fd_t device_fd, capture_config& cfg) noexcept;
+        [[nodiscard]] static expected_void_t negotiate_format(const fd_t device_fd, capture_config& cfg) noexcept;
         /// @brief Negotiates the device frame rate when supported.
-        [[nodiscard]] static std::expected<void, kmx::aio::error_code> negotiate_frame_rate(fd_t device_fd,
-                                                                                            const capture_config& cfg) noexcept;
+        [[nodiscard]] static expected_void_t negotiate_frame_rate(const fd_t device_fd, const capture_config& cfg) noexcept;
         /// @brief Allocates and maps the MMAP buffer set.
-        [[nodiscard]] static std::expected<std::vector<mmap_buffer>, kmx::aio::error_code> request_and_map_buffers(
-            fd_t device_fd, capture_config& cfg) noexcept;
+        [[nodiscard]] static expected_mmap_buffers request_and_map_buffers(fd_t device_fd, capture_config& cfg) noexcept;
         /// @brief Queues every mapped buffer so streaming can start immediately.
-        [[nodiscard]] static std::expected<void, kmx::aio::error_code> queue_all_buffers(fd_t device_fd,
-                                                                                         const std::vector<mmap_buffer>& buffers) noexcept;
+        [[nodiscard]] static expected_void_t queue_all_buffers(const fd_t device_fd, const mmap_buffers& buffers) noexcept;
         /// @brief Starts the V4L2 streaming engine.
-        [[nodiscard]] static std::expected<void, kmx::aio::error_code> start_streaming(fd_t device_fd) noexcept;
+        [[nodiscard]] static expected_void_t start_streaming(const fd_t device_fd) noexcept;
         /// @brief Unmaps the provided buffer set.
-        static void unmap_buffers(std::vector<mmap_buffer>& buffers) noexcept;
+        static void unmap_buffers(mmap_buffers& buffers) noexcept;
 
         /// @brief Unmaps all mmap'd buffers. Called from destructor and failed create().
         void unmap_buffers() noexcept;
@@ -207,7 +217,7 @@ namespace kmx::aio::completion::v4l2
         /// @brief Negotiated capture configuration.
         capture_config config_;
         /// @brief All MMAP buffers owned by the capture object.
-        std::vector<mmap_buffer> buffers_;
+        mmap_buffers buffers_;
         /// @brief Lifetime token shared with outstanding frame views.
         std::shared_ptr<void> device_lifetime_ {std::make_shared<int>(0)};
         /// @brief Indicates whether streaming is currently active.

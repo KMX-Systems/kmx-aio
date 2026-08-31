@@ -4,6 +4,7 @@
 #include <kmx/aio/tls/basic_stream.hpp>
 
 #ifndef PCH
+    #include <array>
     #include <new>
     #include <utility>
 
@@ -138,7 +139,8 @@ namespace kmx::aio::tls
 
                     break;
                 }
-                default: co_return std::unexpected(std::make_error_code(std::errc::protocol_error));
+                default:
+                    co_return std::unexpected(std::make_error_code(std::errc::protocol_error));
             }
         }
     }
@@ -266,15 +268,15 @@ namespace kmx::aio::tls
                 co_return expected_void_t {};
         }
 
-        char buf[buffer_size];
-        const auto res = co_await read_inner(std::span {buf, buffer_size});
+        std::array<char, buffer_size> buf;
+        const auto res = co_await read_inner(std::span {buf});
         if (!res)
             co_return std::unexpected(res.error());
 
         if (*res > 0)
         {
             const std::lock_guard lock(engine_mutex_);
-            ::BIO_write(net_read_bio_, buf, static_cast<int>(*res));
+            ::BIO_write(net_read_bio_, buf.data(), static_cast<int>(*res));
             ++read_bio_fills_;
         }
         else
@@ -294,14 +296,14 @@ namespace kmx::aio::tls
         // peer's session as reordered input bytes are to this one.
         const async_mutex::guard pump_guard = co_await write_pump_mutex_.lock();
 
-        char buf[buffer_size];
+        std::array<char, buffer_size> buf;
         while (true)
         {
             int read_bytes {};
             {
                 const std::lock_guard lock(engine_mutex_);
                 if (::BIO_ctrl_pending(net_write_bio_) > 0)
-                    read_bytes = ::BIO_read(net_write_bio_, buf, static_cast<int>(buffer_size));
+                    read_bytes = ::BIO_read(net_write_bio_, buf.data(), static_cast<int>(buffer_size));
             }
 
             // Nothing pending, or a BIO that reported pending bytes and then would not hand them over.
@@ -309,7 +311,7 @@ namespace kmx::aio::tls
             if (read_bytes <= 0)
                 break;
 
-            const auto res = co_await write_all_inner(std::span {buf, static_cast<std::size_t>(read_bytes)});
+            const auto res = co_await write_all_inner(std::span {buf.data(), static_cast<std::size_t>(read_bytes)});
             if (!res)
                 co_return std::unexpected(res.error());
         }

@@ -11,7 +11,6 @@
     #include <vector>
 
     #include <kmx/aio/avb/avb_types.hpp>
-    #include <kmx/aio/basic_types.hpp>
 #endif
 
 namespace kmx::aio::avb::avtp

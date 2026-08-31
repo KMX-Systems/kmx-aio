@@ -10,7 +10,6 @@
     #include <system_error>
     #include <vector>
 
-    #include <kmx/aio/opc_ua/error.hpp>
     #include <kmx/aio/opc_ua/types.hpp>
     #include <kmx/aio/task.hpp>
 #endif
@@ -31,9 +30,13 @@ namespace kmx::aio::opc_ua
         /// @brief Destroy the client and release backend resources.
         ~client() noexcept;
 
+        /// @brief Non-copyable: the client owns its backend runtime.
         client(const client&) = delete;
+        /// @brief Non-copyable: the client owns its backend runtime.
         client& operator=(const client&) = delete;
+        /// @brief Move constructor — transfers ownership of the backend runtime.
         client(client&&) noexcept;
+        /// @brief Move assignment — transfers ownership of the backend runtime.
         client& operator=(client&&) noexcept;
 
         /// @brief Begin asynchronous connect/session activation.
@@ -86,6 +89,7 @@ namespace kmx::aio::opc_ua
 
     private:
         struct impl;
+        /// @brief The backend implementation, kept opaque so the public header stays free of backend types.
         std::unique_ptr<impl> impl_;
     };
 

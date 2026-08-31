@@ -3,10 +3,12 @@
 
 #include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/opc_ua/client.hpp>
+#include <kmx/aio/opc_ua/error.hpp>
 #include <kmx/aio/opc_ua/open62541_compat.hpp>
 #include <kmx/aio/opc_ua/server.hpp>
 #include <kmx/aio/task.hpp>
 
+#include <array>
 #include <chrono>
 #include <memory>
 #include <optional>
@@ -15,9 +17,11 @@
 #include <utility>
 #include <vector>
 
-namespace kmx::aio::opc_ua
+namespace kmx::aio::test::opc_ua::client_service_test
 {
-    namespace
+    using namespace kmx::aio::opc_ua;
+
+    namespace detail
     {
         [[nodiscard]] client_config make_test_config()
         {
@@ -64,8 +68,7 @@ namespace kmx::aio::opc_ua
         }
 
         task<void> run_write(client& c, std::string node_id, std::string value,
-                             std::shared_ptr<coroutine_result_state<expected_void_t>> state,
-                             completion::executor& exec)
+                             std::shared_ptr<coroutine_result_state<expected_void_t>> state, completion::executor& exec)
         {
             state->result.emplace(co_await c.write_node(std::move(node_id), std::move(value)));
             state->completed = true;
@@ -83,8 +86,7 @@ namespace kmx::aio::opc_ua
             co_return;
         }
 
-        task<void> run_connect(client& c, std::shared_ptr<coroutine_result_state<expected_void_t>> state,
-                               completion::executor& exec)
+        task<void> run_connect(client& c, std::shared_ptr<coroutine_result_state<expected_void_t>> state, completion::executor& exec)
         {
             state->result.emplace(co_await c.connect());
             state->completed = true;
@@ -169,8 +171,7 @@ namespace kmx::aio::opc_ua
             return UA_Variant_setScalarCopy(&output[0], &out_node_id, &UA_TYPES[UA_TYPES_NODEID]);
         }
 
-        task<void> run_server_start(server& s, std::shared_ptr<coroutine_result_state<expected_void_t>> state,
-                                    completion::executor& exec)
+        task<void> run_server_start(server& s, std::shared_ptr<coroutine_result_state<expected_void_t>> state, completion::executor& exec)
         {
             state->result.emplace(co_await s.start());
             state->completed = true;
@@ -188,8 +189,7 @@ namespace kmx::aio::opc_ua
             co_return;
         }
 
-        task<void> run_server_stop(server& s, std::shared_ptr<coroutine_result_state<expected_void_t>> state,
-                                   completion::executor& exec)
+        task<void> run_server_stop(server& s, std::shared_ptr<coroutine_result_state<expected_void_t>> state, completion::executor& exec)
         {
             state->result.emplace(co_await s.stop());
             state->completed = true;
@@ -197,8 +197,7 @@ namespace kmx::aio::opc_ua
             co_return;
         }
 
-        task<void> run_disconnect(client& c, std::shared_ptr<coroutine_result_state<expected_void_t>> state,
-                                  completion::executor& exec)
+        task<void> run_disconnect(client& c, std::shared_ptr<coroutine_result_state<expected_void_t>> state, completion::executor& exec)
         {
             state->result.emplace(co_await c.disconnect());
             state->completed = true;
@@ -206,27 +205,27 @@ namespace kmx::aio::opc_ua
             co_return;
         }
 #endif
-    }
+    } // namespace detail
 
 #if defined(KMX_AIO_FEATURE_OPC_UA)
     TEST_CASE("opc_ua client service completes async requests with real backend", "[opc_ua][client][service][slow]")
     {
-        server s {make_test_server_config()};
+        server s {detail::make_test_server_config()};
         {
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
+            auto state = std::make_shared<detail::coroutine_result_state<expected_void_t>>();
             completion::executor exec;
-            exec.spawn(run_server_start(s, state, exec));
+            exec.spawn(detail::run_server_start(s, state, exec));
             exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
             REQUIRE(state->result->has_value());
         }
 
-        client c {make_test_config()};
+        client c {detail::make_test_config()};
         {
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
+            auto state = std::make_shared<detail::coroutine_result_state<expected_void_t>>();
             completion::executor exec;
-            exec.spawn(run_connect(c, state, exec));
+            exec.spawn(detail::run_connect(c, state, exec));
             exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
@@ -236,9 +235,9 @@ namespace kmx::aio::opc_ua
         bool connected = false;
         const auto stop_server = [&s]()
         {
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
+            auto state = std::make_shared<detail::coroutine_result_state<expected_void_t>>();
             completion::executor exec;
-            exec.spawn(run_server_stop(s, state, exec));
+            exec.spawn(detail::run_server_stop(s, state, exec));
             exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
@@ -247,17 +246,17 @@ namespace kmx::aio::opc_ua
 
         for (int attempt = 0; attempt < 50; ++attempt)
         {
-            auto server_state = std::make_shared<coroutine_result_state<std::expected<std::uint16_t, std::error_code>>>();
+            auto server_state = std::make_shared<detail::coroutine_result_state<std::expected<std::uint16_t, std::error_code>>>();
             completion::executor server_exec;
-            server_exec.spawn(run_server_iterate(s, std::chrono::milliseconds(0), server_state, server_exec));
+            server_exec.spawn(detail::run_server_iterate(s, std::chrono::milliseconds(0), server_state, server_exec));
             server_exec.run();
             REQUIRE(server_state->completed);
             REQUIRE(server_state->result.has_value());
             REQUIRE(server_state->result->has_value());
 
-            auto client_state = std::make_shared<coroutine_result_state<std::expected<bool, std::error_code>>>();
+            auto client_state = std::make_shared<detail::coroutine_result_state<std::expected<bool, std::error_code>>>();
             completion::executor client_exec;
-            client_exec.spawn(run_iterate(c, std::chrono::milliseconds(0), client_state, client_exec));
+            client_exec.spawn(detail::run_iterate(c, std::chrono::milliseconds(0), client_state, client_exec));
             client_exec.run();
             REQUIRE(client_state->completed);
             REQUIRE(client_state->result.has_value());
@@ -279,9 +278,9 @@ namespace kmx::aio::opc_ua
         REQUIRE(c.get_stats().successful_connects > 0u);
 
         {
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
+            auto state = std::make_shared<detail::coroutine_result_state<expected_void_t>>();
             completion::executor exec;
-            exec.spawn(run_disconnect(c, state, exec));
+            exec.spawn(detail::run_disconnect(c, state, exec));
             exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
@@ -290,9 +289,9 @@ namespace kmx::aio::opc_ua
 
         for (int attempt = 0; attempt < 10; ++attempt)
         {
-            auto state = std::make_shared<coroutine_result_state<std::expected<bool, std::error_code>>>();
+            auto state = std::make_shared<detail::coroutine_result_state<std::expected<bool, std::error_code>>>();
             completion::executor exec;
-            exec.spawn(run_iterate(c, std::chrono::milliseconds(0), state, exec));
+            exec.spawn(detail::run_iterate(c, std::chrono::milliseconds(0), state, exec));
             exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
@@ -307,12 +306,12 @@ namespace kmx::aio::opc_ua
 
     TEST_CASE("opc_ua compat async call converts typed outputs", "[opc_ua][client][service][slow]")
     {
-        char locale_name[] = "en-US";
-        char method_name[] = "CompatTypedMethod";
-        char out_name_number[] = "number";
-        char out_name_flag[] = "flag";
-        char out_name_ratio[] = "ratio";
-        char out_name_weight[] = "weight";
+        auto locale_name = std::to_array("en-US");
+        auto method_name = std::to_array("CompatTypedMethod");
+        auto out_name_number = std::to_array("number");
+        auto out_name_flag = std::to_array("flag");
+        auto out_name_ratio = std::to_array("ratio");
+        auto out_name_weight = std::to_array("weight");
 
         UA_Server* native_server = UA_Server_new();
         REQUIRE(native_server != nullptr);
@@ -341,7 +340,7 @@ namespace kmx::aio::opc_ua
         REQUIRE(server_cfg_status == UA_STATUSCODE_GOOD);
 
         UA_MethodAttributes method_attr = UA_MethodAttributes_default;
-        method_attr.displayName = UA_LOCALIZEDTEXT(locale_name, method_name);
+        method_attr.displayName = UA_LOCALIZEDTEXT(locale_name.data(), method_name.data());
         method_attr.executable = true;
         method_attr.userExecutable = true;
 
@@ -350,23 +349,24 @@ namespace kmx::aio::opc_ua
         UA_Argument_init(&output_args[1]);
         UA_Argument_init(&output_args[2]);
         UA_Argument_init(&output_args[3]);
-        output_args[0].name = UA_STRING(out_name_number);
+        output_args[0].name = UA_STRING(out_name_number.data());
         output_args[0].dataType = UA_TYPES[UA_TYPES_INT32].typeId;
         output_args[0].valueRank = UA_VALUERANK_SCALAR;
-        output_args[1].name = UA_STRING(out_name_flag);
+        output_args[1].name = UA_STRING(out_name_flag.data());
         output_args[1].dataType = UA_TYPES[UA_TYPES_BOOLEAN].typeId;
         output_args[1].valueRank = UA_VALUERANK_SCALAR;
-        output_args[2].name = UA_STRING(out_name_ratio);
+        output_args[2].name = UA_STRING(out_name_ratio.data());
         output_args[2].dataType = UA_TYPES[UA_TYPES_FLOAT].typeId;
         output_args[2].valueRank = UA_VALUERANK_SCALAR;
-        output_args[3].name = UA_STRING(out_name_weight);
+        output_args[3].name = UA_STRING(out_name_weight.data());
         output_args[3].dataType = UA_TYPES[UA_TYPES_DOUBLE].typeId;
         output_args[3].valueRank = UA_VALUERANK_SCALAR;
 
-        const UA_NodeId method_node_id = UA_NODEID_STRING(1, method_name);
-        const UA_StatusCode add_status = UA_Server_addMethodNode(
-            native_server, method_node_id, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER), UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT),
-            UA_QUALIFIEDNAME(1, method_name), method_attr, &typed_method_callback, 0u, nullptr, 4u, output_args, nullptr, nullptr);
+        const UA_NodeId method_node_id = UA_NODEID_STRING(1, method_name.data());
+        const UA_StatusCode add_status =
+            UA_Server_addMethodNode(native_server, method_node_id, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
+                                    UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT), UA_QUALIFIEDNAME(1, method_name.data()), method_attr,
+                                    &detail::typed_method_callback, 0u, nullptr, 4u, output_args, nullptr, nullptr);
         REQUIRE(add_status == UA_STATUSCODE_GOOD);
 
         const UA_StatusCode startup_status = UA_Server_run_startup(native_server);
@@ -395,9 +395,9 @@ namespace kmx::aio::opc_ua
         }
         REQUIRE(activated);
 
-        compat_call_capture_state capture;
-        const UA_StatusCode submit_status = KMX_UA_Client_sendAsyncCallRequest(native_client, "ns=0;i=85", "ns=1;s=CompatTypedMethod",
-                                                                               nullptr, 0u, 1u, &compat_call_capture_callback, &capture);
+        detail::compat_call_capture_state capture;
+        const UA_StatusCode submit_status = KMX_UA_Client_sendAsyncCallRequest(
+            native_client, "ns=0;i=85", "ns=1;s=CompatTypedMethod", nullptr, 0u, 1u, &detail::compat_call_capture_callback, &capture);
         REQUIRE(submit_status == UA_STATUSCODE_GOOD);
 
         for (int i = 0; i < 100 && !capture.done; ++i)
@@ -420,9 +420,9 @@ namespace kmx::aio::opc_ua
 
     TEST_CASE("opc_ua compat async call returns bad type mismatch for unsupported output", "[opc_ua][client][service][slow]")
     {
-        char locale_name[] = "en-US";
-        char method_name[] = "CompatUnsupportedOutputMethod";
-        char out_name[] = "node";
+        auto locale_name = std::to_array("en-US");
+        auto method_name = std::to_array("CompatUnsupportedOutputMethod");
+        auto out_name = std::to_array("node");
 
         UA_Server* native_server = UA_Server_new();
         REQUIRE(native_server != nullptr);
@@ -451,21 +451,21 @@ namespace kmx::aio::opc_ua
         REQUIRE(server_cfg_status == UA_STATUSCODE_GOOD);
 
         UA_MethodAttributes method_attr = UA_MethodAttributes_default;
-        method_attr.displayName = UA_LOCALIZEDTEXT(locale_name, method_name);
+        method_attr.displayName = UA_LOCALIZEDTEXT(locale_name.data(), method_name.data());
         method_attr.executable = true;
         method_attr.userExecutable = true;
 
         UA_Argument output_arg;
         UA_Argument_init(&output_arg);
-        output_arg.name = UA_STRING(out_name);
+        output_arg.name = UA_STRING(out_name.data());
         output_arg.dataType = UA_TYPES[UA_TYPES_NODEID].typeId;
         output_arg.valueRank = UA_VALUERANK_SCALAR;
 
-        const UA_NodeId method_node_id = UA_NODEID_STRING(1, method_name);
+        const UA_NodeId method_node_id = UA_NODEID_STRING(1, method_name.data());
         const UA_StatusCode add_status =
             UA_Server_addMethodNode(native_server, method_node_id, UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER),
-                                    UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT), UA_QUALIFIEDNAME(1, method_name), method_attr,
-                                    &unsupported_output_method_callback, 0u, nullptr, 1u, &output_arg, nullptr, nullptr);
+                                    UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT), UA_QUALIFIEDNAME(1, method_name.data()), method_attr,
+                                    &detail::unsupported_output_method_callback, 0u, nullptr, 1u, &output_arg, nullptr, nullptr);
         REQUIRE(add_status == UA_STATUSCODE_GOOD);
 
         const UA_StatusCode startup_status = UA_Server_run_startup(native_server);
@@ -494,9 +494,10 @@ namespace kmx::aio::opc_ua
         }
         REQUIRE(activated);
 
-        compat_call_capture_state capture;
-        const UA_StatusCode submit_status = KMX_UA_Client_sendAsyncCallRequest(
-            native_client, "ns=0;i=85", "ns=1;s=CompatUnsupportedOutputMethod", nullptr, 0u, 1u, &compat_call_capture_callback, &capture);
+        detail::compat_call_capture_state capture;
+        const UA_StatusCode submit_status =
+            KMX_UA_Client_sendAsyncCallRequest(native_client, "ns=0;i=85", "ns=1;s=CompatUnsupportedOutputMethod", nullptr, 0u, 1u,
+                                               &detail::compat_call_capture_callback, &capture);
         REQUIRE(submit_status == UA_STATUSCODE_GOOD);
 
         for (int i = 0; i < 100 && !capture.done; ++i)
@@ -719,12 +720,12 @@ namespace kmx::aio::opc_ua
 
     TEST_CASE("opc_ua client read validates arguments and session", "[opc_ua][client][service]")
     {
-        client c {make_test_config()};
+        client c {detail::make_test_config()};
         completion::executor exec;
 
         {
-            auto state = std::make_shared<coroutine_result_state<std::expected<read_result, std::error_code>>>();
-            exec.spawn(run_read(c, "", state, exec));
+            auto state = std::make_shared<detail::coroutine_result_state<std::expected<read_result, std::error_code>>>();
+            exec.spawn(detail::run_read(c, "", state, exec));
             exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
@@ -735,8 +736,8 @@ namespace kmx::aio::opc_ua
         }
 
         {
-            auto state = std::make_shared<coroutine_result_state<std::expected<read_result, std::error_code>>>();
-            exec.spawn(run_read(c, "ns=2;s=Demo.Static.Scalar.String", state, exec));
+            auto state = std::make_shared<detail::coroutine_result_state<std::expected<read_result, std::error_code>>>();
+            exec.spawn(detail::run_read(c, "ns=2;s=Demo.Static.Scalar.String", state, exec));
             exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
@@ -749,12 +750,12 @@ namespace kmx::aio::opc_ua
 
     TEST_CASE("opc_ua client write validates arguments and session", "[opc_ua][client][service]")
     {
-        client c {make_test_config()};
+        client c {detail::make_test_config()};
         completion::executor exec;
 
         {
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
-            exec.spawn(run_write(c, "", "value", state, exec));
+            auto state = std::make_shared<detail::coroutine_result_state<expected_void_t>>();
+            exec.spawn(detail::run_write(c, "", "value", state, exec));
             exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
@@ -765,8 +766,8 @@ namespace kmx::aio::opc_ua
         }
 
         {
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
-            exec.spawn(run_write(c, "ns=2;s=Demo.Static.Scalar.String", "", state, exec));
+            auto state = std::make_shared<detail::coroutine_result_state<expected_void_t>>();
+            exec.spawn(detail::run_write(c, "ns=2;s=Demo.Static.Scalar.String", "", state, exec));
             exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
@@ -777,8 +778,8 @@ namespace kmx::aio::opc_ua
         }
 
         {
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
-            exec.spawn(run_write(c, "ns=2;s=Demo.Static.Scalar.String", "abc", state, exec));
+            auto state = std::make_shared<detail::coroutine_result_state<expected_void_t>>();
+            exec.spawn(detail::run_write(c, "ns=2;s=Demo.Static.Scalar.String", "abc", state, exec));
             exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
@@ -791,12 +792,12 @@ namespace kmx::aio::opc_ua
 
     TEST_CASE("opc_ua client call validates arguments and session", "[opc_ua][client][service]")
     {
-        client c {make_test_config()};
+        client c {detail::make_test_config()};
         completion::executor exec;
 
         {
-            auto state = std::make_shared<coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            exec.spawn(run_call(c, "", "ns=2;s=Demo.Method", {}, state, exec));
+            auto state = std::make_shared<detail::coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
+            exec.spawn(detail::run_call(c, "", "ns=2;s=Demo.Method", {}, state, exec));
             exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
@@ -807,8 +808,8 @@ namespace kmx::aio::opc_ua
         }
 
         {
-            auto state = std::make_shared<coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            exec.spawn(run_call(c, "ns=2;s=Demo.Object", "", {}, state, exec));
+            auto state = std::make_shared<detail::coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
+            exec.spawn(detail::run_call(c, "ns=2;s=Demo.Object", "", {}, state, exec));
             exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
@@ -819,8 +820,8 @@ namespace kmx::aio::opc_ua
         }
 
         {
-            auto state = std::make_shared<coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            exec.spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}, state, exec));
+            auto state = std::make_shared<detail::coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
+            exec.spawn(detail::run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}, state, exec));
             exec.run();
             REQUIRE(state->completed);
             REQUIRE(state->result.has_value());
@@ -830,4 +831,4 @@ namespace kmx::aio::opc_ua
             REQUIRE(c.get_stats().call_requests == 0u);
         }
     }
-}
+} // namespace kmx::aio::test::opc_ua::client_service_test

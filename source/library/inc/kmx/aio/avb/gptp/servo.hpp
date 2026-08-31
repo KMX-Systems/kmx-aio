@@ -2,13 +2,10 @@
 /// @brief PI clock servo for gPTP (IEEE 802.1AS) timestamp adjustment via clock_adjtime().
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-
-#include <cstdint>
-#include <ctime>
-
-#include <sys/timex.h>
-
-#include <kmx/aio/avb/avb_types.hpp>
+#ifndef PCH
+    #include <cstdint>
+    #include <sys/timex.h>
+#endif
 
 namespace kmx::aio::avb::gptp
 {
@@ -20,6 +17,7 @@ namespace kmx::aio::avb::gptp
     class pi_servo
     {
     public:
+        /// @brief Creates an unsynchronized servo with zeroed state.
         pi_servo() noexcept = default;
 
         /// @brief Feed a new offset measurement (ns) and path delay (ns) to the servo.
@@ -37,15 +35,21 @@ namespace kmx::aio::avb::gptp
         void reset() noexcept;
 
     private:
+        /// @brief Applies a one-shot step correction to `CLOCK_TAI`.
+        /// @param delta_ns Signed correction in nanoseconds to add to the clock.
         void step_clock(std::int64_t delta_ns) noexcept;
 
         // PI gains — tuned for ~125 Hz Sync rate (8 ms period)
         static constexpr double kp_ {0.7}; ///< Proportional gain
         static constexpr double ki_ {0.3}; ///< Integral gain
 
+        /// @brief Set once the first offset measurement has been folded in.
         bool initialized_ {};
+        /// @brief Set once the filtered offset stays below the sync threshold.
         bool synced_ {};
+        /// @brief Accumulated integral term of the PI controller.
         double integral_ {};
+        /// @brief The most recent filtered offset, in nanoseconds.
         std::int64_t last_offset_ {};
     };
 

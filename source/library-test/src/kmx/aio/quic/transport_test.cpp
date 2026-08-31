@@ -26,14 +26,16 @@
     #include <kmx/aio/quic/transport.hpp>
     #include <kmx/aio/task.hpp>
 
-namespace kmx::aio::quic::test
+namespace kmx::aio::test::quic::transport_test
 {
+    using namespace kmx::aio::quic;
+
     namespace fs = std::filesystem;
 
     using executor = kmx::aio::completion::executor;
     using endpoint_t = endpoint<executor>;
 
-    namespace
+    namespace detail
     {
         constexpr const char* test_alpn = "kmx-quic-test";
         constexpr std::array<std::uint8_t, 4u> loopback {127u, 0u, 0u, 1u};
@@ -246,22 +248,22 @@ namespace kmx::aio::quic::test
 
             exec.stop();
         }
-    }
+    } // namespace detail
 
     TEST_CASE("quic transport endpoint serves successive connections", "[quic][transport][integration]")
     {
-        if (!ensure_certificates())
+        if (!detail::ensure_certificates())
             SKIP("QUIC transport test skipped: could not create /tmp/quic_cert.pem");
 
-        const auto server_ctx = make_server_context();
-        const auto client_ctx = make_client_context();
+        const auto server_ctx = detail::make_server_context();
+        const auto client_ctx = detail::make_client_context();
         if (!server_ctx || !client_ctx)
             SKIP("QUIC transport test skipped: could not configure OpenSSL contexts");
 
         executor exec;
-        auto result = std::make_shared<outcome>();
+        auto result = std::make_shared<detail::outcome>();
 
-        exec.spawn(drive(exec, result, server_ctx, client_ctx));
+        exec.spawn(detail::drive(exec, result, server_ctx, client_ctx));
         exec.run();
 
         CHECK(result->failure.value() == 0);
@@ -418,6 +420,6 @@ namespace kmx::aio::quic::test
         }
     }
 
-}
+} // namespace kmx::aio::test::quic::transport_test
 
 #endif // KMX_AIO_FEATURE_QUIC

@@ -1,7 +1,7 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#include <kmx/aio/modbus/error.hpp>
 #include <kmx/aio/modbus/frame.hpp>
 
-#include <algorithm>
 #include <cstring>
 
 namespace kmx::aio::modbus::frame
@@ -9,20 +9,17 @@ namespace kmx::aio::modbus::frame
     namespace detail
     {
         /// @brief Write a 16-bit value in big-endian byte order into @p dest at @p offset.
-        void write_be16(std::span<std::uint8_t> dest, const std::size_t offset,
-                        const std::uint16_t value) noexcept
+        void write_be16(std::span<std::uint8_t> dest, const std::size_t offset, const std::uint16_t value) noexcept
         {
-            dest[offset]     = static_cast<std::uint8_t>(value >> bits_per_byte);
+            dest[offset] = static_cast<std::uint8_t>(value >> bits_per_byte);
             dest[offset + 1] = static_cast<std::uint8_t>(value & byte_mask);
         }
 
         /// @brief Read a 16-bit big-endian value from @p src at @p offset.
-        [[nodiscard]] std::uint16_t read_be16(std::span<const std::uint8_t> src,
-                                              const std::size_t offset) noexcept
+        [[nodiscard]] std::uint16_t read_be16(std::span<const std::uint8_t> src, const std::size_t offset) noexcept
         {
-            return static_cast<std::uint16_t>(
-                (static_cast<std::uint16_t>(src[offset]) << bits_per_byte) |
-                static_cast<std::uint16_t>(src[offset + 1]));
+            return static_cast<std::uint16_t>((static_cast<std::uint16_t>(src[offset]) << bits_per_byte) |
+                                              static_cast<std::uint16_t>(src[offset + 1]));
         }
 
         /// @brief Return the protocol-maximum readable item count for @p fc.
@@ -44,19 +41,18 @@ namespace kmx::aio::modbus::frame
 
     // MBAP header
 
-    void encode_mbap(std::span<std::uint8_t> dest, const std::uint16_t tid,
-                     const std::uint16_t pdu_length, const std::uint8_t unit_id) noexcept
+    void encode_mbap(std::span<std::uint8_t> dest, const std::uint16_t tid, const std::uint16_t pdu_length,
+                     const std::uint8_t unit_id) noexcept
     {
         // Length field = unit_id byte (1) + PDU
         const std::uint16_t length_field = static_cast<std::uint16_t>(1u + pdu_length);
         detail::write_be16(dest, 0u, tid);                          // bytes 0–1: transaction id
         detail::write_be16(dest, 2u, 0u);                           // bytes 2–3: protocol id = 0
         detail::write_be16(dest, mbap_length_offset, length_field); // bytes 4–5: length
-        dest[mbap_unit_id_offset] = unit_id;             // byte  6:   unit id
+        dest[mbap_unit_id_offset] = unit_id;                        // byte  6:   unit id
     }
 
-    std::expected<mbap_header, std::error_code> decode_mbap(
-        std::span<const std::uint8_t> src) noexcept
+    std::expected<mbap_header, std::error_code> decode_mbap(std::span<const std::uint8_t> src) noexcept
     {
         if (src.size() < mbap_size)
             return std::unexpected(make_error_code(error::malformed_frame));
@@ -67,17 +63,17 @@ namespace kmx::aio::modbus::frame
 
         mbap_header hdr;
         hdr.transaction_id = detail::read_be16(src, 0u);
-        hdr.protocol_id    = protocol_id;
-        hdr.length         = detail::read_be16(src, mbap_length_offset);
-        hdr.unit_id        = src[mbap_unit_id_offset];
+        hdr.protocol_id = protocol_id;
+        hdr.length = detail::read_be16(src, mbap_length_offset);
+        hdr.unit_id = src[mbap_unit_id_offset];
         return hdr;
     }
 
     // Read request PDU builders
 
-    std::expected<std::array<std::uint8_t, single_pdu_size>, std::error_code> encode_read_request(
-        const function_code fc, const std::uint16_t address,
-        const std::uint16_t count) noexcept
+    std::expected<std::array<std::uint8_t, single_pdu_size>, std::error_code> encode_read_request(const function_code fc,
+                                                                                                  const std::uint16_t address,
+                                                                                                  const std::uint16_t count) noexcept
     {
         const std::uint16_t limit = detail::max_read_count(fc);
         if ((limit == 0u) || (count == 0u) || (count > limit))
@@ -92,8 +88,7 @@ namespace kmx::aio::modbus::frame
 
     // Write request PDU builders
 
-    std::array<std::uint8_t, single_pdu_size> encode_write_single_register(
-        const std::uint16_t address, const std::uint16_t value) noexcept
+    std::array<std::uint8_t, single_pdu_size> encode_write_single_register(const std::uint16_t address, const std::uint16_t value) noexcept
     {
         std::array<std::uint8_t, single_pdu_size> pdu {};
         pdu[0] = static_cast<std::uint8_t>(function_code::write_single_register);
@@ -102,8 +97,7 @@ namespace kmx::aio::modbus::frame
         return pdu;
     }
 
-    std::array<std::uint8_t, single_pdu_size> encode_write_single_coil(const std::uint16_t address,
-                                                          const bool on) noexcept
+    std::array<std::uint8_t, single_pdu_size> encode_write_single_coil(const std::uint16_t address, const bool on) noexcept
     {
         std::array<std::uint8_t, single_pdu_size> pdu {};
         pdu[0] = static_cast<std::uint8_t>(function_code::write_single_coil);
@@ -164,8 +158,7 @@ namespace kmx::aio::modbus::frame
         return !pdu.empty() && ((pdu[0] & exception_fc_flag) != 0u);
     }
 
-    std::expected<exception_code, std::error_code> decode_exception_pdu(
-        const std::span<const std::uint8_t> pdu) noexcept
+    std::expected<exception_code, std::error_code> decode_exception_pdu(const std::span<const std::uint8_t> pdu) noexcept
     {
         if (pdu.size() < 2u)
             return std::unexpected(make_error_code(error::malformed_frame));
@@ -174,9 +167,9 @@ namespace kmx::aio::modbus::frame
 
     // Response PDU decoders
 
-    std::expected<register_values, std::error_code> decode_read_registers_response(
-        const std::span<const std::uint8_t> pdu, const function_code expected_fc,
-        const std::uint16_t count) noexcept
+    std::expected<register_values, std::error_code> decode_read_registers_response(const std::span<const std::uint8_t> pdu,
+                                                                                   const function_code expected_fc,
+                                                                                   const std::uint16_t count) noexcept
     {
         if (pdu.empty())
             return std::unexpected(make_error_code(error::malformed_frame));
@@ -205,9 +198,9 @@ namespace kmx::aio::modbus::frame
         return result;
     }
 
-    std::expected<coil_values, std::error_code> decode_read_coils_response(
-        const std::span<const std::uint8_t> pdu, const function_code expected_fc,
-        const std::uint16_t count) noexcept
+    std::expected<coil_values, std::error_code> decode_read_coils_response(const std::span<const std::uint8_t> pdu,
+                                                                           const function_code expected_fc,
+                                                                           const std::uint16_t count) noexcept
     {
         if (pdu.empty())
             return std::unexpected(make_error_code(error::malformed_frame));
@@ -239,8 +232,7 @@ namespace kmx::aio::modbus::frame
         return result;
     }
 
-    expected_void_t decode_write_single_response(
-        const std::span<const std::uint8_t> pdu, const function_code expected_fc) noexcept
+    expected_void_t decode_write_single_response(const std::span<const std::uint8_t> pdu, const function_code expected_fc) noexcept
     {
         if (pdu.empty())
             return std::unexpected(make_error_code(error::malformed_frame));
@@ -257,8 +249,7 @@ namespace kmx::aio::modbus::frame
         return {};
     }
 
-    expected_void_t decode_write_multiple_response(
-        const std::span<const std::uint8_t> pdu, const function_code expected_fc) noexcept
+    expected_void_t decode_write_multiple_response(const std::span<const std::uint8_t> pdu, const function_code expected_fc) noexcept
     {
         if (pdu.empty())
             return std::unexpected(make_error_code(error::malformed_frame));

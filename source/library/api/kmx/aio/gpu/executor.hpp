@@ -60,6 +60,7 @@ namespace kmx::aio::gpu
 
         /// @brief Non-copyable (contains atomics).
         statistics(const statistics&) = delete;
+        /// @brief Non-copyable (contains atomics).
         statistics& operator=(const statistics&) = delete;
 
         /// @brief Resets all counters to zero.
@@ -93,6 +94,7 @@ namespace kmx::aio::gpu
         /// @throws std::bad_alloc if internal allocations fail.
         explicit executor(const executor_config& config = {}) noexcept(false);
 
+        /// @brief Stops the event loop, drains pending work, and releases the CUDA resources.
         ~executor() noexcept;
 
         /// @brief Non-copyable.
@@ -152,40 +154,69 @@ namespace kmx::aio::gpu
         /// @brief Detached wrapper for top-level spawned tasks.
         struct detached_task_wrapper
         {
+            /// @brief Promise type of @ref detached_task_wrapper; destroys its own frame on completion.
             struct promise_type
             {
+                /// @brief Builds the wrapper handed back to @ref execute_task.
+                /// @return A wrapper owning the coroutine handle for this promise.
                 detached_task_wrapper get_return_object() noexcept
                 {
                     return detached_task_wrapper {std::coroutine_handle<promise_type>::from_promise(*this)};
                 }
 
+                /// @brief Suspends before the body runs, so the caller decides when to start it.
+                /// @return An always-suspending awaiter.
                 std::suspend_always initial_suspend() const noexcept { return {}; }
 
+                /// @brief Final awaiter that destroys the coroutine frame instead of resuming anyone.
                 struct final_awaiter
                 {
+                    /// @brief Never completes synchronously, so @ref await_suspend always runs.
+                    /// @return Always `false`.
                     bool await_ready() const noexcept { return false; }
+                    /// @brief Destroys the finished coroutine frame.
+                    /// @param h The handle of the coroutine that just completed.
                     void await_suspend(std::coroutine_handle<promise_type> h) const noexcept { h.destroy(); }
+                    /// @brief Required by the awaiter concept; never reached because the frame is destroyed above.
                     void await_resume() const noexcept {}
                 };
 
+                /// @brief Returns the awaiter that tears the frame down.
+                /// @return The @ref final_awaiter.
                 final_awaiter final_suspend() const noexcept { return {}; }
+                /// @brief Terminates: a detached task whose frame is about to be destroyed cannot propagate.
                 void unhandled_exception() noexcept { std::terminate(); }
+                /// @brief Completes the coroutine; the task itself returns nothing.
                 void return_void() const noexcept {}
             };
 
+            /// @brief Handle of the wrapped coroutine.
             std::coroutine_handle<promise_type> handle;
         };
 
+        /// @brief Runs a spawned task to completion and updates the task counters.
+        /// @tparam T   The task's result type.
+        /// @param t    The task to run.
+        /// @param self Shared ownership of this executor, keeping it alive for the task's lifetime.
+        /// @return The detached wrapper coroutine driving @p t.
         template <typename T>
         detached_task_wrapper execute_task(task<T> t, std::shared_ptr<executor> self) noexcept;
 
+        /// @brief Tells whether any task or GPU event is still outstanding.
+        /// @return `true` while the pending-task queue or the waiting-event map is non-empty.
         [[nodiscard]] bool has_pending_work() noexcept;
 
+        /// @brief The configuration this executor was constructed with.
         executor_config config_;
+        /// @brief Counters reported by @ref get_statistics.
         statistics stats_;
+        /// @brief Spawned coroutines waiting for their first resumption.
         std::deque<coroutine_handle_t> pending_tasks_;
+        /// @brief Maps each pending GPU event to the coroutine suspended on it.
         std::unordered_map<void*, coroutine_handle_t> waiting_events_;
+        /// @brief Set by @ref stop to make the event loop exit.
         std::atomic_bool stop_requested_ {false};
+        /// @brief Guards @ref pending_tasks_ and @ref waiting_events_.
         std::mutex queue_mutex_;
 
         /// @brief Pinned to a single CUDA GPU device.
@@ -212,10 +243,16 @@ namespace kmx::aio::gpu
         /// @brief Internal awaiter struct for co_await suspension.
         struct awaiter
         {
+            /// @brief The event this awaiter suspends on.
             event& event_;
 
+            /// @brief Tells whether the event has already fired, letting the coroutine continue without suspending.
+            /// @return `true` when the event is already signaled.
             bool await_ready() const noexcept;
+            /// @brief Registers @p h with the executor so it resumes once the event fires.
+            /// @param h The coroutine to resume.
             void await_suspend(coroutine_handle_t h) noexcept;
+            /// @brief Completes the await; the event carries no result.
             void await_resume() const noexcept {}
         };
 
@@ -250,11 +287,15 @@ namespace kmx::aio::gpu
         [[nodiscard]] bool is_ready() const noexcept(false);
 
     private:
+        /// @brief The underlying CUDA event handle, or null after a move.
         event_handle handle_ {};
 
+        /// @brief Destroys the CUDA event and clears @ref handle_.
         void destroy() noexcept;
 
+        /// @brief Grants the awaiter access to the raw handle.
         friend struct awaiter;
+        /// @brief Lets @ref stream record events directly onto the raw handle.
         friend class stream;
     };
 
@@ -295,8 +336,10 @@ namespace kmx::aio::gpu
         [[nodiscard]] event create_event() noexcept(false);
 
     private:
+        /// @brief The underlying CUDA stream handle, or null after a move.
         stream_handle handle_ {};
 
+        /// @brief Destroys the CUDA stream and clears @ref handle_.
         void destroy() noexcept;
     };
 

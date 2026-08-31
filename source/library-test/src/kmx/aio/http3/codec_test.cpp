@@ -1,10 +1,13 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <kmx/aio/http3/codec.hpp>
+#include <kmx/aio/http3/qpack.hpp>
 #include <kmx/aio/http3/stream.hpp>
 
-namespace kmx::aio::http3::test
+namespace kmx::aio::test::http3::codec_test
 {
+    using namespace kmx::aio::http3;
+
     TEST_CASE("http3 demo request payload roundtrip", "[http3][codec][request]")
     {
         request_head request {
@@ -327,4 +330,4 @@ namespace kmx::aio::http3::test
         REQUIRE(decoded->head.status == response.status);
         REQUIRE(decoded->body == "hello world");
     }
-}
+} // namespace kmx::aio::test::http3::codec_test
