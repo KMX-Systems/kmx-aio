@@ -208,7 +208,7 @@ namespace kmx::aio::test::tls::duplex_test
             // The writer holds a reference to writer_finished, which lives in this frame, so this
             // coroutine must outlive it.
             while (!writer_finished.load(std::memory_order_acquire))
-                co_await exec.async_timeout(1u);
+                static_cast<void>(co_await exec.async_timeout(1u));
 
             finished.store(true, std::memory_order_release);
         }

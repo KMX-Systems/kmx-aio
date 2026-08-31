@@ -55,59 +55,54 @@ namespace kmx::aio::modbus
         /// @param address Starting register address.
         /// @param count   Number of registers to read (1–125).
         /// @return Decoded register values, or an error.
-        [[nodiscard]] task<std::expected<register_values, std::error_code>>
-        read_holding_registers(std::uint16_t address, std::uint16_t count) noexcept(false);
+        [[nodiscard]] task<std::expected<register_values, std::error_code>> read_holding_registers(std::uint16_t address,
+                                                                                                   std::uint16_t count) noexcept(false);
 
         /// @brief Read contiguous input registers (function code 0x04).
         /// @param address Starting register address.
         /// @param count   Number of registers to read (1–125).
         /// @return Decoded register values, or an error.
-        [[nodiscard]] task<std::expected<register_values, std::error_code>>
-        read_input_registers(std::uint16_t address, std::uint16_t count) noexcept(false);
+        [[nodiscard]] task<std::expected<register_values, std::error_code>> read_input_registers(std::uint16_t address,
+                                                                                                 std::uint16_t count) noexcept(false);
 
         /// @brief Read contiguous coil statuses (function code 0x01).
         /// @param address Starting coil address.
         /// @param count   Number of coils to read (1–2000).
         /// @return Decoded coil values (0 or 1 per element), or an error.
-        [[nodiscard]] task<std::expected<coil_values, std::error_code>>
-        read_coils(std::uint16_t address, std::uint16_t count) noexcept(false);
+        [[nodiscard]] task<std::expected<coil_values, std::error_code>> read_coils(std::uint16_t address,
+                                                                                   std::uint16_t count) noexcept(false);
 
         /// @brief Read contiguous discrete input statuses (function code 0x02).
         /// @param address Starting input address.
         /// @param count   Number of inputs to read (1–2000).
         /// @return Decoded coil values (0 or 1 per element), or an error.
-        [[nodiscard]] task<std::expected<coil_values, std::error_code>>
-        read_discrete_inputs(std::uint16_t address, std::uint16_t count) noexcept(false);
+        [[nodiscard]] task<std::expected<coil_values, std::error_code>> read_discrete_inputs(std::uint16_t address,
+                                                                                             std::uint16_t count) noexcept(false);
 
         /// @brief Write a single holding register (function code 0x06).
         /// @param address Target register address.
         /// @param value   16-bit value to write.
         /// @return Success or an error.
-        [[nodiscard]] task_returning_expected_void_t
-        write_single_register(std::uint16_t address, std::uint16_t value) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t write_single_register(std::uint16_t address, std::uint16_t value) noexcept(false);
 
         /// @brief Write a single coil (function code 0x05).
         /// @param address Target coil address.
         /// @param on      @c true to set coil ON, @c false for OFF.
         /// @return Success or an error.
-        [[nodiscard]] task_returning_expected_void_t
-        write_single_coil(std::uint16_t address, bool on) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t write_single_coil(std::uint16_t address, bool on) noexcept(false);
 
         /// @brief Write contiguous holding registers (function code 0x10).
         /// @param address Starting register address.
         /// @param values  Values to write (1–123 elements).
         /// @return Success or an error.
-        [[nodiscard]] task_returning_expected_void_t
-        write_multiple_registers(std::uint16_t address,
-                                 std::span<const std::uint16_t> values) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t write_multiple_registers(std::uint16_t address,
+                                                                              std::span<const std::uint16_t> values) noexcept(false);
 
         /// @brief Write contiguous coils (function code 0x0F).
         /// @param address Starting coil address.
         /// @param values  Coil values to write (0=OFF, non-zero=ON; 1–1968 elements).
         /// @return Success or an error.
-        [[nodiscard]] task_returning_expected_void_t
-        write_multiple_coils(std::uint16_t address,
-                             std::span<const std::uint8_t> values) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t write_multiple_coils(std::uint16_t address, cspan_uint8_t values) noexcept(false);
 
         /// @brief Check whether the client currently has an open TCP connection.
         [[nodiscard]] bool is_connected() const noexcept;

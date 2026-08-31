@@ -160,7 +160,7 @@ namespace kmx::aio::test::modbus::integration::tls_client_server_test
                                   .verify_peer = true,
                                   .sni_hostname = ""};
 
-        auto serve = [exec, srv, srv_cfg, srv_tls]() -> task<void> { co_await srv->serve(*exec, srv_cfg, srv_tls); };
+        auto serve = [exec, srv, srv_cfg, srv_tls]() -> task<void> { static_cast<void>(co_await srv->serve(*exec, srv_cfg, srv_tls)); };
         exec->spawn(serve());
 
         std::jthread server_stopper(
@@ -173,7 +173,7 @@ namespace kmx::aio::test::modbus::integration::tls_client_server_test
 
         auto exchange = [&, exec, srv, &ca = certs.ca_cert, &ccert = certs.client_cert, &ckey = certs.client_key]() -> task<void>
         {
-            co_await exec->async_timeout(5'000'000u);
+            static_cast<void>(co_await exec->async_timeout(5'000'000u));
 
             const client_config cl_cfg {.host = "127.0.0.1", .port = tls_test_port, .unit_id = tls_test_unit_id};
             const tls_config cl_tls {.cert_path = ccert, .key_path = ckey, .ca_cert_path = ca, .verify_peer = true, .sni_hostname = ""};
@@ -186,7 +186,7 @@ namespace kmx::aio::test::modbus::integration::tls_client_server_test
                 connect_result = co_await c.connect();
                 if (connect_result)
                     break;
-                co_await exec->async_timeout(5'000'000u);
+                static_cast<void>(co_await exec->async_timeout(5'000'000u));
             }
 
             if (!connect_result)
@@ -203,7 +203,7 @@ namespace kmx::aio::test::modbus::integration::tls_client_server_test
                 op_error = r.error();
 
             completed.store(true, std::memory_order_release);
-            co_await c.disconnect();
+            static_cast<void>(co_await c.disconnect());
         };
         exec->spawn(exchange());
 
@@ -242,7 +242,7 @@ namespace kmx::aio::test::modbus::integration::tls_client_server_test
                                   .verify_peer = true,
                                   .sni_hostname = ""}; // server requires client cert
 
-        auto serve = [exec, srv, srv_cfg, srv_tls]() -> task<void> { co_await srv->serve(*exec, srv_cfg, srv_tls); };
+        auto serve = [exec, srv, srv_cfg, srv_tls]() -> task<void> { static_cast<void>(co_await srv->serve(*exec, srv_cfg, srv_tls)); };
         exec->spawn(serve());
 
         std::jthread server_stopper(
@@ -255,7 +255,7 @@ namespace kmx::aio::test::modbus::integration::tls_client_server_test
 
         auto exchange = [&, exec, srv, &ca = certs.ca_cert]() -> task<void>
         {
-            co_await exec->async_timeout(5'000'000u);
+            static_cast<void>(co_await exec->async_timeout(5'000'000u));
 
             const client_config cl_cfg {.host = "127.0.0.1", .port = tls_test_port + 1u, .unit_id = tls_test_unit_id};
             // No cert_path / key_path — client presents no certificate
@@ -277,7 +277,7 @@ namespace kmx::aio::test::modbus::integration::tls_client_server_test
                 else
                     op_error = request.error();
 
-                co_await c.disconnect();
+                static_cast<void>(co_await c.disconnect());
             }
 
             completed.store(true, std::memory_order_release);

@@ -65,7 +65,7 @@ namespace kmx::aio::avb
         /// @param tx_time   Optional TAI transmission timestamp for scheduled TX (SO_TXTIME).
         ///                  If empty, frame is sent immediately.
         /// @return Success or an error code.
-        [[nodiscard]] task_returning_expected_void_t send(const mac_address_t& dest_mac, std::span<const std::byte> frame,
+        [[nodiscard]] task_returning_expected_void_t send(const mac_address_t& dest_mac, cspan_byte_t frame,
                                                           std::optional<avb_timestamp_t> tx_time = {}) noexcept(false);
 
         /// @brief Receive the next frame matching the bound EtherType.

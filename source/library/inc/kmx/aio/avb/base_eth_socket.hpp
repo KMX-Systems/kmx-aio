@@ -70,8 +70,7 @@ namespace kmx::aio::avb
         /// @param payload  Payload bytes; the kernel prepends the L2 header.
         /// @param tx_time  TAI transmission time for scheduled TX; sends immediately when empty.
         /// @return Success, or the error code `sendmsg` reported.
-        [[nodiscard]] expected_void_t do_send(const mac_address_t& dest_mac, std::span<const std::byte> payload,
-                                              std::optional<avb_timestamp_t> tx_time);
+        [[nodiscard]] expected_void_t do_send(const mac_address_t& dest_mac, cspan_byte_t payload, std::optional<avb_timestamp_t> tx_time);
 
         // Receive
 

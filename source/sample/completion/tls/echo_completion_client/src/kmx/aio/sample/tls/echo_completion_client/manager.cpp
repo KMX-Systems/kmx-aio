@@ -199,7 +199,7 @@ namespace kmx::aio::sample::tls::echo_completion_client
             std::size_t received_bytes {};
             while (true)
             {
-                auto recv_result = co_await stream_ptr->read(std::span<char>(buffer.data(), buffer.size()));
+                auto recv_result = co_await stream_ptr->read(span_char_t(buffer.data(), buffer.size()));
                 if (!recv_result)
                 {
                     metrics_.errors.fetch_add(1u, mem_order);
@@ -270,7 +270,7 @@ namespace kmx::aio::sample::tls::echo_completion_client
                 if (buffer.size() > remaining)
                     buffer.resize(remaining);
 
-                const std::span<const char> buffer_span {buffer.data(), buffer.size()};
+                const cspan_char_t buffer_span {buffer.data(), buffer.size()};
                 if (auto res = co_await stream->write_all(buffer_span); !res)
                 {
                     metrics_.errors.fetch_add(1u, mem_order);

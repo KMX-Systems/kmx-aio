@@ -75,7 +75,7 @@ namespace kmx::aio::completion::xdp
     struct frame
     {
         /// @brief View into the UMEM region containing the frame.
-        std::span<std::byte> data {};
+        span_byte_t data {};
         /// @brief UMEM address used to return the frame to the fill ring.
         std::uint64_t addr {};
         /// @brief Length of the frame in bytes.
@@ -126,7 +126,7 @@ namespace kmx::aio::completion::xdp
         /// @param data The frame data to transmit.
         /// @return A task yielding success or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task_returning_expected_void_t send(std::span<const std::byte> data) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t send(cspan_byte_t data) noexcept(false);
 
         /// @brief Returns a frame's UMEM address to the fill ring for reuse.
         /// @param addr The UMEM address from a previously received frame.
@@ -143,19 +143,16 @@ namespace kmx::aio::completion::xdp
         struct state;
 
         /// @brief Validates create arguments before initialization.
-        [[nodiscard]] static expected_void_t validate_create_args(const executor& exec,
-                                                                                       const socket_config& config) noexcept;
+        [[nodiscard]] static expected_void_t validate_create_args(const executor& exec, const socket_config& config) noexcept;
 
         /// @brief Initializes the socket state and selects the backend.
-        [[nodiscard]] static expected_void_t initialize_state(executor& exec, const socket_config& config,
-                                                                                   socket& out) noexcept;
+        [[nodiscard]] static expected_void_t initialize_state(executor& exec, const socket_config& config, socket& out) noexcept;
 
         /// @brief Validates send arguments against the current socket state.
-        [[nodiscard]] static expected_void_t validate_send_args(const state& state,
-                                                                                     std::span<const std::byte> data) noexcept;
+        [[nodiscard]] static expected_void_t validate_send_args(const state& state, cspan_byte_t data) noexcept;
 
         /// @brief Sends data through the fallback backend.
-        [[nodiscard]] static expected_void_t send_via_fallback(state& state, std::span<const std::byte> data) noexcept;
+        [[nodiscard]] static expected_void_t send_via_fallback(state& state, cspan_byte_t data) noexcept;
 
 #if defined(KMX_AIO_FEATURE_AF_XDP)
         /// @brief Initializes the AF_XDP backend.
@@ -168,8 +165,7 @@ namespace kmx::aio::completion::xdp
         [[nodiscard]] static expected_void_t create_xsk_socket(state& state) noexcept;
 
         /// @brief Sends data through the AF_XDP backend.
-        [[nodiscard]] static expected_void_t send_via_af_xdp_backend(state& state,
-                                                                                          std::span<const std::byte> data) noexcept;
+        [[nodiscard]] static expected_void_t send_via_af_xdp_backend(state& state, cspan_byte_t data) noexcept;
 
         /// @brief Seeds the free-frame pool.
         static void seed_free_frames(state& state) noexcept;

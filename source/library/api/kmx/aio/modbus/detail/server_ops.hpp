@@ -65,7 +65,7 @@ namespace kmx::aio::modbus::detail
         [[nodiscard]] static task<std::optional<mbap_header>> read_header(StreamT& stream) noexcept(false)
         {
             std::array<std::uint8_t, frame::mbap_size> hdr_buf {};
-            auto span = std::span<char>(reinterpret_cast<char*>(hdr_buf.data()), hdr_buf.size()); // NOLINT(*-reinterpret-cast)
+            auto span = span_char_t(reinterpret_cast<char*>(hdr_buf.data()), hdr_buf.size()); // NOLINT(*-reinterpret-cast)
             if (const auto r = co_await detail::read_exactly(stream, span); !r)
                 co_return std::nullopt;
 
@@ -97,7 +97,7 @@ namespace kmx::aio::modbus::detail
                 co_return std::nullopt;
 
             std::vector<std::uint8_t> pdu(static_cast<std::size_t>(mbap_length) - 1u);
-            auto span = std::span<char>(reinterpret_cast<char*>(pdu.data()), pdu.size()); // NOLINT(*-reinterpret-cast)
+            auto span = span_char_t(reinterpret_cast<char*>(pdu.data()), pdu.size()); // NOLINT(*-reinterpret-cast)
             if (const auto r = co_await detail::read_exactly(stream, span); !r)
                 co_return std::nullopt;
 
@@ -120,8 +120,7 @@ namespace kmx::aio::modbus::detail
         }
 
         /// @brief Prefixes @p response_pdu with an MBAP header echoing @p hdr.
-        [[nodiscard]] static std::vector<std::uint8_t> build_response_adu(const mbap_header& hdr,
-                                                                          std::span<const std::uint8_t> response_pdu)
+        [[nodiscard]] static std::vector<std::uint8_t> build_response_adu(const mbap_header& hdr, cspan_uint8_t response_pdu)
         {
             const auto pdu_len = static_cast<std::uint16_t>(response_pdu.size());
             std::vector<std::uint8_t> adu(frame::mbap_size + pdu_len);
@@ -133,9 +132,9 @@ namespace kmx::aio::modbus::detail
         /// @brief Writes @p adu in full.
         /// @return False when the write failed - the connection is no longer usable.
         template <typename StreamT>
-        [[nodiscard]] static task<bool> send_adu(StreamT& stream, std::span<const std::uint8_t> adu) noexcept(false)
+        [[nodiscard]] static task<bool> send_adu(StreamT& stream, cspan_uint8_t adu) noexcept(false)
         {
-            const auto view = std::span<const char>(reinterpret_cast<const char*>(adu.data()), adu.size()); // NOLINT(*-reinterpret-cast)
+            const auto view = cspan_char_t(reinterpret_cast<const char*>(adu.data()), adu.size()); // NOLINT(*-reinterpret-cast)
             const auto r = co_await stream.write_all(view);
             co_return r.has_value();
         }

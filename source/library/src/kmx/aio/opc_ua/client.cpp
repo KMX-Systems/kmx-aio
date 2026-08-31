@@ -60,7 +60,7 @@ namespace kmx::aio::opc_ua
 
         template <typename Result, typename State, typename Map>
         task<std::expected<Result, std::error_code>> await_request_outcome(client& owner, Map& requests, const std::uint64_t request_id,
-                                                                          std::shared_ptr<State> request) noexcept(false)
+                                                                           std::shared_ptr<State> request) noexcept(false)
         {
             const auto iterate_result = co_await owner.iterate(std::chrono::milliseconds(0));
             if (!iterate_result)
@@ -105,21 +105,17 @@ namespace kmx::aio::opc_ua
                     code = error::invalid_configuration;
                     break;
                 case UA_STATUSCODE_BADSECURECHANNELCLOSED:
-                    code = context == status_context::connect ? error::security_error :
-                                                                error::disconnected;
+                    code = context == status_context::connect ? error::security_error : error::disconnected;
                     break;
                 case UA_STATUSCODE_BADNOTCONNECTED:
                 case UA_STATUSCODE_BADCONNECTIONCLOSED:
-                    code = context == status_context::connect ? error::connect_failed :
-                                                                error::disconnected;
+                    code = context == status_context::connect ? error::connect_failed : error::disconnected;
                     break;
                 case UA_STATUSCODE_BADINTERNALERROR:
-                    code = context == status_context::connect ? error::connect_failed :
-                                                                error::request_failed;
+                    code = context == status_context::connect ? error::connect_failed : error::request_failed;
                     break;
                 default:
-                    code = context == status_context::connect ? error::connect_failed :
-                                                                error::internal_error;
+                    code = context == status_context::connect ? error::connect_failed : error::internal_error;
                     break;
             }
 

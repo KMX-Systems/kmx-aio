@@ -23,7 +23,7 @@ namespace kmx::aio::http3
         }
     } // namespace detail
 
-    std::vector<std::uint8_t> frame_codec::encode(const frame_type type, std::span<const std::uint8_t> payload) noexcept(false)
+    std::vector<std::uint8_t> frame_codec::encode(const frame_type type, cspan_uint8_t payload) noexcept(false)
     {
         std::vector<std::uint8_t> encoded;
         const std::size_t exact_capacity =
@@ -35,7 +35,7 @@ namespace kmx::aio::http3
         return encoded;
     }
 
-    std::expected<frame, std::error_code> frame_codec::decode(std::span<const std::uint8_t> payload) noexcept
+    std::expected<frame, std::error_code> frame_codec::decode(cspan_uint8_t payload) noexcept
     {
         auto type_result = detail::decode_varint(payload, 0u);
         if (!type_result)
@@ -56,7 +56,7 @@ namespace kmx::aio::http3
         return decoded;
     }
 
-    std::expected<std::vector<frame>, std::error_code> frame_codec::decode_all(std::span<const std::uint8_t> payload) noexcept
+    std::expected<std::vector<frame>, std::error_code> frame_codec::decode_all(cspan_uint8_t payload) noexcept
     {
         std::vector<frame> frames;
         frames.reserve(2u);
@@ -91,7 +91,7 @@ namespace kmx::aio::http3
         return qpack::literal_codec::encode(headers);
     }
 
-    std::expected<header_list, std::error_code> headers_codec::decode(std::span<const std::uint8_t> payload) noexcept
+    std::expected<header_list, std::error_code> headers_codec::decode(cspan_uint8_t payload) noexcept
     {
         return qpack::literal_codec::decode(payload);
     }
@@ -102,7 +102,7 @@ namespace kmx::aio::http3
         return frame_codec::encode(frame_type::headers, block);
     }
 
-    std::expected<header_list, std::error_code> headers_codec::decode_frame(std::span<const std::uint8_t> payload) noexcept
+    std::expected<header_list, std::error_code> headers_codec::decode_frame(cspan_uint8_t payload) noexcept
     {
         auto decoded = frame_codec::decode(payload);
         if (!decoded)
@@ -112,23 +112,23 @@ namespace kmx::aio::http3
         return decode(decoded->payload);
     }
 
-    std::vector<std::uint8_t> data_codec::encode(std::span<const std::uint8_t> payload) noexcept(false)
+    std::vector<std::uint8_t> data_codec::encode(cspan_uint8_t payload) noexcept(false)
     {
         return std::vector<std::uint8_t>(payload.begin(), payload.end());
     }
 
-    std::expected<std::vector<std::uint8_t>, std::error_code> data_codec::decode(std::span<const std::uint8_t> payload) noexcept
+    std::expected<std::vector<std::uint8_t>, std::error_code> data_codec::decode(cspan_uint8_t payload) noexcept
     {
         return std::vector<std::uint8_t>(payload.begin(), payload.end());
     }
 
-    std::vector<std::uint8_t> data_codec::encode_frame(std::span<const std::uint8_t> payload) noexcept(false)
+    std::vector<std::uint8_t> data_codec::encode_frame(cspan_uint8_t payload) noexcept(false)
     {
         const auto body = encode(payload);
         return frame_codec::encode(frame_type::data, body);
     }
 
-    std::expected<std::vector<std::uint8_t>, std::error_code> data_codec::decode_frame(std::span<const std::uint8_t> payload) noexcept
+    std::expected<std::vector<std::uint8_t>, std::error_code> data_codec::decode_frame(cspan_uint8_t payload) noexcept
     {
         auto decoded = frame_codec::decode(payload);
         if (!decoded)
@@ -173,7 +173,7 @@ namespace kmx::aio::http3
         return frame_codec::encode(frame_type::settings, payload);
     }
 
-    std::expected<settings, std::error_code> settings_codec::decode(std::span<const std::uint8_t> payload) noexcept
+    std::expected<settings, std::error_code> settings_codec::decode(cspan_uint8_t payload) noexcept
     {
         settings parsed {};
         std::size_t offset {};
@@ -214,7 +214,7 @@ namespace kmx::aio::http3
         return parsed;
     }
 
-    std::expected<settings, std::error_code> settings_codec::decode_frame(std::span<const std::uint8_t> payload) noexcept
+    std::expected<settings, std::error_code> settings_codec::decode_frame(cspan_uint8_t payload) noexcept
     {
         auto decoded = frame_codec::decode(payload);
         if (!decoded)
@@ -231,7 +231,7 @@ namespace kmx::aio::http3
         return payload;
     }
 
-    std::expected<goaway_frame, std::error_code> goaway_codec::decode(std::span<const std::uint8_t> payload) noexcept
+    std::expected<goaway_frame, std::error_code> goaway_codec::decode(cspan_uint8_t payload) noexcept
     {
         auto decoded = detail::decode_varint(payload, 0u);
         if (!decoded)
@@ -247,7 +247,7 @@ namespace kmx::aio::http3
         return frame_codec::encode(frame_type::goaway, payload);
     }
 
-    std::expected<goaway_frame, std::error_code> goaway_codec::decode_frame(std::span<const std::uint8_t> payload) noexcept
+    std::expected<goaway_frame, std::error_code> goaway_codec::decode_frame(cspan_uint8_t payload) noexcept
     {
         auto decoded = frame_codec::decode(payload);
         if (!decoded)
@@ -266,7 +266,7 @@ namespace kmx::aio::http3
         return bytes;
     }
 
-    std::vector<std::uint8_t> control_stream_codec::append_goaway(std::span<const std::uint8_t> control_stream_bytes,
+    std::vector<std::uint8_t> control_stream_codec::append_goaway(cspan_uint8_t control_stream_bytes,
                                                                   const goaway_frame& value) noexcept(false)
     {
         std::vector<std::uint8_t> bytes(control_stream_bytes.begin(), control_stream_bytes.end());
@@ -275,7 +275,7 @@ namespace kmx::aio::http3
         return bytes;
     }
 
-    std::expected<control_stream_state, std::error_code> control_stream_codec::decode(std::span<const std::uint8_t> payload) noexcept
+    std::expected<control_stream_state, std::error_code> control_stream_codec::decode(cspan_uint8_t payload) noexcept
     {
         auto stream_type_value = detail::decode_varint(payload, 0u);
         if (!stream_type_value)
@@ -491,7 +491,7 @@ namespace kmx::aio::http3::demo
             return std::vector<std::uint8_t>(text.begin(), text.end());
         }
 
-        std::string bytes_to_string(std::span<const std::uint8_t> bytes)
+        std::string bytes_to_string(cspan_uint8_t bytes)
         {
             return std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
         }
@@ -692,7 +692,7 @@ namespace kmx::aio::http3::demo
         if (!body.empty())
         {
             const auto data_frame =
-                data_codec::encode_frame(std::span<const std::uint8_t>(reinterpret_cast<const std::uint8_t*>(body.data()), body.size()));
+                data_codec::encode_frame(cspan_uint8_t(reinterpret_cast<const std::uint8_t*>(body.data()), body.size()));
             encoded.insert(encoded.end(), data_frame.begin(), data_frame.end());
         }
 
@@ -711,14 +711,14 @@ namespace kmx::aio::http3::demo
         if (!body.empty())
         {
             const auto data_frame =
-                data_codec::encode_frame(std::span<const std::uint8_t>(reinterpret_cast<const std::uint8_t*>(body.data()), body.size()));
+                data_codec::encode_frame(cspan_uint8_t(reinterpret_cast<const std::uint8_t*>(body.data()), body.size()));
             encoded.insert(encoded.end(), data_frame.begin(), data_frame.end());
         }
 
         return encoded;
     }
 
-    std::expected<request_message, std::error_code> message_builder::parse_request_frames(std::span<const std::uint8_t> payload) noexcept
+    std::expected<request_message, std::error_code> message_builder::parse_request_frames(cspan_uint8_t payload) noexcept
     {
         auto frames = frame_codec::decode_all(payload);
         if (!frames)
@@ -762,7 +762,7 @@ namespace kmx::aio::http3::demo
         return message;
     }
 
-    std::expected<response_message, std::error_code> message_builder::parse_response_frames(std::span<const std::uint8_t> payload) noexcept
+    std::expected<response_message, std::error_code> message_builder::parse_response_frames(cspan_uint8_t payload) noexcept
     {
         auto frames = frame_codec::decode_all(payload);
         if (!frames)

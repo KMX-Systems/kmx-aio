@@ -146,7 +146,7 @@ namespace kmx::aio::http3::qpack
         return block;
     }
 
-    std::expected<header_list, std::error_code> literal_codec::decode(std::span<const std::uint8_t> payload) noexcept
+    std::expected<header_list, std::error_code> literal_codec::decode(cspan_uint8_t payload) noexcept
     {
         if (payload.size() < 2u)
             return std::unexpected(detail::qpack_decode_error());

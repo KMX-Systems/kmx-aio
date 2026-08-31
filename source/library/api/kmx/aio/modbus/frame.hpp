@@ -65,13 +65,13 @@ namespace kmx::aio::modbus::frame
     /// @param tid Transaction identifier.
     /// @param pdu_length Byte count of the PDU that follows (NOT including unit_id).
     /// @param unit_id Unit / slave identifier.
-    void encode_mbap(std::span<std::uint8_t> dest, std::uint16_t tid, std::uint16_t pdu_length, std::uint8_t unit_id) noexcept;
+    void encode_mbap(span_uint8_t dest, std::uint16_t tid, std::uint16_t pdu_length, std::uint8_t unit_id) noexcept;
 
     /// @brief Decode a Modbus MBAP header from the first 7 bytes of @p src.
     /// @param src Buffer of at least 7 bytes.
     /// @return Decoded header or @c error::malformed_frame when the protocol
     ///         identifier is non-zero.
-    [[nodiscard]] std::expected<mbap_header, std::error_code> decode_mbap(std::span<const std::uint8_t> src) noexcept;
+    [[nodiscard]] std::expected<mbap_header, std::error_code> decode_mbap(cspan_uint8_t src) noexcept;
 
     // Read request PDU builders (client → server)
 
@@ -110,28 +110,28 @@ namespace kmx::aio::modbus::frame
     /// @param values Coil values to write (0 = OFF, non-zero = ON).
     /// @return Encoded PDU bytes, or @c error::frame_too_large when
     ///         @p values has more than @ref max_write_coils entries.
-    [[nodiscard]] std::expected<std::vector<std::uint8_t>, std::error_code> encode_write_multiple_coils(
-        std::uint16_t address, std::span<const std::uint8_t> values) noexcept;
+    [[nodiscard]] std::expected<std::vector<std::uint8_t>, std::error_code> encode_write_multiple_coils(std::uint16_t address,
+                                                                                                        cspan_uint8_t values) noexcept;
 
     // Response PDU decoders (server → client)
 
     /// @brief Check whether a response PDU carries an exception.
     /// @param pdu Raw PDU bytes starting with the function code byte.
     /// @return @c true when the high bit of the function code is set.
-    [[nodiscard]] bool is_exception_pdu(std::span<const std::uint8_t> pdu) noexcept;
+    [[nodiscard]] bool is_exception_pdu(cspan_uint8_t pdu) noexcept;
 
     /// @brief Decode an exception response PDU.
     /// @param pdu PDU bytes (must begin with an exception function code byte).
     /// @return The exception code, or @c error::malformed_frame when the PDU is
     ///         too short.
-    [[nodiscard]] std::expected<exception_code, std::error_code> decode_exception_pdu(std::span<const std::uint8_t> pdu) noexcept;
+    [[nodiscard]] std::expected<exception_code, std::error_code> decode_exception_pdu(cspan_uint8_t pdu) noexcept;
 
     /// @brief Decode a Read Holding Registers or Read Input Registers response PDU.
     /// @param pdu Raw PDU bytes (function code byte included).
     /// @param expected_fc Function code expected at pdu[0].
     /// @param count Number of registers that were requested.
     /// @return Decoded register values, or an error.
-    [[nodiscard]] std::expected<register_values, std::error_code> decode_read_registers_response(std::span<const std::uint8_t> pdu,
+    [[nodiscard]] std::expected<register_values, std::error_code> decode_read_registers_response(cspan_uint8_t pdu,
                                                                                                  function_code expected_fc,
                                                                                                  std::uint16_t count) noexcept;
 
@@ -140,16 +140,15 @@ namespace kmx::aio::modbus::frame
     /// @param expected_fc Function code expected at pdu[0].
     /// @param count Number of coils that were requested.
     /// @return Decoded coil values (one byte each, 0 or 1), or an error.
-    [[nodiscard]] std::expected<coil_values, std::error_code> decode_read_coils_response(std::span<const std::uint8_t> pdu,
-                                                                                         function_code expected_fc,
+    [[nodiscard]] std::expected<coil_values, std::error_code> decode_read_coils_response(cspan_uint8_t pdu, function_code expected_fc,
                                                                                          std::uint16_t count) noexcept;
 
     /// @brief Decode a Write Single Register or Write Single Coil response PDU.
     /// @details The server echoes the address and value — this function validates
     ///          the echo has the expected function code.
-    [[nodiscard]] expected_void_t decode_write_single_response(std::span<const std::uint8_t> pdu, function_code expected_fc) noexcept;
+    [[nodiscard]] expected_void_t decode_write_single_response(cspan_uint8_t pdu, function_code expected_fc) noexcept;
 
     /// @brief Decode a Write Multiple Registers or Write Multiple Coils response PDU.
-    [[nodiscard]] expected_void_t decode_write_multiple_response(std::span<const std::uint8_t> pdu, function_code expected_fc) noexcept;
+    [[nodiscard]] expected_void_t decode_write_multiple_response(cspan_uint8_t pdu, function_code expected_fc) noexcept;
 
 } // namespace kmx::aio::modbus::frame

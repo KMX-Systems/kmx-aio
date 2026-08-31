@@ -7,6 +7,7 @@
     #include <cstring>
     #include <expected>
     #include <netinet/in.h>
+    #include <span>
     #include <string>
     #include <sys/socket.h>
     #include <system_error>
@@ -18,6 +19,21 @@
 
 namespace kmx::aio
 {
+    /// @brief Non-owning mutable span of characters.
+    using span_char_t = std::span<char>;
+    /// @brief Non-owning read-only span of characters.
+    using cspan_char_t = std::span<const char>;
+
+    /// @brief Non-owning mutable span of bytes.
+    using span_uint8_t = std::span<std::uint8_t>;
+    /// @brief Non-owning read-only span of bytes.
+    using cspan_uint8_t = std::span<const std::uint8_t>;
+
+    /// @brief Non-owning mutable span of bytes.
+    using span_byte_t = std::span<std::byte>;
+    /// @brief Non-owning read-only span of bytes.
+    using cspan_byte_t = std::span<const std::byte>;
+
     /// @brief Owned IP address variant covering IPv4 and IPv6.
     using ip_address_owned_t = std::variant<ipv4::address_owned_t, ipv6::address_owned_t>;
     /// @brief Non-owning IP address view variant.

@@ -14,7 +14,7 @@ namespace kmx::aio::http2
         return total;
     }
 
-    std::size_t hpack_encoder::encode_literal(std::span<std::uint8_t> buffer, const std::string_view name,
+    std::size_t hpack_encoder::encode_literal(span_uint8_t buffer, const std::string_view name,
                                               const std::string_view value) noexcept(false)
     {
         std::size_t required = encoded_size_literal(name, value);
@@ -39,7 +39,7 @@ namespace kmx::aio::http2
         return offset;
     }
 
-    std::size_t hpack_encoder::encode(std::span<std::uint8_t> buffer, const header_list& headers) noexcept(false)
+    std::size_t hpack_encoder::encode(span_uint8_t buffer, const header_list& headers) noexcept(false)
     {
         std::size_t offset {};
         for (const auto& kv: headers)

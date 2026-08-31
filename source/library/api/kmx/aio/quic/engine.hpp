@@ -33,8 +33,8 @@ namespace kmx::aio::quic
         buffer::handle<stream_payload_buffer> storage;
         std::size_t size {};
 
-        [[nodiscard]] std::span<char> bytes() noexcept(false) { return {storage->data(), size}; }
-        [[nodiscard]] std::span<const char> bytes() const noexcept(false) { return {storage->data(), size}; }
+        [[nodiscard]] span_char_t bytes() noexcept(false) { return {storage->data(), size}; }
+        [[nodiscard]] cspan_char_t bytes() const noexcept(false) { return {storage->data(), size}; }
     };
 
     /// @brief Generic QUIC engine template.

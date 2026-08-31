@@ -64,7 +64,7 @@ namespace kmx::aio::sample::udp::echo::client
             }
 
             std::vector<char> message_buf(config_.payload.begin(), config_.payload.end());
-            std::span<const std::byte> send_buf {reinterpret_cast<const std::byte*>(message_buf.data()), message_buf.size()};
+            cspan_byte_t send_buf {reinterpret_cast<const std::byte*>(message_buf.data()), message_buf.size()};
 
             std::vector<std::byte> recv_buf(4096u);
 

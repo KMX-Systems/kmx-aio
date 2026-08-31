@@ -7,7 +7,7 @@
 namespace kmx::aio::http2
 {
 
-    std::size_t frame_builder::make_settings(std::span<std::uint8_t> buffer) noexcept(false)
+    std::size_t frame_builder::make_settings(span_uint8_t buffer) noexcept(false)
     {
         if (buffer.size() < 9u)
             throw std::invalid_argument("Buffer too small for SETTINGS frame");
@@ -17,14 +17,14 @@ namespace kmx::aio::http2
         return 9u;
     }
 
-    std::size_t frame_builder::make_settings_ack(std::span<std::uint8_t> buffer) noexcept(false)
+    std::size_t frame_builder::make_settings_ack(span_uint8_t buffer) noexcept(false)
     {
         std::size_t written = make_settings(buffer);
         buffer[4u] = 0x01u; // Flags: ACK
         return written;
     }
 
-    std::size_t frame_builder::make_headers(std::span<std::uint8_t> buffer, std::uint32_t stream_id, bool end_stream,
+    std::size_t frame_builder::make_headers(span_uint8_t buffer, const std::uint32_t stream_id, const bool end_stream,
                                             const header_list& headers) noexcept(false)
     {
         std::size_t hpack_len = hpack_encoder::encoded_size(headers);
@@ -56,7 +56,7 @@ namespace kmx::aio::http2
         return 9u + hpack_len;
     }
 
-    std::size_t frame_builder::make_data(std::span<std::uint8_t> buffer, std::uint32_t stream_id, bool end_stream,
+    std::size_t frame_builder::make_data(span_uint8_t buffer, const std::uint32_t stream_id, const bool end_stream,
                                          std::string_view data) noexcept(false)
     {
         if (data.size() > 0xFFFFFFu)

@@ -34,8 +34,7 @@ int main() noexcept
                 .notification_queue_capacity = 64u,
                 .iterate_timeout = std::chrono::milliseconds(20),
             },
-            5u
-        );
+            5u);
 
         exec.spawn(mgr.run(exec, ok));
         exec.run();

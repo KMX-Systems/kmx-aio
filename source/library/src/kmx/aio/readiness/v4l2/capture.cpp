@@ -59,7 +59,7 @@ namespace kmx::aio::readiness::v4l2
         }
     }
 
-    std::span<const std::byte> frame_view::data() const noexcept
+    cspan_byte_t frame_view::data() const noexcept
     {
         return {ptr_, metadata_.bytes_used};
     }

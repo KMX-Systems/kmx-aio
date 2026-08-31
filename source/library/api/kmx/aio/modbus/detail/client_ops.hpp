@@ -22,8 +22,8 @@ namespace kmx::aio::modbus::detail
     {
     public:
         /// @brief Encode a complete ADU, send it, and return the raw response PDU.
-        [[nodiscard]] task<std::expected<std::vector<std::uint8_t>, std::error_code>> exchange_pdu(
-            const std::span<const std::uint8_t> pdu_bytes) noexcept(false)
+        [[nodiscard]] task<std::expected<std::vector<std::uint8_t>, std::error_code>> exchange_pdu(const cspan_uint8_t pdu_bytes) noexcept(
+            false)
         {
             auto* self = static_cast<ImplT*>(this);
             if (!self->stream_.has_value())

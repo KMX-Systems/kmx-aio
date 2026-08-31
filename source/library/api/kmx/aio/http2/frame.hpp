@@ -3,8 +3,7 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
-    #include <cstdint>
-    #include <span>
+    #include <kmx/aio/basic_types.hpp>
 #endif
 
 /// @brief HTTP/2 core protocol definitions and utilities
@@ -53,7 +52,6 @@ namespace kmx::aio::http2
     /// @param error_code The reason for closing the connection
     /// @return Number of bytes written
     /// @throws std::invalid_argument if buffer is too small
-    std::size_t make_goaway(std::span<std::uint8_t> buffer, const std::uint32_t last_stream_id,
-                            const std::uint32_t error_code) noexcept(false);
+    std::size_t make_goaway(span_uint8_t buffer, const std::uint32_t last_stream_id, const std::uint32_t error_code) noexcept(false);
 
 } // namespace kmx::aio::http2

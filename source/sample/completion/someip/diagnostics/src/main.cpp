@@ -33,8 +33,7 @@ int main() noexcept
                 .event_ids = {0x1001u},
                 .notification_queue_capacity = 8u,
                 .iterate_timeout = std::chrono::milliseconds(20),
-            }
-        );
+            });
 
         exec.spawn(mgr.run(exec, ok));
         exec.run();

@@ -27,16 +27,16 @@ namespace kmx::aio::benchmark
             {
                 const auto start = clock_t::now();
 
-                if (!co_await exec.async_write(client_fd, std::span<const char>(&out_byte, 1u), 0u))
+                if (!co_await exec.async_write(client_fd, cspan_char_t(&out_byte, 1u), 0u))
                     co_return;
 
-                if (!co_await exec.async_read(server_fd, std::span<char>(&in_byte, 1u), 0u))
+                if (!co_await exec.async_read(server_fd, span_char_t(&in_byte, 1u), 0u))
                     co_return;
 
-                if (!co_await exec.async_write(server_fd, std::span<const char>(&out_byte, 1u), 0u))
+                if (!co_await exec.async_write(server_fd, cspan_char_t(&out_byte, 1u), 0u))
                     co_return;
 
-                if (!co_await exec.async_read(client_fd, std::span<char>(&in_byte, 1u), 0u))
+                if (!co_await exec.async_read(client_fd, span_char_t(&in_byte, 1u), 0u))
                     co_return;
 
                 samples.push_back(
@@ -58,10 +58,10 @@ namespace kmx::aio::benchmark
 
             for (std::size_t i {}; i != rounds; ++i)
             {
-                if (!co_await exec.async_write(write_fd, std::span<const char>(&out_byte, 1u), 0u))
+                if (!co_await exec.async_write(write_fd, cspan_char_t(&out_byte, 1u), 0u))
                     co_return;
 
-                if (!co_await exec.async_read(read_fd, std::span<char>(&in_byte, 1u), 0u))
+                if (!co_await exec.async_read(read_fd, span_char_t(&in_byte, 1u), 0u))
                     co_return;
 
                 completed.fetch_add(2u, std::memory_order_relaxed);

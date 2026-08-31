@@ -95,8 +95,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
         }
 
         task<void> run_iterate(client& c, const std::chrono::milliseconds timeout,
-                               std::shared_ptr<coroutine_result_state<expected_bool_t>> state,
-                               completion::executor& exec)
+                               std::shared_ptr<coroutine_result_state<expected_bool_t>> state, completion::executor& exec)
         {
             state->result.emplace(co_await c.iterate(timeout));
             state->completed = true;

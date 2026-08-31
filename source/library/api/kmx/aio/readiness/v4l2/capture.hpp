@@ -47,7 +47,7 @@ namespace kmx::aio::readiness::v4l2
         ~frame_view() noexcept;
 
         /// @brief Raw frame bytes (zero-copy view into the mmap'd kernel buffer).
-        [[nodiscard]] std::span<const std::byte> data() const noexcept;
+        [[nodiscard]] cspan_byte_t data() const noexcept;
 
         /// @brief Frame metadata (sequence, timestamp, dimensions, format).
         [[nodiscard]] const frame_metadata& metadata() const noexcept { return metadata_; }

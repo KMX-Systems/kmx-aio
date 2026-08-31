@@ -15,7 +15,7 @@ namespace kmx::aio::completion::udp
         return endpoint(std::move(*sock));
     }
 
-    task_returning_expected_size_t endpoint::recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
+    task_returning_expected_size_t endpoint::recv(span_byte_t buffer, sockaddr_storage& peer_addr,
                                                   ::socklen_t& out_peer_addr_len) noexcept(false)
     {
         out_peer_addr_len = 0u;
@@ -37,7 +37,7 @@ namespace kmx::aio::completion::udp
         co_return result;
     }
 
-    task_returning_expected_size_t endpoint::recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr, ::socklen_t& out_peer_addr_len,
+    task_returning_expected_size_t endpoint::recv(span_byte_t buffer, sockaddr_storage& peer_addr, ::socklen_t& out_peer_addr_len,
                                                   ip_address_t& out_peer_ip, port_t& out_peer_port) noexcept(false)
     {
         auto result = co_await recv(buffer, peer_addr, out_peer_addr_len);
@@ -75,7 +75,7 @@ namespace kmx::aio::completion::udp
         }
     }
 
-    task_returning_expected_size_t endpoint::send(std::span<const std::byte> buffer, const sockaddr* peer_addr,
+    task_returning_expected_size_t endpoint::send(cspan_byte_t buffer, const sockaddr* peer_addr,
                                                   const ::socklen_t addr_len) noexcept(false)
     {
         if (peer_addr == nullptr)
@@ -98,8 +98,7 @@ namespace kmx::aio::completion::udp
         co_return co_await socket_.sendmsg(&msg);
     }
 
-    task_returning_expected_size_t endpoint::send(std::span<const std::byte> buffer, const ip_address_t peer_ip,
-                                                  const port_t peer_port) noexcept(false)
+    task_returning_expected_size_t endpoint::send(cspan_byte_t buffer, const ip_address_t peer_ip, const port_t peer_port) noexcept(false)
     {
         const auto peer_addr = make_socket_address(peer_ip, peer_port);
         if (!peer_addr)

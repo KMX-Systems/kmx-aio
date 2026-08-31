@@ -154,8 +154,7 @@ namespace kmx::aio::completion::xdp
 #endif
     }
 
-    expected_void_t socket::validate_create_args([[maybe_unused]] const executor& exec,
-                                                                      const socket_config& config) noexcept
+    expected_void_t socket::validate_create_args([[maybe_unused]] const executor& exec, const socket_config& config) noexcept
     {
         if (config.interface_name.empty())
             return std::unexpected(to_std_error_code(error_code::invalid_argument));
@@ -190,7 +189,7 @@ namespace kmx::aio::completion::xdp
 #endif
     }
 
-    expected_void_t socket::validate_send_args(const state& state, std::span<const std::byte> data) noexcept
+    expected_void_t socket::validate_send_args(const state& state, cspan_byte_t data) noexcept
     {
         if (data.empty())
             return std::unexpected(to_std_error_code(error_code::invalid_argument));
@@ -274,7 +273,7 @@ namespace kmx::aio::completion::xdp
         return {};
     }
 
-    expected_void_t socket::send_via_af_xdp_backend(state& state, std::span<const std::byte> data) noexcept
+    expected_void_t socket::send_via_af_xdp_backend(state& state, cspan_byte_t data) noexcept
     {
         recycle_completion_frames(state);
 
@@ -328,7 +327,7 @@ namespace kmx::aio::completion::xdp
     }
 #endif
 
-    expected_void_t socket::send_via_fallback(state& state, std::span<const std::byte> data) noexcept
+    expected_void_t socket::send_via_fallback(state& state, cspan_byte_t data) noexcept
     {
         std::vector<std::byte> payload(data.size());
         std::memcpy(payload.data(), data.data(), data.size());
@@ -388,7 +387,7 @@ namespace kmx::aio::completion::xdp
             state_->stats.rx_frames_received++;
 
             frame out {
-                .data = std::span<std::byte>(data_ptr, desc->len),
+                .data = span_byte_t(data_ptr, desc->len),
                 .addr = addr,
                 .length = desc->len,
             };
@@ -409,7 +408,7 @@ namespace kmx::aio::completion::xdp
 
         auto& storage = it->second;
         frame out {
-            .data = std::span<std::byte>(storage.data(), storage.size()),
+            .data = span_byte_t(storage.data(), storage.size()),
             .addr = addr,
             .length = static_cast<std::uint32_t>(storage.size()),
         };
@@ -417,7 +416,7 @@ namespace kmx::aio::completion::xdp
         co_return out;
     }
 
-    task_returning_expected_void_t socket::send(std::span<const std::byte> data) noexcept(false)
+    task_returning_expected_void_t socket::send(cspan_byte_t data) noexcept(false)
     {
         if (!state_)
             co_return std::unexpected(to_std_error_code(error_code::bad_descriptor));

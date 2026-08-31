@@ -2,7 +2,7 @@
 /// @brief Transport-agnostic Modbus TCP request/response exchange helpers.
 /// @details
 /// Provides two free function templates that operate on any stream type
-/// exposing `read(std::span<char>)` and `write_all(std::span<const char>)`
+/// exposing `read(span_char_t)` and `write_all(cspan_char_t)`
 /// coroutine methods.  The session layer is intentionally stateless — the
 /// transaction-ID counter and stream ownership live in the caller (client or
 /// server pimpl).
@@ -26,13 +26,12 @@ namespace kmx::aio::modbus::detail
     /// @brief Read exactly @p dest.size() bytes from @p stream.
     /// @details Loops on the stream's read() coroutine until all requested bytes
     ///          have been received, the stream reaches EOF, or an I/O error occurs.
-    /// @tparam StreamT Any stream providing `task_returning_expected_size_t read(std::span<char>)`.
+    /// @tparam StreamT Any stream providing `task_returning_expected_size_t read(span_char_t)`.
     /// @param stream The stream to read from.
     /// @param dest   Output span of the exact size to fill.
     /// @return Success, or an error on EOF / I/O failure.
     template <typename StreamT>
-    [[nodiscard]] task_returning_expected_void_t
-    read_exactly(StreamT& stream, std::span<char> dest) noexcept(false)
+    [[nodiscard]] task_returning_expected_void_t read_exactly(StreamT& stream, span_char_t dest) noexcept(false)
     {
         std::size_t total = 0u;
         while (total < dest.size())
@@ -58,21 +57,19 @@ namespace kmx::aio::modbus::detail
     /// @param expected_unit Unit identifier to validate in the response MBAP header.
     /// @return Raw response PDU bytes (function code + data), or an error.
     template <typename StreamT>
-    [[nodiscard]] task<std::expected<std::vector<std::uint8_t>, std::error_code>>
-    exchange(StreamT& stream, std::span<const std::uint8_t> adu,
-             const std::uint16_t expected_tid, const std::uint8_t expected_unit) noexcept(false)
+    [[nodiscard]] task<std::expected<std::vector<std::uint8_t>, std::error_code>> exchange(StreamT& stream, cspan_uint8_t adu,
+                                                                                           const std::uint16_t expected_tid,
+                                                                                           const std::uint8_t expected_unit) noexcept(false)
     {
         // 1. Send request ADU
-        const auto send_view = std::span<const char>(
-            reinterpret_cast<const char*>(adu.data()), adu.size()); // NOLINT(*-reinterpret-cast)
+        const auto send_view = cspan_char_t(reinterpret_cast<const char*>(adu.data()), adu.size()); // NOLINT(*-reinterpret-cast)
         if (auto r = co_await stream.write_all(send_view); !r)
             co_return std::unexpected(r.error());
 
         // 2. Read 7-byte MBAP header (tid[2] + proto[2] + length[2] + unit_id[1])
         std::array<std::uint8_t, frame::mbap_size> hdr_buf {};
         {
-            auto hdr_span = std::span<char>(
-                reinterpret_cast<char*>(hdr_buf.data()), hdr_buf.size()); // NOLINT(*-reinterpret-cast)
+            auto hdr_span = span_char_t(reinterpret_cast<char*>(hdr_buf.data()), hdr_buf.size()); // NOLINT(*-reinterpret-cast)
             if (auto r = co_await read_exactly(stream, hdr_span); !r)
                 co_return std::unexpected(r.error());
         }
@@ -97,8 +94,7 @@ namespace kmx::aio::modbus::detail
 
         if (pdu_len > 0u)
         {
-            auto pdu_span = std::span<char>(
-                reinterpret_cast<char*>(pdu.data()), pdu.size()); // NOLINT(*-reinterpret-cast)
+            auto pdu_span = span_char_t(reinterpret_cast<char*>(pdu.data()), pdu.size()); // NOLINT(*-reinterpret-cast)
             if (auto r = co_await read_exactly(stream, pdu_span); !r)
                 co_return std::unexpected(r.error());
         }

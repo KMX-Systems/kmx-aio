@@ -73,8 +73,7 @@ namespace kmx::aio::test::completion::udp::endpoint_test
             std::byte {0x05}, std::byte {0x06}, std::byte {0x07}, std::byte {0x08},
         };
 
-        const auto send_res =
-            co_await send_endpoint->send(std::span<const std::byte>(payload), ipv4::make_address(ipv4::localhost), recv_port);
+        const auto send_res = co_await send_endpoint->send(cspan_byte_t(payload), ipv4::make_address(ipv4::localhost), recv_port);
         if (!send_res)
         {
             state->error = send_res.error();
@@ -89,7 +88,7 @@ namespace kmx::aio::test::completion::udp::endpoint_test
         ip_address_t peer_ip = ipv4::make_address(ipv4::any);
         port_t peer_port = 0u;
 
-        const auto recv_res = co_await recv_endpoint->recv(std::span<std::byte>(recv_buffer), peer_addr, peer_addr_len, peer_ip, peer_port);
+        const auto recv_res = co_await recv_endpoint->recv(span_byte_t(recv_buffer), peer_addr, peer_addr_len, peer_ip, peer_port);
         if (!recv_res)
         {
             state->error = recv_res.error();

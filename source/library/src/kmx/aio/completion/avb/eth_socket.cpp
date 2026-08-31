@@ -29,8 +29,7 @@ namespace kmx::aio::avb
     // open
 
     template <typename Executor>
-    task_returning_expected_void_t generic_eth_socket<Executor>::open(const std::string_view iface,
-                                                                                  std::uint16_t ethertype) noexcept(false)
+    task_returning_expected_void_t generic_eth_socket<Executor>::open(const std::string_view iface, std::uint16_t ethertype) noexcept(false)
     {
         co_return impl_->open_socket(iface, ethertype);
     }
@@ -38,9 +37,8 @@ namespace kmx::aio::avb
     // send
 
     template <typename Executor>
-    task_returning_expected_void_t generic_eth_socket<Executor>::send(const mac_address_t& dest_mac,
-                                                                                  std::span<const std::byte> frame,
-                                                                                  std::optional<avb_timestamp_t> tx_time) noexcept(false)
+    task_returning_expected_void_t generic_eth_socket<Executor>::send(const mac_address_t& dest_mac, cspan_byte_t frame,
+                                                                      std::optional<avb_timestamp_t> tx_time) noexcept(false)
     {
         ::sockaddr_ll dest {};
         dest.sll_family = AF_PACKET;

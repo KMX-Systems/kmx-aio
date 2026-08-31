@@ -15,6 +15,7 @@
     #ifndef PCH
         #include <cstddef>
         #include <cstdint>
+        #include <cstdio>
         #include <deque>
         #include <expected>
         #include <functional>
@@ -24,7 +25,6 @@
         #include <system_error>
         #include <unordered_map>
         #include <utility>
-        #include <cstdio>
         #include <vector>
 
         #include <netinet/in.h>
@@ -67,17 +67,14 @@ namespace kmx::aio::quic
         [[nodiscard]] const char* data() const noexcept { return data_.data() + read_pos_; }
 
         /// @brief Queues @p count bytes read from @p first.
-        void append(const char* const first, const std::size_t count) noexcept(false)
-        {
-            data_.insert(data_.end(), first, first + count);
-        }
+        void append(const char* const first, const std::size_t count) noexcept(false) { data_.insert(data_.end(), first, first + count); }
 
         /// @brief Drops the first @p count queued bytes, which must not exceed size().
         void consume(std::size_t count) noexcept;
 
     private:
-        std::vector<char> data_ {};  ///< Queued bytes, preceded by those already taken.
-        std::size_t read_pos_ {};    ///< How much of @ref data_ has been taken.
+        std::vector<char> data_ {}; ///< Queued bytes, preceded by those already taken.
+        std::size_t read_pos_ {};   ///< How much of @ref data_ has been taken.
     };
 
     /// @brief Everything one QUIC stream needs to behave like a byte stream.
@@ -86,15 +83,15 @@ namespace kmx::aio::quic
     ///       rather than a dangling pointer.
     struct stream_state
     {
-        ::lsquic_stream_t* handle {};        ///< The lsquic stream, or null once it has closed.
-        ::lsquic_conn_t* conn {};            ///< The connection it belongs to; kept after @ref handle is cleared.
-        byte_buffer incoming {};             ///< Bytes received and not yet read.
-        byte_buffer outgoing {};             ///< Bytes queued for writing, not yet accepted by lsquic.
-        coroutine_handle_t reader {};   ///< Suspended reader, if any.
-        coroutine_handle_t writer {};   ///< Suspended writer, if any.
-        bool fin_received {};                ///< The peer finished its direction.
-        bool closed {};                      ///< The stream is gone.
-        std::error_code error {};            ///< Why it ended, if abnormally.
+        ::lsquic_stream_t* handle {}; ///< The lsquic stream, or null once it has closed.
+        ::lsquic_conn_t* conn {};     ///< The connection it belongs to; kept after @ref handle is cleared.
+        byte_buffer incoming {};      ///< Bytes received and not yet read.
+        byte_buffer outgoing {};      ///< Bytes queued for writing, not yet accepted by lsquic.
+        coroutine_handle_t reader {}; ///< Suspended reader, if any.
+        coroutine_handle_t writer {}; ///< Suspended writer, if any.
+        bool fin_received {};         ///< The peer finished its direction.
+        bool closed {};               ///< The stream is gone.
+        std::error_code error {};     ///< Why it ended, if abnormally.
     };
 
     /// @brief Bytes buffered for one stream before reading is paused.
@@ -144,17 +141,17 @@ namespace kmx::aio::quic
         /// @brief Reads whatever has arrived.
         /// @param out Destination.
         /// @return Bytes read; zero once the peer has finished and nothing is left.
-        [[nodiscard]] task_returning_expected_size_t read(std::span<char> out) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t read(span_char_t out) noexcept(false);
 
         /// @brief Writes every byte, suspending until lsquic has accepted them all.
-        [[nodiscard]] task_returning_expected_void_t write_all(std::span<const char> in) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t write_all(cspan_char_t in) noexcept(false);
 
         /// @brief Ends this side of the stream.
         void shutdown_write() noexcept;
 
     private:
         /// @brief Shared coroutine mechanics for stream waiters.
-        template <coroutine_handle_t stream_state::* waiter>
+        template <coroutine_handle_t stream_state::*waiter>
         struct awaiter_base
         {
             stream_state& state;
@@ -181,7 +178,7 @@ namespace kmx::aio::quic
             }
         };
 
-        std::shared_ptr<stream_state> state_ {};  ///< Shared with the endpoint's callbacks.
+        std::shared_ptr<stream_state> state_ {}; ///< Shared with the endpoint's callbacks.
     };
 
     /// @brief Owns an lsquic engine and its UDP socket, and drives both.
@@ -227,8 +224,7 @@ namespace kmx::aio::quic
         /// @param sni Server name to present.
         /// @param ssl_ctx A configured SSL_CTX.
         /// @return Nothing, or why setup failed.
-        [[nodiscard]] expected_void_t connect(const ip_address_t ip, const port_t port, const std::string& sni,
-                                                                   void* ssl_ctx) noexcept;
+        [[nodiscard]] expected_void_t connect(const ip_address_t ip, const port_t port, const std::string& sni, void* ssl_ctx) noexcept;
 
         /// @brief Opens a new stream on this connection.
         /// @return The stream, or why one could not be opened.
@@ -356,10 +352,7 @@ namespace kmx::aio::quic
         {
             basic_endpoint& self;
 
-            [[nodiscard]] bool await_ready() const noexcept
-            {
-                return static_cast<bool>(self.opened_) || static_cast<bool>(self.failure_);
-            }
+            [[nodiscard]] bool await_ready() const noexcept { return static_cast<bool>(self.opened_) || static_cast<bool>(self.failure_); }
 
             void await_suspend(const coroutine_handle_t handle) const noexcept { self.opener_ = handle; }
             void await_resume() const noexcept {}
@@ -370,18 +363,14 @@ namespace kmx::aio::quic
         {
             basic_endpoint& self;
 
-            [[nodiscard]] bool await_ready() const noexcept
-            {
-                return !self.accepted_.empty() || static_cast<bool>(self.failure_);
-            }
+            [[nodiscard]] bool await_ready() const noexcept { return !self.accepted_.empty() || static_cast<bool>(self.failure_); }
 
             void await_suspend(const coroutine_handle_t handle) const noexcept { self.acceptor_ = handle; }
             void await_resume() const noexcept {}
         };
 
         /// @brief Creates the socket and the lsquic engine.
-        [[nodiscard]] expected_void_t setup(const ip_address_t ip, const port_t port, void* ssl_ctx,
-                                                                 const bool server) noexcept;
+        [[nodiscard]] expected_void_t setup(const ip_address_t ip, const port_t port, void* ssl_ctx, const bool server) noexcept;
 
         /// @brief Wakes the packet loop, from either the socket or the timer.
         /// @note Resumes directly rather than parking the handle: the loop holds nothing that a resumed
@@ -455,29 +444,29 @@ namespace kmx::aio::quic
         static struct ssl_ctx_st* cb_get_ssl_ctx(void* peer_ctx, const struct sockaddr*) noexcept;
         static struct ssl_ctx_st* cb_lookup_cert(void* ctx, const struct sockaddr*, const char*) noexcept;
 
-        file_descriptor socket_ {};                                                ///< The UDP socket.
-        ::lsquic_engine_t* engine_ {};                                             ///< The lsquic engine.
-        ::lsquic_stream_if stream_if_ {};                                          ///< Callback table.
-        ::lsquic_conn_t* conn_ {};                                                 ///< The connection, once established.
-        void* ssl_ctx_ {};                                                         ///< Caller owned SSL_CTX.
-        socket_address peer_ {};                                                   ///< Peer address, for a client.
+        file_descriptor socket_ {};                                                        ///< The UDP socket.
+        ::lsquic_engine_t* engine_ {};                                                     ///< The lsquic engine.
+        ::lsquic_stream_if stream_if_ {};                                                  ///< Callback table.
+        ::lsquic_conn_t* conn_ {};                                                         ///< The connection, once established.
+        void* ssl_ctx_ {};                                                                 ///< Caller owned SSL_CTX.
+        socket_address peer_ {};                                                           ///< Peer address, for a client.
         std::unordered_map<::lsquic_stream_t*, std::shared_ptr<stream_state>> streams_ {}; ///< Live streams.
-        std::deque<std::shared_ptr<stream_state>> accepted_ {};                    ///< Streams the peer opened.
-        std::shared_ptr<stream_state> opened_ {};                                  ///< Stream handed to open_stream().
-        coroutine_handle_t opener_ {};                                        ///< Coroutine in open_stream().
-        coroutine_handle_t acceptor_ {};                                      ///< Coroutine in accept_stream().
-        std::size_t pending_opens_ {};                                             ///< open_stream() calls not yet served.
-        std::vector<coroutine_handle_t> ready_ {};                            ///< Woken coroutines.
-        std::error_code failure_ {};                                               ///< Why setup or handshake failed.
-        const char* alpn_ {"kmx-rpc"};                                             ///< ALPN name offered on the handshake.
-        std::size_t ticks_ {};                                                     ///< Packet loop iterations.
-        std::size_t packets_in_ {};                                                ///< Packets received.
-        std::size_t packets_out_ {};                                               ///< Packets sent.
-        coroutine_handle_t wakeup_waiter_ {};                                 ///< The packet loop, when asleep.
-        bool wakeup_signalled_ {};                                                 ///< A wakeup arrived before the wait.
-        bool poll_armed_ {};                                                       ///< A readability poll is outstanding.
-        bool is_server_ {};                                                        ///< Whether this is a server endpoint.
-        bool running_ {};                                                          ///< Whether the packet loop should continue.
+        std::deque<std::shared_ptr<stream_state>> accepted_ {};                            ///< Streams the peer opened.
+        std::shared_ptr<stream_state> opened_ {};                                          ///< Stream handed to open_stream().
+        coroutine_handle_t opener_ {};                                                     ///< Coroutine in open_stream().
+        coroutine_handle_t acceptor_ {};                                                   ///< Coroutine in accept_stream().
+        std::size_t pending_opens_ {};                                                     ///< open_stream() calls not yet served.
+        std::vector<coroutine_handle_t> ready_ {};                                         ///< Woken coroutines.
+        std::error_code failure_ {};                                                       ///< Why setup or handshake failed.
+        const char* alpn_ {"kmx-rpc"};                                                     ///< ALPN name offered on the handshake.
+        std::size_t ticks_ {};                                                             ///< Packet loop iterations.
+        std::size_t packets_in_ {};                                                        ///< Packets received.
+        std::size_t packets_out_ {};                                                       ///< Packets sent.
+        coroutine_handle_t wakeup_waiter_ {};                                              ///< The packet loop, when asleep.
+        bool wakeup_signalled_ {};                                                         ///< A wakeup arrived before the wait.
+        bool poll_armed_ {};                                                               ///< A readability poll is outstanding.
+        bool is_server_ {};                                                                ///< Whether this is a server endpoint.
+        bool running_ {};                                                                  ///< Whether the packet loop should continue.
     };
 
     /// @brief A @ref basic_endpoint driven by @p Executor.

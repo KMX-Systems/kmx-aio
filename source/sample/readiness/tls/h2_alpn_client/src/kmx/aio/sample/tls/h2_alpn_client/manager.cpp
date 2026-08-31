@@ -166,7 +166,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
             std::string preface_data = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
             preface_data.append(settings_frame.data(), settings_frame.size());
 
-            if (auto res = co_await stream_ptr->write_all(std::span<const char>(preface_data.data(), preface_data.size())); !res)
+            if (auto res = co_await stream_ptr->write_all(cspan_char_t(preface_data.data(), preface_data.size())); !res)
             {
                 metrics_.failures.fetch_add(1u, mem_order);
                 metrics_.errors.fetch_add(1u, mem_order);
@@ -175,7 +175,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
             }
 
             std::array<char, 9u> recv_buf {};
-            auto r_res = co_await stream_ptr->read(std::span<char>(recv_buf.data(), recv_buf.size()));
+            auto r_res = co_await stream_ptr->read(span_char_t(recv_buf.data(), recv_buf.size()));
             if (!r_res || *r_res < recv_buf.size() || recv_buf[3] != 4 || recv_buf[4] != 0)
             {
                 metrics_.failures.fetch_add(1u, mem_order);
@@ -184,7 +184,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
                 co_return;
             }
 
-            if (auto w_res = co_await stream_ptr->write_all(std::span<const char>(ack_frame.data(), ack_frame.size())); !w_res)
+            if (auto w_res = co_await stream_ptr->write_all(cspan_char_t(ack_frame.data(), ack_frame.size())); !w_res)
             {
                 metrics_.failures.fetch_add(1u, mem_order);
                 metrics_.errors.fetch_add(1u, mem_order);
@@ -192,7 +192,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
                 co_return;
             }
 
-            r_res = co_await stream_ptr->read(std::span<char>(recv_buf.data(), recv_buf.size()));
+            r_res = co_await stream_ptr->read(span_char_t(recv_buf.data(), recv_buf.size()));
             if (!r_res || *r_res < recv_buf.size() || recv_buf[3] != 4 || recv_buf[4] != 1)
             {
                 metrics_.failures.fetch_add(1u, mem_order);
@@ -201,7 +201,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
                 co_return;
             }
 
-            if (auto res = co_await stream_ptr->write_all(std::span<const char>(req_frame.data(), req_frame.size())); !res)
+            if (auto res = co_await stream_ptr->write_all(cspan_char_t(req_frame.data(), req_frame.size())); !res)
             {
                 metrics_.failures.fetch_add(1u, mem_order);
                 metrics_.errors.fetch_add(1u, mem_order);
@@ -213,7 +213,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
             std::size_t total = 0u;
             while (total < resp_hdr.size())
             {
-                auto r = co_await stream_ptr->read(std::span<char>(resp_hdr.data() + total, resp_hdr.size() - total));
+                auto r = co_await stream_ptr->read(span_char_t(resp_hdr.data() + total, resp_hdr.size() - total));
                 if (!r || *r == 0u)
                     break;
                 total += *r;
@@ -223,7 +223,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
             total = 0u;
             while (total < data_hdr.size())
             {
-                auto r = co_await stream_ptr->read(std::span<char>(data_hdr.data() + total, data_hdr.size() - total));
+                auto r = co_await stream_ptr->read(span_char_t(data_hdr.data() + total, data_hdr.size() - total));
                 if (!r || *r == 0u)
                     break;
                 total += *r;
@@ -239,7 +239,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
                 total = 0u;
                 while (total < data_len)
                 {
-                    auto r = co_await stream_ptr->read(std::span<char>(data_payload.data() + total, data_len - total));
+                    auto r = co_await stream_ptr->read(span_char_t(data_payload.data() + total, data_len - total));
                     if (!r || *r == 0u)
                         break;
                     total += *r;

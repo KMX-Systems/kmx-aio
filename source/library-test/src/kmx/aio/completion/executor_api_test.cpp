@@ -108,7 +108,7 @@ namespace kmx::aio::test::completion::executor_api_test
         auto body = [&exec, state, fd = pipes.write_end()]() -> task<void>
         {
             const std::string payload {"stats"};
-            const auto result = co_await exec.async_write(fd, std::span<const char>(payload.data(), payload.size()));
+            const auto result = co_await exec.async_write(fd, cspan_char_t(payload.data(), payload.size()));
             state->completed = true;
             if (result)
             {
@@ -170,7 +170,7 @@ namespace kmx::aio::test::completion::executor_api_test
         auto body = [&exec, written, read, &buffer, &pipes]() -> task<void>
         {
             const std::string payload {"kmx-aio"};
-            const auto w = co_await exec.async_write(pipes.write_end(), std::span<const char>(payload.data(), payload.size()));
+            const auto w = co_await exec.async_write(pipes.write_end(), cspan_char_t(payload.data(), payload.size()));
             written->completed = true;
             if (w)
             {
@@ -266,7 +266,7 @@ namespace kmx::aio::test::completion::executor_api_test
         auto body = [&exec, state]() -> task<void>
         {
             const std::string payload {"x"};
-            const auto w = co_await exec.async_write(-1, std::span<const char>(payload.data(), payload.size()));
+            const auto w = co_await exec.async_write(-1, cspan_char_t(payload.data(), payload.size()));
             state->completed = true;
             if (w)
                 state->ok = true;
@@ -328,7 +328,7 @@ namespace kmx::aio::test::completion::executor_api_test
             const std::string payload {"fixed"};
             std::memcpy(storage.data(), payload.data(), payload.size());
 
-            const auto w = co_await exec.async_write_fixed(pipes.write_end(), std::span<const char>(storage.data(), payload.size()), 0u, 0);
+            const auto w = co_await exec.async_write_fixed(pipes.write_end(), cspan_char_t(storage.data(), payload.size()), 0u, 0);
             written->completed = true;
             if (w)
             {

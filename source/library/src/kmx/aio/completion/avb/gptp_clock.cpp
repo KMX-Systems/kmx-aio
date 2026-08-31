@@ -92,7 +92,7 @@ namespace kmx::aio::avb::gptp
 
             auto bytes = std::as_bytes(std::span {&frame, 1});
             std::vector<std::byte> buf(bytes.begin(), bytes.end());
-            co_return co_await sock_.send(multicast::gptp_peer, std::span<const std::byte>(buf));
+            co_return co_await sock_.send(multicast::gptp_peer, cspan_byte_t(buf));
         }
 
         // Handle incoming Sync

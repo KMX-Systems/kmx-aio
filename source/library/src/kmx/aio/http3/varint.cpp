@@ -47,7 +47,7 @@ namespace kmx::aio::http3::detail
         out.push_back(static_cast<std::uint8_t>(value & 0xFFu));
     }
 
-    [[nodiscard]] std::expected<std::pair<std::uint64_t, std::size_t>, std::error_code> decode_varint(std::span<const std::uint8_t> payload,
+    [[nodiscard]] std::expected<std::pair<std::uint64_t, std::size_t>, std::error_code> decode_varint(cspan_uint8_t payload,
                                                                                                       const std::size_t offset) noexcept
     {
         if (offset >= payload.size())

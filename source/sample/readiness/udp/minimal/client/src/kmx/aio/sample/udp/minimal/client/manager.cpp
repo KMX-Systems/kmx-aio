@@ -72,8 +72,7 @@ namespace kmx::aio::sample::udp::minimal::client
 
             // Asynchronously send message
             std::vector<char> message_buffer(config_.message.begin(), config_.message.end());
-            const std::span<const std::byte> message_span {reinterpret_cast<const std::byte*>(message_buffer.data()),
-                                                           message_buffer.size()};
+            const cspan_byte_t message_span {reinterpret_cast<const std::byte*>(message_buffer.data()), message_buffer.size()};
 
             if (auto send_result =
                     co_await ep.send(message_span, reinterpret_cast<const sockaddr*>(&server_addr->storage), server_addr->length);

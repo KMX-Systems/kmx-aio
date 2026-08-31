@@ -106,7 +106,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
             co_return; // out of buffers
         }
 
-        std::span<char> buffer_span(static_cast<char*>(registered_buffers_[rx_buf_idx].iov_base), buffer_size);
+        span_char_t buffer_span(static_cast<char*>(registered_buffers_[rx_buf_idx].iov_base), buffer_size);
 
         std::size_t messages_received {};
 
@@ -169,7 +169,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
 
         try
         {
-            std::span<char> buffer_span(static_cast<char*>(registered_buffers_[tx_buf_idx].iov_base), buffer_size);
+            span_char_t buffer_span(static_cast<char*>(registered_buffers_[tx_buf_idx].iov_base), buffer_size);
             std::size_t sent_bytes {};
             stats->tx_active.store(true, std::memory_order_relaxed);
 
@@ -185,7 +185,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
                 for (std::size_t i {}; i < chunk_size; ++i)
                     buffer_span[i] = static_cast<char>(i % 256);
 
-                const std::span<const char> write_span {buffer_span.data(), chunk_size};
+                const cspan_char_t write_span {buffer_span.data(), chunk_size};
                 if (auto res = co_await stream->write_all_fixed(write_span, tx_buf_idx); !res)
                 {
                     metrics_.errors.fetch_add(1u, std::memory_order_relaxed);

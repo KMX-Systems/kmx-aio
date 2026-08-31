@@ -148,7 +148,7 @@ namespace kmx::aio::sample::udp::minimal::server
 
                 logger::log(logger::level::debug, std::source_location::current(), "Server: Sending {} bytes reply...", response.size());
 
-                const std::span<const std::byte> response_span {reinterpret_cast<const std::byte*>(response.data()), response.size()};
+                const cspan_byte_t response_span {reinterpret_cast<const std::byte*>(response.data()), response.size()};
 
                 const auto write_result = co_await ep.send(response_span, reinterpret_cast<const sockaddr*>(&peer_addr), peer_addr_len);
 

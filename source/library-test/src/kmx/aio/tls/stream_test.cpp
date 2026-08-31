@@ -54,7 +54,7 @@ namespace kmx::aio::test::tls::stream_test
             }
 
             /// @brief Stands in for a transport write. Never reached by the tests below.
-            [[nodiscard]] task_returning_expected_void_t write_all(std::span<const char>) noexcept(false)
+            [[nodiscard]] task_returning_expected_void_t write_all(cspan_char_t) noexcept(false)
             {
                 co_return std::unexpected(std::make_error_code(std::errc::not_supported));
             }
@@ -153,8 +153,8 @@ namespace kmx::aio::test::tls::stream_test
         REQUIRE(ctx.get() != nullptr);
 
         stream<detail::stub_stream> tls_stream {detail::stub_stream {}, ctx.get()};
-        CHECK(tls_stream.set_alpn_protocols(std::span<const std::uint8_t>(detail::alpn_h2)).has_value());
-        CHECK(tls_stream.set_alpn_protocols(std::span<const std::uint8_t>(detail::alpn_h2_and_http11)).has_value());
+        CHECK(tls_stream.set_alpn_protocols(cspan_uint8_t(detail::alpn_h2)).has_value());
+        CHECK(tls_stream.set_alpn_protocols(cspan_uint8_t(detail::alpn_h2_and_http11)).has_value());
     }
 
     TEST_CASE("set_alpn_protocols rejects an empty list", "[core][tls][stream][alpn]")
@@ -164,7 +164,7 @@ namespace kmx::aio::test::tls::stream_test
 
         stream<detail::stub_stream> tls_stream {detail::stub_stream {}, ctx.get()};
 
-        const auto result = tls_stream.set_alpn_protocols(std::span<const std::uint8_t> {});
+        const auto result = tls_stream.set_alpn_protocols(cspan_uint8_t {});
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error() == std::errc::invalid_argument);
     }
@@ -175,7 +175,7 @@ namespace kmx::aio::test::tls::stream_test
         // passing its null SSL to OpenSSL would fault rather than fail.
         stream<detail::stub_stream> tls_stream;
 
-        const auto result = tls_stream.set_alpn_protocols(std::span<const std::uint8_t>(detail::alpn_h2));
+        const auto result = tls_stream.set_alpn_protocols(cspan_uint8_t(detail::alpn_h2));
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error() == std::errc::invalid_argument);
     }
@@ -186,7 +186,7 @@ namespace kmx::aio::test::tls::stream_test
         REQUIRE(ctx.get() != nullptr);
 
         stream<detail::stub_stream> tls_stream {detail::stub_stream {}, ctx.get()};
-        REQUIRE(tls_stream.set_alpn_protocols(std::span<const std::uint8_t>(detail::alpn_h2)).has_value());
+        REQUIRE(tls_stream.set_alpn_protocols(cspan_uint8_t(detail::alpn_h2)).has_value());
 
         // Offering a protocol is not negotiating one: nothing is selected until a peer has agreed.
         CHECK(tls_stream.selected_alpn().empty());
@@ -224,12 +224,12 @@ namespace kmx::aio::test::tls::stream_test
         // both, and the wrapper has to report that rather than let a stream negotiate with a list the
         // library already refused.
         constexpr std::array<std::uint8_t, 3u> overrunning_length {9u, 'h', '2'};
-        const auto overrun = tls_stream.set_alpn_protocols(std::span<const std::uint8_t>(overrunning_length));
+        const auto overrun = tls_stream.set_alpn_protocols(cspan_uint8_t(overrunning_length));
         REQUIRE_FALSE(overrun.has_value());
         CHECK(overrun.error() == std::errc::protocol_error);
 
         constexpr std::array<std::uint8_t, 3u> zero_length_entry {0u, 'h', '2'};
-        const auto zero_length = tls_stream.set_alpn_protocols(std::span<const std::uint8_t>(zero_length_entry));
+        const auto zero_length = tls_stream.set_alpn_protocols(cspan_uint8_t(zero_length_entry));
         REQUIRE_FALSE(zero_length.has_value());
         CHECK(zero_length.error() == std::errc::protocol_error);
     }
@@ -254,7 +254,7 @@ namespace kmx::aio::test::tls::stream_test
         {
             stream<completion::tcp::stream> tls_stream {completion::tcp::stream {exec, std::move(*socket)}, ctx.get()};
             REQUIRE(tls_stream.next_layer() != nullptr);
-            CHECK(tls_stream.set_alpn_protocols(std::span<const std::uint8_t>(detail::alpn_h2)).has_value());
+            CHECK(tls_stream.set_alpn_protocols(cspan_uint8_t(detail::alpn_h2)).has_value());
         }
 
         SUCCEED("the completion instantiation constructed, configured ALPN and released its SSL");
@@ -273,7 +273,7 @@ namespace kmx::aio::test::tls::stream_test
         {
             stream<readiness::tcp::stream> tls_stream {readiness::tcp::stream {exec, std::move(*socket)}, ctx.get()};
             REQUIRE(tls_stream.next_layer() != nullptr);
-            CHECK(tls_stream.set_alpn_protocols(std::span<const std::uint8_t>(detail::alpn_h2)).has_value());
+            CHECK(tls_stream.set_alpn_protocols(cspan_uint8_t(detail::alpn_h2)).has_value());
         }
 
         SUCCEED("the readiness instantiation constructed, configured ALPN and released its SSL");
@@ -291,14 +291,14 @@ namespace kmx::aio::test::tls::stream_test
         completion::executor completion_exec;
         stream<completion::tcp::stream> over_completion {completion::tcp::stream {completion_exec, std::move(*completion_socket)},
                                                          ctx.get()};
-        CHECK(over_completion.set_alpn_protocols(std::span<const std::uint8_t>(overrunning_length)).error() == std::errc::protocol_error);
+        CHECK(over_completion.set_alpn_protocols(cspan_uint8_t(overrunning_length)).error() == std::errc::protocol_error);
 
 #if defined(KMX_AIO_FEATURE_READINESS)
         auto readiness_socket = file_descriptor::create_socket(AF_INET, SOCK_STREAM, 0);
         REQUIRE(readiness_socket.has_value());
         readiness::executor readiness_exec;
         stream<readiness::tcp::stream> over_readiness {readiness::tcp::stream {readiness_exec, std::move(*readiness_socket)}, ctx.get()};
-        CHECK(over_readiness.set_alpn_protocols(std::span<const std::uint8_t>(overrunning_length)).error() == std::errc::protocol_error);
+        CHECK(over_readiness.set_alpn_protocols(cspan_uint8_t(overrunning_length)).error() == std::errc::protocol_error);
 #endif
 
         // A default-constructed stream of each shipped instantiation takes the destructor's null guard.

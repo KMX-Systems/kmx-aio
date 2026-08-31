@@ -5,8 +5,7 @@
 
 namespace kmx::aio::http2
 {
-    std::size_t make_goaway(std::span<std::uint8_t> buffer, const std::uint32_t last_stream_id,
-                            const std::uint32_t error_code) noexcept(false)
+    std::size_t make_goaway(span_uint8_t buffer, const std::uint32_t last_stream_id, const std::uint32_t error_code) noexcept(false)
     {
         if (buffer.size() < 17u)
             throw std::invalid_argument("Buffer too small for GOAWAY frame");

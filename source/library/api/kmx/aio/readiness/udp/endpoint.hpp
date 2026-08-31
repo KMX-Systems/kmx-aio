@@ -50,7 +50,7 @@ namespace kmx::aio::readiness::udp
         /// @param out_peer_addr_len In/out address storage length populated by recv.
         /// @return Awaitable task producing bytes received or an error.
         /// @throws std::system_error If submission or await path fails.
-        [[nodiscard]] task_returning_expected_size_t recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
+        [[nodiscard]] task_returning_expected_size_t recv(span_byte_t buffer, sockaddr_storage& peer_addr,
                                                           ::socklen_t& out_peer_addr_len) noexcept(false);
 
         /// @brief Receive a datagram and decode sender IP/port in addition to raw sockaddr data.
@@ -61,9 +61,8 @@ namespace kmx::aio::readiness::udp
         /// @param out_peer_port Parsed sender UDP port.
         /// @return Awaitable task producing bytes received or an error.
         /// @throws std::system_error If submission or await path fails.
-        [[nodiscard]] task_returning_expected_size_t recv(std::span<std::byte> buffer, sockaddr_storage& peer_addr,
-                                                          ::socklen_t& out_peer_addr_len, ip_address_t& out_peer_ip,
-                                                          port_t& out_peer_port) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t recv(span_byte_t buffer, sockaddr_storage& peer_addr, ::socklen_t& out_peer_addr_len,
+                                                          ip_address_t& out_peer_ip, port_t& out_peer_port) noexcept(false);
 
         /// @brief Send a datagram to a peer address represented as sockaddr.
         /// @param buffer Source byte span to transmit.
@@ -71,7 +70,7 @@ namespace kmx::aio::readiness::udp
         /// @param addr_len Length of @p peer_addr.
         /// @return Awaitable task producing bytes sent or an error.
         /// @throws std::system_error If submission or await path fails.
-        [[nodiscard]] task_returning_expected_size_t send(std::span<const std::byte> buffer, const sockaddr* peer_addr,
+        [[nodiscard]] task_returning_expected_size_t send(cspan_byte_t buffer, const sockaddr* peer_addr,
                                                           ::socklen_t addr_len) noexcept(false);
 
         /// @brief Send a datagram to a peer address represented as IP and port.
@@ -80,8 +79,7 @@ namespace kmx::aio::readiness::udp
         /// @param peer_port Destination UDP port.
         /// @return Awaitable task producing bytes sent or an error.
         /// @throws std::system_error If submission or await path fails.
-        [[nodiscard]] task_returning_expected_size_t send(std::span<const std::byte> buffer, ip_address_t peer_ip,
-                                                          port_t peer_port) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t send(cspan_byte_t buffer, ip_address_t peer_ip, port_t peer_port) noexcept(false);
 
     private:
         /// @brief The owned UDP socket every send and receive goes through.

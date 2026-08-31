@@ -185,7 +185,7 @@ namespace kmx::aio::modbus
         co_return frame::decode_write_multiple_response(*response, function_code::write_multiple_registers);
     }
 
-    async_result client::write_multiple_coils(const std::uint16_t address, const std::span<const std::uint8_t> values) noexcept(false)
+    async_result client::write_multiple_coils(const std::uint16_t address, const cspan_uint8_t values) noexcept(false)
     {
         auto self = impl_.get();
         const auto pdu_result = frame::encode_write_multiple_coils(address, values);

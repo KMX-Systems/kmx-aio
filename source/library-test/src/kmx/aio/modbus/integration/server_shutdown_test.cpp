@@ -78,7 +78,7 @@ namespace kmx::aio::test::modbus::integration::server_shutdown_test
         std::atomic_bool serving {false};
         std::optional<std::error_code> serve_error;
 
-        auto serve = [exec, srv, &serving, &serve_error, port]() -> task<void>
+        auto serve = [exec, srv, &serving, &serve_error]() -> task<void>
         {
             serving.store(true, std::memory_order_release);
             if (const auto r = co_await srv->serve(*exec, config_for(port)); !r)
@@ -111,7 +111,7 @@ namespace kmx::aio::test::modbus::integration::server_shutdown_test
         std::atomic_bool connected {false};
         std::optional<std::error_code> connect_error;
 
-        auto serve = [exec, srv, port]() -> task<void> { co_await srv->serve(*exec, config_for(port)); };
+        auto serve = [exec, srv]() -> task<void> { static_cast<void>(co_await srv->serve(*exec, config_for(port))); };
         exec->spawn(serve());
 
         // The client outlives the coroutine that connects it, so the connection stays open - and the
@@ -122,7 +122,7 @@ namespace kmx::aio::test::modbus::integration::server_shutdown_test
 
         auto connect_only = [exec, peer, &connected, &connect_error]() -> task<void>
         {
-            co_await exec->async_timeout(20'000'000u); // 20 ms, for the listener to be up
+            static_cast<void>(co_await exec->async_timeout(20'000'000u)); // 20 ms, for the listener to be up
 
             if (const auto r = co_await peer->connect(); !r)
                 connect_error = r.error();
@@ -154,12 +154,12 @@ namespace kmx::aio::test::modbus::integration::server_shutdown_test
         std::optional<register_values> values;
         std::optional<std::error_code> op_error;
 
-        auto serve = [exec, srv, port]() -> task<void> { co_await srv->serve(*exec, config_for(port)); };
+        auto serve = [exec, srv]() -> task<void> { static_cast<void>(co_await srv->serve(*exec, config_for(port))); };
         exec->spawn(serve());
 
-        auto exchange = [exec, &exchanged, &values, &op_error, port]() -> task<void>
+        auto exchange = [exec, &exchanged, &values, &op_error]() -> task<void>
         {
-            co_await exec->async_timeout(20'000'000u);
+            static_cast<void>(co_await exec->async_timeout(20'000'000u));
             client c {{.host = "127.0.0.1", .port = port, .unit_id = shutdown_unit_id}, *exec};
 
             if (const auto r = co_await c.connect(); !r)
@@ -176,7 +176,7 @@ namespace kmx::aio::test::modbus::integration::server_shutdown_test
 
             // The server's session task must notice this and finish. Before the fix it could not tell a
             // closed connection from a served request, so it kept reading from a socket that was gone.
-            co_await c.disconnect();
+            static_cast<void>(co_await c.disconnect());
             exchanged.store(true, std::memory_order_release);
         };
         exec->spawn(exchange());

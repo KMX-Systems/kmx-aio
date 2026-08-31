@@ -3,13 +3,13 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
     #include <kmx/aio/http3/control.hpp>
     #include <kmx/aio/http3/frame.hpp>
     #include <kmx/aio/http3/message.hpp>
     #include <kmx/aio/http3/settings.hpp>
 
     #include <expected>
-    #include <span>
     #include <string>
     #include <string_view>
     #include <system_error>
@@ -26,15 +26,15 @@ namespace kmx::aio::http3
         /// @param type The HTTP/3 frame type.
         /// @param payload The frame payload bytes.
         /// @return Serialized frame envelope bytes.
-        static std::vector<std::uint8_t> encode(frame_type type, std::span<const std::uint8_t> payload) noexcept(false);
+        static std::vector<std::uint8_t> encode(frame_type type, cspan_uint8_t payload) noexcept(false);
         /// @brief Decodes a single frame envelope.
         /// @param payload The encoded frame envelope bytes.
         /// @return The decoded frame or a parse error.
-        static std::expected<frame, std::error_code> decode(std::span<const std::uint8_t> payload) noexcept;
+        static std::expected<frame, std::error_code> decode(cspan_uint8_t payload) noexcept;
         /// @brief Decodes all frame envelopes contained in a buffer.
         /// @param payload The encoded byte buffer.
         /// @return All decoded frames or a parse error.
-        static std::expected<std::vector<frame>, std::error_code> decode_all(std::span<const std::uint8_t> payload) noexcept;
+        static std::expected<std::vector<frame>, std::error_code> decode_all(cspan_uint8_t payload) noexcept;
     };
 
     /// @brief Explicit HEADERS frame codec built on top of the QPACK layer.
@@ -48,7 +48,7 @@ namespace kmx::aio::http3
         /// @brief Decodes a literal header block into header fields.
         /// @param payload The encoded header block bytes.
         /// @return The decoded header list or a parse error.
-        static std::expected<header_list, std::error_code> decode(std::span<const std::uint8_t> payload) noexcept;
+        static std::expected<header_list, std::error_code> decode(cspan_uint8_t payload) noexcept;
         /// @brief Encodes a HEADERS frame containing the given headers.
         /// @param headers The header fields to encode.
         /// @return Serialized HEADERS frame bytes.
@@ -56,7 +56,7 @@ namespace kmx::aio::http3
         /// @brief Decodes a HEADERS frame and returns its header fields.
         /// @param payload The encoded frame bytes.
         /// @return The decoded header list or a parse error.
-        static std::expected<header_list, std::error_code> decode_frame(std::span<const std::uint8_t> payload) noexcept;
+        static std::expected<header_list, std::error_code> decode_frame(cspan_uint8_t payload) noexcept;
     };
 
     /// @brief Explicit DATA frame codec.
@@ -66,19 +66,19 @@ namespace kmx::aio::http3
         /// @brief Copies a DATA payload into owned storage.
         /// @param payload The payload bytes to encode.
         /// @return Serialized DATA payload bytes.
-        static std::vector<std::uint8_t> encode(std::span<const std::uint8_t> payload) noexcept(false);
+        static std::vector<std::uint8_t> encode(cspan_uint8_t payload) noexcept(false);
         /// @brief Copies a DATA payload out of owned storage.
         /// @param payload The encoded payload bytes.
         /// @return The decoded payload bytes or a parse error.
-        static std::expected<std::vector<std::uint8_t>, std::error_code> decode(std::span<const std::uint8_t> payload) noexcept;
+        static std::expected<std::vector<std::uint8_t>, std::error_code> decode(cspan_uint8_t payload) noexcept;
         /// @brief Encodes a DATA frame containing the given payload.
         /// @param payload The payload bytes to encode.
         /// @return Serialized DATA frame bytes.
-        static std::vector<std::uint8_t> encode_frame(std::span<const std::uint8_t> payload) noexcept(false);
+        static std::vector<std::uint8_t> encode_frame(cspan_uint8_t payload) noexcept(false);
         /// @brief Decodes a DATA frame and returns its payload.
         /// @param payload The encoded frame bytes.
         /// @return The decoded payload bytes or a parse error.
-        static std::expected<std::vector<std::uint8_t>, std::error_code> decode_frame(std::span<const std::uint8_t> payload) noexcept;
+        static std::expected<std::vector<std::uint8_t>, std::error_code> decode_frame(cspan_uint8_t payload) noexcept;
     };
 
     /// @brief Helpers for HTTP/3 SETTINGS payload encoding/decoding.
@@ -92,7 +92,7 @@ namespace kmx::aio::http3
         /// @brief Decodes a settings payload block.
         /// @param payload The encoded payload bytes.
         /// @return The decoded settings or a parse error.
-        static std::expected<settings, std::error_code> decode(std::span<const std::uint8_t> payload) noexcept;
+        static std::expected<settings, std::error_code> decode(cspan_uint8_t payload) noexcept;
         /// @brief Encodes a SETTINGS frame containing the given settings.
         /// @param value The settings model to encode.
         /// @return Serialized SETTINGS frame bytes.
@@ -100,7 +100,7 @@ namespace kmx::aio::http3
         /// @brief Decodes a SETTINGS frame and returns the settings payload.
         /// @param payload The encoded frame bytes.
         /// @return The decoded settings or a parse error.
-        static std::expected<settings, std::error_code> decode_frame(std::span<const std::uint8_t> payload) noexcept;
+        static std::expected<settings, std::error_code> decode_frame(cspan_uint8_t payload) noexcept;
     };
 
     /// @brief Encodes and decodes HTTP/3 GOAWAY payloads and frames.
@@ -114,7 +114,7 @@ namespace kmx::aio::http3
         /// @brief Decodes a GOAWAY payload.
         /// @param payload The encoded payload bytes.
         /// @return The decoded GOAWAY payload or a parse error.
-        static std::expected<goaway_frame, std::error_code> decode(std::span<const std::uint8_t> payload) noexcept;
+        static std::expected<goaway_frame, std::error_code> decode(cspan_uint8_t payload) noexcept;
         /// @brief Encodes a GOAWAY frame containing the given payload.
         /// @param value The GOAWAY frame payload to encode.
         /// @return Serialized GOAWAY frame bytes.
@@ -122,7 +122,7 @@ namespace kmx::aio::http3
         /// @brief Decodes a GOAWAY frame and returns its payload.
         /// @param payload The encoded frame bytes.
         /// @return The decoded GOAWAY payload or a parse error.
-        static std::expected<goaway_frame, std::error_code> decode_frame(std::span<const std::uint8_t> payload) noexcept;
+        static std::expected<goaway_frame, std::error_code> decode_frame(cspan_uint8_t payload) noexcept;
     };
 
     /// @brief Builds and extends the byte stream of an HTTP/3 control stream.
@@ -137,12 +137,11 @@ namespace kmx::aio::http3
         /// @param control_stream_bytes The current control stream bytes.
         /// @param value The GOAWAY payload to append.
         /// @return The updated control stream bytes.
-        static std::vector<std::uint8_t> append_goaway(std::span<const std::uint8_t> control_stream_bytes,
-                                                       const goaway_frame& value) noexcept(false);
+        static std::vector<std::uint8_t> append_goaway(cspan_uint8_t control_stream_bytes, const goaway_frame& value) noexcept(false);
         /// @brief Decodes a complete control stream byte buffer.
         /// @param payload The encoded control stream bytes.
         /// @return The decoded control stream state or a protocol error.
-        static std::expected<control_stream_state, std::error_code> decode(std::span<const std::uint8_t> payload) noexcept;
+        static std::expected<control_stream_state, std::error_code> decode(cspan_uint8_t payload) noexcept;
     };
 } // namespace kmx::aio::http3
 
@@ -188,10 +187,10 @@ namespace kmx::aio::http3::demo
         /// @brief Parses demo request frames.
         /// @param payload The encoded frame bytes.
         /// @return The decoded request or a parse error.
-        static std::expected<request_message, std::error_code> parse_request_frames(std::span<const std::uint8_t> payload) noexcept;
+        static std::expected<request_message, std::error_code> parse_request_frames(cspan_uint8_t payload) noexcept;
         /// @brief Parses demo response frames.
         /// @param payload The encoded frame bytes.
         /// @return The decoded response or a parse error.
-        static std::expected<response_message, std::error_code> parse_response_frames(std::span<const std::uint8_t> payload) noexcept;
+        static std::expected<response_message, std::error_code> parse_response_frames(cspan_uint8_t payload) noexcept;
     };
 } // namespace kmx::aio::http3::demo

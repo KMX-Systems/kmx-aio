@@ -79,7 +79,7 @@ namespace kmx::aio::avb::srp
 
             auto bytes = std::as_bytes(std::span {&pdu, 1});
             std::vector<std::byte> buf(bytes.begin(), bytes.end());
-            co_return co_await sock_.send(multicast::srp, std::span<const std::byte>(buf));
+            co_return co_await sock_.send(multicast::srp, cspan_byte_t(buf));
         }
 
         task_returning_expected_void_t send_listener_ready(const stream_descriptor& desc) noexcept(false)
@@ -101,7 +101,7 @@ namespace kmx::aio::avb::srp
 
             auto bytes = std::as_bytes(std::span {&pdu, 1});
             std::vector<std::byte> buf(bytes.begin(), bytes.end());
-            co_return co_await sock_.send(multicast::srp, std::span<const std::byte>(buf));
+            co_return co_await sock_.send(multicast::srp, cspan_byte_t(buf));
         }
 
         task_returning_expected_void_t send_domain() noexcept(false)
@@ -122,7 +122,7 @@ namespace kmx::aio::avb::srp
 
             const auto bytes = std::as_bytes(std::span {&pdu, 1});
             std::vector<std::byte> buf(bytes.begin(), bytes.end());
-            co_return co_await sock_.send(multicast::srp, std::span<const std::byte>(buf));
+            co_return co_await sock_.send(multicast::srp, cspan_byte_t(buf));
         }
 
         // Decode incoming Talker Advertise

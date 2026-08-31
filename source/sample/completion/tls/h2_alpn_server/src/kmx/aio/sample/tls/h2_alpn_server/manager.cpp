@@ -86,7 +86,7 @@ namespace kmx::aio::sample::tls::h2_alpn_server
 
             // Wait for 24 byte Preface + 9 byte Client Settings
             std::array<char, 33u> recv_buf {};
-            auto read_res = co_await stream.read(std::span<char>(recv_buf.data(), recv_buf.size()));
+            auto read_res = co_await stream.read(span_char_t(recv_buf.data(), recv_buf.size()));
             if (!read_res || *read_res < recv_buf.size())
                 co_return;
 
@@ -102,12 +102,12 @@ namespace kmx::aio::sample::tls::h2_alpn_server
                 0, 0, 0, 4, 1, 0, 0, 0, 0  // SETTINGS ACK
             };
 
-            if (auto w_res = co_await stream.write_all(std::span<const char>(send_frames)); !w_res)
+            if (auto w_res = co_await stream.write_all(cspan_char_t(send_frames)); !w_res)
                 co_return;
             logger::log(logger::level::info, std::source_location::current(), "Server: Sent SETTINGS + SETTINGS ACK");
 
             // Read Client SETTINGS ACK
-            auto r_ack = co_await stream.read(std::span<char>(recv_buf.data(), 9u));
+            auto r_ack = co_await stream.read(span_char_t(recv_buf.data(), 9u));
             if (r_ack && *r_ack >= 9 && recv_buf[3] == 4 && recv_buf[4] == 1)
                 // type == SETTINGS, flags == 1
                 logger::log(logger::level::info, std::source_location::current(),
@@ -118,7 +118,7 @@ namespace kmx::aio::sample::tls::h2_alpn_server
             size_t total {};
             while (total < req_hdr.size())
             {
-                auto r = co_await stream.read(std::span<char>(req_hdr.data() + total, req_hdr.size() - total));
+                auto r = co_await stream.read(span_char_t(req_hdr.data() + total, req_hdr.size() - total));
                 if (!r || *r == 0)
                     break;
                 total += *r;
@@ -132,7 +132,7 @@ namespace kmx::aio::sample::tls::h2_alpn_server
                 total = {};
                 while (total < payload_len)
                 {
-                    auto r = co_await stream.read(std::span<char>(payload.data() + total, payload_len - total));
+                    auto r = co_await stream.read(span_char_t(payload.data() + total, payload_len - total));
                     if (!r || *r == 0)
                         break;
                     total += *r;
@@ -150,7 +150,7 @@ namespace kmx::aio::sample::tls::h2_alpn_server
                     'e',  'l',  'l',  'o',  ' ',  'f',  'r',  'o',  'm',  ' ',
                     'K',  'M',  'X',  ' ',  'H',  'T',  'T',  'P',  '/',  '2',
                 });
-                if (auto w_res = co_await stream.write_all(std::span<const char>(resp)); w_res)
+                if (auto w_res = co_await stream.write_all(cspan_char_t(resp)); w_res)
                     logger::log(logger::level::info, std::source_location::current(), "Server: Sent 200 OK + DATA");
             }
         }
