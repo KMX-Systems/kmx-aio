@@ -15,8 +15,6 @@ namespace kmx::aio::readiness::descriptor
     class epoll: public file_descriptor
     {
     public:
-        using result_t = std::expected<void, std::error_code>;
-
         epoll() noexcept = default;
 
         explicit epoll(const fd_t fd) noexcept: file_descriptor(fd) {}
@@ -38,18 +36,18 @@ namespace kmx::aio::readiness::descriptor
         /// @param fd The file descriptor to monitor.
         /// @param events The events to monitor (bitmask of epoll_event_mask).
         /// @return An error_code on failure, or void on success.
-        [[nodiscard]] result_t add_monitored_fd(const fd_t fd, const event_mask_t events = default_epoll_events) noexcept;
+        [[nodiscard]] expected_void_t add_monitored_fd(const fd_t fd, const event_mask_t events = default_epoll_events) noexcept;
 
         /// @brief Modify the monitored events for a file descriptor.
         /// @param fd The file descriptor to modify.
         /// @param events The new events to monitor (bitmask of epoll_event_mask).
         /// @return An error_code on failure, or void on success.
-        [[nodiscard]] result_t modify_events(const fd_t fd, const event_mask_t events) noexcept;
+        [[nodiscard]] expected_void_t modify_events(const fd_t fd, const event_mask_t events) noexcept;
 
         /// @brief Remove a file descriptor from epoll monitoring.
         /// @param fd The file descriptor to stop monitoring.
         /// @return An error_code on failure, or void on success.
-        [[nodiscard]] result_t remove_monitored_fd(const fd_t fd) noexcept;
+        [[nodiscard]] expected_void_t remove_monitored_fd(const fd_t fd) noexcept;
 
         /// @brief Wait for events on monitored file descriptors, filling a caller-owned buffer.
         /// @param buffer Storage the kernel writes the ready events into.
@@ -61,15 +59,15 @@ namespace kmx::aio::readiness::descriptor
         ///       means memsetting the whole buffer before every wait for values the kernel is about to
         ///       overwrite anyway. With max_events at its default that is twelve kilobytes of zeroing
         ///       per iteration of the loop.
-        [[nodiscard]] std::expected<std::size_t, std::error_code> wait_events(std::span<epoll_event> buffer,
-                                                                              const int timeout_ms = -1) noexcept;
+        [[nodiscard]] expected_size_t wait_events(std::span<epoll_event> buffer, const int timeout_ms = -1) noexcept;
 
         /// @brief Wait for events on monitored file descriptors.
         /// @param events Resulted vector of epoll events.
         /// @param max_events Maximum number of events to retrieve.
         /// @param timeout_ms Timeout in milliseconds (-1 = indefinite).
         /// @return An error_code on failure, or void on success.
-        [[nodiscard]] result_t wait_events(std::vector<epoll_event>& events, const int max_events, const int timeout_ms = -1) noexcept;
+        [[nodiscard]] expected_void_t wait_events(std::vector<epoll_event>& events, const int max_events,
+                                                  const int timeout_ms = -1) noexcept;
 
         /// @brief Wait for events on monitored file descriptors.
         /// @param max_events Maximum number of events to retrieve.

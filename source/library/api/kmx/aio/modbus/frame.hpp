@@ -16,6 +16,7 @@
     #include <vector>
 #endif
 
+#include <kmx/aio/basic_types.hpp>
 #include <kmx/aio/modbus/error.hpp>
 #include <kmx/aio/modbus/types.hpp>
 
@@ -160,12 +161,12 @@ namespace kmx::aio::modbus::frame
     /// @brief Decode a Write Single Register or Write Single Coil response PDU.
     /// @details The server echoes the address and value — this function validates
     ///          the echo has the expected function code.
-    [[nodiscard]] std::expected<void, std::error_code>
+    [[nodiscard]] expected_void_t
     decode_write_single_response(std::span<const std::uint8_t> pdu,
                                  function_code expected_fc) noexcept;
 
     /// @brief Decode a Write Multiple Registers or Write Multiple Coils response PDU.
-    [[nodiscard]] std::expected<void, std::error_code>
+    [[nodiscard]] expected_void_t
     decode_write_multiple_response(std::span<const std::uint8_t> pdu,
                                    function_code expected_fc) noexcept;
 

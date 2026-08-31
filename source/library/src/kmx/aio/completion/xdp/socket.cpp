@@ -155,7 +155,7 @@ namespace kmx::aio::completion::xdp
 #endif
     }
 
-    std::expected<void, std::error_code> socket::validate_create_args([[maybe_unused]] const executor& exec,
+    expected_void_t socket::validate_create_args([[maybe_unused]] const executor& exec,
                                                                       const socket_config& config) noexcept
     {
         if (config.interface_name.empty())
@@ -175,7 +175,7 @@ namespace kmx::aio::completion::xdp
         return {};
     }
 
-    std::expected<void, std::error_code> socket::initialize_state(executor& exec, const socket_config& config, socket& out) noexcept
+    expected_void_t socket::initialize_state(executor& exec, const socket_config& config, socket& out) noexcept
     {
         out.state_.reset(new (std::nothrow) state {});
         if (!out.state_)
@@ -191,7 +191,7 @@ namespace kmx::aio::completion::xdp
 #endif
     }
 
-    std::expected<void, std::error_code> socket::validate_send_args(const state& state, std::span<const std::byte> data) noexcept
+    expected_void_t socket::validate_send_args(const state& state, std::span<const std::byte> data) noexcept
     {
         if (data.empty())
             return std::unexpected(to_std_error_code(error_code::invalid_argument));
@@ -203,7 +203,7 @@ namespace kmx::aio::completion::xdp
     }
 
 #if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
-    std::expected<void, std::error_code> socket::initialize_af_xdp_backend(state& state) noexcept
+    expected_void_t socket::initialize_af_xdp_backend(state& state) noexcept
     {
         const std::string interface_name {state.config.interface_name};
         if (::if_nametoindex(interface_name.c_str()) == 0u)
@@ -226,7 +226,7 @@ namespace kmx::aio::completion::xdp
         return {};
     }
 
-    std::expected<void, std::error_code> socket::allocate_umem(state& state) noexcept
+    expected_void_t socket::allocate_umem(state& state) noexcept
     {
         void* umem_raw = nullptr;
         if (::posix_memalign(&umem_raw, 4096u, static_cast<std::size_t>(state.umem_size)) != 0 || !umem_raw)
@@ -249,7 +249,7 @@ namespace kmx::aio::completion::xdp
         return {};
     }
 
-    std::expected<void, std::error_code> socket::create_xsk_socket(state& state) noexcept
+    expected_void_t socket::create_xsk_socket(state& state) noexcept
     {
         const std::string interface_name {state.config.interface_name};
 
@@ -273,7 +273,7 @@ namespace kmx::aio::completion::xdp
         return {};
     }
 
-    std::expected<void, std::error_code> socket::send_via_af_xdp_backend(state& state, std::span<const std::byte> data) noexcept
+    expected_void_t socket::send_via_af_xdp_backend(state& state, std::span<const std::byte> data) noexcept
     {
         recycle_completion_frames(state);
 
@@ -327,7 +327,7 @@ namespace kmx::aio::completion::xdp
     }
 #endif
 
-    std::expected<void, std::error_code> socket::send_via_fallback(state& state, std::span<const std::byte> data) noexcept
+    expected_void_t socket::send_via_fallback(state& state, std::span<const std::byte> data) noexcept
     {
         std::vector<std::byte> payload(data.size());
         std::memcpy(payload.data(), data.data(), data.size());
@@ -416,7 +416,7 @@ namespace kmx::aio::completion::xdp
         co_return out;
     }
 
-    task<std::expected<void, std::error_code>> socket::send(std::span<const std::byte> data) noexcept(false)
+    task_returning_expected_void_t socket::send(std::span<const std::byte> data) noexcept(false)
     {
         if (!state_)
             co_return std::unexpected(to_std_error_code(error_code::bad_descriptor));

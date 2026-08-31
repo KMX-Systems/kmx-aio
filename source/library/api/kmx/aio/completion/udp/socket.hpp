@@ -20,9 +20,6 @@ namespace kmx::aio::completion::udp
     class socket: public io_base
     {
     public:
-        /// @brief Task type for recv/send operations.
-        using result_task = task<std::expected<std::size_t, std::error_code>>;
-
         /// @brief Result type for factory creation.
         using create_result = std::expected<socket, std::error_code>;
 
@@ -58,20 +55,20 @@ namespace kmx::aio::completion::udp
         /// @param flags Flags forwarded to recvmsg.
         /// @return Number of bytes received, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] result_task recvmsg(::msghdr* msg, unsigned flags = 0u) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t recvmsg(::msghdr* msg, unsigned flags = 0u) noexcept(false);
 
         /// @brief Asynchronously sends a datagram via io_uring.
         /// @param msg   Message header describing payload buffers and peer address.
         /// @param flags Flags forwarded to sendmsg.
         /// @return Number of bytes sent, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] result_task sendmsg(const ::msghdr* msg, unsigned flags = 0u) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t sendmsg(const ::msghdr* msg, unsigned flags = 0u) noexcept(false);
 
         /// @brief Binds the socket to an address and port.
         /// @param ip   The IP address to bind to.
         /// @param port The port to bind to.
         /// @return Success or an error code.
-        [[nodiscard]] std::expected<void, std::error_code> bind(ip_address_t ip, port_t port) noexcept;
+        [[nodiscard]] expected_void_t bind(ip_address_t ip, port_t port) noexcept;
     };
 
 } // namespace kmx::aio::completion::udp

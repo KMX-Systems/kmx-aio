@@ -23,7 +23,7 @@ namespace kmx::aio::sample::tcp::echo::server
     struct config
     {
         std::uint32_t scheduler_threads = 4u;
-        kmx::aio::ip_address_t bind_address = kmx::aio::make_ip_address(kmx::aio::localhost_ipv4);
+        kmx::aio::ip_address_t bind_address = kmx::aio::make_ip_address(kmx::aio::ipv4::localhost);
         port_t bind_port = 8080u;
         port_t epoll_max_events = 1024u;
         port_t epoll_timeout_ms = 200u;

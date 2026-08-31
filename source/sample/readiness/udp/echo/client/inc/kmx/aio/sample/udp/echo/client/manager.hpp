@@ -15,7 +15,7 @@ namespace kmx::aio::sample::udp::echo::client
     {
         std::uint32_t concurrency = 10u;
         std::uint32_t messages_per_worker = 1000u;
-        kmx::aio::ip_address_t server_address = kmx::aio::make_ip_address(kmx::aio::localhost_ipv4);
+        kmx::aio::ip_address_t server_address = kmx::aio::make_ip_address(kmx::aio::ipv4::localhost);
         port_t server_port = 9001u;
         std::string_view payload = "Outstanding UDP Echo Packet from kmx-aio";
         std::uint32_t executor_threads = 4u;

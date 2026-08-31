@@ -12,7 +12,7 @@ namespace kmx::aio::sample::udp::echo::server
 {
     struct config
     {
-        kmx::aio::ip_address_t bind_address = kmx::aio::make_ip_address(kmx::aio::any_ipv4);
+        kmx::aio::ip_address_t bind_address = kmx::aio::make_ip_address(kmx::aio::ipv4::any);
         port_t bind_port = 9001u;
         std::uint32_t executor_threads = 4u;
         port_t max_events = 2048u;

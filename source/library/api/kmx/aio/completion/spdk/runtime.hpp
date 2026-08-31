@@ -7,17 +7,19 @@
     #include <string>
     #include <system_error>
     #include <vector>
+
+    #include <kmx/aio/basic_types.hpp>
 #endif
 
 namespace kmx::aio::completion::spdk::runtime
 {
     /// @brief Initializes SPDK env and subsystems once per process.
     /// @return Success or an error code describing initialization failure.
-    [[nodiscard]] std::expected<void, std::error_code> initialize() noexcept;
+    [[nodiscard]] expected_void_t initialize() noexcept;
 
     /// @brief Finalizes SPDK env and subsystems cleanly gracefully stopping threads.
     /// @return Success or an error code.
-    [[nodiscard]] std::expected<void, std::error_code> finalize() noexcept;
+    [[nodiscard]] expected_void_t finalize() noexcept;
 
     /// @brief Enumerates currently registered SPDK bdev names.
     /// @return Vector of bdev names, or an initialization/probe error.

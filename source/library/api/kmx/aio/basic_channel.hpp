@@ -87,10 +87,13 @@ namespace kmx::aio
         /// @brief Non-copyable.
         basic_channel& operator=(const basic_channel&) = delete;
 
-        /// @brief Move constructor.
-        basic_channel(basic_channel&&) noexcept = default;
-        /// @brief Move assignment.
-        basic_channel& operator=(basic_channel&&) noexcept = default;
+        /// @brief Non-movable: the ring indices are atomics a second thread reads concurrently, and a
+        ///        channel in use is held by a producer and a consumer at once. Defaulting these made
+        ///        them implicitly deleted anyway; saying so is what stops a caller reading the
+        ///        declaration as an offer.
+        basic_channel(basic_channel&&) = delete;
+        /// @brief Non-movable.
+        basic_channel& operator=(basic_channel&&) = delete;
 
         ~basic_channel() noexcept = default;
 

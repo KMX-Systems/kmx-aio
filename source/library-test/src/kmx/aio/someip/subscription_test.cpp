@@ -48,7 +48,7 @@ namespace kmx::aio::someip
     TEST_CASE("someip subscription open fails when not bound", "[someip][subscription]")
     {
         subscription s {make_test_subscription_config()};
-        auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
+        auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
         completion::executor exec;
 
         auto body = [&]() -> task<void>
@@ -74,7 +74,7 @@ namespace kmx::aio::someip
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
+            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
             auto body = [&]() -> task<void>
             {
                 state->result.emplace(co_await c.start());
@@ -90,7 +90,7 @@ namespace kmx::aio::someip
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
+            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
             auto body = [&]() -> task<void>
             {
                 state->result.emplace(co_await s.open());
@@ -134,7 +134,7 @@ namespace kmx::aio::someip
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
+            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
             auto body = [&]() -> task<void>
             {
                 state->result.emplace(co_await c.start());
@@ -150,7 +150,7 @@ namespace kmx::aio::someip
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
+            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
             auto body = [&]() -> task<void>
             {
                 state->result.emplace(co_await s.open());
@@ -185,7 +185,7 @@ namespace kmx::aio::someip
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
+            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
             auto body = [&]() -> task<void>
             {
                 state->result.emplace(co_await c.start());
@@ -201,7 +201,7 @@ namespace kmx::aio::someip
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
+            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
             auto body = [&]() -> task<void>
             {
                 state->result.emplace(co_await s.open());
@@ -264,7 +264,7 @@ namespace kmx::aio::someip
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
+            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
             auto body = [&]() -> task<void>
             {
                 state->result.emplace(co_await c.start());
@@ -280,7 +280,7 @@ namespace kmx::aio::someip
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
+            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
             auto body = [&]() -> task<void>
             {
                 state->result.emplace(co_await s.open());
@@ -305,7 +305,7 @@ namespace kmx::aio::someip
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
+            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
             auto body = [&]() -> task<void>
             {
                 state->result.emplace(co_await s.close());
@@ -321,7 +321,7 @@ namespace kmx::aio::someip
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
+            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
             auto body = [&]() -> task<void>
             {
                 state->result.emplace(co_await s.open());

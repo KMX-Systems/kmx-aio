@@ -52,7 +52,7 @@ namespace kmx::aio::avb::gptp
         ///        Spawns internal coroutines for Sync, Pdelay, and Announce handling.
         /// @param iface Network interface name.
         /// @return Success or an error code.
-        [[nodiscard]] task<std::expected<void, std::error_code>> start(const std::string_view iface) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t start(const std::string_view iface) noexcept(false);
 
         /// @brief Return the current TAI time in nanoseconds.
         ///        Reads CLOCK_TAI directly — always available, even before sync.
@@ -62,7 +62,7 @@ namespace kmx::aio::avb::gptp
         /// @brief Suspend until the PI servo reports synchronization, or timeout expires.
         /// @param timeout Maximum time to wait for synchronization.
         /// @return Success once synchronized or an error code on timeout/failure.
-        [[nodiscard]] task<std::expected<void, std::error_code>> wait_sync(std::chrono::milliseconds timeout) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t wait_sync(std::chrono::milliseconds timeout) noexcept(false);
 
         /// @brief Signed offset from master in nanoseconds (diagnostic).
         /// @return Current offset in nanoseconds.

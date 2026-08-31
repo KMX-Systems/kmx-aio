@@ -28,7 +28,11 @@ namespace kmx::aio
         }
     } // namespace detail
 
-    bool parse_mac_address(std::string_view text, mac_storage_t& out) noexcept
+} // namespace kmx::aio
+
+namespace kmx::aio::mac
+{
+    bool parse_address(std::string_view text, storage_t& out) noexcept
     {
         const char* p = text.data();
         const char* const end = p + text.size();
@@ -70,4 +74,4 @@ namespace kmx::aio
         return true;
     }
 
-} // namespace kmx::aio
+} // namespace kmx::aio::mac

@@ -48,13 +48,13 @@ namespace kmx::aio::tls
             int id {};
 
             /// @brief Stands in for a transport read. Never reached by the tests below.
-            [[nodiscard]] task<std::expected<std::size_t, std::error_code>> read(std::span<char>) noexcept(false)
+            [[nodiscard]] task_returning_expected_size_t read(std::span<char>) noexcept(false)
             {
                 co_return std::unexpected(std::make_error_code(std::errc::not_supported));
             }
 
             /// @brief Stands in for a transport write. Never reached by the tests below.
-            [[nodiscard]] task<std::expected<void, std::error_code>> write_all(std::span<const char>) noexcept(false)
+            [[nodiscard]] task_returning_expected_void_t write_all(std::span<const char>) noexcept(false)
             {
                 co_return std::unexpected(std::make_error_code(std::errc::not_supported));
             }

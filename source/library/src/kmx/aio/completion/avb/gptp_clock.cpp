@@ -50,7 +50,7 @@ namespace kmx::aio::avb::gptp
         explicit state(Executor& exec) noexcept: exec_(exec), sock_(exec) {}
 
         template <typename Duration>
-        [[nodiscard]] task<std::expected<void, std::error_code>> sleep_for(Duration duration) noexcept(false)
+        [[nodiscard]] task_returning_expected_void_t sleep_for(Duration duration) noexcept(false)
         {
             static_assert(
                 requires(Executor& e) { e.async_timeout(std::uint64_t {}); },
@@ -83,7 +83,7 @@ namespace kmx::aio::avb::gptp
 
         // Send a Pdelay_Req
 
-        task<std::expected<void, std::error_code>> send_pdelay_req() noexcept(false)
+        task_returning_expected_void_t send_pdelay_req() noexcept(false)
         {
             pdelay_req_frame_t frame {};
             frame.header = make_header(msg_type::pdelay_req, sizeof(pdelay_req_frame_t), pdelay_seq_id_++);
@@ -198,7 +198,7 @@ namespace kmx::aio::avb::gptp
 
         // Main receive loop
 
-        task<std::expected<void, std::error_code>> recv_loop() noexcept(false)
+        task_returning_expected_void_t recv_loop() noexcept(false)
         {
             while (true)
             {
@@ -246,7 +246,7 @@ namespace kmx::aio::avb::gptp
 
         // Pdelay request loop (every ~1s by default)
 
-        task<std::expected<void, std::error_code>> pdelay_loop() noexcept(false)
+        task_returning_expected_void_t pdelay_loop() noexcept(false)
         {
             while (true)
             {
@@ -280,7 +280,7 @@ namespace kmx::aio::avb::gptp
     generic_clock<Executor>::~generic_clock() noexcept = default;
 
     template <typename Executor>
-    task<std::expected<void, std::error_code>> generic_clock<Executor>::start(const std::string_view iface) noexcept(false)
+    task_returning_expected_void_t generic_clock<Executor>::start(const std::string_view iface) noexcept(false)
     {
         // Open raw Ethernet socket filtered to gPTP EtherType
         auto open_res = co_await state_->sock_.open(iface, ethertype::gptp);
@@ -297,7 +297,7 @@ namespace kmx::aio::avb::gptp
         exec.spawn(state_->recv_loop_task());
         exec.spawn(state_->pdelay_loop_task());
 
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     template <typename Executor>
@@ -307,7 +307,7 @@ namespace kmx::aio::avb::gptp
     }
 
     template <typename Executor>
-    task<std::expected<void, std::error_code>> generic_clock<Executor>::wait_sync(std::chrono::milliseconds timeout) noexcept(false)
+    task_returning_expected_void_t generic_clock<Executor>::wait_sync(std::chrono::milliseconds timeout) noexcept(false)
     {
         const auto deadline = std::chrono::steady_clock::now() + timeout;
 
@@ -321,7 +321,7 @@ namespace kmx::aio::avb::gptp
                 co_return std::unexpected(sleep_res.error());
         }
 
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     template <typename Executor>

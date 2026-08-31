@@ -45,7 +45,7 @@ namespace kmx::aio::completion::spdk
     }
 
     template <typename submit_fn>
-    [[nodiscard]] std::expected<void, std::error_code> submit_and_wait(spdk_thread* thread, submit_fn&& submit) noexcept
+    [[nodiscard]] expected_void_t submit_and_wait(spdk_thread* thread, submit_fn&& submit) noexcept
     {
         if (!thread)
             return std::unexpected(to_std_error_code(error_code::spdk_queue_pair_failed));
@@ -67,7 +67,7 @@ namespace kmx::aio::completion::spdk
         if (!completion.success)
             return std::unexpected(to_std_error_code(error_code::spdk_io_completion_failed));
 
-        return std::expected<void, std::error_code> {};
+        return expected_void_t {};
     }
 #endif
 
@@ -110,7 +110,7 @@ namespace kmx::aio::completion::spdk
         return total_bytes_u64;
     }
 
-    std::expected<void, std::error_code> device::initialize_state(device& out, executor& exec, const device_config& config) noexcept
+    expected_void_t device::initialize_state(device& out, executor& exec, const device_config& config) noexcept
     {
         out.state_.reset(new (std::nothrow) state {});
         if (!out.state_)
@@ -121,7 +121,7 @@ namespace kmx::aio::completion::spdk
         return {};
     }
 
-    std::expected<void, std::error_code> device::initialize_fallback_storage(state& state, const std::uint64_t total_bytes_u64) noexcept
+    expected_void_t device::initialize_fallback_storage(state& state, const std::uint64_t total_bytes_u64) noexcept
     {
         try
         {
@@ -136,7 +136,7 @@ namespace kmx::aio::completion::spdk
     }
 
 #if defined(KMX_AIO_FEATURE_SPDK)
-    std::expected<void, std::error_code> device::initialize_spdk_backend(state& state) noexcept
+    expected_void_t device::initialize_spdk_backend(state& state) noexcept
     {
         const auto init_result = runtime::initialize();
         if (!init_result)
@@ -242,7 +242,7 @@ namespace kmx::aio::completion::spdk
 #endif
     }
 
-    task<std::expected<std::size_t, std::error_code>> device::read(const std::uint64_t lba, const std::span<std::byte> out) noexcept(false)
+    task_returning_expected_size_t device::read(const std::uint64_t lba, const std::span<std::byte> out) noexcept(false)
     {
         if (!state_)
             co_return std::unexpected(to_std_error_code(error_code::bad_descriptor));
@@ -290,7 +290,7 @@ namespace kmx::aio::completion::spdk
         co_return out.size();
     }
 
-    task<std::expected<std::size_t, std::error_code>> device::write(const std::uint64_t lba,
+    task_returning_expected_size_t device::write(const std::uint64_t lba,
                                                                     const std::span<const std::byte> in) noexcept(false)
     {
         if (!state_)
@@ -341,7 +341,7 @@ namespace kmx::aio::completion::spdk
         co_return in.size();
     }
 
-    task<std::expected<void, std::error_code>> device::flush() noexcept(false)
+    task_returning_expected_void_t device::flush() noexcept(false)
     {
         if (!state_)
             co_return std::unexpected(to_std_error_code(error_code::bad_descriptor));
@@ -362,11 +362,11 @@ namespace kmx::aio::completion::spdk
             if (!op_result)
                 co_return std::unexpected(op_result.error());
 
-            co_return std::expected<void, std::error_code> {};
+            co_return expected_void_t {};
         }
 #endif
 
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     device::~device() noexcept

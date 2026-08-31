@@ -1,20 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if ! command -v apt-get >/dev/null 2>&1; then
-	echo "This script currently supports Ubuntu/Debian only (apt-get required)." >&2
-	exit 1
-fi
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$script_dir/../apt.sh"
 
-if [[ "${EUID}" -ne 0 ]]; then
-	SUDO="sudo"
-else
-	SUDO=""
-fi
-
-echo "[accelerators] Installing optional accelerator dependencies (Ubuntu/Debian)..."
-${SUDO} apt-get update
-${SUDO} apt-get install -y \
+echo "[accelerators] Checking optional accelerator dependencies..."
+apt_install_missing accelerators \
 	libbpf-dev \
 	libxdp-dev \
 	libelf-dev \
@@ -36,6 +27,6 @@ command -v llvm-config >/dev/null 2>&1
 command -v meson >/dev/null 2>&1
 command -v ninja >/dev/null 2>&1
 
-bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/cuda/check_env.sh"
+bash "$script_dir/check_env.sh"
 
 echo "[accelerators] Done."

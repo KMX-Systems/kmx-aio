@@ -32,8 +32,6 @@ namespace kmx::aio::modbus::test
     class mock_stream
     {
     public:
-        using result_task = task<std::expected<std::size_t, std::error_code>>;
-
         mock_stream() noexcept = default;
 
         // -----------------------------------------------------------------
@@ -69,7 +67,7 @@ namespace kmx::aio::modbus::test
         /// @brief Reads up to `buffer.size()` bytes from the pre-loaded queue.
         /// @details Never suspends; `await_ready()` on the underlying awaitable
         ///          is always `true`.
-        result_task read(std::span<char> buffer) noexcept(false)
+        task_returning_expected_size_t read(std::span<char> buffer) noexcept(false)
         {
             if (read_queue_.empty())
                 co_return std::size_t {0u}; // EOF
@@ -92,12 +90,12 @@ namespace kmx::aio::modbus::test
         }
 
         /// @brief Captures all bytes written; always reports full write success.
-        task<std::expected<void, std::error_code>> write_all(
+        task_returning_expected_void_t write_all(
             std::span<const char> buffer) noexcept(false)
         {
             for (const char c: buffer)
                 written_.push_back(static_cast<std::uint8_t>(c));
-            co_return std::expected<void, std::error_code>();
+            co_return expected_void_t();
         }
 
     private:

@@ -29,7 +29,7 @@ namespace kmx::aio::readiness::tcp
             throw std::system_error(res.error(), "bind failed");
     }
 
-    std::expected<void, std::error_code> listener::listen(const int backlog) noexcept
+    expected_void_t listener::listen(const int backlog) noexcept
     {
         if (auto res = fd_.set_as_non_blocking(); !res)
             return res;
@@ -40,7 +40,7 @@ namespace kmx::aio::readiness::tcp
         return exec_.register_fd(fd_.get());
     }
 
-    task<std::expected<file_descriptor, std::error_code>> listener::accept() noexcept(false)
+    task<file_descriptor::expected_t> listener::accept() noexcept(false)
     {
         for (::sockaddr_in client_addr {};;)
         {

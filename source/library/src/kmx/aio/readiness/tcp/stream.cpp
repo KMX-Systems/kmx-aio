@@ -13,7 +13,7 @@
 
 namespace kmx::aio::readiness::tcp
 {
-    stream::result_task stream::read(const std::span<char> buffer) noexcept(false)
+    task_returning_expected_size_t stream::read(const std::span<char> buffer) noexcept(false)
     {
         const bool is_onload_accel = (exec_.get_active_backend() == active_backend::openonload) && openonload::is_accelerated_fd(fd_.get());
 
@@ -83,7 +83,7 @@ namespace kmx::aio::readiness::tcp
         }
     }
 
-    stream::result_task stream::write(const std::span<const char> buffer) noexcept(false)
+    task_returning_expected_size_t stream::write(const std::span<const char> buffer) noexcept(false)
     {
         const bool is_onload_accel = (exec_.get_active_backend() == active_backend::openonload) && openonload::is_accelerated_fd(fd_.get());
 
@@ -138,7 +138,7 @@ namespace kmx::aio::readiness::tcp
         }
     }
 
-    task<std::expected<void, std::error_code>> stream::write_all(const std::span<const char> buffer) noexcept(false)
+    task_returning_expected_void_t stream::write_all(const std::span<const char> buffer) noexcept(false)
     {
         for (std::size_t offset {}; offset < buffer.size();)
         {
@@ -150,7 +150,7 @@ namespace kmx::aio::readiness::tcp
             offset += *res;
         }
 
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
 } // namespace kmx::aio::readiness::tcp

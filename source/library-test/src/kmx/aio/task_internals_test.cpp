@@ -5,7 +5,7 @@
 ///
 /// task<T> is a template, so each result type is a separate promise instantiation with its own
 /// unhandled_exception and return_value. The library's own tasks are mostly
-/// task<std::expected<std::size_t, std::error_code>> and its siblings, and nothing in the suite makes
+/// task_returning_expected_size_t and its siblings, and nothing in the suite makes
 /// one of those throw - the exception path exists once per instantiation and was taken in none of them.
 #include <catch2/catch_test_macros.hpp>
 
@@ -33,10 +33,10 @@ namespace kmx::aio
 
         // One throwing coroutine per result type the library instantiates, so the promise under test is
         // that instantiation's own rather than a shared one.
-        task<std::expected<std::size_t, std::error_code>> throwing_size_task()
+        task_returning_expected_size_t throwing_size_task()
         {
             throw task_error {};
-            co_return std::expected<std::size_t, std::error_code> {0u};
+            co_return expected_size_t {0u};
         }
 
         task<std::expected<int, std::error_code>> throwing_int_result_task()
@@ -45,10 +45,10 @@ namespace kmx::aio
             co_return std::expected<int, std::error_code> {0};
         }
 
-        task<std::expected<void, std::error_code>> throwing_void_result_task()
+        task_returning_expected_void_t throwing_void_result_task()
         {
             throw task_error {};
-            co_return std::expected<void, std::error_code> {};
+            co_return expected_void_t {};
         }
 
         task<int> int_task(const int value) { co_return value; }

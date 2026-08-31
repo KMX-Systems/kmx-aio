@@ -4,13 +4,13 @@
 
 namespace kmx::aio::completion
 {
-    task<std::expected<void, std::error_code>> timer::wait_ns(const std::uint64_t ns) noexcept(false)
+    task_returning_expected_void_t timer::wait_ns(const std::uint64_t ns) noexcept(false)
     {
         const auto result = co_await exec_.async_timeout(ns);
         if (!result)
             co_return std::unexpected(result.error());
 
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
 } // namespace kmx::aio::completion

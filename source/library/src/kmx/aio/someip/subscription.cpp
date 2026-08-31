@@ -35,7 +35,7 @@ namespace kmx::aio::someip
     subscription::subscription(subscription&&) noexcept = default;
     subscription& subscription::operator=(subscription&&) noexcept = default;
 
-    task<std::expected<void, std::error_code>> subscription::open() noexcept(false)
+    task_returning_expected_void_t subscription::open() noexcept(false)
     {
         if (impl_->bound_client == nullptr)
             co_return std::unexpected(make_error_code(error::invalid_configuration));
@@ -70,10 +70,10 @@ namespace kmx::aio::someip
         }
 
         impl_->opened = true;
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
-    task<std::expected<void, std::error_code>> subscription::close() noexcept(false)
+    task_returning_expected_void_t subscription::close() noexcept(false)
     {
         if (!impl_->opened)
             co_return std::unexpected(make_error_code(error::subscription_closed));
@@ -89,7 +89,7 @@ namespace kmx::aio::someip
 
         impl_->opened = false;
         impl_->queue.clear();
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     task<std::expected<event_notification, std::error_code>> subscription::next() noexcept(false)
@@ -144,7 +144,7 @@ namespace kmx::aio::someip
         co_return notification;
     }
 
-    std::expected<void, std::error_code> subscription::bind(client& bound_client) noexcept
+    expected_void_t subscription::bind(client& bound_client) noexcept
     {
         if (impl_->opened)
             return std::unexpected(make_error_code(error::invalid_configuration));

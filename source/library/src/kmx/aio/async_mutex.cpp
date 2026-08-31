@@ -14,7 +14,7 @@ namespace kmx::aio
         return true;
     }
 
-    bool async_mutex::enqueue(const std::coroutine_handle<> handle) noexcept(false)
+    bool async_mutex::enqueue(const coroutine_handle_t handle) noexcept(false)
     {
         const std::lock_guard lock(state_mutex_);
 
@@ -33,13 +33,11 @@ namespace kmx::aio
 
     void async_mutex::unlock() noexcept
     {
-        std::coroutine_handle<> next {};
+        coroutine_handle_t next {};
         {
             const std::lock_guard lock(state_mutex_);
             if (waiters_.empty())
-            {
                 held_ = false;
-            }
             else
             {
                 // held_ stays true: ownership passes straight to this waiter rather than being dropped

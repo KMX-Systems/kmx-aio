@@ -58,11 +58,11 @@ namespace kmx::aio::avb::srp
 
         /// @brief Bind to a NIC and start receiving MSRP frames.
         ///        Spawns the receive loop and domain advertisement.
-        [[nodiscard]] task<std::expected<void, std::error_code>> start(const std::string_view iface) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t start(const std::string_view iface) noexcept(false);
 
         /// @brief **Talker**: advertise a stream and periodically re-declare it.
         ///        Returns once the first declaration is sent.
-        [[nodiscard]] task<std::expected<void, std::error_code>> advertise(const stream_descriptor& desc) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t advertise(const stream_descriptor& desc) noexcept(false);
 
         /// @brief **Listener**: wait until a Talker Advertise for the given stream_id
         ///        is received, then send a Listener Ready declaration.
@@ -71,7 +71,7 @@ namespace kmx::aio::avb::srp
             const stream_id_t& stream_id, std::chrono::milliseconds timeout = std::chrono::seconds(5)) noexcept(false);
 
         /// @brief **Talker / Listener**: withdraw a previously advertised or subscribed stream.
-        [[nodiscard]] task<std::expected<void, std::error_code>> withdraw(const stream_id_t& stream_id) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t withdraw(const stream_id_t& stream_id) noexcept(false);
 
     private:
         /// @brief Opaque implementation state for the SRP client.

@@ -56,7 +56,7 @@ namespace kmx::aio::avb::srp
         explicit state(Executor& exec) noexcept: exec_(exec), sock_(exec) {}
 
         template <typename Duration>
-        [[nodiscard]] task<std::expected<void, std::error_code>> sleep_for(Duration duration) noexcept(false)
+        [[nodiscard]] task_returning_expected_void_t sleep_for(Duration duration) noexcept(false)
         {
             static_assert(
                 requires(Executor& e) { e.async_timeout(std::uint64_t {}); },
@@ -67,7 +67,7 @@ namespace kmx::aio::avb::srp
 
         // Encode / send helpers
 
-        task<std::expected<void, std::error_code>> send_talker_advertise(const stream_descriptor& desc) noexcept(false)
+        task_returning_expected_void_t send_talker_advertise(const stream_descriptor& desc) noexcept(false)
         {
             msrp_talker_pdu_t pdu {};
             const auto attr_val = encode_talker(desc);
@@ -85,7 +85,7 @@ namespace kmx::aio::avb::srp
             co_return co_await sock_.send(multicast::srp, std::span<const std::byte>(buf));
         }
 
-        task<std::expected<void, std::error_code>> send_listener_ready(const stream_descriptor& desc) noexcept(false)
+        task_returning_expected_void_t send_listener_ready(const stream_descriptor& desc) noexcept(false)
         {
             msrp_listener_pdu_t pdu {};
             pdu.attr_value.stream_id = encode_stream_id(desc.stream_id);
@@ -107,7 +107,7 @@ namespace kmx::aio::avb::srp
             co_return co_await sock_.send(multicast::srp, std::span<const std::byte>(buf));
         }
 
-        task<std::expected<void, std::error_code>> send_domain() noexcept(false)
+        task_returning_expected_void_t send_domain() noexcept(false)
         {
             msrp_domain_pdu_t pdu {};
             auto& attr = pdu.attr_value;
@@ -158,7 +158,7 @@ namespace kmx::aio::avb::srp
 
         // Receive loop
 
-        task<std::expected<void, std::error_code>> recv_loop() noexcept(false)
+        task_returning_expected_void_t recv_loop() noexcept(false)
         {
             while (true)
             {
@@ -189,7 +189,7 @@ namespace kmx::aio::avb::srp
 
         // Periodic re-declaration loop
 
-        task<std::expected<void, std::error_code>> talker_loop() noexcept(false)
+        task_returning_expected_void_t talker_loop() noexcept(false)
         {
             while (true)
             {
@@ -233,7 +233,7 @@ namespace kmx::aio::avb::srp
     generic_client<Executor>::~generic_client() noexcept = default;
 
     template <typename Executor>
-    task<std::expected<void, std::error_code>> generic_client<Executor>::start(const std::string_view iface) noexcept(false)
+    task_returning_expected_void_t generic_client<Executor>::start(const std::string_view iface) noexcept(false)
     {
         const auto open_res = co_await state_->sock_.open(iface, ethertype::msrp);
         if (!open_res)
@@ -248,11 +248,11 @@ namespace kmx::aio::avb::srp
         exec.spawn(state_->recv_loop_task());
         exec.spawn(state_->talker_loop_task());
 
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     template <typename Executor>
-    task<std::expected<void, std::error_code>> generic_client<Executor>::advertise(const stream_descriptor& desc) noexcept(false)
+    task_returning_expected_void_t generic_client<Executor>::advertise(const stream_descriptor& desc) noexcept(false)
     {
         state_->talker_streams_[desc.stream_id] = desc;
         co_return co_await state_->send_talker_advertise(desc);
@@ -296,11 +296,11 @@ namespace kmx::aio::avb::srp
     }
 
     template <typename Executor>
-    task<std::expected<void, std::error_code>> generic_client<Executor>::withdraw(const stream_id_t& stream_id) noexcept(false)
+    task_returning_expected_void_t generic_client<Executor>::withdraw(const stream_id_t& stream_id) noexcept(false)
     {
         state_->talker_streams_.erase(stream_id);
         state_->listener_streams_.erase(stream_id);
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     // Explicit instantiation

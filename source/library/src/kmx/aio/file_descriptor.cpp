@@ -6,7 +6,7 @@
 
 namespace kmx::aio
 {
-    std::expected<void, std::error_code> inet_pton(const int af, const char* const src, void* dst) noexcept
+    expected_void_t inet_pton(const int af, const char* const src, void* dst) noexcept
     {
         const int ret = ::inet_pton(af, src, dst);
         if (ret == 0)
@@ -43,8 +43,7 @@ namespace kmx::aio
         }
     }
 
-    std::expected<file_descriptor, std::error_code> file_descriptor::create_socket(const int domain, const int type,
-                                                                                   const int protocol) noexcept
+    file_descriptor::expected_t file_descriptor::create_socket(const int domain, const int type, const int protocol) noexcept
     {
         const fd_t fd = detail::syscalls::socket(domain, type, protocol);
         if (fd < 0)
@@ -53,7 +52,7 @@ namespace kmx::aio
         return file_descriptor(fd);
     }
 
-    std::expected<int, std::error_code> file_descriptor::fcntl(const int cmd, const int arg) noexcept
+    expected_int_t file_descriptor::fcntl(const int cmd, const int arg) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -65,7 +64,7 @@ namespace kmx::aio
         return ret;
     }
 
-    std::expected<std::size_t, std::error_code> file_descriptor::read(void* const buffer, const size_t size) noexcept
+    expected_size_t file_descriptor::read(void* const buffer, const size_t size) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -77,7 +76,7 @@ namespace kmx::aio
         return static_cast<std::size_t>(ret);
     }
 
-    std::expected<std::size_t, std::error_code> file_descriptor::write(const void* buffer, const size_t size) noexcept
+    expected_size_t file_descriptor::write(const void* buffer, const size_t size) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -89,7 +88,7 @@ namespace kmx::aio
         return static_cast<std::size_t>(ret);
     }
 
-    std::expected<void, std::error_code> file_descriptor::bind(const struct sockaddr* const addr, const ::socklen_t addrlen) noexcept
+    expected_void_t file_descriptor::bind(const struct sockaddr* const addr, const ::socklen_t addrlen) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -100,7 +99,7 @@ namespace kmx::aio
         return {};
     }
 
-    std::expected<void, std::error_code> file_descriptor::bind(const ip_address_t ip, const port_t port) noexcept
+    expected_void_t file_descriptor::bind(const ip_address_t ip, const port_t port) noexcept
     {
         const auto addr = make_socket_address(ip, port);
         // LCOV_EXCL_START
@@ -114,8 +113,8 @@ namespace kmx::aio
         return bind(reinterpret_cast<const sockaddr*>(&addr->storage), addr->length);
     }
 
-    std::expected<void, std::error_code> file_descriptor::setsockopt(const int level, const int optname, const void* const optval,
-                                                                     const ::socklen_t optlen) noexcept
+    expected_void_t file_descriptor::setsockopt(const int level, const int optname, const void* const optval,
+                                                                 const ::socklen_t optlen) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -126,7 +125,7 @@ namespace kmx::aio
         return {};
     }
 
-    std::expected<void, std::error_code> file_descriptor::listen(const int backlog) noexcept
+    expected_void_t file_descriptor::listen(const int backlog) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -137,8 +136,7 @@ namespace kmx::aio
         return {};
     }
 
-    std::expected<file_descriptor, std::error_code> file_descriptor::accept(struct sockaddr* const addr,
-                                                                            ::socklen_t* const addrlen) noexcept
+    file_descriptor::expected_t file_descriptor::accept(struct sockaddr* const addr, ::socklen_t* const addrlen) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -150,7 +148,7 @@ namespace kmx::aio
         return file_descriptor(client_fd);
     }
 
-    std::expected<file_descriptor, std::error_code> file_descriptor::accept(ip_address_owned_t& out_ip, port_t& out_port) noexcept
+    file_descriptor::expected_t file_descriptor::accept(ip_address_owned_t& out_ip, port_t& out_port) noexcept
     {
         sockaddr_storage storage {};
         ::socklen_t length = sizeof(storage);
@@ -164,7 +162,7 @@ namespace kmx::aio
             case AF_INET:
             {
                 auto* addr4 = reinterpret_cast<::sockaddr_in*>(&storage);
-                ipv4_storage_t ip4 {};
+                ipv4::storage_t ip4 {};
                 std::memcpy(ip4.data(), &addr4->sin_addr, ip4.size());
                 out_ip = ip4;
                 out_port = ::ntohs(addr4->sin_port);
@@ -173,7 +171,7 @@ namespace kmx::aio
             case AF_INET6:
             {
                 auto* addr6 = reinterpret_cast<sockaddr_in6*>(&storage);
-                ipv6_storage_t ip6 {};
+                ipv6::storage_t ip6 {};
                 std::memcpy(ip6.data(), &addr6->sin6_addr, ip6.size());
                 out_ip = ip6;
                 out_port = ::ntohs(addr6->sin6_port);
@@ -187,7 +185,7 @@ namespace kmx::aio
         return file_res;
     }
 
-    std::expected<void, std::error_code> file_descriptor::connect(const struct sockaddr* const addr, const ::socklen_t addrlen) noexcept
+    expected_void_t file_descriptor::connect(const struct sockaddr* const addr, const ::socklen_t addrlen) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -202,7 +200,7 @@ namespace kmx::aio
         return {};
     }
 
-    std::expected<void, std::error_code> file_descriptor::connect(const ip_address_t ip, const port_t port) noexcept
+    expected_void_t file_descriptor::connect(const ip_address_t ip, const port_t port) noexcept
     {
         const auto addr = make_socket_address(ip, port);
         // LCOV_EXCL_START
@@ -216,8 +214,8 @@ namespace kmx::aio
         return connect(reinterpret_cast<const sockaddr*>(&addr->storage), addr->length);
     }
 
-    std::expected<void, std::error_code> file_descriptor::getsockopt(const int level, const int optname, void* const optval,
-                                                                     ::socklen_t* const optlen) noexcept
+    expected_void_t file_descriptor::getsockopt(const int level, const int optname, void* const optval,
+                                                                 ::socklen_t* const optlen) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -228,7 +226,7 @@ namespace kmx::aio
         return {};
     }
 
-    std::expected<void, std::error_code> file_descriptor::set_as_non_blocking() noexcept
+    expected_void_t file_descriptor::set_as_non_blocking() noexcept
     {
         const auto flags_res = fcntl(F_GETFL, 0);
         if (!flags_res)

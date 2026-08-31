@@ -51,10 +51,10 @@ namespace kmx::aio::modbus
 
         /// @brief Establish the TCP connection and perform the TLS handshake.
         /// @return Task resolving to success, or an error.
-        [[nodiscard]] task<std::expected<void, std::error_code>> connect() noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t connect() noexcept(false);
 
         /// @brief Close the TLS session and underlying TCP connection.
-        [[nodiscard]] task<std::expected<void, std::error_code>> disconnect() noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t disconnect() noexcept(false);
 
         [[nodiscard]] task<std::expected<register_values, std::error_code>>
         read_holding_registers(std::uint16_t address, std::uint16_t count) noexcept(false);
@@ -68,17 +68,17 @@ namespace kmx::aio::modbus
         [[nodiscard]] task<std::expected<coil_values, std::error_code>>
         read_discrete_inputs(std::uint16_t address, std::uint16_t count) noexcept(false);
 
-        [[nodiscard]] task<std::expected<void, std::error_code>>
+        [[nodiscard]] task_returning_expected_void_t
         write_single_register(std::uint16_t address, std::uint16_t value) noexcept(false);
 
-        [[nodiscard]] task<std::expected<void, std::error_code>>
+        [[nodiscard]] task_returning_expected_void_t
         write_single_coil(std::uint16_t address, bool on) noexcept(false);
 
-        [[nodiscard]] task<std::expected<void, std::error_code>>
+        [[nodiscard]] task_returning_expected_void_t
         write_multiple_registers(std::uint16_t address,
                                  std::span<const std::uint16_t> values) noexcept(false);
 
-        [[nodiscard]] task<std::expected<void, std::error_code>>
+        [[nodiscard]] task_returning_expected_void_t
         write_multiple_coils(std::uint16_t address,
                              std::span<const std::uint8_t> values) noexcept(false);
 

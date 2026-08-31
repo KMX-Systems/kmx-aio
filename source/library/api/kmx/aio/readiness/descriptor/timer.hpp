@@ -44,8 +44,7 @@ namespace kmx::aio::readiness::descriptor
         /// @param new_value New timer values.
         /// @param old_value Optional pointer to store the previous timer values.
         /// @return An error_code on failure, or void on success.
-        [[nodiscard]] std::expected<void, std::error_code> set_time(const int flags, const ::itimerspec& new_value,
-                                                                    ::itimerspec* old_value = nullptr) noexcept;
+        [[nodiscard]] expected_void_t set_time(const int flags, const ::itimerspec& new_value, ::itimerspec* old_value = nullptr) noexcept;
 
         /// @brief Asynchronously waits for the timer to expire.
         /// @param exec Executor used to suspend/resume on read readiness.

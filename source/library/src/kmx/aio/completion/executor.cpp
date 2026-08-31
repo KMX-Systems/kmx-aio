@@ -54,7 +54,7 @@ namespace kmx::aio::completion
         ::io_uring_queue_exit(&ring_);
     }
 
-    task<std::expected<std::size_t, std::error_code>> executor::async_read(const fd_t fd, std::span<char> buffer,
+    task_returning_expected_size_t executor::async_read(const fd_t fd, std::span<char> buffer,
                                                                            const std::uint64_t offset) noexcept(false)
     {
         io_context ctx {};
@@ -80,7 +80,7 @@ namespace kmx::aio::completion
         co_return static_cast<std::size_t>(ctx.result);
     }
 
-    task<std::expected<std::size_t, std::error_code>> executor::async_write(const fd_t fd, std::span<const char> buffer,
+    task_returning_expected_size_t executor::async_write(const fd_t fd, std::span<const char> buffer,
                                                                             const std::uint64_t offset) noexcept(false)
     {
         io_context ctx {};
@@ -105,25 +105,25 @@ namespace kmx::aio::completion
         co_return static_cast<std::size_t>(ctx.result);
     }
 
-    std::expected<void, std::error_code> executor::register_buffers(std::span<const ::iovec> iovecs) noexcept
+    expected_void_t executor::register_buffers(std::span<const ::iovec> iovecs) noexcept
     {
         const int ret = ::io_uring_register_buffers(&ring_, iovecs.data(), static_cast<unsigned>(iovecs.size()));
         if (ret < 0)
             return std::unexpected(std::error_code(-ret, std::generic_category()));
 
-        return std::expected<void, std::error_code> {};
+        return expected_void_t {};
     }
 
-    std::expected<void, std::error_code> executor::unregister_buffers() noexcept
+    expected_void_t executor::unregister_buffers() noexcept
     {
         const int ret = ::io_uring_unregister_buffers(&ring_);
         if (ret < 0)
             return std::unexpected(std::error_code(-ret, std::generic_category()));
 
-        return std::expected<void, std::error_code> {};
+        return expected_void_t {};
     }
 
-    task<std::expected<std::size_t, std::error_code>> executor::async_read_fixed(const fd_t fd, std::span<char> buffer,
+    task_returning_expected_size_t executor::async_read_fixed(const fd_t fd, std::span<char> buffer,
                                                                                  const std::uint64_t offset,
                                                                                  const int buf_index) noexcept(false)
     {
@@ -148,7 +148,7 @@ namespace kmx::aio::completion
         co_return static_cast<std::size_t>(ctx.result);
     }
 
-    task<std::expected<std::size_t, std::error_code>> executor::async_write_fixed(const fd_t fd, std::span<const char> buffer,
+    task_returning_expected_size_t executor::async_write_fixed(const fd_t fd, std::span<const char> buffer,
                                                                                   const std::uint64_t offset,
                                                                                   const int buf_index) noexcept(false)
     {
@@ -199,7 +199,7 @@ namespace kmx::aio::completion
         co_return ctx.result;
     }
 
-    task<std::expected<void, std::error_code>> executor::async_connect(const fd_t fd, const sockaddr* addr,
+    task_returning_expected_void_t executor::async_connect(const fd_t fd, const sockaddr* addr,
                                                                        const socklen_t addrlen) noexcept(false)
     {
         const auto result =
@@ -208,10 +208,10 @@ namespace kmx::aio::completion
         if (!result)
             co_return std::unexpected(result.error());
 
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
-    task<std::expected<std::size_t, std::error_code>> executor::async_recvmsg(const fd_t fd, msghdr* msg,
+    task_returning_expected_size_t executor::async_recvmsg(const fd_t fd, msghdr* msg,
                                                                               const unsigned flags) noexcept(false)
     {
         const auto result =
@@ -223,7 +223,7 @@ namespace kmx::aio::completion
         co_return static_cast<std::size_t>(*result);
     }
 
-    task<std::expected<std::size_t, std::error_code>> executor::async_sendmsg(const fd_t fd, const msghdr* msg,
+    task_returning_expected_size_t executor::async_sendmsg(const fd_t fd, const msghdr* msg,
                                                                               const unsigned flags) noexcept(false)
     {
         const auto result =
@@ -235,7 +235,7 @@ namespace kmx::aio::completion
         co_return static_cast<std::size_t>(*result);
     }
 
-    task<std::expected<void, std::error_code>> executor::async_cancel(const std::uint64_t user_data) noexcept(false)
+    task_returning_expected_void_t executor::async_cancel(const std::uint64_t user_data) noexcept(false)
     {
         io_context ctx {};
         auto* const sqe = ::io_uring_get_sqe(&ring_);
@@ -255,10 +255,10 @@ namespace kmx::aio::completion
         if ((ctx.result < 0) && (ctx.result != -EALREADY) && (ctx.result != -ENOENT))
             co_return std::unexpected(std::error_code(-ctx.result, std::generic_category()));
 
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
-    task<std::expected<void, std::error_code>> executor::async_timeout(const std::uint64_t duration_ns) noexcept(false)
+    task_returning_expected_void_t executor::async_timeout(const std::uint64_t duration_ns) noexcept(false)
     {
         io_context ctx {};
         auto* const sqe = ::io_uring_get_sqe(&ring_);
@@ -293,7 +293,7 @@ namespace kmx::aio::completion
         if ((ctx.result < 0) && (ctx.result != -ETIME))
             co_return std::unexpected(std::error_code(-ctx.result, std::generic_category()));
 
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     task<std::expected<int, std::error_code>> executor::async_poll(const fd_t fd, const unsigned poll_mask) noexcept(false)
@@ -467,7 +467,7 @@ namespace kmx::aio::completion
         return t_current_loop_executor == this;
     }
 
-    std::expected<std::size_t, std::error_code> executor::submit() noexcept
+    expected_size_t executor::submit() noexcept
     {
         // Left for the loop, which submits and waits in one call. Not when the submission queue is
         // running out of room, though: a batch of completions can resume a coroutine per entry, each

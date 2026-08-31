@@ -19,7 +19,6 @@ namespace kmx::aio::readiness::udp
     class socket: public io_base
     {
     public:
-        using result_task = task<std::expected<std::size_t, std::error_code>>;
         using create_result = std::expected<socket, std::error_code>;
 
         [[nodiscard]] static create_result create(executor& exec, const int domain = AF_INET,
@@ -30,8 +29,8 @@ namespace kmx::aio::readiness::udp
         socket(socket&&) noexcept = default;
         socket& operator=(socket&&) noexcept = delete;
 
-        [[nodiscard]] result_task recvmsg(::msghdr* msg, int flags = 0) noexcept(false);
-        [[nodiscard]] result_task sendmsg(const ::msghdr* msg, int flags = 0) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t recvmsg(::msghdr* msg, int flags = 0) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t sendmsg(const ::msghdr* msg, int flags = 0) noexcept(false);
     };
 } // namespace kmx::aio::readiness::udp
 

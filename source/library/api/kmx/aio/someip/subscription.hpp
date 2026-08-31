@@ -45,11 +45,11 @@ namespace kmx::aio::someip
         /// @brief Starts the subscription runtime and subscribes to the event group.
         /// @return void on success, or an error code on failure.
         /// @note Requires a bound client; returns @c error::invalid_configuration if unbound.
-        [[nodiscard]] task<std::expected<void, std::error_code>> open() noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t open() noexcept(false);
 
         /// @brief Cancels the subscription and releases backend resources.
         /// @return void on success, or @c error::subscription_closed if already closed.
-        [[nodiscard]] task<std::expected<void, std::error_code>> close() noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t close() noexcept(false);
 
         /// @brief Waits for and dequeues the next event notification.
         /// @return The oldest buffered notification, or @c error::timed_out if none arrives
@@ -59,7 +59,7 @@ namespace kmx::aio::someip
         /// @brief Binds the subscription to a client after construction.
         /// @param bound_client The client to bind to.
         /// @return void on success, or @c error::invalid_configuration if already open.
-        [[nodiscard]] std::expected<void, std::error_code> bind(client& bound_client) noexcept;
+        [[nodiscard]] expected_void_t bind(client& bound_client) noexcept;
 
         /// @brief Returns the configuration supplied at construction.
         [[nodiscard]] const subscription_config& config() const noexcept;

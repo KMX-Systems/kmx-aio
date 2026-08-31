@@ -73,11 +73,8 @@ namespace kmx::aio::tls
     class basic_stream
     {
     public:
-        /// @brief Task type returned by the read and write operations.
-        using result_task = task<std::expected<std::size_t, std::error_code>>;
-
         /// @brief Task type returned by the operations that report success without a byte count.
-        using status_task = task<std::expected<void, std::error_code>>;
+        using status_task = task_returning_expected_void_t;
 
         /// @brief Non-copyable: the SSL and its BIOs have a single owner.
         basic_stream(const basic_stream&) = delete;
@@ -96,7 +93,7 @@ namespace kmx::aio::tls
         /// @param protocols The protocol list, each entry a length byte followed by that many bytes.
         /// @return Nothing on success; std::errc::invalid_argument for an empty list or a stream with
         ///         no SSL, std::errc::protocol_error for a list OpenSSL rejects.
-        [[nodiscard]] std::expected<void, std::error_code> set_alpn_protocols(std::span<const std::uint8_t> protocols) noexcept;
+        [[nodiscard]] expected_void_t set_alpn_protocols(std::span<const std::uint8_t> protocols) noexcept;
 
         /// @brief Returns the selected ALPN protocol after the handshake.
         /// @return The negotiated protocol, or an empty view when none was negotiated.
@@ -115,13 +112,13 @@ namespace kmx::aio::tls
         /// @param buffer Destination buffer.
         /// @return The number of bytes read, zero once the peer has closed the TLS session, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] result_task read(std::span<char> buffer) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t read(std::span<char> buffer) noexcept(false);
 
         /// @brief Encrypts a buffer and flushes the resulting records to the transport.
         /// @param buffer Source buffer.
         /// @return The number of bytes accepted by the TLS layer, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] result_task write(std::span<const char> buffer) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t write(std::span<const char> buffer) noexcept(false);
 
         /// @brief Writes a whole buffer, repeating write() until nothing is left.
         /// @param buffer Source buffer.
@@ -150,7 +147,7 @@ namespace kmx::aio::tls
         /// @param buffer Destination buffer.
         /// @return The number of bytes read, zero at end of stream, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] virtual result_task read_inner(std::span<char> buffer) noexcept(false) = 0;
+        [[nodiscard]] virtual task_returning_expected_size_t read_inner(std::span<char> buffer) noexcept(false) = 0;
 
         /// @brief Hands the whole of what the write BIO produced to the transport.
         /// @param buffer Source buffer.

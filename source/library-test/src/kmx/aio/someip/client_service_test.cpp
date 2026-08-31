@@ -32,7 +32,7 @@ namespace kmx::aio::someip
             bool completed = false;
         };
 
-        task<void> run_start(client& c, std::shared_ptr<coroutine_result_state<std::expected<void, std::error_code>>> state,
+        task<void> run_start(client& c, std::shared_ptr<coroutine_result_state<expected_void_t>> state,
                              completion::executor& exec)
         {
             state->result.emplace(co_await c.start());
@@ -41,7 +41,7 @@ namespace kmx::aio::someip
             co_return;
         }
 
-        task<void> run_stop(client& c, std::shared_ptr<coroutine_result_state<std::expected<void, std::error_code>>> state,
+        task<void> run_stop(client& c, std::shared_ptr<coroutine_result_state<expected_void_t>> state,
                             completion::executor& exec)
         {
             state->result.emplace(co_await c.stop());
@@ -67,7 +67,7 @@ namespace kmx::aio::someip
         client c {make_test_config()};
 
         {
-            auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
+            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
             completion::executor exec;
             exec.spawn(run_start(c, state, exec));
             exec.run();
@@ -82,7 +82,7 @@ namespace kmx::aio::someip
         CHECK(stats.dropped_events == 0u);
 
         {
-            auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
+            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
             completion::executor exec;
             exec.spawn(run_stop(c, state, exec));
             exec.run();
@@ -97,7 +97,7 @@ namespace kmx::aio::someip
         client c {make_test_config()};
 
         {
-            auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
+            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
             completion::executor exec;
             exec.spawn(run_start(c, state, exec));
             exec.run();
@@ -121,7 +121,7 @@ namespace kmx::aio::someip
         client c {make_test_config()};
 
         {
-            auto state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
+            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
             completion::executor exec;
             exec.spawn(run_start(c, state, exec));
             exec.run();
@@ -130,7 +130,7 @@ namespace kmx::aio::someip
         }
 
         {
-            auto request_state = std::make_shared<coroutine_result_state<std::expected<void, std::error_code>>>();
+            auto request_state = std::make_shared<coroutine_result_state<expected_void_t>>();
             completion::executor exec;
             auto body = [&]() -> task<void>
             {

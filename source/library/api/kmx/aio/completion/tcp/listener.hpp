@@ -24,7 +24,7 @@ namespace kmx::aio::completion::tcp
     {
     public:
         /// @brief Result type for non-coroutine operations.
-        using result_t = std::expected<void, std::error_code>;
+        using result_t = expected_void_t;
 
         /// @brief Creates a listener bound to the specified IP and port.
         /// @param exec The completion executor.
@@ -54,7 +54,7 @@ namespace kmx::aio::completion::tcp
         /// @brief Asynchronously accepts a new connection via io_uring.
         /// @return A task yielding the accepted client file descriptor, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] task<std::expected<file_descriptor, std::error_code>> accept() noexcept(false);
+        [[nodiscard]] task<file_descriptor::expected_t> accept() noexcept(false);
     };
 
 } // namespace kmx::aio::completion::tcp

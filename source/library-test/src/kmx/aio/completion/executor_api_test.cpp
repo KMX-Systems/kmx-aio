@@ -414,7 +414,7 @@ namespace kmx::aio::completion
 
         const int reuse = 1;
         REQUIRE(listener->setsockopt(SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)).has_value());
-        REQUIRE(listener->bind(make_ip_address(localhost_ipv4), 0u).has_value());
+        REQUIRE(listener->bind(make_ip_address(ipv4::localhost), 0u).has_value());
         REQUIRE(listener->listen(4).has_value());
 
         ::sockaddr_in bound {};
@@ -508,7 +508,7 @@ namespace kmx::aio::completion
         {
             auto probe = file_descriptor::create_socket(AF_INET, SOCK_STREAM, 0);
             REQUIRE(probe.has_value());
-            REQUIRE(probe->bind(make_ip_address(localhost_ipv4), 0u).has_value());
+            REQUIRE(probe->bind(make_ip_address(ipv4::localhost), 0u).has_value());
 
             ::sockaddr_in bound {};
             ::socklen_t bound_len = sizeof(bound);
@@ -519,7 +519,7 @@ namespace kmx::aio::completion
         auto client = file_descriptor::create_socket(AF_INET, SOCK_STREAM, 0);
         REQUIRE(client.has_value());
 
-        const auto address = make_socket_address(make_ip_address(localhost_ipv4), closed_port);
+        const auto address = make_socket_address(make_ip_address(ipv4::localhost), closed_port);
         REQUIRE(address.has_value());
 
         executor exec;

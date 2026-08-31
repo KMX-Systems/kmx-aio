@@ -51,17 +51,17 @@ namespace kmx::aio::opc_ua
 
         /// @brief Open backend subscription resources asynchronously.
         /// @return Task resolving to success or error.
-        [[nodiscard]] task<std::expected<void, std::error_code>> open() noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t open() noexcept(false);
         /// @brief Close backend subscription resources asynchronously.
         /// @return Task resolving to success or error.
-        [[nodiscard]] task<std::expected<void, std::error_code>> close() noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t close() noexcept(false);
         /// @brief Await the next notification from internal queue/stream.
         /// @return Task resolving to notification payload or error.
         [[nodiscard]] task<std::expected<notification, std::error_code>> next() noexcept(false);
         /// @brief Bind this subscription to a client after construction.
         /// @param bound_client Client used for backend subscription operations.
         /// @return Success or error when binding is invalid/unavailable.
-        [[nodiscard]] std::expected<void, std::error_code> bind(client& bound_client) noexcept;
+        [[nodiscard]] expected_void_t bind(client& bound_client) noexcept;
 
         /// @brief Access immutable subscription configuration.
         /// @return Reference to active configuration.

@@ -73,22 +73,7 @@ namespace kmx::aio::quic
         }
 
         /// @brief Drops the first @p count queued bytes, which must not exceed size().
-        void consume(const std::size_t count) noexcept
-        {
-            read_pos_ += count;
-            if (read_pos_ == data_.size())
-            {
-                // Everything taken, so start again at the front rather than compacting. The capacity stays,
-                // which is what makes a stream read to exhaustion and refilled cost no allocation at all.
-                data_.clear();
-                read_pos_ = 0u;
-            }
-            else if ((read_pos_ * 2u) >= data_.size())
-            {
-                data_.erase(data_.begin(), data_.begin() + static_cast<std::ptrdiff_t>(read_pos_));
-                read_pos_ = 0u;
-            }
-        }
+        void consume(std::size_t count) noexcept;
 
     private:
         std::vector<char> data_ {};  ///< Queued bytes, preceded by those already taken.
@@ -105,8 +90,8 @@ namespace kmx::aio::quic
         ::lsquic_conn_t* conn {};            ///< The connection it belongs to; kept after @ref handle is cleared.
         byte_buffer incoming {};             ///< Bytes received and not yet read.
         byte_buffer outgoing {};             ///< Bytes queued for writing, not yet accepted by lsquic.
-        std::coroutine_handle<> reader {};   ///< Suspended reader, if any.
-        std::coroutine_handle<> writer {};   ///< Suspended writer, if any.
+        coroutine_handle_t reader {};   ///< Suspended reader, if any.
+        coroutine_handle_t writer {};   ///< Suspended writer, if any.
         bool fin_received {};                ///< The peer finished its direction.
         bool closed {};                      ///< The stream is gone.
         std::error_code error {};            ///< Why it ended, if abnormally.
@@ -159,22 +144,22 @@ namespace kmx::aio::quic
         /// @brief Reads whatever has arrived.
         /// @param out Destination.
         /// @return Bytes read; zero once the peer has finished and nothing is left.
-        [[nodiscard]] task<std::expected<std::size_t, std::error_code>> read(std::span<char> out) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t read(std::span<char> out) noexcept(false);
 
         /// @brief Writes every byte, suspending until lsquic has accepted them all.
-        [[nodiscard]] task<std::expected<void, std::error_code>> write_all(std::span<const char> in) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t write_all(std::span<const char> in) noexcept(false);
 
         /// @brief Ends this side of the stream.
         void shutdown_write() noexcept;
 
     private:
         /// @brief Shared coroutine mechanics for stream waiters.
-        template <std::coroutine_handle<> stream_state::* waiter>
+        template <coroutine_handle_t stream_state::* waiter>
         struct awaiter_base
         {
             stream_state& state;
 
-            void await_suspend(const std::coroutine_handle<> handle) const noexcept { state.*waiter = handle; }
+            void await_suspend(const coroutine_handle_t handle) const noexcept { state.*waiter = handle; }
             void await_resume() const noexcept {}
         };
 
@@ -231,7 +216,7 @@ namespace kmx::aio::quic
         /// @param port Port to bind.
         /// @param ssl_ctx A configured SSL_CTX carrying the certificate chain and key.
         /// @return Nothing, or why setup failed.
-        [[nodiscard]] std::expected<void, std::error_code> listen(const ip_address_t ip, const port_t port, void* ssl_ctx) noexcept
+        [[nodiscard]] expected_void_t listen(const ip_address_t ip, const port_t port, void* ssl_ctx) noexcept
         {
             return setup(ip, port, ssl_ctx, true);
         }
@@ -242,7 +227,7 @@ namespace kmx::aio::quic
         /// @param sni Server name to present.
         /// @param ssl_ctx A configured SSL_CTX.
         /// @return Nothing, or why setup failed.
-        [[nodiscard]] std::expected<void, std::error_code> connect(const ip_address_t ip, const port_t port, const std::string& sni,
+        [[nodiscard]] expected_void_t connect(const ip_address_t ip, const port_t port, const std::string& sni,
                                                                    void* ssl_ctx) noexcept;
 
         /// @brief Opens a new stream on this connection.
@@ -322,7 +307,7 @@ namespace kmx::aio::quic
         [[nodiscard]] std::size_t pending_accepts() const noexcept { return accepted_.size(); }
 
         /// @brief The queue woken coroutines are parked on.
-        [[nodiscard]] std::vector<std::coroutine_handle<>>& ready() noexcept { return ready_; }
+        [[nodiscard]] std::vector<coroutine_handle_t>& ready() noexcept { return ready_; }
 
     protected:
         basic_endpoint() noexcept = default;
@@ -350,7 +335,7 @@ namespace kmx::aio::quic
         virtual void io_spawn(task<void>&& t) noexcept(false) = 0;
 
         /// @brief Sleeps for @p duration_ns on the executor.
-        [[nodiscard]] virtual task<std::expected<void, std::error_code>> io_timeout(std::uint64_t duration_ns) noexcept(false) = 0;
+        [[nodiscard]] virtual task_returning_expected_void_t io_timeout(std::uint64_t duration_ns) noexcept(false) = 0;
 
         /// @brief Waits on the executor for @p poll_mask on @p fd.
         [[nodiscard]] virtual task<std::expected<int, std::error_code>> io_poll(fd_t fd, unsigned poll_mask) noexcept(false) = 0;
@@ -362,7 +347,7 @@ namespace kmx::aio::quic
             basic_endpoint& self;
 
             [[nodiscard]] bool await_ready() const noexcept { return self.wakeup_signalled_; }
-            void await_suspend(const std::coroutine_handle<> handle) const noexcept { self.wakeup_waiter_ = handle; }
+            void await_suspend(const coroutine_handle_t handle) const noexcept { self.wakeup_waiter_ = handle; }
             void await_resume() const noexcept { self.wakeup_signalled_ = false; }
         };
 
@@ -376,7 +361,7 @@ namespace kmx::aio::quic
                 return static_cast<bool>(self.opened_) || static_cast<bool>(self.failure_);
             }
 
-            void await_suspend(const std::coroutine_handle<> handle) const noexcept { self.opener_ = handle; }
+            void await_suspend(const coroutine_handle_t handle) const noexcept { self.opener_ = handle; }
             void await_resume() const noexcept {}
         };
 
@@ -390,12 +375,12 @@ namespace kmx::aio::quic
                 return !self.accepted_.empty() || static_cast<bool>(self.failure_);
             }
 
-            void await_suspend(const std::coroutine_handle<> handle) const noexcept { self.acceptor_ = handle; }
+            void await_suspend(const coroutine_handle_t handle) const noexcept { self.acceptor_ = handle; }
             void await_resume() const noexcept {}
         };
 
         /// @brief Creates the socket and the lsquic engine.
-        [[nodiscard]] std::expected<void, std::error_code> setup(const ip_address_t ip, const port_t port, void* ssl_ctx,
+        [[nodiscard]] expected_void_t setup(const ip_address_t ip, const port_t port, void* ssl_ctx,
                                                                  const bool server) noexcept;
 
         /// @brief Wakes the packet loop, from either the socket or the timer.
@@ -419,7 +404,7 @@ namespace kmx::aio::quic
         /// @note Every caller must first establish whatever the parked coroutine's awaiter tests for. A
         ///       coroutine resumed without that cannot tell it has been woken for nothing, and one waiting on
         ///       a read reports the end of its stream when it finds no bytes.
-        static void park(std::vector<std::coroutine_handle<>>& ready, std::coroutine_handle<>& slot) noexcept;
+        static void park(std::vector<coroutine_handle_t>& ready, coroutine_handle_t& slot) noexcept;
 
         // lsquic callbacks
 
@@ -479,16 +464,16 @@ namespace kmx::aio::quic
         std::unordered_map<::lsquic_stream_t*, std::shared_ptr<stream_state>> streams_ {}; ///< Live streams.
         std::deque<std::shared_ptr<stream_state>> accepted_ {};                    ///< Streams the peer opened.
         std::shared_ptr<stream_state> opened_ {};                                  ///< Stream handed to open_stream().
-        std::coroutine_handle<> opener_ {};                                        ///< Coroutine in open_stream().
-        std::coroutine_handle<> acceptor_ {};                                      ///< Coroutine in accept_stream().
+        coroutine_handle_t opener_ {};                                        ///< Coroutine in open_stream().
+        coroutine_handle_t acceptor_ {};                                      ///< Coroutine in accept_stream().
         std::size_t pending_opens_ {};                                             ///< open_stream() calls not yet served.
-        std::vector<std::coroutine_handle<>> ready_ {};                            ///< Woken coroutines.
+        std::vector<coroutine_handle_t> ready_ {};                            ///< Woken coroutines.
         std::error_code failure_ {};                                               ///< Why setup or handshake failed.
         const char* alpn_ {"kmx-rpc"};                                             ///< ALPN name offered on the handshake.
         std::size_t ticks_ {};                                                     ///< Packet loop iterations.
         std::size_t packets_in_ {};                                                ///< Packets received.
         std::size_t packets_out_ {};                                               ///< Packets sent.
-        std::coroutine_handle<> wakeup_waiter_ {};                                 ///< The packet loop, when asleep.
+        coroutine_handle_t wakeup_waiter_ {};                                 ///< The packet loop, when asleep.
         bool wakeup_signalled_ {};                                                 ///< A wakeup arrived before the wait.
         bool poll_armed_ {};                                                       ///< A readability poll is outstanding.
         bool is_server_ {};                                                        ///< Whether this is a server endpoint.
@@ -510,7 +495,7 @@ namespace kmx::aio::quic
     private:
         void io_spawn(task<void>&& t) noexcept(false) override { exec_->spawn(std::move(t)); }
 
-        [[nodiscard]] task<std::expected<void, std::error_code>> io_timeout(const std::uint64_t duration_ns) noexcept(false) override
+        [[nodiscard]] task_returning_expected_void_t io_timeout(const std::uint64_t duration_ns) noexcept(false) override
         {
             return exec_->async_timeout(duration_ns);
         }

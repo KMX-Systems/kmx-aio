@@ -45,11 +45,11 @@ namespace kmx::aio::modbus
 
         /// @brief Establish the TCP connection to the configured host and port.
         /// @return Task resolving to success, or an error on connection failure.
-        [[nodiscard]] task<std::expected<void, std::error_code>> connect() noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t connect() noexcept(false);
 
         /// @brief Close the TCP connection.
         /// @return Task resolving to success.
-        [[nodiscard]] task<std::expected<void, std::error_code>> disconnect() noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t disconnect() noexcept(false);
 
         /// @brief Read contiguous holding registers (function code 0x03).
         /// @param address Starting register address.
@@ -83,21 +83,21 @@ namespace kmx::aio::modbus
         /// @param address Target register address.
         /// @param value   16-bit value to write.
         /// @return Success or an error.
-        [[nodiscard]] task<std::expected<void, std::error_code>>
+        [[nodiscard]] task_returning_expected_void_t
         write_single_register(std::uint16_t address, std::uint16_t value) noexcept(false);
 
         /// @brief Write a single coil (function code 0x05).
         /// @param address Target coil address.
         /// @param on      @c true to set coil ON, @c false for OFF.
         /// @return Success or an error.
-        [[nodiscard]] task<std::expected<void, std::error_code>>
+        [[nodiscard]] task_returning_expected_void_t
         write_single_coil(std::uint16_t address, bool on) noexcept(false);
 
         /// @brief Write contiguous holding registers (function code 0x10).
         /// @param address Starting register address.
         /// @param values  Values to write (1–123 elements).
         /// @return Success or an error.
-        [[nodiscard]] task<std::expected<void, std::error_code>>
+        [[nodiscard]] task_returning_expected_void_t
         write_multiple_registers(std::uint16_t address,
                                  std::span<const std::uint16_t> values) noexcept(false);
 
@@ -105,7 +105,7 @@ namespace kmx::aio::modbus
         /// @param address Starting coil address.
         /// @param values  Coil values to write (0=OFF, non-zero=ON; 1–1968 elements).
         /// @return Success or an error.
-        [[nodiscard]] task<std::expected<void, std::error_code>>
+        [[nodiscard]] task_returning_expected_void_t
         write_multiple_coils(std::uint16_t address,
                              std::span<const std::uint8_t> values) noexcept(false);
 

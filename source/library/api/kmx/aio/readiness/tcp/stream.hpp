@@ -18,16 +18,14 @@ namespace kmx::aio::readiness::tcp
     class stream: public io_base
     {
     public:
-        using result_task = task<std::expected<std::size_t, std::error_code>>;
-
         stream(executor& exec, file_descriptor&& fd) noexcept: io_base(exec, std::move(fd)) {}
         ~stream() override = default;
         stream(stream&&) noexcept = default;
         stream& operator=(stream&&) noexcept = delete;
 
-        result_task read(std::span<char> buffer) noexcept(false);
-        result_task write(std::span<const char> buffer) noexcept(false);
-        task<std::expected<void, std::error_code>> write_all(std::span<const char> buffer) noexcept(false);
+        task_returning_expected_size_t read(std::span<char> buffer) noexcept(false);
+        task_returning_expected_size_t write(std::span<const char> buffer) noexcept(false);
+        task_returning_expected_void_t write_all(std::span<const char> buffer) noexcept(false);
     };
 
 } // namespace kmx::aio::readiness::tcp

@@ -57,7 +57,7 @@ namespace kmx::aio::opc_ua
     server::server(server&&) noexcept = default;
     server& server::operator=(server&&) noexcept = default;
 
-    task<std::expected<void, std::error_code>> server::start() noexcept(false)
+    task_returning_expected_void_t server::start() noexcept(false)
     {
         if (impl_->config.port == 0u)
             co_return std::unexpected(make_error_code(error::invalid_configuration));
@@ -81,10 +81,10 @@ namespace kmx::aio::opc_ua
         }
 
         impl_->state = lifecycle_state::running;
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
-    task<std::expected<void, std::error_code>> server::stop() noexcept(false)
+    task_returning_expected_void_t server::stop() noexcept(false)
     {
         if (impl_->native_server == nullptr)
             co_return std::unexpected(make_error_code(error::not_initialized));
@@ -101,7 +101,7 @@ namespace kmx::aio::opc_ua
         UA_Server_delete(impl_->native_server);
         impl_->native_server = nullptr;
         impl_->state = lifecycle_state::idle;
-        co_return std::expected<void, std::error_code> {};
+        co_return expected_void_t {};
     }
 
     task<std::expected<std::uint16_t, std::error_code>> server::iterate(const std::chrono::milliseconds timeout) noexcept(false)

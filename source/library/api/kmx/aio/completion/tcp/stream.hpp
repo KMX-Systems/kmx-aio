@@ -21,9 +21,6 @@ namespace kmx::aio::completion::tcp
     class stream: public io_base
     {
     public:
-        /// @brief Task type returned by read/write operations.
-        using result_task = task<std::expected<std::size_t, std::error_code>>;
-
         /// @brief Constructs a stream from an executor and an owned socket descriptor.
         /// @param exec The completion executor providing io_uring operations.
         /// @param fd   Connected socket descriptor (ownership transferred).
@@ -46,33 +43,33 @@ namespace kmx::aio::completion::tcp
         /// @param buffer Destination buffer; the kernel writes directly here.
         /// @return A task yielding the number of bytes read, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] result_task read(std::span<char> buffer) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t read(std::span<char> buffer) noexcept(false);
 
         /// @brief Asynchronously writes data from the buffer via io_uring.
         /// @param buffer Source buffer.
         /// @return A task yielding the number of bytes written, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        [[nodiscard]] result_task write(std::span<const char> buffer) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t write(std::span<const char> buffer) noexcept(false);
 
-        [[nodiscard]] task<std::expected<void, std::error_code>> write_all(std::span<const char> buffer) noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t write_all(std::span<const char> buffer) noexcept(false);
 
         /// @brief Asynchronously reads data into a pre-registered buffer via io_uring.
         /// @param buffer Destination buffer; must be part of the registered iovec.
         /// @param buf_index Index into the registered iovec array.
         /// @return A task yielding the number of bytes read, or an error.
-        [[nodiscard]] result_task read_fixed(std::span<char> buffer, const int buf_index) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t read_fixed(std::span<char> buffer, const int buf_index) noexcept(false);
 
         /// @brief Asynchronously writes data from a pre-registered buffer via io_uring.
         /// @param buffer Source buffer; must be part of the registered iovec.
         /// @param buf_index Index into the registered iovec array.
         /// @return A task yielding the number of bytes written, or an error.
-        [[nodiscard]] result_task write_fixed(std::span<const char> buffer, const int buf_index) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t write_fixed(std::span<const char> buffer, const int buf_index) noexcept(false);
 
         /// @brief Writes all data from a pre-registered buffer, handling partial writes.
         /// @param buffer Source buffer; must be part of the registered iovec.
         /// @param buf_index Index into the registered iovec array.
         /// @return A task yielding success or an error.
-        [[nodiscard]] task<std::expected<void, std::error_code>> write_all_fixed(std::span<const char> buffer,
+        [[nodiscard]] task_returning_expected_void_t write_all_fixed(std::span<const char> buffer,
                                                                                  const int buf_index) noexcept(false);
     };
 

@@ -38,11 +38,11 @@ namespace kmx::aio::someip
         /// @brief Initialises the vsomeip runtime and registers the application.
         /// @return void on success, or an error code on failure.
         /// @throws std::bad_alloc if runtime allocation fails.
-        [[nodiscard]] task<std::expected<void, std::error_code>> start() noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t start() noexcept(false);
 
         /// @brief Stops the runtime and withdraws all offered services.
         /// @return void on success, or @c error::stopped if already stopped.
-        [[nodiscard]] task<std::expected<void, std::error_code>> stop() noexcept(false);
+        [[nodiscard]] task_returning_expected_void_t stop() noexcept(false);
 
         /// @brief Drives the internal dispatch loop for one time slot.
         /// @param timeout Maximum time to wait for pending events.
@@ -53,14 +53,14 @@ namespace kmx::aio::someip
         /// @param service_id  Identifier of the service to offer.
         /// @param instance_id Instance of the service to offer.
         /// @return void on success, or an error code on failure.
-        [[nodiscard]] task<std::expected<void, std::error_code>> offer_service(service_id_t service_id,
+        [[nodiscard]] task_returning_expected_void_t offer_service(service_id_t service_id,
                                                                                instance_id_t instance_id) noexcept(false);
 
         /// @brief Withdraws a previously advertised service from Service Discovery.
         /// @param service_id  Identifier of the service to withdraw.
         /// @param instance_id Instance of the service to withdraw.
         /// @return void on success, or an error code on failure.
-        [[nodiscard]] task<std::expected<void, std::error_code>> stop_offer_service(service_id_t service_id,
+        [[nodiscard]] task_returning_expected_void_t stop_offer_service(service_id_t service_id,
                                                                                     instance_id_t instance_id) noexcept(false);
 
         /// @brief Dequeues the next incoming method request.
@@ -71,7 +71,7 @@ namespace kmx::aio::someip
         /// @param request_id Identifier echoed from @c method_request::request_id.
         /// @param payload    Response payload bytes.
         /// @return void on success, or an error code on failure.
-        [[nodiscard]] task<std::expected<void, std::error_code>> send_response(request_id_t request_id,
+        [[nodiscard]] task_returning_expected_void_t send_response(request_id_t request_id,
                                                                                std::vector<std::uint8_t> payload) noexcept(false);
 
         /// @brief Broadcasts an event notification to all active subscribers.
@@ -80,7 +80,7 @@ namespace kmx::aio::someip
         /// @param event_id    Event identifier.
         /// @param payload     Event payload bytes.
         /// @return void on success, or an error code if the service is not offered.
-        [[nodiscard]] task<std::expected<void, std::error_code>> notify(service_id_t service_id, instance_id_t instance_id,
+        [[nodiscard]] task_returning_expected_void_t notify(service_id_t service_id, instance_id_t instance_id,
                                                                         event_id_t event_id,
                                                                         std::vector<std::uint8_t> payload) noexcept(false);
 

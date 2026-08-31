@@ -239,7 +239,7 @@ namespace kmx::aio::modbus::frame
         return result;
     }
 
-    std::expected<void, std::error_code> decode_write_single_response(
+    expected_void_t decode_write_single_response(
         const std::span<const std::uint8_t> pdu, const function_code expected_fc) noexcept
     {
         if (pdu.empty())
@@ -257,7 +257,7 @@ namespace kmx::aio::modbus::frame
         return {};
     }
 
-    std::expected<void, std::error_code> decode_write_multiple_response(
+    expected_void_t decode_write_multiple_response(
         const std::span<const std::uint8_t> pdu, const function_code expected_fc) noexcept
     {
         if (pdu.empty())
