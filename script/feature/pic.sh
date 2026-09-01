@@ -28,6 +28,15 @@ library_needs_pic_rebuild() {
 
 	# R_X86_64_32 and R_X86_64_32S are both absolute and both rejected in a PIE link; the shared prefix
 	# matches either. An archive of LTO objects reports no relocations at all and is left alone here -
-	# it has its own incompatibilities, which are not this check's business.
-	readelf --relocs "${library}" 2>/dev/null | grep -q 'R_X86_64_32'
+	# it has its own incompatibilities, which are not this check's business (the OPC UA builder makes
+	# that check for itself).
+	#
+	# The output is captured rather than piped into grep: "grep -q" stops at the first match and closes
+	# the pipe, readelf dies of SIGPIPE, and under the "set -o pipefail" every caller of this file runs
+	# with, the pipeline then reports 141 - so a large archive that does need rebuilding would be read
+	# as "no match" and kept.
+	local relocations
+	relocations="$(readelf --relocs "${library}" 2>/dev/null || true)"
+
+	grep -q 'R_X86_64_32' <<< "${relocations}"
 }
