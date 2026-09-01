@@ -73,7 +73,7 @@ namespace kmx::aio::benchmark
             results.push_back(std::move(best));
         }
 
-        print_results(results);
+        print_results(results, reg);
         return 0;
     }
 } // namespace kmx::aio::benchmark

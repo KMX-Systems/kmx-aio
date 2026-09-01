@@ -186,11 +186,49 @@ namespace kmx::aio::benchmark
         sched.wait_until_idle();
         const auto elapsed = clock_t::now() - start;
         keep(done.load(std::memory_order_relaxed));
-        return from_total("core/scheduler_spawn+run", iterations, elapsed);
+
+        auto out = from_total("core/scheduler_dispatch (backlog drain)", iterations, elapsed);
+        out.note = "the whole batch is queued first, so this is throughput with a worker that never idles; see scheduler_handoff";
+        return out;
+    }
+
+    static result bench_scheduler_handoff(const double scale)
+    {
+        // One task at a time, with nothing queued behind it: the wake-up a caller waits through between
+        // handing a callable to a worker and that callable running. This is the hand-off the readiness
+        // executor pays on every resumption in its default mode, so the two figures belong side by side.
+        const auto iterations = scaled(20'000u, scale);
+        scheduler sched {1u};
+        std::atomic_bool done {};
+
+        std::vector<double> samples {};
+        samples.reserve(iterations);
+
+        for (std::size_t i {}; i != iterations; ++i)
+        {
+            done.store(false, std::memory_order_relaxed);
+
+            const auto start = clock_t::now();
+            sched.spawn(
+                [&done]() noexcept
+                {
+                    done.store(true, std::memory_order_release);
+                    done.notify_one();
+                });
+
+            done.wait(false, std::memory_order_acquire);
+            samples.push_back(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(clock_t::now() - start).count()));
+        }
+
+        auto out = from_samples("core/scheduler_handoff (one at a time)", samples);
+        out.note = "spawn() to the task running on a worker, one task in flight: the wake-up, not the queue";
+        return out;
     }
 
     void register_core_cases(registry& reg) noexcept(false)
     {
+        reg.describe("core", "what every application pays for, with no I/O involved");
+
         reg.add("core/task_await_heap", bench_task_await_heap);
         reg.add("core/task_await_slab", bench_task_await_slab);
         reg.add("core/task_await_chain8", bench_task_chain_slab);
@@ -199,6 +237,7 @@ namespace kmx::aio::benchmark
         reg.add("core/channel_cross_thread", bench_channel_cross_thread);
         reg.add("core/buffer_pool", bench_buffer_pool);
         reg.add("core/scheduler_dispatch", bench_scheduler_dispatch);
+        reg.add("core/scheduler_handoff", bench_scheduler_handoff);
     }
 
 } // namespace kmx::aio::benchmark

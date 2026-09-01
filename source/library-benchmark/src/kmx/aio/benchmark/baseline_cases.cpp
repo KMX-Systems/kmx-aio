@@ -112,8 +112,10 @@ namespace kmx::aio::benchmark
 
         for (const int fd: pair.fd)
         {
+            // Read readiness only. Registering EPOLLOUT as well would have every wait return at once on
+            // a socket that is always writable, and the case would measure nothing it claims to.
             epoll_event ev {};
-            ev.events = EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP | EPOLLET;
+            ev.events = EPOLLIN | EPOLLET;
             ev.data.fd = fd;
             keep(::epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev));
         }
@@ -122,28 +124,40 @@ namespace kmx::aio::benchmark
         samples.reserve(iterations);
         epoll_event events[8] {};
 
-        // The same syscall sequence a readiness coroutine performs: try the read first, wait only once
-        // it reports EAGAIN, then read again. Two more system calls per round trip than the plain
-        // baseline above, and the honest floor for the executor's own pattern.
-        const auto half_trip = [&](const int write_fd, const int read_fd) noexcept
+        // The readiness executor's inline round trip, syscall for syscall. Each side sends and then reads
+        // its own end straight away, before the peer has had a chance to answer: that read reports
+        // EAGAIN, and the wait which follows is what the event loop does next. The order matters. A read
+        // placed after the peer's write finds the byte already queued, returns it without ever waiting,
+        // and measures a loop that never enters epoll_wait at all - which is not what the executor does.
+        const auto send_then_probe = [&](const int fd) noexcept
         {
-            baseline_detail::ping(write_fd);
+            baseline_detail::ping(fd);
+
             char byte {};
-            while (::read(read_fd, &byte, 1u) < 0)
-                keep(::epoll_wait(epoll_fd, events, 8, -1));
+            keep(::read(fd, &byte, 1u)); // EAGAIN: the answer cannot be here yet.
+        };
+
+        const auto wait_then_receive = [&](const int fd) noexcept
+        {
+            keep(::epoll_wait(epoll_fd, events, 8, -1));
+            baseline_detail::drain(fd);
         };
 
         for (std::size_t i {}; i != iterations; ++i)
         {
             const auto start = clock_t::now();
-            half_trip(pair.fd[0], pair.fd[1]);
-            half_trip(pair.fd[1], pair.fd[0]);
+
+            send_then_probe(pair.fd[0]);   // The ping side writes and parks on its own end.
+            wait_then_receive(pair.fd[1]); // The loop wakes the echo side, which takes the byte,
+            send_then_probe(pair.fd[1]);   // answers, and parks on its end in turn.
+            wait_then_receive(pair.fd[0]); // The loop wakes the ping side with the answer.
+
             samples.push_back(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(clock_t::now() - start).count()));
         }
 
         ::close(epoll_fd);
         auto out = from_samples("baseline/socketpair_rtt (epoll + EAGAIN probe)", samples);
-        out.note = "the executor's exact syscall pattern without the executor: 2 x (write + read + epoll_wait + read)";
+        out.note = "the readiness executor's inline syscall pattern: 2 x (write + read that hits EAGAIN + epoll_wait + read)";
         return out;
     }
 
@@ -198,6 +212,8 @@ namespace kmx::aio::benchmark
 
     void register_baseline_cases(registry& reg) noexcept(false)
     {
+        reg.describe("baseline", "the same work without the library: the system heap and raw syscalls");
+
         reg.add("baseline/heap_alloc", bench_heap_alloc);
         reg.add("baseline/epoll_rtt", bench_epoll_rtt);
         reg.add("baseline/epoll_rtt_eagain", bench_epoll_rtt_eagain);

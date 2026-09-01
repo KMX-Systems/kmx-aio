@@ -35,19 +35,20 @@ Arguments after the script name go to the binary unchanged (`--filter`, `--scale
 | `core/channel_push+pop (same thread)` | `channel<T>` ring mechanics without contention. |
 | `core/channel_transfer (2 threads)` | One element crossing a real thread boundary through the channel. |
 | `core/buffer_pool_acquire+release` | One `buffer::pool` lease and its RAII return. |
-| `core/scheduler_spawn+run` | Handing a callable to a worker thread and having it run. |
+| `core/scheduler_dispatch (backlog drain)` | 200,000 callables queued first, then drained: dispatch throughput with a worker that never idles. |
+| `core/scheduler_handoff (one at a time)` | One callable in flight, timed from `spawn()` to it running: the wake-up a queued task waits through. |
 | `baseline/operator_new+delete (256 B)` | The heap the slab is supposed to beat. |
 | `baseline/socketpair_rtt (epoll, 1 thread)` | The floor for a thread-per-core reactor: `write` + `epoll_wait` + `read`, both ways, no hand-off. |
-| `baseline/socketpair_rtt (epoll + EAGAIN probe)` | The same, in the exact syscall sequence a readiness coroutine performs (try the read, wait on EAGAIN, read again). |
+| `baseline/socketpair_rtt (epoll + EAGAIN probe)` | The readiness executor's inline sequence: each side writes, reads its own end before the peer can answer (EAGAIN), waits, then reads. |
 | `baseline/socketpair_rtt (2 threads, blocking)` | What crossing a thread boundary and coming back costs: a wake-up plus a context switch. |
 | `readiness/epoll wait_events (vector/span)` | The two `descriptor::epoll::wait_events` overloads at the default 1024-event capacity. |
 | `readiness/stop an idle executor` | Time from `stop()` to the event loop's thread being joined, at the default `timeout_ms`. |
-| `readiness/spawn+complete noop task` | `readiness::executor::spawn` of a task that does nothing, through to completion. |
+| `readiness/spawn+drain noop tasks (queued, then run)` | The whole batch queued before `run()`: drain throughput including loop start-up, not a per-task figure. |
 | `readiness/socketpair_rtt (scheduler)` | A full ping-pong between two coroutines, resumptions handed to a scheduler worker (the default). |
 | `readiness/socketpair_rtt (inline)` | The same ping-pong with `resumption_mode::inline_on_io_thread`. |
 | `completion/spawn+complete noop task` | `completion::executor::spawn`, which resumes on the calling thread. |
 | `completion/socketpair_rtt` | A full ping-pong as four io_uring operations. |
-| `completion/concurrent_echo (64 connections)` | 64 coroutines echoing over their own sockets at once - the shape in which submission batching shows. |
+| `completion/concurrent_echo (1/8/64/256 connections)` | The same 25,600 operations spread over one, eight, 64 and 256 coroutines, timed from the first connection starting to the last finishing - the sweep in which submission batching shows, and the only way to see whether per-operation cost grows with the number in flight. |
 
 ## Reading the numbers
 
@@ -56,54 +57,93 @@ each other because they were taken under the same conditions; figures compared a
 apart, mostly measure what else the machine was doing. For a specific comparison, run the two cases
 alternately several times and compare the medians, rather than reading two numbers from one long run.
 
-The latency cases print `min`, `p50` and `p99` as well as the mean. `p50` is the figure to quote;
-`min` says what the path costs when nothing interferes.
+The report is one section per group. Every duration column is the cost of *one* operation, printed in
+whichever unit reads best (`2.30 ns`, `4.93 µs`, `1.23 ms`); `rate` is the throughput that mean implies
+(1 s / mean), and `ops` is how many operations went into it. The last column holds the case's own note,
+on the same line as its figures.
+
+The latency cases print `min`, `p50` and `p99` as well as the mean, by nearest rank. `p50` is the
+figure to quote; `min` says what the path costs when nothing interferes. `p99` is left unreported below
+a hundred samples, where it would name one of the few slowest operations rather than a percentile. A
+`-` in those columns means the case timed a whole loop rather than each operation, so it has no
+distribution to report - its mean is the only figure it can give.
+
+Beware of timing around `run()`. The completion executor's loop waits with a 100 ms timeout, so `run()`
+returns up to that long after the last completion, and a case that starts its clock before `run()` and
+stops it after reports that tail as per-operation cost - spread over 25,600 operations it was most of
+what `concurrent_echo` used to print. A case that drives an executor times its own work window instead:
+`concurrent_echo` runs its clock from the first connection starting to the last one finishing.
 
 ## A reference set
 
-Taken on an AMD Ryzen 7 7840HS (powersave governor, other desktop applications running), GCC 16,
-`config:release`. They are here to show the shape of the results - the ratios - not as a target.
+Taken on an AMD Ryzen 7 7840HS under the `performance` governor, GCC 16, `config:release`, one run of
+`script/run-benchmarks.sh --repeats 3`. They are here to show the shape of the results - the ratios -
+not as a target.
 
 | Case | Figure |
 | :--- | ---: |
-| `core/task_await` (heap frames) | 23.5 ns |
-| `core/task_await` (slab frames) | 18.0 ns |
-| `core/slab_allocate+deallocate` | ~1 ns |
-| `baseline/operator_new+delete` | 8.6 ns |
-| `core/channel_push+pop` | 15.6 ns |
-| `core/buffer_pool_acquire+release` | 22.1 ns |
-| `core/scheduler_spawn+run` | 59.5 ns |
-| `readiness/spawn+complete noop task` | 346 ns |
-| `readiness/epoll wait_events` (vector, 1024) | 793 ns |
-| `readiness/epoll wait_events` (span, 1024) | 436 ns |
-| `completion/concurrent_echo` (64 connections) | 2.7 µs/op |
-| `baseline/socketpair_rtt` (epoll + EAGAIN probe) | 3.9 µs |
-| `completion/socketpair_rtt` | 5.7 µs |
-| `readiness/socketpair_rtt` (inline) | 6.4 µs |
-| `baseline/socketpair_rtt` (2 threads, blocking) | 7.3 µs |
+| `core/slab_allocate+deallocate` | 2.33 ns |
+| `baseline/operator_new+delete` | 8.44 ns |
+| `core/buffer_pool_acquire+release` | 10.4 ns |
+| `core/channel_push+pop` | 14.3 ns |
+| `core/task_await` (slab frames) | 19.6 ns |
+| `core/task_await_chain8` (slab) | 22.6 ns |
+| `core/task_await` (heap frames) | 23.9 ns |
+| `core/channel_transfer` (2 threads) | 31.7 ns |
+| `completion/spawn+complete noop task` | 44.3 ns |
+| `core/scheduler_dispatch` (backlog drain) | 61.4 ns |
+| `readiness/spawn+drain noop tasks` | 395 ns |
+| `readiness/epoll wait_events` (span, 1024) | 456 ns |
+| `completion/concurrent_echo` (64 connections) | 760 ns/op |
+| `completion/concurrent_echo` (8 connections) | 803 ns/op |
+| `completion/concurrent_echo` (256 connections) | 821 ns/op |
+| `readiness/epoll wait_events` (vector, 1024) | 895 ns |
+| `completion/concurrent_echo` (1 connection) | 1.32 µs/op |
+| `core/scheduler_handoff` (one at a time) | 4.23 µs (p50 3.81 µs) |
+| `baseline/socketpair_rtt` (epoll, 1 thread) | 4.96 µs |
+| `completion/socketpair_rtt` | 5.24 µs |
+| `baseline/socketpair_rtt` (epoll + EAGAIN probe) | 5.83 µs |
+| `readiness/socketpair_rtt` (inline) | 6.66 µs |
+| `baseline/socketpair_rtt` (2 threads, blocking) | 7.27 µs |
 | `readiness/socketpair_rtt` (scheduler) | 13.1 µs |
-| `readiness/stop an idle executor` | 27.6 µs |
+| `readiness/stop an idle executor` | 21.9 µs |
 
-One run of `script/run-benchmarks.sh --repeats 3`. The round-trip figures move by several microseconds
-between runs on a machine with a browser open; the ratios between them hold.
+The round-trip figures move by a few hundred nanoseconds between runs on an otherwise idle machine, and
+by microseconds with a browser open; the ratios between them hold.
+
+Two of these are worth cross-checking against each other, because they are the same measurement taken
+two different ways: `completion/concurrent_echo (1 connection)` at 1.32 µs per operation and
+`completion/socketpair_rtt` at 5.24 µs for four. If those two ever disagree, one of them has started
+measuring something other than an io_uring operation.
 
 ## Counting system calls
 
 Wall-clock time on a shared desktop hides changes that a syscall count states plainly. `strace -c -f -e
-trace=io_uring_enter` over `completion/concurrent_echo` is how the submission batching was confirmed:
-12,800 operations, 12,801 `io_uring_enter` calls before, 264 after. The same technique settles
-questions about the readiness executor with `-e trace=epoll_wait,read,write`.
+trace=io_uring_enter` over `completion/concurrent_echo` is how the submission batching was confirmed,
+and the connection sweep now shows it in one pair of runs: the same 25,600 operations take 25,601
+`io_uring_enter` calls at one connection and 464 at 64, because everything prepared between two waits
+rides into the kernel together. The same technique settles questions about the readiness executor with
+`-e trace=epoll_wait,read,write` - it is what caught the EAGAIN-probe baseline calling `epoll_wait`
+zero times.
 
 ## What the round-trip numbers say
 
-The readiness executor's default is to hand every resumption to a scheduler worker, which costs a
-wake-up and a context switch in each direction - the `2 threads, blocking` baseline is that cost on its
-own, and it is larger than everything the library does put together.
-`resumption_mode::inline_on_io_thread` continues the coroutine on the thread that observed the event
-instead, which is what the thread-per-core model asks for, and lands within striking distance of the
-raw-syscall floor. The trade-off is real and is why it is not the default: in that mode the event loop
-is blocked for as long as a resumed coroutine runs, so an application that blocks inside one delays
-every other descriptor that executor serves.
+Each executor has its own floor, and it is not the same one. The plain `epoll` baseline waits without
+ever probing; the readiness executor probes, gets EAGAIN, waits and reads again, which is what the
+`EAGAIN probe` baseline now does too - two more system calls per round trip, and 0.9 µs dearer
+(5.83 µs against 4.96 µs). Measured against the floor for its own pattern,
+`resumption_mode::inline_on_io_thread` runs at 6.66 µs, 14% above it; the completion executor's
+5.24 µs is a different pattern again, four io_uring operations with no probe at all.
+
+The readiness executor's default is to hand every resumption to a scheduler worker instead, and that
+costs 6.4 µs per round trip (13.1 µs against the inline 6.66 µs). Two hand-offs go into a round trip
+and `core/scheduler_handoff` measures one at 3.81 µs (p50), so the arithmetic closes - and it is
+roughly three times what the context switch alone accounts for, which the `2 threads, blocking` baseline
+puts at 2.3 µs for the round trip. The gap is the scheduler's queue and condvar, not the kernel.
+`inline_on_io_thread` continues the coroutine on the thread that observed the event, which is what the
+thread-per-core model asks for. The trade-off is real and is why it is not the default: in that mode
+the event loop is blocked for as long as a resumed coroutine runs, so an application that blocks inside
+one delays every other descriptor that executor serves.
 
 ## Things that were measured and not kept
 
@@ -144,4 +184,6 @@ improvement.
 Add the function to the group's file under `source/library-benchmark/src/kmx/aio/benchmark`, returning
 a `result` built by `from_total()` (throughput) or `from_samples()` (latency), and register it in that
 file's `register_*_cases`. A case that cannot run on the machine it finds should return `skipped()`
-with the reason rather than failing the run.
+with the reason rather than failing the run. Set `result::note` to the one line printed beside the
+figures - what the case means, not what it does - and, if it drives an executor, time its own work
+window rather than the executor's lifetime.
