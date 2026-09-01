@@ -3,6 +3,7 @@
 #include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/completion/v4l2/capture.hpp>
 #include <kmx/aio/gpu/executor.hpp>
+#include <kmx/aio/gpu/stream.hpp>
 #include <kmx/aio/task.hpp>
 
 #include <cstddef>

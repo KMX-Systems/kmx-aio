@@ -11,7 +11,6 @@
 /// @brief HTTP/2 core protocol definitions and utilities
 namespace kmx::aio::http2
 {
-
     /// @brief Defines the exact HTTP/2 stream states per RFC 7540
     enum class stream_state : std::uint8_t
     {

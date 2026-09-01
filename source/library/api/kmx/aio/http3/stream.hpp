@@ -25,6 +25,17 @@ namespace kmx::aio::http3
         closed
     };
 
+    /// @brief Error texts used while validating frames of one stream direction.
+    struct stream_frame_messages
+    {
+        /// @brief Text used when the frame type is not allowed on a request stream.
+        const char* unsupported_frame {};
+        /// @brief Text used when the stream does not start with a HEADERS frame.
+        const char* missing_headers {};
+        /// @brief Text used when the direction is already closed.
+        const char* closed_side {};
+    };
+
     /// @brief Minimal HTTP/3 request/response stream state machine on top of
     /// QUIC stream lifecycle.
     class stream
@@ -55,6 +66,12 @@ namespace kmx::aio::http3
         void on_reset() noexcept;
 
     private:
+        /// @brief Validates a frame and updates state for one stream direction.
+        /// @param type The frame type that was sent or received.
+        /// @param half_closed_state The half-closed state that blocks this direction.
+        /// @param messages The error texts of this direction.
+        void on_frame(frame_type type, stream_state half_closed_state, const stream_frame_messages& messages) noexcept(false);
+
         /// @brief The tracked stream ID.
         std::uint64_t id_ {};
         /// @brief The current stream state.

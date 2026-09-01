@@ -7,35 +7,18 @@
     #include <coroutine>
     #include <cstdint>
     #include <deque>
-    #include <expected>
     #include <memory>
     #include <mutex>
-    #include <span>
     #include <stop_token>
-    #include <system_error>
     #include <unordered_map>
 
     #include <kmx/aio/executor_base.hpp>
+    #include <kmx/aio/gpu/basic_types.hpp>
     #include <kmx/aio/task.hpp>
-#endif
-
-/// @brief CUDA runtime is optional; guard GPU code with this feature flag.
-#if defined(KMX_AIO_FEATURE_CUDA)
-    #include <cuda_runtime.h>
 #endif
 
 namespace kmx::aio::gpu
 {
-    /// @brief Opaque handle to a GPU stream (CUDA stream or mock).
-    using stream_handle = void*;
-
-    /// @brief Opaque handle to a GPU event (CUDA event or mock).
-    using event_handle = void*;
-
-    /// @brief Forward declarations.
-    class stream;
-    class event;
-
     /// @brief Configuration for the GPU completion-model executor.
     struct executor_config
     {
@@ -231,116 +214,6 @@ namespace kmx::aio::gpu
 
         /// @brief Handles graceful shutdown after stop() is called.
         void finalize() noexcept;
-    };
-
-    /// @brief GPU event awaiter for coroutine suspension on GPU completion.
-    /// @details Provides a C++20 co_await interface for waiting on GPU events.
-    ///          When a coroutine co_awaits an event, it suspends until the GPU work
-    ///          that recorded the event has completed.
-    class event
-    {
-    public:
-        /// @brief Internal awaiter struct for co_await suspension.
-        struct awaiter
-        {
-            /// @brief The event this awaiter suspends on.
-            event& event_;
-
-            /// @brief Tells whether the event has already fired, letting the coroutine continue without suspending.
-            /// @return `true` when the event is already signaled.
-            bool await_ready() const noexcept;
-            /// @brief Registers @p h with the executor so it resumes once the event fires.
-            /// @param h The coroutine to resume.
-            void await_suspend(coroutine_handle_t h) noexcept;
-            /// @brief Completes the await; the event carries no result.
-            void await_resume() const noexcept {}
-        };
-
-        /// @brief Creates a new GPU event for tracking GPU stream work.
-        /// @throws std::system_error if cudaEventCreate fails.
-        event() noexcept(false);
-
-        /// @brief Destroys the GPU event.
-        ~event() noexcept;
-
-        /// @brief Non-copyable.
-        event(const event&) = delete;
-        /// @brief Non-copyable.
-        event& operator=(const event&) = delete;
-
-        /// @brief Move constructor.
-        event(event&& other) noexcept;
-
-        /// @brief Move assignment.
-        event& operator=(event&& other) noexcept;
-
-        /// @brief Returns the underlying CUDA event handle.
-        [[nodiscard]] event_handle handle() const noexcept { return handle_; }
-
-        /// @brief C++20 awaiter interface for co_await.
-        /// @return An awaiter that suspends the coroutine until the event fires.
-        [[nodiscard]] awaiter operator co_await() noexcept;
-
-        /// @brief Checks if the event has fired (non-blocking).
-        /// @return true if the event is signaled, false otherwise.
-        /// @throws std::system_error if cudaEventQuery fails.
-        [[nodiscard]] bool is_ready() const noexcept(false);
-
-    private:
-        /// @brief The underlying CUDA event handle, or null after a move.
-        event_handle handle_ {};
-
-        /// @brief Destroys the CUDA event and clears @ref handle_.
-        void destroy() noexcept;
-
-        /// @brief Grants the awaiter access to the raw handle.
-        friend struct awaiter;
-        /// @brief Lets @ref stream record events directly onto the raw handle.
-        friend class stream;
-    };
-
-    /// @brief GPU stream wrapper for CUDA stream operations.
-    /// @details Provides a lightweight RAII wrapper around CUDA stream creation,
-    ///          synchronization, and destruction. Non-copyable, move-only.
-    class stream
-    {
-    public:
-        /// @brief Creates a new GPU stream on the current device.
-        /// @throws std::system_error if cudaStreamCreate fails.
-        stream() noexcept(false);
-
-        /// @brief Destroys the GPU stream (synchronizes if needed).
-        ~stream() noexcept;
-
-        /// @brief Non-copyable.
-        stream(const stream&) = delete;
-        /// @brief Non-copyable.
-        stream& operator=(const stream&) = delete;
-
-        /// @brief Move constructor.
-        stream(stream&& other) noexcept;
-
-        /// @brief Move assignment.
-        stream& operator=(stream&& other) noexcept;
-
-        /// @brief Returns the underlying CUDA stream handle.
-        [[nodiscard]] stream_handle handle() const noexcept { return handle_; }
-
-        /// @brief Synchronizes this stream (blocks until all queued work completes).
-        /// @throws std::system_error if cudaStreamSynchronize fails.
-        void synchronize() noexcept(false);
-
-        /// @brief Records an event on this stream (for async synchronization).
-        /// @return A GPU event that fires when all prior work on this stream completes.
-        /// @throws std::system_error if cudaEventCreate or cudaEventRecord fails.
-        [[nodiscard]] event create_event() noexcept(false);
-
-    private:
-        /// @brief The underlying CUDA stream handle, or null after a move.
-        stream_handle handle_ {};
-
-        /// @brief Destroys the CUDA stream and clears @ref handle_.
-        void destroy() noexcept;
     };
 
 } // namespace kmx::aio::gpu

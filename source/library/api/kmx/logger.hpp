@@ -22,21 +22,18 @@ namespace kmx::logger
         error
     };
 
-    namespace detail
+    /// @brief Internal helper to format log levels as a single char using std::array.
+    constexpr char level_to_char(const level l) noexcept
     {
-        /// @brief Internal helper to format log levels as a single char using std::array.
-        constexpr char level_to_char(const level l) noexcept
-        {
-            static constexpr std::array<char, static_cast<std::size_t>(level::error) + 2u> chars {
-                'D', // debug
-                'I', // info
-                'W', // warn
-                'E', // error
-                '?'  // unknown
-            };
-            const auto index = static_cast<std::size_t>(l);
-            return index < chars.size() ? chars[index] : chars.back();
-        }
+        static constexpr std::array<char, static_cast<std::size_t>(level::error) + 2u> chars {
+            'D', // debug
+            'I', // info
+            'W', // warn
+            'E', // error
+            '?'  // unknown
+        };
+        const auto index = static_cast<std::size_t>(l);
+        return index < chars.size() ? chars[index] : chars.back();
     }
 
     /// @brief Logs a formatted message to stdout/stderr.
@@ -57,13 +54,13 @@ namespace kmx::logger
             // Manually flush to ensure immediate output
             if (lvl == level::error)
             {
-                std::println(stderr, "[{0}] [{1}:{2}] {3}", detail::level_to_char(lvl), file, loc.line(),
+                std::println(stderr, "[{0}] [{1}:{2}] {3}", level_to_char(lvl), file, loc.line(),
                              std::format(fmt, std::forward<Args>(args)...));
                 std::fflush(stderr);
             }
             else
             {
-                std::println(stdout, "[{0}] [{1}:{2}] {3}", detail::level_to_char(lvl), file, loc.line(),
+                std::println(stdout, "[{0}] [{1}:{2}] {3}", level_to_char(lvl), file, loc.line(),
                              std::format(fmt, std::forward<Args>(args)...));
                 std::fflush(stdout);
             }

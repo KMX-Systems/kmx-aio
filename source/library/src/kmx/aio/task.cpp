@@ -35,7 +35,7 @@
 #include <cstddef>
 #include <new>
 
-namespace kmx::aio::detail
+namespace kmx::aio
 {
     /// @brief Bytes reserved ahead of every coroutine frame, holding the slab that owns it.
     /// @details A frame is allocated on whichever thread created the coroutine and destroyed on
@@ -92,4 +92,4 @@ namespace kmx::aio::detail
         else
             alloc->deallocate_remote(base);
     }
-} // namespace kmx::aio::detail
+} // namespace kmx::aio

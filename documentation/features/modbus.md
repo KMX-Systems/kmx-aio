@@ -71,7 +71,7 @@ timeout 25s "$TEST_BIN" "modbus tls: server rejects client with missing certific
 - `source/library/api/kmx/aio/modbus/tls_client.hpp`
 - `source/library/api/kmx/aio/modbus/tls_server.hpp`
 - `source/library/api/kmx/aio/modbus/frame.hpp`
-- `source/library/api/kmx/aio/modbus/detail/session.hpp`
+- `source/library/inc/kmx/aio/modbus/detail/session.hpp`
 - `source/library/src/kmx/aio/modbus/client.cpp`
 - `source/library/src/kmx/aio/modbus/server.cpp`
 - `source/library/src/kmx/aio/modbus/tls_client.cpp`

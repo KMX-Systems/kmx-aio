@@ -28,13 +28,12 @@ StaticLibrary {
     }
     cpp.includePaths: [
         "../api",
+        "../inc",
         "/usr/local/include",
     ].concat(project.tls_include_paths)
     install: true
     files: [
         "../api/kmx/aio/allocator/counter.hpp",
-        "../api/kmx/aio/allocator/detail/counter_kind.hpp",
-        "../api/kmx/aio/allocator/detail/thread_state.hpp",
         "../api/kmx/aio/allocator/slab.hpp",
         "../api/kmx/aio/allocator/statistics.hpp",
         "../api/kmx/aio/async_mutex.hpp",
@@ -44,7 +43,6 @@ StaticLibrary {
         "../api/kmx/aio/buffer/pool.hpp",
         "../api/kmx/aio/buffer/view/item.hpp",
         "../api/kmx/aio/channel.hpp",
-        "../api/kmx/aio/detail/syscalls.hpp",
         "../api/kmx/aio/error_code.hpp",
         "../api/kmx/aio/executor_base.hpp",
         "../api/kmx/aio/file_descriptor.hpp",
@@ -55,8 +53,10 @@ StaticLibrary {
         "../api/kmx/aio/stream_concepts.hpp",
         "../api/kmx/aio/task.hpp",
         "../api/kmx/aio/tls/basic_stream.hpp",
-        "../api/kmx/aio/tls/detail/tls_syscalls.hpp",
         "../api/kmx/aio/tls/stream.hpp",
+        "../inc/kmx/aio/allocator/detail/thread_state.hpp",
+        "../inc/kmx/aio/detail/syscalls.hpp",
+        "../inc/kmx/aio/tls/detail/tls_syscalls.hpp",
         "../src/kmx/aio/allocator/counter.cpp",
         "../src/kmx/aio/allocator/detail/thread_state.cpp",
         "../src/kmx/aio/allocator/slab.cpp",

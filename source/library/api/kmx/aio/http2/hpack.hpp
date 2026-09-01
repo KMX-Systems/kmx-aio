@@ -15,7 +15,6 @@
 /// @brief HTTP/2 core protocol definitions and utilities
 namespace kmx::aio::http2
 {
-
     /// @brief One header field as a (name, value) pair of views into caller-owned storage.
     using header_field = std::pair<std::string_view, std::string_view>;
     /// @brief An ordered list of header fields, as it appears on the wire.

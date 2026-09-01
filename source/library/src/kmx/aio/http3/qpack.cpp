@@ -72,6 +72,7 @@ namespace kmx::aio::http3::qpack
             std::optional<std::uint64_t> exact_index;
             std::optional<std::uint64_t> name_index;
         };
+
         std::vector<lookup_result> lookups;
         lookups.reserve(headers.size());
 

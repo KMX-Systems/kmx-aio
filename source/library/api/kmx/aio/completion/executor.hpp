@@ -202,7 +202,7 @@ namespace kmx::aio::completion
 
         /// @brief Checks whether the I/O thread is affined to the requested CPU core.
         /// @details Returns an error if the I/O thread is not currently running.
-        [[nodiscard]] expected_bool_t is_io_thread_affined_to(int core_id) noexcept;
+        [[nodiscard]] expected_bool_t is_io_thread_affined_to(const int core_id) noexcept;
 
         /// @brief Returns the thread-local default executor, creating it lazily on first call.
         /// @details The instance is created with default `executor_config` on the first call

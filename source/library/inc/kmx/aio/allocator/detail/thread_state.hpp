@@ -3,8 +3,6 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
-    #include <kmx/aio/allocator/detail/counter_kind.hpp>
-
     #include <atomic>
     #include <cstdint>
 #endif
@@ -12,6 +10,9 @@
 namespace kmx::aio::allocator
 {
     class slab;
+
+    /// @brief Which of the per-thread counters a process-wide total refers to.
+    enum class counter_kind : std::uint8_t;
 
     namespace detail
     {
