@@ -111,6 +111,10 @@ Quick reference showing which APIs are available in each execution model:
 | [**SPDK Block I/O**](documentation/features/spdk.md) | ❌ | ✅ | ⚙ | NVMe, generic bdev; DPDK-backed |
 | [**V4L2 Capture**](documentation/features/v4l2.md) | ✅ | ✅ | | No gate of its own; rides on whichever executor backend is enabled |
 
+This table says which model a feature *works* in. For how the two compare where both are available,
+`kmx-aio-benchmark` runs one scenario body on each executor and prints them side by side - see
+[Benchmarking](documentation/benchmarking.md#epoll-against-io_uring).
+
 ## Documentation
 
 * [Architecture](documentation/architecture.md)

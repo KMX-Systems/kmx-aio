@@ -11,39 +11,13 @@
     #include <unistd.h>
     #include <vector>
 
+    #include <kmx/aio/benchmark/feature/scenarios.hpp>
     #include <kmx/aio/completion/executor.hpp>
 
 namespace kmx::aio::benchmark
 {
     namespace completion_detail
     {
-        static task<void> rtt_body(completion::executor& exec, const fd_t client_fd, const fd_t server_fd, const std::size_t iterations,
-                                   std::vector<double>& samples) noexcept(false)
-        {
-            char out_byte {};
-            char in_byte {};
-
-            for (std::size_t i {}; i != iterations; ++i)
-            {
-                const auto start = clock_t::now();
-
-                if (!co_await exec.async_write(client_fd, cspan_char_t(&out_byte, 1u), 0u))
-                    co_return;
-
-                if (!co_await exec.async_read(server_fd, span_char_t(&in_byte, 1u), 0u))
-                    co_return;
-
-                if (!co_await exec.async_write(server_fd, cspan_char_t(&out_byte, 1u), 0u))
-                    co_return;
-
-                if (!co_await exec.async_read(client_fd, span_char_t(&in_byte, 1u), 0u))
-                    co_return;
-
-                samples.push_back(
-                    static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(clock_t::now() - start).count()));
-            }
-        }
-
         static task<void> noop() noexcept(false)
         {
             co_return;
@@ -88,28 +62,20 @@ namespace kmx::aio::benchmark
         }
     } // namespace completion_detail
 
+    /// @brief The io_uring side of the socketpair round trip.
+    /// @details Runs the shared scenario body, which is what makes the pairing mean anything. This
+    ///          case used to drive both ends of the socket from a single coroutine issuing four
+    ///          operations in a row, while the readiness side ran two coroutines that had to hand off
+    ///          to each other. Those are different amounts of work, and the difference was being
+    ///          reported as a difference between the executors. Both sides now run the same two
+    ///          coroutines; only the waiting differs.
     static result bench_completion_rtt(const double scale)
     {
-        const auto iterations = scaled(20'000u, scale);
-        int fd[2] {-1, -1};
-        if (::socketpair(AF_UNIX, SOCK_STREAM, 0, fd) != 0)
-            return skipped("completion/socketpair_rtt", "socketpair failed");
+        using scenario = feature::catalogue::socketpair_rtt_scenario;
 
-        std::vector<double> samples {};
-        samples.reserve(iterations);
-
-        {
-            completion::executor exec {completion::executor_config {.ring_entries = 256u}};
-            exec.spawn(completion_detail::rtt_body(exec, fd[0], fd[1], iterations, samples));
-            exec.run();
-        }
-
-        ::close(fd[0]);
-        ::close(fd[1]);
-
-        auto out = from_samples("completion/socketpair_rtt", samples);
-        out.note = "one round trip = 4 io_uring operations, one at a time, so nothing to batch";
-        return out;
+        return with_note(feature::socketpair_rtt<feature::completion_backend>("completion/socketpair_rtt",
+                                                                              scaled(scenario::iterations, scale), scenario::payload_size),
+                         "one round trip = 4 io_uring operations, one at a time, so nothing to batch");
     }
 
     static result bench_completion_spawn(const double scale)
@@ -200,12 +166,102 @@ namespace kmx::aio::benchmark
         return measure_completion_concurrent("completion/concurrent_echo (256 connections)", 256u, scale);
     }
 
+    static result bench_completion_tcp_echo_1(const double scale)
+    {
+        using scenario = feature::catalogue::tcp_echo_scenario;
+
+        return feature::tcp_echo_rtt<feature::completion_backend>("completion/tcp_echo_rtt (1 connection)", 1u,
+                                                                  scaled(scenario::single_rounds, scale), scenario::payload_size);
+    }
+
+    static result bench_completion_tcp_echo_many(const double scale)
+    {
+        using scenario = feature::catalogue::tcp_echo_scenario;
+
+        return with_note(feature::tcp_echo_rtt<feature::completion_backend>(
+                             "completion/tcp_echo_rtt (64 connections)", scenario::connections,
+                             scaled(scenario::many_total_rounds / scenario::connections, scale), scenario::payload_size),
+                         "round trips spread over 64 connections, timed first start to last finish");
+    }
+
+    static result bench_completion_tcp_throughput_small(const double scale)
+    {
+        using scenario = feature::catalogue::tcp_throughput_scenario;
+
+        return with_note(feature::tcp_throughput<feature::completion_backend>("completion/tcp_throughput (4 KiB blocks)",
+                                                                              scaled(scenario::total_bytes / scenario::small_block, scale),
+                                                                              scenario::small_block),
+                         "streamed one way; the sender never waits, so this is the cost of getting one block through");
+    }
+
+    static result bench_completion_tcp_throughput_medium(const double scale)
+    {
+        using scenario = feature::catalogue::tcp_throughput_scenario;
+
+        return with_note(feature::tcp_throughput<feature::completion_backend>("completion/tcp_throughput (16 KiB blocks)",
+                                                                              scaled(scenario::total_bytes / scenario::medium_block, scale),
+                                                                              scenario::medium_block),
+                         "streamed one way; the sender never waits, so this is the cost of getting one block through");
+    }
+
+    static result bench_completion_tcp_throughput_large(const double scale)
+    {
+        using scenario = feature::catalogue::tcp_throughput_scenario;
+
+        return with_note(feature::tcp_throughput<feature::completion_backend>("completion/tcp_throughput (64 KiB blocks)",
+                                                                              scaled(scenario::total_bytes / scenario::large_block, scale),
+                                                                              scenario::large_block),
+                         "streamed one way; the sender never waits, so this is the cost of getting one block through");
+    }
+
+    static result bench_completion_tcp_accept(const double scale)
+    {
+        using scenario = feature::catalogue::tcp_accept_scenario;
+
+        return with_note(feature::tcp_accept<feature::completion_backend>("completion/tcp_accept", scaled(scenario::connections, scale)),
+                         "connections brought all the way up, as a rate: both ends share one loop");
+    }
+
+    static result bench_completion_udp_echo(const double scale)
+    {
+        using scenario = feature::catalogue::udp_echo_scenario;
+
+        return feature::udp_echo_rtt<feature::completion_backend>("completion/udp_echo_rtt", scaled(scenario::iterations, scale),
+                                                                  scenario::payload_size);
+    }
+
+    static result bench_completion_timer(const double scale)
+    {
+        using scenario = feature::catalogue::timer_scenario;
+
+        return with_note(feature::timer_oneshot<feature::completion_backend>("completion/timer_oneshot (200 us)",
+                                                                             scaled(scenario::iterations, scale), scenario::interval),
+                         "overshoot: how much later than the 200 us asked for the wait actually returned");
+    }
+
     void register_completion_cases(registry& reg) noexcept(false)
     {
         reg.describe("completion", "the io_uring executor, to be read against the baseline round trips");
 
         reg.add("completion/spawn", bench_completion_spawn);
-        reg.add("completion/rtt", bench_completion_rtt);
+        reg.add_paired(feature::catalogue::socketpair_rtt_scenario::key, execution_model::completion, "completion/rtt",
+                       bench_completion_rtt);
+        reg.add_paired(feature::catalogue::tcp_echo_scenario::single_key, execution_model::completion, "completion/tcp_echo_1",
+                       bench_completion_tcp_echo_1);
+        reg.add_paired(feature::catalogue::tcp_echo_scenario::many_key, execution_model::completion, "completion/tcp_echo_64",
+                       bench_completion_tcp_echo_many);
+        reg.add_paired(feature::catalogue::tcp_throughput_scenario::small_key, execution_model::completion,
+                       "completion/tcp_throughput_small", bench_completion_tcp_throughput_small);
+        reg.add_paired(feature::catalogue::tcp_throughput_scenario::medium_key, execution_model::completion,
+                       "completion/tcp_throughput_medium", bench_completion_tcp_throughput_medium);
+        reg.add_paired(feature::catalogue::tcp_throughput_scenario::large_key, execution_model::completion,
+                       "completion/tcp_throughput_large", bench_completion_tcp_throughput_large);
+        reg.add_paired(feature::catalogue::tcp_accept_scenario::key, execution_model::completion, "completion/tcp_accept",
+                       bench_completion_tcp_accept);
+        reg.add_paired(feature::catalogue::udp_echo_scenario::key, execution_model::completion, "completion/udp_echo",
+                       bench_completion_udp_echo);
+        reg.add_paired(feature::catalogue::timer_scenario::key, execution_model::completion, "completion/timer_oneshot",
+                       bench_completion_timer);
         reg.add("completion/concurrent_1", bench_completion_concurrent_1);
         reg.add("completion/concurrent_8", bench_completion_concurrent_8);
         reg.add("completion/concurrent_64", bench_completion_concurrent_64);

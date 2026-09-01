@@ -15,6 +15,7 @@
     #include <unistd.h>
     #include <vector>
 
+    #include <kmx/aio/benchmark/feature/scenarios.hpp>
     #include <kmx/aio/readiness/descriptor/epoll.hpp>
     #include <kmx/aio/readiness/executor.hpp>
 
@@ -179,12 +180,21 @@ namespace kmx::aio::benchmark
         return out;
     }
 
+    /// @brief The epoll side of the socketpair round trip.
+    /// @details Runs the shared scenario body rather than a copy of it, so the io_uring side is
+    ///          measuring the identical two coroutines over the identical socket pair. It differs
+    ///          from the case above only in resumption mode, which is what makes the pair fair: the
+    ///          completion executor continues a coroutine on the thread that saw the completion, and
+    ///          inline_on_io_thread is the readiness setting that does the same. Left at the default,
+    ///          this side would additionally pay a scheduler hand-off per wake-up and the comparison
+    ///          would report that hand-off as though it were the cost of epoll.
     static result bench_readiness_rtt_inline(const double scale)
     {
-        auto out = measure_readiness_rtt("readiness/socketpair_rtt (inline)", scaled(20'000u, scale),
-                                         readiness::resumption_mode::inline_on_io_thread);
-        out.note = "resumed on the I/O thread that saw the event, so no hand-off";
-        return out;
+        using scenario = feature::catalogue::socketpair_rtt_scenario;
+
+        return with_note(feature::socketpair_rtt<feature::readiness_backend>("readiness/socketpair_rtt (inline)",
+                                                                             scaled(scenario::iterations, scale), scenario::payload_size),
+                         "resumed on the I/O thread that saw the event, so no hand-off");
     }
 
     /// @brief Compares the two wait_events() overloads at the default event capacity.
@@ -295,6 +305,79 @@ namespace kmx::aio::benchmark
         return out;
     }
 
+    static result bench_readiness_tcp_echo_1(const double scale)
+    {
+        using scenario = feature::catalogue::tcp_echo_scenario;
+
+        return feature::tcp_echo_rtt<feature::readiness_backend>("readiness/tcp_echo_rtt (1 connection)", 1u,
+                                                                 scaled(scenario::single_rounds, scale), scenario::payload_size);
+    }
+
+    static result bench_readiness_tcp_echo_many(const double scale)
+    {
+        using scenario = feature::catalogue::tcp_echo_scenario;
+
+        return with_note(feature::tcp_echo_rtt<feature::readiness_backend>(
+                             "readiness/tcp_echo_rtt (64 connections)", scenario::connections,
+                             scaled(scenario::many_total_rounds / scenario::connections, scale), scenario::payload_size),
+                         "round trips spread over 64 connections, timed first start to last finish");
+    }
+
+    static result bench_readiness_tcp_throughput_small(const double scale)
+    {
+        using scenario = feature::catalogue::tcp_throughput_scenario;
+
+        return with_note(feature::tcp_throughput<feature::readiness_backend>("readiness/tcp_throughput (4 KiB blocks)",
+                                                                             scaled(scenario::total_bytes / scenario::small_block, scale),
+                                                                             scenario::small_block),
+                         "streamed one way; the sender never waits, so this is the cost of getting one block through");
+    }
+
+    static result bench_readiness_tcp_throughput_medium(const double scale)
+    {
+        using scenario = feature::catalogue::tcp_throughput_scenario;
+
+        return with_note(feature::tcp_throughput<feature::readiness_backend>("readiness/tcp_throughput (16 KiB blocks)",
+                                                                             scaled(scenario::total_bytes / scenario::medium_block, scale),
+                                                                             scenario::medium_block),
+                         "streamed one way; the sender never waits, so this is the cost of getting one block through");
+    }
+
+    static result bench_readiness_tcp_throughput_large(const double scale)
+    {
+        using scenario = feature::catalogue::tcp_throughput_scenario;
+
+        return with_note(feature::tcp_throughput<feature::readiness_backend>("readiness/tcp_throughput (64 KiB blocks)",
+                                                                             scaled(scenario::total_bytes / scenario::large_block, scale),
+                                                                             scenario::large_block),
+                         "streamed one way; the sender never waits, so this is the cost of getting one block through");
+    }
+
+    static result bench_readiness_tcp_accept(const double scale)
+    {
+        using scenario = feature::catalogue::tcp_accept_scenario;
+
+        return with_note(feature::tcp_accept<feature::readiness_backend>("readiness/tcp_accept", scaled(scenario::connections, scale)),
+                         "connections brought all the way up, as a rate: both ends share one loop");
+    }
+
+    static result bench_readiness_udp_echo(const double scale)
+    {
+        using scenario = feature::catalogue::udp_echo_scenario;
+
+        return feature::udp_echo_rtt<feature::readiness_backend>("readiness/udp_echo_rtt", scaled(scenario::iterations, scale),
+                                                                 scenario::payload_size);
+    }
+
+    static result bench_readiness_timer(const double scale)
+    {
+        using scenario = feature::catalogue::timer_scenario;
+
+        return with_note(feature::timer_oneshot<feature::readiness_backend>("readiness/timer_oneshot (200 us)",
+                                                                            scaled(scenario::iterations, scale), scenario::interval),
+                         "overshoot: how much later than the 200 us asked for the wait actually returned");
+    }
+
     void register_readiness_cases(registry& reg) noexcept(false)
     {
         reg.describe("readiness", "the epoll executor, to be read against the baseline round trips");
@@ -304,7 +387,24 @@ namespace kmx::aio::benchmark
         reg.add("readiness/stop", bench_readiness_stop);
         reg.add("readiness/spawn", bench_readiness_spawn);
         reg.add("readiness/rtt_scheduler", bench_readiness_rtt_scheduler);
-        reg.add("readiness/rtt_inline", bench_readiness_rtt_inline);
+        reg.add_paired(feature::catalogue::socketpair_rtt_scenario::key, execution_model::readiness, "readiness/rtt_inline",
+                       bench_readiness_rtt_inline);
+        reg.add_paired(feature::catalogue::tcp_echo_scenario::single_key, execution_model::readiness, "readiness/tcp_echo_1",
+                       bench_readiness_tcp_echo_1);
+        reg.add_paired(feature::catalogue::tcp_echo_scenario::many_key, execution_model::readiness, "readiness/tcp_echo_64",
+                       bench_readiness_tcp_echo_many);
+        reg.add_paired(feature::catalogue::tcp_throughput_scenario::small_key, execution_model::readiness, "readiness/tcp_throughput_small",
+                       bench_readiness_tcp_throughput_small);
+        reg.add_paired(feature::catalogue::tcp_throughput_scenario::medium_key, execution_model::readiness,
+                       "readiness/tcp_throughput_medium", bench_readiness_tcp_throughput_medium);
+        reg.add_paired(feature::catalogue::tcp_throughput_scenario::large_key, execution_model::readiness, "readiness/tcp_throughput_large",
+                       bench_readiness_tcp_throughput_large);
+        reg.add_paired(feature::catalogue::tcp_accept_scenario::key, execution_model::readiness, "readiness/tcp_accept",
+                       bench_readiness_tcp_accept);
+        reg.add_paired(feature::catalogue::udp_echo_scenario::key, execution_model::readiness, "readiness/udp_echo",
+                       bench_readiness_udp_echo);
+        reg.add_paired(feature::catalogue::timer_scenario::key, execution_model::readiness, "readiness/timer_oneshot",
+                       bench_readiness_timer);
     }
 
 } // namespace kmx::aio::benchmark
