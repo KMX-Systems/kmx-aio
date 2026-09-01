@@ -64,6 +64,32 @@ namespace kmx::aio::benchmark
         cases_.push_back(case_entry {name, run});
     }
 
+    void registry::add_paired(const std::string_view key, const execution_model model, const std::string_view name,
+                              const case_fn_t run) noexcept(false)
+    {
+        cases_.push_back(case_entry {name, run, key, model});
+
+        // The scenario is listed the first time either side mentions it, so the comparison keeps the
+        // order the cases were registered in whichever side got there first.
+        for (const auto& item: pairs_)
+            if (item.key == key)
+                return;
+
+        pairs_.push_back(pair_entry {key, {}});
+    }
+
+    void registry::describe_pair(const std::string_view key, const std::string_view description) noexcept(false)
+    {
+        for (auto& item: pairs_)
+            if (item.key == key)
+            {
+                item.description = description;
+                return;
+            }
+
+        pairs_.push_back(pair_entry {key, description});
+    }
+
     void registry::describe(const std::string_view group, const std::string_view description) noexcept(false)
     {
         groups_.push_back(group_entry {group, description});
@@ -73,6 +99,15 @@ namespace kmx::aio::benchmark
     {
         for (const auto& item: groups_)
             if (item.name == group)
+                return item.description;
+
+        return {};
+    }
+
+    std::string_view registry::pair_description(const std::string_view key) const noexcept
+    {
+        for (const auto& item: pairs_)
+            if (item.key == key)
                 return item.description;
 
         return {};
@@ -119,6 +154,14 @@ namespace kmx::aio::benchmark
         out.has_distribution = true;
         out.has_p99 = (count >= detail::min_samples_for_p99);
         return out;
+    }
+
+    result with_note(result outcome, std::string note) noexcept(false)
+    {
+        if (!outcome.skipped)
+            outcome.note = std::move(note);
+
+        return outcome;
     }
 
     result skipped(std::string name, std::string reason) noexcept(false)
@@ -349,64 +392,76 @@ namespace kmx::aio::benchmark
         std::println("{}", header);
         std::println("{:-<{}}", "", rule_width);
 
-        std::string_view group = "\x01"; // A group name no case can have, so the first case opens a section.
+        // Sections are collected by group rather than taken from adjacency: a paired scenario
+        // registers one case in each of two groups, so registration order no longer keeps a group's
+        // rows together. Groups appear in the order they are first seen and rows keep their order
+        // within a group, which is what plain adjacency gave when every group was contiguous.
+        std::vector<std::string_view> groups {};
         for (const auto& item: results)
         {
             const auto item_group = group_of(item.name);
-            if (item_group != group)
+            if (std::find(groups.begin(), groups.end(), item_group) == groups.end())
+                groups.push_back(item_group);
+        }
+
+        for (const auto& group: groups)
+        {
+            std::println("");
+            if (!group.empty())
             {
-                group = item_group;
-                std::println("");
-                if (!group.empty())
-                {
-                    const auto description = reg.description(group);
-                    if (description.empty())
-                        std::println("{}", group);
-                    else
-                        std::println("{} - {}", group, description);
-                }
+                const auto description = reg.description(group);
+                if (description.empty())
+                    std::println("{}", group);
+                else
+                    std::println("{} - {}", group, description);
             }
 
-            auto line = std::format("{:{}}{:<{}}", "", row_indent, case_of(item.name), name_width - row_indent);
-            if (item.skipped)
+            for (const auto& item: results)
             {
-                // The numeric columns stay empty, so the reason lands under the note column like any other remark.
-                add_column(line, "skipped", time_width);
-                add_column(line, "", time_width);
-                add_column(line, "", time_width);
-                add_column(line, "", time_width);
-                add_column(line, "", rate_width);
-                add_column(line, "", count_width);
-            }
-            else
-            {
-                add_column(line, duration_text(item.mean_ns), time_width);
-                if (item.has_distribution)
+                if (group_of(item.name) != group)
+                    continue;
+
+                auto line = std::format("{:{}}{:<{}}", "", row_indent, case_of(item.name), name_width - row_indent);
+                if (item.skipped)
                 {
-                    add_column(line, duration_text(item.min_ns), time_width);
-                    add_column(line, duration_text(item.p50_ns), time_width);
-                    add_column(line, item.has_p99 ? duration_text(item.p99_ns) : std::string {"-"}, time_width);
+                    // The numeric columns stay empty, so the reason lands under the note column like any other remark.
+                    add_column(line, "skipped", time_width);
+                    add_column(line, "", time_width);
+                    add_column(line, "", time_width);
+                    add_column(line, "", time_width);
+                    add_column(line, "", rate_width);
+                    add_column(line, "", count_width);
                 }
                 else
                 {
-                    add_column(line, "-", time_width);
-                    add_column(line, "-", time_width);
-                    add_column(line, "-", time_width);
+                    add_column(line, duration_text(item.mean_ns), time_width);
+                    if (item.has_distribution)
+                    {
+                        add_column(line, duration_text(item.min_ns), time_width);
+                        add_column(line, duration_text(item.p50_ns), time_width);
+                        add_column(line, item.has_p99 ? duration_text(item.p99_ns) : std::string {"-"}, time_width);
+                    }
+                    else
+                    {
+                        add_column(line, "-", time_width);
+                        add_column(line, "-", time_width);
+                        add_column(line, "-", time_width);
+                    }
+
+                    add_column(line, rate_text((item.mean_ns > 0.0) ? (1e9 / item.mean_ns) : 0.0), rate_width);
+                    add_column(line, count_text(item.operations), count_width);
                 }
 
-                add_column(line, rate_text((item.mean_ns > 0.0) ? (1e9 / item.mean_ns) : 0.0), rate_width);
-                add_column(line, count_text(item.operations), count_width);
+                const auto note_lines = wrapped(item.note, note_width);
+                if (!note_lines.empty())
+                    add_last_column(line, note_lines.front());
+
+                std::println("{}", line);
+
+                // A note too long for the column carries on down it, under its own first line.
+                for (std::size_t i = 1u; i < note_lines.size(); ++i)
+                    std::println("{:{}}{}{}", "", columns_width, column_gap, note_lines[i]);
             }
-
-            const auto note_lines = wrapped(item.note, note_width);
-            if (!note_lines.empty())
-                add_last_column(line, note_lines.front());
-
-            std::println("{}", line);
-
-            // A note too long for the column carries on down it, under its own first line.
-            for (std::size_t i = 1u; i < note_lines.size(); ++i)
-                std::println("{:{}}{}{}", "", columns_width, column_gap, note_lines[i]);
         }
 
         std::println("");
@@ -416,6 +471,263 @@ namespace kmx::aio::benchmark
         std::println("or - under p99 alone - that it took fewer than {} samples, too few for a percentile to name anything.",
                      detail::min_samples_for_p99);
         std::fflush(stdout);
+    }
+
+    namespace detail
+    {
+        /// @brief Field width of the delta column, wide enough for "+1234%".
+        static constexpr std::size_t delta_width = 7u;
+
+        /// @brief The figure a comparison row quotes for one side.
+        /// @param item The result to read.
+        /// @return The median where the case sampled each operation, the mean where it timed a whole loop.
+        static double quoted_ns(const result& item) noexcept
+        {
+            return item.has_distribution ? item.p50_ns : item.mean_ns;
+        }
+
+        /// @brief Finds one side of a pairing among the results.
+        /// @param results The results to search.
+        /// @param key The scenario name.
+        /// @param model The side wanted.
+        /// @return The result, or nullptr when that side did not run - it was filtered out, or the
+        ///         model is not in this build.
+        static const result* side_of(const std::vector<result>& results, const std::string_view key, const execution_model model) noexcept
+        {
+            for (const auto& item: results)
+                if ((item.pair_key == key) && (item.model == model))
+                    return &item;
+
+            return nullptr;
+        }
+
+        /// @brief Formats the change from the epoll figure to the io_uring one.
+        /// @param readiness_ns The epoll figure.
+        /// @param completion_ns The io_uring figure.
+        /// @return The change as a signed percentage, negative where io_uring is the faster of the two.
+        /// @throws std::bad_alloc if the result cannot be stored.
+        static std::string delta_text(const double readiness_ns, const double completion_ns) noexcept(false)
+        {
+            if (readiness_ns <= 0.0)
+                return "-";
+
+            return std::format("{:+.0f}%", ((completion_ns - readiness_ns) / readiness_ns) * 100.0);
+        }
+
+        /// @brief Escapes a string for a JSON document.
+        /// @param text The text to escape.
+        /// @return The escaped text, without the surrounding quotes.
+        /// @throws std::bad_alloc if the result cannot be stored.
+        static std::string json_escaped(const std::string_view text) noexcept(false)
+        {
+            std::string out {};
+            out.reserve(text.size());
+            for (const auto c: text)
+            {
+                switch (c)
+                {
+                    case '"':
+                        out += "\\\"";
+                        break;
+                    case '\\':
+                        out += "\\\\";
+                        break;
+                    case '\n':
+                        out += "\\n";
+                        break;
+                    case '\r':
+                        out += "\\r";
+                        break;
+                    case '\t':
+                        out += "\\t";
+                        break;
+                    default:
+                        // Everything below a space has to be escaped; a UTF-8 continuation byte is
+                        // above it and passes through, which keeps a "µs" in a note intact.
+                        if (static_cast<unsigned char>(c) < 0x20u)
+                            out += std::format("\\u{:04x}", static_cast<unsigned>(static_cast<unsigned char>(c)));
+                        else
+                            out += c;
+
+                        break;
+                }
+            }
+
+            return out;
+        }
+
+        /// @brief Names an execution model for the JSON output.
+        /// @param model The model.
+        /// @return Its name.
+        static std::string_view model_name(const execution_model model) noexcept
+        {
+            switch (model)
+            {
+                case execution_model::readiness:
+                    return "readiness";
+                case execution_model::completion:
+                    return "completion";
+                case execution_model::none:
+                    break;
+            }
+
+            return "none";
+        }
+    } // namespace detail
+
+    void print_comparison(const std::vector<result>& results, const registry& reg) noexcept
+    {
+        using namespace detail;
+
+        if (reg.pairs().empty())
+            return;
+
+        // Only pairings with at least one side among the results, so a --filter that selected none of
+        // them prints no empty section.
+        std::vector<const pair_entry*> present {};
+        std::size_t name_width = 8u;
+        std::size_t note_width {};
+        for (const auto& pair: reg.pairs())
+        {
+            const auto* readiness_side = side_of(results, pair.key, execution_model::readiness);
+            const auto* completion_side = side_of(results, pair.key, execution_model::completion);
+            if ((readiness_side == nullptr) && (completion_side == nullptr))
+                continue;
+
+            present.push_back(&pair);
+            name_width = std::max(name_width, width_of(pair.key) + row_indent);
+
+            // A skipped side explains itself in the note column, so its reason has to fit there too.
+            auto note = pair.description;
+            note_width = std::max(note_width, note.size());
+            for (const auto* side: {readiness_side, completion_side})
+                if ((side != nullptr) && side->skipped)
+                    note_width = std::max(note_width, side->note.size());
+        }
+
+        if (present.empty())
+            return;
+
+        note_width = std::min(note_width, note_width_cap);
+
+        auto header = std::format("{:<{}}", "scenario", name_width);
+        add_column(header, "epoll", time_width);
+        add_column(header, "io_uring", time_width);
+        add_column(header, "delta", delta_width);
+        add_column(header, "ops", count_width);
+
+        const auto columns_width = width_of(header);
+        const auto rule_width = (note_width == 0u) ? columns_width : (columns_width + column_gap.size() + note_width);
+        if (note_width != 0u)
+            add_last_column(header, "what the scenario does");
+
+        std::println("");
+        std::println("");
+        std::println("epoll against io_uring - one scenario, the same work, measured on both executors");
+        std::println("");
+        std::println("{}", header);
+        std::println("{:-<{}}", "", rule_width);
+
+        for (const auto* pair: present)
+        {
+            const auto* readiness_side = side_of(results, pair->key, execution_model::readiness);
+            const auto* completion_side = side_of(results, pair->key, execution_model::completion);
+
+            // "not run" and "skipped" are different answers and the reader needs both: the first means
+            // a filter or a build gate left the side out, the second that the machine could not run it.
+            const auto cell = [](const result* side) noexcept(false) -> std::string
+            {
+                if (side == nullptr)
+                    return "not run";
+
+                return side->skipped ? std::string {"skipped"} : duration_text(quoted_ns(*side));
+            };
+
+            auto line = std::format("{:{}}{:<{}}", "", row_indent, pair->key, name_width - row_indent);
+            add_column(line, cell(readiness_side), time_width);
+            add_column(line, cell(completion_side), time_width);
+
+            // A delta is only meaningful with two figures in hand, and only when both quote the same
+            // kind of figure - a median against a whole-loop mean would be a number with no meaning.
+            const auto both_ran =
+                (readiness_side != nullptr) && (completion_side != nullptr) && !readiness_side->skipped && !completion_side->skipped;
+            const auto comparable = both_ran && (readiness_side->has_distribution == completion_side->has_distribution);
+            add_column(line, comparable ? delta_text(quoted_ns(*readiness_side), quoted_ns(*completion_side)) : std::string {"-"},
+                       delta_width);
+
+            // Both sides run the same amount of work by construction, so one operation count describes
+            // the row; where they disagree the smaller one is the honest figure to print.
+            std::size_t operations {};
+            if (both_ran)
+                operations = std::min(readiness_side->operations, completion_side->operations);
+            else if (readiness_side != nullptr)
+                operations = readiness_side->operations;
+            else if (completion_side != nullptr)
+                operations = completion_side->operations;
+
+            add_column(line, (operations == 0u) ? std::string {"-"} : count_text(operations), count_width);
+
+            // The scenario's own line normally, replaced by a skip reason when there is one to give -
+            // why a side could not run is what the reader needs from that row, not what it would have done.
+            auto note = pair->description;
+            for (const auto* side: {readiness_side, completion_side})
+                if ((side != nullptr) && side->skipped && !side->note.empty())
+                    note = side->note;
+
+            const auto note_lines = wrapped(note, note_width);
+            if (!note_lines.empty())
+                add_last_column(line, note_lines.front());
+
+            std::println("{}", line);
+
+            for (std::size_t i = 1u; i < note_lines.size(); ++i)
+                std::println("{:{}}{}{}", "", columns_width, column_gap, note_lines[i]);
+        }
+
+        std::println("");
+        std::println("{:-<{}}", "", rule_width);
+        std::println("Each figure is the cost of one operation: the median where the case sampled every operation, the mean");
+        std::println("where it timed a whole loop. delta is how the io_uring figure differs from the epoll one, so a negative");
+        std::println("delta means io_uring was the faster of the two. The same figures appear in the table above, with their");
+        std::println("distributions; this section only puts the two sides of each scenario on one line.");
+        std::fflush(stdout);
+    }
+
+    void print_json(const std::vector<result>& results, std::FILE* const out) noexcept
+    {
+        using namespace detail;
+
+        std::println(out, "{{");
+        std::println(out, "  \"results\": [");
+        for (std::size_t i {}; i != results.size(); ++i)
+        {
+            const auto& item = results[i];
+            std::string line = "    {";
+            line += std::format("\"name\": \"{}\"", json_escaped(item.name));
+            line += std::format(", \"pair\": \"{}\"", json_escaped(item.pair_key));
+            line += std::format(", \"model\": \"{}\"", model_name(item.model));
+            line += std::format(", \"skipped\": {}", item.skipped ? "true" : "false");
+            line += std::format(", \"operations\": {}", item.operations);
+            line += std::format(", \"mean_ns\": {:.3f}", item.mean_ns);
+            if (item.has_distribution)
+            {
+                line += std::format(", \"min_ns\": {:.3f}", item.min_ns);
+                line += std::format(", \"p50_ns\": {:.3f}", item.p50_ns);
+                if (item.has_p99)
+                    line += std::format(", \"p99_ns\": {:.3f}", item.p99_ns);
+            }
+
+            line += std::format(", \"note\": \"{}\"", json_escaped(item.note));
+            line += '}';
+            if ((i + 1u) != results.size())
+                line += ',';
+
+            std::println(out, "{}", line);
+        }
+
+        std::println(out, "  ]");
+        std::println(out, "}}");
+        std::fflush(out);
     }
 
 } // namespace kmx::aio::benchmark
