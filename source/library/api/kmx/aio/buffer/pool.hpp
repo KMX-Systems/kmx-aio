@@ -50,7 +50,17 @@ namespace kmx::aio::buffer
         static_assert(std::is_default_constructible_v<T>, "buffer::pool<T, Capacity> requires default-constructible T");
 
         /// @brief Default constructor: initializes all slots and builds free list.
-        pool() noexcept;
+        pool() noexcept
+        {
+            // Initialize free list as a chain: slots_[0] -> slots_[1] -> ... -> slots_[Capacity-1] -> nullptr
+            for (std::size_t i = 0; i + 1u < Capacity; ++i)
+                slots_[i].next_free_ = &slots_[i + 1u];
+
+            slots_[Capacity - 1u].next_free_ = nullptr;
+
+            // Set head to first slot
+            free_list_head_ = &slots_[0];
+        }
 
         /// @brief Destructor: no-op (all memory is stack-allocated).
         ~pool() noexcept = default;
@@ -83,7 +93,25 @@ namespace kmx::aio::buffer
         ///       block on a hot path. Throwing also forces every such caller into a try/catch that is easy to
         ///       get wrong - the QUIC read path currently catches, logs and then silently drops the bytes it
         ///       had already read, which on a reliable stream is a protocol violation the peer cannot detect.
-        [[nodiscard]] std::optional<handle<T>> try_acquire() noexcept;
+        [[nodiscard]] std::optional<handle<T>> try_acquire() noexcept
+        {
+            {
+                std::lock_guard<std::mutex> lock(free_list_mutex_);
+                if (free_list_head_ == nullptr)
+                    return {};
+            }
+
+            // T's constructor may throw, which acquire() propagates; here it is reported the same way exhaustion
+            // is, so that a caller on an event loop has exactly one failure path to handle rather than two.
+            try
+            {
+                return acquire();
+            }
+            catch (...)
+            {
+                return {};
+            }
+        }
 
         /// @brief Number of buffers currently available (not yet leased).
         [[nodiscard]] std::size_t available() const noexcept { return Capacity - allocated_count_.load(std::memory_order_acquire); }
@@ -105,7 +133,7 @@ namespace kmx::aio::buffer
         struct slot
         {
             /// @brief Storage for T (uninitialized until acquired).
-            alignas(T) std::byte storage[sizeof(T)];
+            alignas(T) std::array<std::byte, sizeof(T)> storage;
 
             /// @brief Intrusive free-list link (valid only when slot is not leased).
             slot* next_free_ {};
@@ -126,12 +154,12 @@ namespace kmx::aio::buffer
 
         /// @brief Releases a buffer back to the free list (called by handle destructor).
         /// @param ptr Pointer to the buffer to release (must be from this pool).
-        void release(T* ptr) noexcept;
+        void release(T* const ptr) noexcept;
 
         /// @brief Reinterprets raw pointer as slot pointer (type erasure support).
         /// @param ptr Raw T* pointer (must point to a slot in this pool).
         /// @return Pointer to the containing slot.
-        static slot* ptr_to_slot(T* ptr) noexcept
+        static slot* ptr_to_slot(T* const ptr) noexcept
         {
             // Reinterpret T* as the address of the slot's storage member
             return reinterpret_cast<slot*>(reinterpret_cast<std::byte*>(ptr) - offsetof(slot, storage));
@@ -140,45 +168,11 @@ namespace kmx::aio::buffer
         /// @brief Reinterprets slot pointer as T pointer.
         /// @param s Pointer to a slot.
         /// @return Pointer to the T object within the slot.
-        static T* slot_to_ptr(slot* s) noexcept { return reinterpret_cast<T*>(&s->storage); }
+        static T* slot_to_ptr(slot* const s) noexcept { return reinterpret_cast<T*>(s->storage.data()); }
 
         // handle needs access to release() and slot conversion
         friend class handle<T>;
     };
-
-    template <typename T, std::size_t Capacity>
-    pool<T, Capacity>::pool() noexcept
-    {
-        // Initialize free list as a chain: slots_[0] -> slots_[1] -> ... -> slots_[Capacity-1] -> nullptr
-        for (std::size_t i = 0; i + 1u < Capacity; ++i)
-            slots_[i].next_free_ = &slots_[i + 1u];
-
-        slots_[Capacity - 1u].next_free_ = nullptr;
-
-        // Set head to first slot
-        free_list_head_ = &slots_[0];
-    }
-
-    template <typename T, std::size_t Capacity>
-    std::optional<handle<T>> pool<T, Capacity>::try_acquire() noexcept
-    {
-        {
-            std::lock_guard<std::mutex> lock(free_list_mutex_);
-            if (free_list_head_ == nullptr)
-                return {};
-        }
-
-        // T's constructor may throw, which acquire() propagates; here it is reported the same way exhaustion
-        // is, so that a caller on an event loop has exactly one failure path to handle rather than two.
-        try
-        {
-            return acquire();
-        }
-        catch (...)
-        {
-            return {};
-        }
-    }
 
     template <typename T, std::size_t Capacity>
     handle<T> pool<T, Capacity>::acquire() noexcept(false)
@@ -211,7 +205,7 @@ namespace kmx::aio::buffer
         allocated_count_.fetch_add(1, std::memory_order_release);
 
         // Create release function (captured in lambda, converted to function pointer)
-        auto release_fn = [](void* pool_ptr, T* buf_ptr) noexcept
+        auto release_fn = [](void* const pool_ptr, T* const buf_ptr) noexcept
         {
             auto* const owner = static_cast<pool<T, Capacity>*>(pool_ptr);
             owner->release(buf_ptr);
@@ -222,7 +216,7 @@ namespace kmx::aio::buffer
     }
 
     template <typename T, std::size_t Capacity>
-    void pool<T, Capacity>::release(T* ptr) noexcept
+    void pool<T, Capacity>::release(T* const ptr) noexcept
     {
         // LCOV_EXCL_BR_LINE / LCOV_EXCL_LINE on the return: release() is private and reached only
         // through handle, which checks its pointer before calling. The guard stays because the

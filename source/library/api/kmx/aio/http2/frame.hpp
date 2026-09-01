@@ -9,7 +9,6 @@
 /// @brief HTTP/2 core protocol definitions and utilities
 namespace kmx::aio::http2
 {
-
     /// @brief Defines standard HTTP/2 frame type identifiers
     enum class frame_type : std::uint8_t
     {

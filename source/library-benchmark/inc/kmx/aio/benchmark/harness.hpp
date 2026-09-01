@@ -21,13 +21,13 @@ namespace kmx::aio::benchmark
     struct result
     {
         std::string name;          ///< Case name, as registered.
+        std::string note;          ///< Free-form remark, e.g. why a case was skipped.
         std::size_t operations {}; ///< Number of operations measured.
         double mean_ns {};         ///< Mean cost of one operation.
         double min_ns {};          ///< Fastest observed operation (samples only).
         double p50_ns {};          ///< Median operation (samples only).
         double p99_ns {};          ///< 99th percentile operation (samples only).
         bool has_distribution {};  ///< True when the percentile fields are populated.
-        std::string note;          ///< Free-form remark, e.g. why a case was skipped.
         bool skipped {};           ///< True when the case could not run on this machine.
     };
 

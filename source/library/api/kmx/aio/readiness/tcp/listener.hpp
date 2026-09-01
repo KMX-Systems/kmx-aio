@@ -3,7 +3,6 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
-
     #include <kmx/aio/basic_types.hpp>
     #include <kmx/aio/readiness/executor.hpp>
     #include <kmx/aio/readiness/io_base.hpp>
@@ -21,7 +20,7 @@ namespace kmx::aio::readiness::tcp
         /// @param ip   The local IP address to bind to.
         /// @param port The local TCP port to bind to.
         /// @throws std::system_error If the socket could not be created, bound, or registered.
-        listener(executor& exec, ip_address_t ip, port_t port) noexcept(false);
+        listener(executor& exec, ip_address_t ip, const port_t port) noexcept(false);
         /// @brief Unregisters the descriptor and closes the listening socket.
         ~listener() override = default;
         /// @brief Move constructor — transfers ownership of the descriptor.

@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <kmx/aio/gpu/executor.hpp>
+#include <kmx/aio/gpu/stream.hpp>
 
 namespace kmx::aio::test::gpu::executor_test
 {

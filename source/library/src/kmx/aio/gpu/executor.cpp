@@ -2,7 +2,9 @@
 /// @brief GPU completion-model executor implementation.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/allocator/slab.hpp>
+#include <kmx/aio/gpu/event.hpp>
 #include <kmx/aio/gpu/executor.hpp>
+#include <kmx/aio/gpu/stream.hpp>
 
 #include <algorithm>
 #include <condition_variable>
@@ -11,6 +13,8 @@
 #include <pthread.h>
 #include <queue>
 #include <stop_token>
+#include <string>
+#include <system_error>
 #include <thread>
 #include <utility>
 #include <vector>

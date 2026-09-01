@@ -45,6 +45,7 @@ StaticLibrary {
             "../api/kmx/aio/completion/udp/**.hpp",
             "../api/kmx/aio/completion/tls/**.hpp",
             "../api/kmx/aio/completion/v4l2/**.hpp",
+            "../inc/kmx/aio/completion/**.hpp",
             "../src/kmx/aio/completion/detail/**.cpp",
             "../src/kmx/aio/completion/executor.cpp",
             "../src/kmx/aio/completion/timer.cpp",

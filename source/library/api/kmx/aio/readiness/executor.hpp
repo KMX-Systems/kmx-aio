@@ -256,7 +256,8 @@ namespace kmx::aio::readiness
         /// @param cancelled Flag in the awaiting coroutine's frame, set when the wait is cancelled.
         /// @return `false` when the descriptor is already cancelled and the caller must not suspend.
         /// @throws std::bad_alloc If the subscription map could not grow.
-        [[nodiscard]] bool subscribe(fd_t fd, event_type type, coroutine_handle_t handle, bool* cancelled) noexcept(false);
+        [[nodiscard]] bool subscribe(const fd_t fd, const event_type type, coroutine_handle_t handle,
+                                     bool* const cancelled) noexcept(false);
 
         // Resumes every waiter on fd, flagging each as cancelled first.
         // @param remember Keep the descriptor marked so a subscription arriving afterwards is refused
@@ -269,7 +270,7 @@ namespace kmx::aio::readiness
         ///                 too. Wanted when the descriptor stays registered and someone may still try to
         ///                 wait on it (cancel_io); not wanted when it is being taken away for good
         ///                 (unregister_fd), where the mark would outlive everything that could consult it.
-        void cancel_waiters(fd_t fd, bool remember) noexcept;
+        void cancel_waiters(const fd_t fd, const bool remember) noexcept;
 
         // Internal loop function.
         /// @brief Body of the event loop: reaps epoll events and resumes their waiters until stopped.
@@ -283,7 +284,7 @@ namespace kmx::aio::readiness
         /// @brief Resumes the first waiter subscribed to (@p fd, @p type), if any.
         /// @param fd   The descriptor the event fired on.
         /// @param type The event that fired.
-        void resume_if_found(fd_t fd, event_type type);
+        void resume_if_found(const fd_t fd, const event_type type);
 
         /// @brief Wakes the event loop out of epoll_wait immediately.
         /// @details Written to when the loop is asked to stop. Without it the loop learns of a stop

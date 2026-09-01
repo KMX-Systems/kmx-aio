@@ -1,3 +1,4 @@
+#include <kmx/aio/error_code.hpp>
 #include <kmx/aio/sample/tcp/echo/client/manager.hpp>
 #include <kmx/aio/sample/tcp/echo/common.hpp>
 
@@ -108,9 +109,15 @@ namespace kmx::aio::sample::tcp::echo::client
         if (const auto reg_result = executor_->register_fd(fd); !reg_result)
             co_return std::unexpected(reg_result.error());
 
-        // If connect is in progress, wait for socket to be writable
+        // If connect is in progress, wait for socket to be writable. A false result is a cancelled wait
+        // rather than a ready socket - the executor is shutting the operation down, so the descriptor has
+        // to be handed back before leaving.
         if (in_progress)
-            co_await executor_->wait_io(fd, kmx::aio::readiness::event_type::write);
+            if (!co_await executor_->wait_io(fd, kmx::aio::readiness::event_type::write))
+            {
+                executor_->unregister_fd(fd);
+                co_return std::unexpected(to_std_error_code(error_code::operation_cancelled));
+            }
 
         // Check connection status using wrapper
         int so_error {};

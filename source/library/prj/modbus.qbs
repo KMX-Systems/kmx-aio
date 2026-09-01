@@ -39,6 +39,7 @@ StaticLibrary {
     install: true
     files: [
         "../api/kmx/aio/modbus/**.hpp",
+        "../inc/kmx/aio/modbus/**.hpp",
         "../src/kmx/aio/modbus/error.cpp",
         "../src/kmx/aio/modbus/frame.cpp",
         "../src/kmx/aio/modbus/client.cpp",

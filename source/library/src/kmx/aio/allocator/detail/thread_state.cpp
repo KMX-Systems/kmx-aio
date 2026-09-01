@@ -2,6 +2,8 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/allocator/detail/thread_state.hpp>
 
+#include <kmx/aio/allocator/counter.hpp>
+
 #include <mutex>
 #include <new>
 
