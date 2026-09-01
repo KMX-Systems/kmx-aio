@@ -29,6 +29,7 @@
 #include <kmx/aio/scheduler.hpp>
 #include <kmx/aio/task.hpp>
 #include <kmx/aio/test/executor_runner.hpp>
+#include <kmx/aio/test/fd_pair.hpp>
 #include <kmx/logger.hpp>
 
 namespace kmx::aio::test::branch_edges_test
@@ -100,32 +101,6 @@ namespace kmx::aio::test::branch_edges_test
     // readiness executor: cancellation bookkeeping
     namespace detail
     {
-        /// @brief A connected pair of non-blocking sockets, closed on destruction.
-        class socket_pair
-        {
-        public:
-            socket_pair() noexcept { valid_ = ::socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0, fds_) == 0; }
-
-            socket_pair(const socket_pair&) = delete;
-            socket_pair& operator=(const socket_pair&) = delete;
-
-            ~socket_pair() noexcept
-            {
-                if (valid_)
-                {
-                    ::close(fds_[0]);
-                    ::close(fds_[1]);
-                }
-            }
-
-            [[nodiscard]] bool valid() const noexcept { return valid_; }
-            [[nodiscard]] int local() const noexcept { return fds_[0]; }
-            [[nodiscard]] int peer() const noexcept { return fds_[1]; }
-
-        private:
-            int fds_[2] {-1, -1};
-            bool valid_ = false;
-        };
     } // namespace detail
 
 #if defined(KMX_AIO_FEATURE_READINESS)
@@ -133,7 +108,7 @@ namespace kmx::aio::test::branch_edges_test
     {
         // cancel_io walks the subscription table and finds nothing to resume. The empty-table side of
         // that search is never taken by a test that cancels a wait it just parked.
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<readiness::executor>();
@@ -150,7 +125,7 @@ namespace kmx::aio::test::branch_edges_test
         // subscribe() refuses a descriptor that cancel_io has marked, and the awaiter reports the wait
         // as cancelled without ever suspending. That is the arm that keeps a cancel landing between a
         // caller's own check and its subscription from being lost.
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<readiness::executor>();
@@ -179,7 +154,7 @@ namespace kmx::aio::test::branch_edges_test
     {
         // The subscription list holds more than one entry per descriptor, and cancel walks all of them.
         // A single-waiter test only ever takes the "list is now empty" side of that loop.
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<readiness::executor>();
@@ -229,7 +204,7 @@ namespace kmx::aio::test::branch_edges_test
     {
         // Subscriptions are keyed on descriptor and direction, so cancelling one direction leaves the
         // other in the table - the "different key, keep looking" arm of the cancellation walk.
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<readiness::executor>();
@@ -306,7 +281,7 @@ namespace kmx::aio::test::branch_edges_test
     {
         // run() arms the executor with running_.exchange(true) and only creates the I/O thread when it
         // was the one to arm it. A second run() has to find it already armed and not start a rival loop.
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<readiness::executor>();
@@ -419,7 +394,7 @@ namespace kmx::aio::test::branch_edges_test
         // has awaited it, and the loop must drop the event rather than resume something that is not
         // there. Every other test in the suite parks a wait first, so only the found-and-non-empty side
         // had ever been taken.
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<readiness::executor>();
@@ -448,7 +423,7 @@ namespace kmx::aio::test::branch_edges_test
     {
         // The list for a descriptor is erased once its last waiter is taken, and kept when others
         // remain. A single waiter reaches the erase; the two-waiter case below it reaches the other.
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<readiness::executor>();
@@ -550,7 +525,7 @@ namespace kmx::aio::test::branch_edges_test
         // resume_if_found takes the front waiter and erases the list only once it is empty. Two waiters
         // woken by real events - not by a cancellation, which resumes them all at once - is what takes
         // the "list still has entries" side of that check.
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<readiness::executor>();

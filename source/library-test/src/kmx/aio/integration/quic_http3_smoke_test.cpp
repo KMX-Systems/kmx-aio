@@ -4,7 +4,11 @@
 #if defined(KMX_AIO_FEATURE_QUIC)
 
     #include <catch2/catch_test_macros.hpp>
+
+    #include <kmx/aio/test/tls_certs.hpp>
+
     #include <catch2/generators/catch_generators.hpp>
+    #include <kmx/aio/test/sample_process.hpp>
 
     #include <chrono>
     #include <cstdlib>
@@ -24,107 +28,6 @@ namespace kmx::aio::test::integration::quic_http3_smoke_test
         completion_http3,
         readiness_echo,
     };
-
-    [[nodiscard]] static auto read_file_text(const fs::path& path) -> std::string
-    {
-        std::ifstream in(path);
-        if (!in.is_open())
-            return {};
-
-        return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
-    }
-
-    [[nodiscard]] static auto shell_quote(const std::string_view raw) -> std::string
-    {
-        std::string quoted;
-        quoted.reserve(raw.size() + 2u);
-        quoted.push_back('\'');
-        for (const char ch: raw)
-        {
-            if (ch == '\'')
-                quoted += "'\\''";
-            else
-                quoted.push_back(ch);
-        }
-        quoted.push_back('\'');
-        return quoted;
-    }
-    [[nodiscard]] static bool ensure_quic_certificates()
-    {
-        const fs::path cert_path = "/tmp/quic_cert.pem";
-        const fs::path key_path = "/tmp/quic_key.pem";
-        if (fs::exists(cert_path) && fs::exists(key_path))
-            return true;
-        const int ret = std::system("openssl req -x509 -newkey rsa:2048 -keyout /tmp/quic_key.pem -out /tmp/quic_cert.pem "
-                                    "-days 1 -nodes -subj \"/CN=localhost\" >/dev/null 2>&1");
-        return ret == 0 && fs::exists(cert_path) && fs::exists(key_path);
-    }
-    [[nodiscard]] static auto contains_markers_in_order(const std::string_view text,
-                                                        const std::initializer_list<std::string_view> markers) -> bool
-    {
-        std::size_t pos = 0;
-        for (const auto marker: markers)
-        {
-            const std::size_t found = text.find(marker, pos);
-            if (found == std::string_view::npos)
-                return false;
-            pos = found + marker.size();
-        }
-
-        return true;
-    }
-
-    [[nodiscard]] static auto find_repo_root() -> std::optional<fs::path>
-    {
-        auto cur = fs::current_path();
-        while (!cur.empty())
-        {
-            if (fs::exists(cur / "kmx-aio.qbs"))
-                return cur;
-
-            if (cur == cur.root_path())
-                break;
-            cur = cur.parent_path();
-        }
-
-        return std::nullopt;
-    }
-
-    [[nodiscard]] static auto find_binary_under_debug(const fs::path& repo_root,
-                                                      const std::string_view binary_name) -> std::optional<fs::path>
-    {
-        const std::vector<fs::path> debug_dirs = {
-            // Where the scripts build (see script/feature/common.sh), then the two in-tree locations a bare
-            // "qbs build" leaves behind depending on the directory it was run from.
-            repo_root / "output" / "debug",
-            repo_root / "debug",
-            repo_root / "source" / "debug",
-        };
-
-        std::optional<fs::path> newest_path;
-        fs::file_time_type newest_mtime {};
-
-        for (const auto& debug_dir: debug_dirs)
-        {
-            if (!fs::exists(debug_dir) || !fs::is_directory(debug_dir))
-                continue;
-
-            for (const auto& entry: fs::recursive_directory_iterator(debug_dir))
-            {
-                if (!entry.is_regular_file() || entry.path().filename() != binary_name)
-                    continue;
-
-                const auto mtime = entry.last_write_time();
-                if (!newest_path.has_value() || mtime > newest_mtime)
-                {
-                    newest_path = entry.path();
-                    newest_mtime = mtime;
-                }
-            }
-        }
-
-        return newest_path;
-    }
 
     /// SPDK is installed into its own prefix rather than next to the sample binaries, so when a build has
     /// the SPDK feature on, the samples need that directory on their library path. It is optional: a build
@@ -170,7 +73,7 @@ namespace kmx::aio::test::integration::quic_http3_smoke_test
             SKIP(std::string("QUIC smoke skipped: sample binary not built: ") +
                  (server_bin_opt.has_value() ? client_bin_name : server_bin_name));
 
-        if (!ensure_quic_certificates())
+        if (!ensure_self_signed_pair("/tmp/quic_cert.pem", "/tmp/quic_key.pem"))
             SKIP("QUIC smoke skipped: failed to generate /tmp/quic_cert.pem and /tmp/quic_key.pem");
 
         const auto now_ns = std::chrono::steady_clock::now().time_since_epoch().count();

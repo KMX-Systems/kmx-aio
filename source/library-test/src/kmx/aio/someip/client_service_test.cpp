@@ -4,6 +4,8 @@
 #include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/someip/client.hpp>
 #include <kmx/aio/someip/error.hpp>
+#include <kmx/aio/test/executor_runner.hpp>
+#include <kmx/aio/test/outcome.hpp>
 
 #include <memory>
 #include <optional>
@@ -26,53 +28,17 @@ namespace kmx::aio::test::someip::client_service_test
             };
         }
 
-        template <typename Result>
-        struct coroutine_result_state
-        {
-            std::optional<Result> result;
-            bool completed = false;
-        };
-
-        task<void> run_start(client& c, std::shared_ptr<coroutine_result_state<expected_void_t>> state, completion::executor& exec)
-        {
-            state->result.emplace(co_await c.start());
-            state->completed = true;
-            exec.stop();
-            co_return;
-        }
-
-        task<void> run_stop(client& c, std::shared_ptr<coroutine_result_state<expected_void_t>> state, completion::executor& exec)
-        {
-            state->result.emplace(co_await c.stop());
-            state->completed = true;
-            exec.stop();
-            co_return;
-        }
-
-        task<void> run_call(client& c, std::shared_ptr<coroutine_result_state<std::expected<call_result, std::error_code>>> state,
-                            completion::executor& exec)
-        {
-            state->result.emplace(co_await c.call_method(0x1111u, 0x2222u, 0x3333u, {1u, 2u, 3u}));
-            state->completed = true;
-            exec.stop();
-            co_return;
-        }
     }
-
-    using namespace detail;
 
     TEST_CASE("someip client start and stop succeed", "[someip][client][service]")
     {
-        client c {make_test_config()};
+        client c {detail::make_test_config()};
 
         {
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
             completion::executor exec;
-            exec.spawn(run_start(c, state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
+            const auto state = run_awaited(exec, c.start());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
         }
 
         const auto& stats = c.get_stats();
@@ -81,78 +47,57 @@ namespace kmx::aio::test::someip::client_service_test
         CHECK(stats.dropped_events == 0u);
 
         {
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
             completion::executor exec;
-            exec.spawn(run_stop(c, state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
+            const auto state = run_awaited(exec, c.stop());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
         }
     }
 
     TEST_CASE("someip client call fails when service unavailable", "[someip][client][service]")
     {
-        client c {make_test_config()};
+        client c {detail::make_test_config()};
 
         {
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
             completion::executor exec;
-            exec.spawn(run_start(c, state, exec));
-            exec.run();
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
+            const auto state = run_awaited(exec, c.start());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
         }
 
         {
-            auto state = std::make_shared<coroutine_result_state<std::expected<call_result, std::error_code>>>();
             completion::executor exec;
-            exec.spawn(run_call(c, state, exec));
-            exec.run();
-            REQUIRE(state->result.has_value());
-            REQUIRE_FALSE(state->result->has_value());
-            CHECK(state->result->error() == make_error_code(error::service_unavailable));
+            const auto state = run_awaited(exec, c.call_method(0x1111u, 0x2222u, 0x3333u, {1u, 2u, 3u}));
+            REQUIRE(state.has_value());
+            REQUIRE_FALSE(state->has_value());
+            CHECK(state->error() == make_error_code(error::service_unavailable));
         }
     }
 
     TEST_CASE("someip client call returns payload when service requested", "[someip][client][service]")
     {
-        client c {make_test_config()};
+        client c {detail::make_test_config()};
 
         {
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
             completion::executor exec;
-            exec.spawn(run_start(c, state, exec));
-            exec.run();
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
+            const auto state = run_awaited(exec, c.start());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
         }
 
         {
-            auto request_state = std::make_shared<coroutine_result_state<expected_void_t>>();
             completion::executor exec;
-            auto body = [&]() -> task<void>
-            {
-                request_state->result.emplace(co_await c.request_service(0x1111u, 0x2222u));
-                request_state->completed = true;
-                exec.stop();
-                co_return;
-            };
-            exec.spawn(body());
-            exec.run();
-            REQUIRE(request_state->completed);
-            REQUIRE(request_state->result.has_value());
-            REQUIRE(request_state->result->has_value());
+            const auto request_state = run_awaited(exec, c.request_service(0x1111u, 0x2222u));
+            REQUIRE(request_state.has_value());
+            REQUIRE(request_state->has_value());
         }
 
         {
-            auto call_state = std::make_shared<coroutine_result_state<std::expected<call_result, std::error_code>>>();
             completion::executor exec;
-            exec.spawn(run_call(c, call_state, exec));
-            exec.run();
-            REQUIRE(call_state->result.has_value());
-            REQUIRE(call_state->result->has_value());
-            CHECK(call_state->result->value().payload == std::vector<std::uint8_t>({1u, 2u, 3u}));
+            const auto call_state = run_awaited(exec, c.call_method(0x1111u, 0x2222u, 0x3333u, {1u, 2u, 3u}));
+            REQUIRE(call_state.has_value());
+            REQUIRE(call_state->has_value());
+            CHECK(call_state->value().payload == std::vector<std::uint8_t>({1u, 2u, 3u}));
 
             const auto& stats = c.get_stats();
             CHECK(stats.call_requests == 1u);

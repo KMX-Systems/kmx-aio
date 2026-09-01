@@ -1,7 +1,7 @@
 import qbs
 
 Project {
-    name: "kmx-aio-benchmark"
+    name: "kmx-aio-sample"
     references: [
         "common/common.qbs",
         "readiness/tcp/echo/common/tcp-echo-common.qbs",

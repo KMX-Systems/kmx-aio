@@ -3,6 +3,11 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <kmx/aio/test/temp_dir.hpp>
+#include <kmx/aio/test/tls_certs.hpp>
+
+#include <kmx/aio/test/sample_process.hpp>
+
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -13,94 +18,19 @@ namespace kmx::aio::test::integration::tls_mtls_smoke_test
 {
     namespace fs = std::filesystem;
 
-    [[nodiscard]] static auto read_file_text(const fs::path& path) -> std::string
-    {
-        std::ifstream in(path);
-        if (!in.is_open())
-            return {};
-
-        return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
-    }
-
-    [[nodiscard]] static auto shell_quote(const std::string_view raw) -> std::string
-    {
-        std::string quoted;
-        quoted.reserve(raw.size() + 2u);
-        quoted.push_back('\'');
-        for (const char ch: raw)
-        {
-            if (ch == '\'')
-                quoted += "'\\''";
-            else
-                quoted.push_back(ch);
-        }
-        quoted.push_back('\'');
-        return quoted;
-    }
-
-    [[nodiscard]] static bool ensure_mtls_certificates()
-    {
-        const fs::path cert_dir = "/tmp/kmx_mtls_certs";
-        const fs::path server_cert = cert_dir / "server_cert.pem";
-        const fs::path server_key = cert_dir / "server_key.pem";
-        const fs::path client_cert = cert_dir / "client_cert.pem";
-        const fs::path client_key = cert_dir / "client_key.pem";
-        const fs::path client_csr = cert_dir / "client.csr";
-
-        // Check if all files exist
-        if (fs::exists(server_cert) && fs::exists(server_key) && fs::exists(client_cert) && fs::exists(client_key))
-        {
-            return true;
-        }
-
-        // Create certificate directory
-        std::error_code ec;
-        fs::create_directories(cert_dir, ec);
-        if (ec)
-            return false;
-
-        // Generate server key and self-signed certificate
-        std::string server_gen_cmd = "openssl req -x509 -newkey rsa:2048 -keyout " + shell_quote(server_key.string()) + " -out " +
-                                     shell_quote(server_cert.string()) + " -days 1 -nodes -subj \"/CN=localhost\" >/dev/null 2>&1";
-
-        if (std::system(server_gen_cmd.c_str()) != 0)
-            return false;
-
-        // Generate client key
-        std::string client_key_cmd = "openssl genrsa -out " + shell_quote(client_key.string()) + " 2048 >/dev/null 2>&1";
-
-        if (std::system(client_key_cmd.c_str()) != 0)
-            return false;
-
-        // Generate client CSR
-        std::string client_csr_cmd = "openssl req -new -key " + shell_quote(client_key.string()) + " -out " +
-                                     shell_quote(client_csr.string()) + " -subj \"/CN=client\" >/dev/null 2>&1";
-
-        if (std::system(client_csr_cmd.c_str()) != 0)
-            return false;
-
-        // Sign client certificate with server key
-        std::string client_sign_cmd = "openssl x509 -req -in " + shell_quote(client_csr.string()) + " -signkey " +
-                                      shell_quote(server_key.string()) + " -out " + shell_quote(client_cert.string()) +
-                                      " -days 1 >/dev/null 2>&1";
-
-        if (std::system(client_sign_cmd.c_str()) != 0)
-            return false;
-
-        // Verify all certificates were created
-        return fs::exists(server_cert) && fs::exists(server_key) && fs::exists(client_cert) && fs::exists(client_key);
-    }
-
     TEST_CASE("mTLS smoke test with valid client and server certificates", "[tls][mtls][smoke][slow]")
     {
-        if (!ensure_mtls_certificates())
+        const scoped_temp_dir cert_dir {"kmx_mtls_certs"};
+        REQUIRE(cert_dir.valid());
+
+        const auto certs = ensure_ca_signed_set(cert_dir.path());
+        if (!certs.has_value())
             SKIP("mTLS smoke skipped: failed to generate mTLS certificates");
 
-        const fs::path cert_dir = "/tmp/kmx_mtls_certs";
-        const fs::path server_cert = cert_dir / "server_cert.pem";
-        const fs::path server_key = cert_dir / "server_key.pem";
-        const fs::path client_cert = cert_dir / "client_cert.pem";
-        const fs::path client_key = cert_dir / "client_key.pem";
+        const fs::path& server_cert = certs->server_cert;
+        const fs::path& server_key = certs->server_key;
+        const fs::path& client_cert = certs->client_cert;
+        const fs::path& client_key = certs->client_key;
 
         // Test 1: Certificates are generated and readable
         REQUIRE(fs::exists(server_cert));
@@ -127,18 +57,12 @@ namespace kmx::aio::test::integration::tls_mtls_smoke_test
         REQUIRE(client_key_text.find("BEGIN") != std::string::npos);
 
         // Test 5: Verify certificates can be parsed by OpenSSL
-        const std::string verify_server_cmd = "openssl x509 -in " + shell_quote(server_cert.string()) + " -text -noout >/dev/null 2>&1";
-        REQUIRE(std::system(verify_server_cmd.c_str()) == 0);
-
-        const std::string verify_client_cmd = "openssl x509 -in " + shell_quote(client_cert.string()) + " -text -noout >/dev/null 2>&1";
-        REQUIRE(std::system(verify_client_cmd.c_str()) == 0);
+        REQUIRE(verify_certificate(server_cert));
+        REQUIRE(verify_certificate(client_cert));
 
         // Test 6: Verify server and client keys are valid RSA keys
-        const std::string verify_server_key_cmd = "openssl rsa -in " + shell_quote(server_key.string()) + " -check -noout >/dev/null 2>&1";
-        REQUIRE(std::system(verify_server_key_cmd.c_str()) == 0);
-
-        const std::string verify_client_key_cmd = "openssl rsa -in " + shell_quote(client_key.string()) + " -check -noout >/dev/null 2>&1";
-        REQUIRE(std::system(verify_client_key_cmd.c_str()) == 0);
+        REQUIRE(verify_private_key(server_key));
+        REQUIRE(verify_private_key(client_key));
 
         // Test 7: Verify mTLS setup is complete (all artifacts present and valid)
         REQUIRE(!server_cert_text.empty());

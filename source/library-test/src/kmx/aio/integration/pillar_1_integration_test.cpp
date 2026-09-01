@@ -12,6 +12,7 @@
 
 #include <kmx/aio/readiness/executor.hpp>
 #include <kmx/aio/readiness/openonload/extensions.hpp>
+#include <kmx/aio/test/system_probe.hpp>
 
 #include <atomic>
 #include <fstream>
@@ -21,22 +22,6 @@
 
 namespace kmx::aio::test::integration::pillar_1_integration_test
 {
-    [[nodiscard]] static bool hugepages_available() noexcept
-    {
-        std::ifstream meminfo {"/proc/meminfo"};
-        if (!meminfo)
-            return false;
-
-        std::string label;
-        std::uint64_t value {};
-        std::string unit;
-        while (meminfo >> label >> value >> unit)
-            if (label == "HugePages_Total:")
-                return value > 0u;
-
-        return false;
-    }
-
     struct test_state
     {
         std::atomic_bool spdk_init_ok {false};

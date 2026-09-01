@@ -29,6 +29,7 @@
 #include <kmx/aio/scheduler.hpp>
 #include <kmx/aio/task.hpp>
 #include <kmx/aio/test/executor_runner.hpp>
+#include <kmx/aio/test/fd_pair.hpp>
 
 namespace kmx::aio::test::lifecycle_edges_test
 {
@@ -38,33 +39,6 @@ namespace kmx::aio::test::lifecycle_edges_test
 
     namespace detail
     {
-        /// @brief A connected pair of non-blocking sockets, closed on destruction unless released.
-        class socket_pair
-        {
-        public:
-            socket_pair() noexcept { valid_ = ::socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0, fds_) == 0; }
-
-            socket_pair(const socket_pair&) = delete;
-            socket_pair& operator=(const socket_pair&) = delete;
-
-            ~socket_pair() noexcept
-            {
-                for (int& fd: fds_)
-                    if (fd >= 0)
-                        ::close(fd);
-            }
-
-            [[nodiscard]] bool valid() const noexcept { return valid_; }
-            [[nodiscard]] int local() const noexcept { return fds_[0]; }
-            [[nodiscard]] int peer() const noexcept { return fds_[1]; }
-
-            /// @brief Gives up ownership of the local end, for handing to a stream.
-            [[nodiscard]] int release_local() noexcept { return std::exchange(fds_[0], -1); }
-
-        private:
-            int fds_[2] {-1, -1};
-            bool valid_ = false;
-        };
     } // namespace detail
 
     // io_base teardown, through the two stream types that derive from it
@@ -73,7 +47,7 @@ namespace kmx::aio::test::lifecycle_edges_test
     {
         // ~io_base() is what keeps a closed descriptor from staying in epoll: the fd number is reused by
         // the next open, and a stale registration would then deliver that descriptor's events here.
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         readiness::executor exec;
@@ -105,7 +79,7 @@ namespace kmx::aio::test::lifecycle_edges_test
 
     TEST_CASE("a completion stream tears down without an executor round-trip", "[completion][io_base][lifetime]")
     {
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         completion::executor exec;
@@ -122,7 +96,7 @@ namespace kmx::aio::test::lifecycle_edges_test
     {
         // io_base holds a weak lifetime token precisely so that this ordering is safe: the destructor
         // must notice the executor is gone rather than call unregister_fd on freed memory.
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_unique<readiness::executor>();

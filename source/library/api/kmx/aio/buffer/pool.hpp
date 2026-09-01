@@ -78,6 +78,7 @@ namespace kmx::aio::buffer
         /// @brief Acquires a buffer from the pool (lease via RAII handle).
         /// @return A handle<T> that holds exclusive ownership until destruction.
         /// @throws std::runtime_error if the pool is exhausted (all Capacity buffers allocated).
+        /// @throws Whatever T's default constructor throws; the free list is restored first.
         ///
         /// @details
         /// The returned handle manages the buffer's lifetime. When the handle is destroyed,
@@ -87,31 +88,15 @@ namespace kmx::aio::buffer
 
         /// @brief Leases a buffer, or reports that none is free.
         /// @return A handle to the leased buffer, or an empty optional when the pool is exhausted.
-        /// @note The non-throwing counterpart of acquire(), for callers on an event loop. There, exhaustion is
-        ///       not an error but backpressure: the correct response is to stop taking on new work until a
-        ///       buffer comes back, which is a decision the caller has to make and cannot make from a catch
-        ///       block on a hot path. Throwing also forces every such caller into a try/catch that is easy to
-        ///       get wrong - the QUIC read path currently catches, logs and then silently drops the bytes it
-        ///       had already read, which on a reliable stream is a protocol violation the peer cannot detect.
-        [[nodiscard]] std::optional<handle<T>> try_acquire() noexcept
-        {
-            {
-                std::lock_guard<std::mutex> lock(free_list_mutex_);
-                if (free_list_head_ == nullptr)
-                    return {};
-            }
-
-            // T's constructor may throw, which acquire() propagates; here it is reported the same way exhaustion
-            // is, so that a caller on an event loop has exactly one failure path to handle rather than two.
-            try
-            {
-                return acquire();
-            }
-            catch (...)
-            {
-                return {};
-            }
-        }
+        /// @throws Whatever T's default constructor throws; the free list is restored first.
+        /// @note The primitive of the two: acquire() is this function plus a throw. Exhaustion is what a
+        ///       caller on an event loop meets in normal operation, where it is not an error but
+        ///       backpressure - the response is to stop taking on new work until a buffer comes back, a
+        ///       decision the caller has to make and cannot make from a catch block on a hot path.
+        /// @note Exhaustion is the only condition the empty optional reports. A failing constructor still
+        ///       throws, because a caller that reads construction failure as backpressure waits for buffers
+        ///       to come back that were never taken, and waits forever.
+        [[nodiscard]] std::optional<handle<T>> try_acquire() noexcept(std::is_nothrow_default_constructible_v<T>);
 
         /// @brief Number of buffers currently available (not yet leased).
         [[nodiscard]] std::size_t available() const noexcept { return Capacity - allocated_count_.load(std::memory_order_acquire); }
@@ -177,28 +162,50 @@ namespace kmx::aio::buffer
     template <typename T, std::size_t Capacity>
     handle<T> pool<T, Capacity>::acquire() noexcept(false)
     {
+        // try_acquire() is the whole operation; the two differ only in how they report an empty pool, and
+        // that difference is not worth a second pass over the free list. Checking for a free slot first and
+        // then leasing would take the mutex twice and let the pool empty in between.
+        auto leased = try_acquire();
+        if (!leased)
+            throw std::runtime_error("buffer::pool exhausted: all " + std::to_string(Capacity) + " buffers allocated");
+
+        return std::move(*leased);
+    }
+
+    template <typename T, std::size_t Capacity>
+    std::optional<handle<T>> pool<T, Capacity>::try_acquire() noexcept(std::is_nothrow_default_constructible_v<T>)
+    {
         std::lock_guard<std::mutex> lock(free_list_mutex_);
 
         if (free_list_head_ == nullptr)
-            throw std::runtime_error("buffer::pool exhausted: all " + std::to_string(Capacity) + " buffers allocated");
+            return {};
 
         // Pop from free list
         slot* acquired_slot = free_list_head_;
         free_list_head_ = acquired_slot->next_free_;
         acquired_slot->next_free_ = nullptr; // Mark as not in free list
 
-        // Construct T in-place
+        // Construct T in-place. The rollback exists only for a T that can fail: with a nothrow constructor
+        // this function is noexcept, where a catch block that rethrows is dead code the compiler warns is a
+        // call to terminate.
         T* buffer = slot_to_ptr(acquired_slot);
-        try
+        if constexpr (std::is_nothrow_default_constructible_v<T>)
         {
             new (buffer) T();
         }
-        catch (...)
+        else
         {
-            // Restore free-list state if construction fails.
-            acquired_slot->next_free_ = free_list_head_;
-            free_list_head_ = acquired_slot;
-            throw;
+            try
+            {
+                new (buffer) T();
+            }
+            catch (...)
+            {
+                // Restore free-list state if construction fails.
+                acquired_slot->next_free_ = free_list_head_;
+                free_list_head_ = acquired_slot;
+                throw;
+            }
         }
 
         // Increment allocated count

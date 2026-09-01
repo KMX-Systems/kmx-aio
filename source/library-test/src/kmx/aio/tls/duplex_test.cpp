@@ -33,6 +33,7 @@
     #include <kmx/aio/readiness/tcp/stream.hpp>
     #include <kmx/aio/task.hpp>
     #include <kmx/aio/test/executor_runner.hpp>
+    #include <kmx/aio/test/tls_certs.hpp>
     #include <kmx/aio/tls/stream.hpp>
 
 namespace kmx::aio::test::tls::duplex_test
@@ -96,30 +97,6 @@ namespace kmx::aio::test::tls::duplex_test
 
             return credentials;
         }
-
-        /// @brief An SSL_CTX released on destruction.
-        class scoped_ctx
-        {
-        public:
-            /// @brief Wraps a context, taking ownership.
-            explicit scoped_ctx(::SSL_CTX* const ctx) noexcept: ctx_(ctx) {}
-
-            scoped_ctx(const scoped_ctx&) = delete;
-            scoped_ctx& operator=(const scoped_ctx&) = delete;
-
-            ~scoped_ctx() noexcept
-            {
-                if (ctx_ != nullptr)
-                    ::SSL_CTX_free(ctx_);
-            }
-
-            /// @brief The context, or nullptr.
-            [[nodiscard]] ::SSL_CTX* get() const noexcept { return ctx_; }
-
-        private:
-            /// @brief The owned context.
-            ::SSL_CTX* ctx_ {};
-        };
 
         /// @brief Echoes back whatever arrives, until the peer stops sending.
         /// @param server The accepting side of the session.
@@ -220,8 +197,8 @@ namespace kmx::aio::test::tls::duplex_test
         if (!credentials.usable)
             SKIP("openssl(1) could not generate a server certificate");
 
-        const detail::scoped_ctx server_ctx {::SSL_CTX_new(::TLS_server_method())};
-        const detail::scoped_ctx client_ctx {::SSL_CTX_new(::TLS_client_method())};
+        const scoped_ssl_ctx server_ctx {::TLS_server_method()};
+        const scoped_ssl_ctx client_ctx {::TLS_client_method()};
         REQUIRE(server_ctx.get() != nullptr);
         REQUIRE(client_ctx.get() != nullptr);
 

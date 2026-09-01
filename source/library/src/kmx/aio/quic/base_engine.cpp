@@ -162,10 +162,29 @@ namespace kmx::aio::quic
         ::lsquic_global_cleanup();
     }
 
+    void primary_base_impl::check_engine_thread(const std::string_view operation) noexcept
+    {
+        // Before init_lsquic() there is no engine and no owning thread yet, so nothing to violate.
+        if ((engine_thread_ == std::thread::id {}) || (engine_thread_ == std::this_thread::get_id()))
+            return;
+
+        // Once. The pump calls through here per datagram, and a line per datagram would bury the first
+        // one - which is the only one that says where the damage started.
+        if (reported_foreign_thread_.exchange(true, std::memory_order_relaxed))
+            return;
+
+        logger::log(logger::level::error, std::source_location::current(),
+                    "[QUIC] {} called off the engine thread; lsquic has no internal locking, so the engine state is "
+                    "now unreliable",
+                    operation);
+    }
+
     void primary_base_impl::destroy_lsquic_engine() noexcept
     {
         if (lsquic_engine_)
         {
+            check_engine_thread("engine teardown");
+
             ::lsquic_engine_destroy(lsquic_engine_);
             lsquic_engine_ = nullptr;
         }
@@ -265,25 +284,25 @@ namespace kmx::aio::quic
             return;
         }
 
-        buffer::handle<stream_payload_buffer> payload_storage;
-        try
+        // stream_payload_buffer is trivially default-constructible, so an empty optional here means one
+        // thing only: every buffer in the pool is out on loan.
+        auto leased = self->stream_payload_pool_.try_acquire();
+        if (!leased)
         {
-            payload_storage = self->stream_payload_pool_.acquire();
-        }
-        catch (const std::exception&)
-        {
-            std::array<char, stream_payload_capacity> scratch {};
-            const ssize_t nr = ::lsquic_stream_read(stream, scratch.data(), scratch.size());
-            if (nr > 0)
-            {
-                logger::log(logger::level::warn, std::source_location::current(), "QUIC payload pool exhausted; dropping {} byte(s)",
-                            static_cast<std::size_t>(nr));
-                return;
-            }
+            // Park the stream rather than read it. Reading into a scratch buffer would move lsquic's read
+            // offset and free the flow-control window, telling the peer the bytes arrived, and then throw
+            // them away - a hole in a stream the peer was promised is reliable, and one it has no way to
+            // detect. Leaving the bytes unread closes the window instead, which is how a QUIC receiver is
+            // supposed to say "not now". resume_parked_reads() re-arms the stream once a buffer is back.
+            ::lsquic_stream_wantread(stream, 0);
+            if (self->read_parked_streams_.park(stream))
+                logger::log(logger::level::warn, std::source_location::current(),
+                            "QUIC payload pool exhausted; pausing stream reads until a buffer is returned");
 
-            handle_read_result(nr);
             return;
         }
+
+        buffer::handle<stream_payload_buffer> payload_storage = std::move(*leased);
 
         const ssize_t nr = ::lsquic_stream_read(stream, payload_storage->data(), payload_storage->size());
         if (nr > 0)
@@ -371,6 +390,10 @@ namespace kmx::aio::quic
             return;
 
         self->post_handshake_streams_.erase(stream);
+
+        // A stream can be closed while parked, and resume_parked_reads() would then re-arm a pointer lsquic
+        // has already destroyed.
+        self->read_parked_streams_.forget(stream);
     }
 
     auto primary_base_impl::init_lsquic(const kmx::aio::quic::settings& config, unsigned lsquic_flags) -> expected_void_t
@@ -400,6 +423,11 @@ namespace kmx::aio::quic
         lsquic_engine_ = ::lsquic_engine_new(lsquic_flags, &engine_api);
         if (!lsquic_engine_)
             return std::unexpected(error_from_errno(EINVAL));
+
+        // The engine belongs to whichever thread built it, which is the one running the executor that
+        // called start() or connect(). Recorded here rather than in the constructor because the object
+        // may well be built somewhere else; what matters is the thread that will drive it.
+        engine_thread_ = std::this_thread::get_id();
 
         return {};
     }
@@ -508,8 +536,29 @@ namespace kmx::aio::quic
         msg.msg_iovlen = 1;
     }
 
+    void primary_base_impl::resume_parked_reads() noexcept
+    {
+        if (stream_payload_pool_.available() == 0u)
+            return;
+
+        const auto resumed = read_parked_streams_.resume([](::lsquic_stream_t* const parked) { ::lsquic_stream_wantread(parked, 1); });
+        if (resumed != 0u)
+            logger::log(logger::level::debug, std::source_location::current(), "QUIC payload buffer returned; resuming {} stream read(s)",
+                        resumed);
+    }
+
     void primary_base_impl::drive_engine_once() noexcept
     {
+        // The single funnel every connection tick passes through, on both the readiness and the completion
+        // model, and so the one place worth checking: a packet fed in from a foreign thread reaches lsquic
+        // through here, and so does every stream callback lsquic makes back into this object.
+        check_engine_thread("engine processing");
+
+        // Before the pass, so a stream re-armed here gets its on_read in the same one. Both models reach this
+        // on every idle tick as well as on every datagram, so a buffer returned while the socket is quiet
+        // still resumes within a tick.
+        resume_parked_reads();
+
         ::lsquic_engine_process_conns(lsquic_engine_);
         ::lsquic_engine_send_unsent_packets(lsquic_engine_);
     }

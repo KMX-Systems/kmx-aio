@@ -28,24 +28,13 @@
 #include <kmx/aio/readiness/avb/eth_socket.hpp>
 #include <kmx/aio/readiness/executor.hpp>
 #include <kmx/aio/task.hpp>
+#include <kmx/aio/test/system_probe.hpp>
 
 namespace kmx::aio::test::avb::eth_socket_epoll_registration_test
 {
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
-
-    /// Returns true when the process has CAP_NET_RAW or is running as root.
-    [[nodiscard]] static bool has_cap_net_raw() noexcept
-    {
-        // Attempt a zero-payload AF_PACKET/ETH_P_ALL socket.
-        // This is the cheapest reliable check without parsing /proc/self/status.
-        const int fd = ::socket(AF_PACKET, SOCK_RAW | SOCK_CLOEXEC, ::htons(ETH_P_ALL));
-        if (fd < 0)
-            return false;
-        ::close(fd);
-        return true;
-    }
 
     /// Returns the ifindex of "lo", or -1 on failure.
     [[nodiscard]] static int lo_ifindex() noexcept

@@ -26,7 +26,10 @@ namespace kmx::aio
     /// @details Ownership is handed straight from the releasing holder to the first waiter in line, so
     ///          waiters are served in the order they arrived and none of them is woken only to find the
     ///          mutex taken again.
-    /// @note Not recursive: a coroutine that already holds it and awaits it again deadlocks.
+    /// @note Not recursive: a coroutine that already holds it and awaits it again queues behind itself
+    ///       and never wakes. The mutex recognises that case - it knows which coroutine it handed
+    ///       ownership to - and logs it at error level rather than letting the process hang with
+    ///       nothing on record. It still hangs; what changes is that the log says why.
     /// @warning The releasing holder resumes the next waiter on its own thread, inline. Everything the
     ///          resumed coroutine does up to its next suspension therefore runs before unlock()
     ///          returns.
@@ -93,15 +96,25 @@ namespace kmx::aio
             /// @param owner The mutex to acquire.
             explicit awaiter(async_mutex& owner) noexcept: owner_(owner) {}
 
-            /// @brief Takes the mutex without suspending when it is free.
-            /// @return True when ownership was taken here, false to go on to await_suspend().
-            [[nodiscard]] bool await_ready() noexcept { return owner_.try_lock(); }
+            /// @brief Always defers to await_suspend().
+            /// @return Always false.
+            /// @note An earlier version took the mutex here when it was free, sparing the coroutine the
+            ///       suspend point. What that path could not do is say who took it: await_ready() is
+            ///       handed no coroutine handle, so a mutex acquired through it had an anonymous
+            ///       holder, and a coroutine later awaiting the mutex it already holds was
+            ///       indistinguishable from one waiting its turn - the deadlock the class documents,
+            ///       with nothing able to name it. Deferring costs a stored resume index and a branch,
+            ///       because await_suspend() below returns false and execution falls straight back into
+            ///       the coroutine without a round trip through its caller. That buys a single
+            ///       acquisition path, which knows the handle.
+            [[nodiscard]] bool await_ready() const noexcept { return false; }
 
-            /// @brief Queues the coroutine behind the current holder.
+            /// @brief Takes the mutex if it is free, and otherwise queues the coroutine behind the
+            ///        current holder.
             /// @param handle The coroutine to resume once ownership passes to it.
-            /// @return True to stay suspended, false when the mutex fell free in the meantime.
+            /// @return True to stay suspended, false when ownership was taken for @p handle here.
             /// @throws std::bad_alloc if the waiter queue cannot grow.
-            [[nodiscard]] bool await_suspend(coroutine_handle_t handle) noexcept(false) { return owner_.enqueue(handle); }
+            [[nodiscard]] bool await_suspend(coroutine_handle_t handle) noexcept(false) { return owner_.acquire_or_enqueue(handle); }
 
             /// @brief Hands the caller the ownership it now holds.
             /// @return A guard that releases the mutex.
@@ -134,6 +147,8 @@ namespace kmx::aio
 
         /// @brief Takes the mutex if it is free, without suspending.
         /// @return True when ownership was taken.
+        /// @note For callers that are not coroutines. Ownership taken this way has no coroutine
+        ///       identity attached, so a re-entrant await by whoever holds it is not recognised.
         [[nodiscard]] bool try_lock() noexcept;
 
         /// @brief Releases the mutex, passing ownership to the first waiter if there is one.
@@ -141,16 +156,22 @@ namespace kmx::aio
         void unlock() noexcept;
 
     private:
-        /// @brief Queues @p handle, unless the mutex fell free first and was taken for it.
-        /// @param handle The coroutine to queue.
+        /// @brief The one place ownership is taken from a coroutine: takes the mutex if it is free,
+        ///        and queues @p handle behind the holder otherwise.
+        /// @param handle The coroutine acquiring the mutex.
         /// @return True when the coroutine was queued and must stay suspended.
         /// @throws std::bad_alloc if the waiter queue cannot grow.
-        [[nodiscard]] bool enqueue(coroutine_handle_t handle) noexcept(false);
+        [[nodiscard]] bool acquire_or_enqueue(coroutine_handle_t handle) noexcept(false);
 
-        /// @brief Guards @c held_ and @c waiters_.
+        /// @brief Guards @c held_, @c holder_ and @c waiters_.
         std::mutex state_mutex_;
         /// @brief Whether the mutex is owned by anybody.
         bool held_ {};
+        /// @brief The coroutine ownership currently sits with, where that is known.
+        /// @details Set when a coroutine acquires through acquire_or_enqueue() and when unlock() hands
+        ///          ownership on, and empty while the mutex is free or held via try_lock(). Its only
+        ///          use is recognising a holder that awaits the mutex again.
+        coroutine_handle_t holder_ {};
         /// @brief Coroutines waiting for ownership, in arrival order.
         std::deque<coroutine_handle_t> waiters_;
     };

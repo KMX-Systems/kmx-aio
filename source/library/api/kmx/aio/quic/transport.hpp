@@ -95,10 +95,11 @@ namespace kmx::aio::quic
     };
 
     /// @brief Bytes buffered for one stream before reading is paused.
-    /// @note Backpressure rather than a drop. The existing engine logs and discards when its pool is exhausted,
-    ///       which on a reliable stream is a protocol violation the peer has no way to detect - it believes the
-    ///       bytes arrived. Pausing with lsquic_stream_wantread() lets QUIC's own flow control do what it is
-    ///       for: stop the sender.
+    /// @note Backpressure rather than a drop. Discarding bytes already read would be a protocol violation the
+    ///       peer has no way to detect on a reliable stream - it believes they arrived. Pausing with
+    ///       lsquic_stream_wantread() lets QUIC's own flow control do what it is for: stop the sender. The
+    ///       engine in base_engine.cpp parks its streams the same way when its payload pool runs dry; the two
+    ///       differ only in what they count, bytes buffered here and buffers on loan there.
     constexpr std::size_t stream_read_high_water = 256u * 1024u;
 
     /// @brief Shortest and longest the packet loop will sleep when nothing else wakes it.

@@ -6,6 +6,7 @@
     #include <coroutine>
     #include <cstddef>
     #include <exception>
+    #include <source_location>
     #include <stop_token>
     #include <type_traits>
     #include <utility>
@@ -224,10 +225,18 @@ namespace kmx::aio
         explicit task(const handle_type h) noexcept: handle_(h) {}
 
         /// @brief Destroys the owned coroutine frame if present.
+        /// @note A coroutine that ends by throwing parks the exception in its promise, where it stays
+        ///       until an awaiting coroutine takes it out in await_resume(). A task destroyed with one
+        ///       still in place was therefore never awaited, and the failure would go down with the
+        ///       frame without a trace - the shape of bug where an operation simply never happens and
+        ///       nothing anywhere says why. It is reported here instead.
         ~task() noexcept
         {
             if (handle_)
+            {
+                report_unretrieved_exception();
                 handle_.destroy();
+            }
         }
 
         /// @brief Non-copyable.
@@ -298,14 +307,42 @@ namespace kmx::aio
         /// @throws std::bad_variant_access if result is missing (unlikely).
         [[nodiscard]] T await_resume() const noexcept(false)
         {
-            if (handle_.promise().exception_)
-                std::rethrow_exception(handle_.promise().exception_);
+            // Taken out of the promise rather than read from it: this is the point where responsibility
+            // for the failure passes to the awaiting coroutine, and what the destructor finds still
+            // there is by definition an exception nobody ever collected.
+            if (std::exception_ptr exception = std::exchange(handle_.promise().exception_, {}))
+                std::rethrow_exception(exception);
 
             if constexpr (!std::is_void_v<T>)
                 return std::get<1u>(std::move(handle_.promise().result_));
         }
 
     private:
+        /// @brief Reports the exception the coroutine ended with, if nothing ever collected it.
+        /// @note Only a finished coroutine can hold one; a task abandoned before it ran, or moved from,
+        ///       has nothing to report. The exception is rethrown into a local catch purely to reach
+        ///       what() - it cannot escape, which is what the destructor's noexcept needs.
+        void report_unretrieved_exception() const noexcept
+        {
+            if (!handle_.done() || !handle_.promise().exception_)
+                return;
+
+            try
+            {
+                std::rethrow_exception(handle_.promise().exception_);
+            }
+            catch (const std::exception& e)
+            {
+                logger::log(logger::level::error, std::source_location::current(),
+                            "task destroyed without ever being awaited; its exception is lost: {}", e.what());
+            }
+            catch (...)
+            {
+                logger::log(logger::level::error, std::source_location::current(),
+                            "task destroyed without ever being awaited; its exception is lost");
+            }
+        }
+
         /// @brief The owned coroutine handle, if any.
         handle_type handle_;
     };

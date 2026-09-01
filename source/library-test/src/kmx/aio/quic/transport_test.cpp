@@ -25,6 +25,7 @@
     #include <kmx/aio/completion/executor.hpp>
     #include <kmx/aio/quic/transport.hpp>
     #include <kmx/aio/task.hpp>
+    #include <kmx/aio/test/tls_certs.hpp>
 
 namespace kmx::aio::test::quic::transport_test
 {
@@ -40,46 +41,13 @@ namespace kmx::aio::test::quic::transport_test
         constexpr const char* test_alpn = "kmx-quic-test";
         constexpr std::array<std::uint8_t, 4u> loopback {127u, 0u, 0u, 1u};
 
-        /// @brief A self-signed certificate, made once and left in /tmp for the next run.
-        [[nodiscard]] bool ensure_certificates()
-        {
-            const fs::path cert = "/tmp/quic_cert.pem";
-            const fs::path key = "/tmp/quic_key.pem";
-            if (fs::exists(cert) && fs::exists(key))
-                return true;
-
-            const int rc = std::system("openssl req -x509 -newkey rsa:2048 -keyout /tmp/quic_key.pem -out /tmp/quic_cert.pem "
-                                       "-days 1 -nodes -subj \"/CN=localhost\" >/dev/null 2>&1");
-            return (rc == 0) && fs::exists(cert) && fs::exists(key);
-        }
-
-        /// @brief Owns an SSL_CTX for the duration of a test.
-        class ssl_context
-        {
-        public:
-            explicit ssl_context(::SSL_CTX* const ctx) noexcept: ctx_(ctx) {}
-            ssl_context(const ssl_context&) = delete;
-            ssl_context& operator=(const ssl_context&) = delete;
-
-            ~ssl_context() noexcept
-            {
-                if (ctx_ != nullptr)
-                    ::SSL_CTX_free(ctx_);
-            }
-
-            [[nodiscard]] ::SSL_CTX* get() const noexcept { return ctx_; }
-
-        private:
-            ::SSL_CTX* ctx_ {};
-        };
-
-        [[nodiscard]] std::shared_ptr<ssl_context> make_server_context()
+        [[nodiscard]] std::shared_ptr<scoped_ssl_ctx> make_server_context()
         {
             auto* const ctx = ::SSL_CTX_new(TLS_method());
             if (ctx == nullptr)
                 return {};
 
-            auto owner = std::make_shared<ssl_context>(ctx);
+            auto owner = std::make_shared<scoped_ssl_ctx>(ctx, scoped_ssl_ctx::adopt);
             if (::SSL_CTX_use_certificate_chain_file(ctx, "/tmp/quic_cert.pem") != 1)
                 return {};
 
@@ -91,7 +59,7 @@ namespace kmx::aio::test::quic::transport_test
             return owner;
         }
 
-        [[nodiscard]] std::shared_ptr<ssl_context> make_client_context()
+        [[nodiscard]] std::shared_ptr<scoped_ssl_ctx> make_client_context()
         {
             auto* const ctx = ::SSL_CTX_new(TLS_method());
             if (ctx == nullptr)
@@ -99,7 +67,7 @@ namespace kmx::aio::test::quic::transport_test
 
             // The certificate is self-signed; the point of the test is the transport, not the trust store.
             ::SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, nullptr);
-            return std::make_shared<ssl_context>(ctx);
+            return std::make_shared<scoped_ssl_ctx>(ctx, scoped_ssl_ctx::adopt);
         }
 
         /// @brief Reads until @p expected bytes have arrived or the stream ends.
@@ -162,7 +130,7 @@ namespace kmx::aio::test::quic::transport_test
 
         /// @brief One connection: open a stream, send @p payload, read the echo, close.
         task<void> exchange(executor& exec, const port_t port, std::string payload, std::shared_ptr<outcome> result,
-                            std::shared_ptr<ssl_context> ctx) noexcept(false)
+                            std::shared_ptr<scoped_ssl_ctx> ctx) noexcept(false)
         {
             endpoint_t client(exec);
             client.set_alpn(test_alpn);
@@ -204,8 +172,8 @@ namespace kmx::aio::test::quic::transport_test
         }
 
         /// @brief Two connections in turn against one server, and a look at the server between them.
-        task<void> drive(executor& exec, std::shared_ptr<outcome> result, std::shared_ptr<ssl_context> server_ctx,
-                         std::shared_ptr<ssl_context> client_ctx) noexcept(false)
+        task<void> drive(executor& exec, std::shared_ptr<outcome> result, std::shared_ptr<scoped_ssl_ctx> server_ctx,
+                         std::shared_ptr<scoped_ssl_ctx> client_ctx) noexcept(false)
         {
             endpoint_t server(exec);
             server.set_alpn(test_alpn);
@@ -252,7 +220,7 @@ namespace kmx::aio::test::quic::transport_test
 
     TEST_CASE("quic transport endpoint serves successive connections", "[quic][transport][integration]")
     {
-        if (!detail::ensure_certificates())
+        if (!ensure_self_signed_pair("/tmp/quic_cert.pem", "/tmp/quic_key.pem"))
             SKIP("QUIC transport test skipped: could not create /tmp/quic_cert.pem");
 
         const auto server_ctx = detail::make_server_context();

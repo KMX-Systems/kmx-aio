@@ -7,6 +7,8 @@
 #include <kmx/aio/opc_ua/open62541_compat.hpp>
 #include <kmx/aio/opc_ua/server.hpp>
 #include <kmx/aio/task.hpp>
+#include <kmx/aio/test/executor_runner.hpp>
+#include <kmx/aio/test/outcome.hpp>
 
 #include <array>
 #include <chrono>
@@ -48,59 +50,6 @@ namespace kmx::aio::test::opc_ua::client_service_test
                 .max_sessions = 16u,
                 .mode = security_mode::none,
             };
-        }
-
-        template <typename Result>
-        struct coroutine_result_state
-        {
-            std::optional<Result> result;
-            bool completed = false;
-        };
-
-        task<void> run_read(client& c, std::string node_id,
-                            std::shared_ptr<coroutine_result_state<std::expected<read_result, std::error_code>>> state,
-                            completion::executor& exec)
-        {
-            state->result.emplace(co_await c.read_node(std::move(node_id)));
-            state->completed = true;
-            exec.stop();
-            co_return;
-        }
-
-        task<void> run_write(client& c, std::string node_id, std::string value,
-                             std::shared_ptr<coroutine_result_state<expected_void_t>> state, completion::executor& exec)
-        {
-            state->result.emplace(co_await c.write_node(std::move(node_id), std::move(value)));
-            state->completed = true;
-            exec.stop();
-            co_return;
-        }
-
-        task<void> run_call(client& c, std::string object_id, std::string method_id, std::vector<std::string> args,
-                            std::shared_ptr<coroutine_result_state<std::expected<method_call_result, std::error_code>>> state,
-                            completion::executor& exec)
-        {
-            state->result.emplace(co_await c.call_method(std::move(object_id), std::move(method_id), std::move(args)));
-            state->completed = true;
-            exec.stop();
-            co_return;
-        }
-
-        task<void> run_connect(client& c, std::shared_ptr<coroutine_result_state<expected_void_t>> state, completion::executor& exec)
-        {
-            state->result.emplace(co_await c.connect());
-            state->completed = true;
-            exec.stop();
-            co_return;
-        }
-
-        task<void> run_iterate(client& c, const std::chrono::milliseconds timeout,
-                               std::shared_ptr<coroutine_result_state<expected_bool_t>> state, completion::executor& exec)
-        {
-            state->result.emplace(co_await c.iterate(timeout));
-            state->completed = true;
-            exec.stop();
-            co_return;
         }
 
 #if defined(KMX_AIO_FEATURE_OPC_UA)
@@ -170,39 +119,6 @@ namespace kmx::aio::test::opc_ua::client_service_test
             return UA_Variant_setScalarCopy(&output[0], &out_node_id, &UA_TYPES[UA_TYPES_NODEID]);
         }
 
-        task<void> run_server_start(server& s, std::shared_ptr<coroutine_result_state<expected_void_t>> state, completion::executor& exec)
-        {
-            state->result.emplace(co_await s.start());
-            state->completed = true;
-            exec.stop();
-            co_return;
-        }
-
-        task<void> run_server_iterate(server& s, const std::chrono::milliseconds timeout,
-                                      std::shared_ptr<coroutine_result_state<std::expected<std::uint16_t, std::error_code>>> state,
-                                      completion::executor& exec)
-        {
-            state->result.emplace(co_await s.iterate(timeout));
-            state->completed = true;
-            exec.stop();
-            co_return;
-        }
-
-        task<void> run_server_stop(server& s, std::shared_ptr<coroutine_result_state<expected_void_t>> state, completion::executor& exec)
-        {
-            state->result.emplace(co_await s.stop());
-            state->completed = true;
-            exec.stop();
-            co_return;
-        }
-
-        task<void> run_disconnect(client& c, std::shared_ptr<coroutine_result_state<expected_void_t>> state, completion::executor& exec)
-        {
-            state->result.emplace(co_await c.disconnect());
-            state->completed = true;
-            exec.stop();
-            co_return;
-        }
 #endif
     } // namespace detail
 
@@ -211,55 +127,40 @@ namespace kmx::aio::test::opc_ua::client_service_test
     {
         server s {detail::make_test_server_config()};
         {
-            auto state = std::make_shared<detail::coroutine_result_state<expected_void_t>>();
             completion::executor exec;
-            exec.spawn(detail::run_server_start(s, state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
+            const auto state = run_awaited(exec, s.start());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
         }
 
         client c {detail::make_test_config()};
         {
-            auto state = std::make_shared<detail::coroutine_result_state<expected_void_t>>();
             completion::executor exec;
-            exec.spawn(detail::run_connect(c, state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
+            const auto state = run_awaited(exec, c.connect());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
         }
 
         bool connected = false;
         const auto stop_server = [&s]()
         {
-            auto state = std::make_shared<detail::coroutine_result_state<expected_void_t>>();
             completion::executor exec;
-            exec.spawn(detail::run_server_stop(s, state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
+            const auto state = run_awaited(exec, s.stop());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
         };
 
         for (int attempt = 0; attempt < 50; ++attempt)
         {
-            auto server_state = std::make_shared<detail::coroutine_result_state<std::expected<std::uint16_t, std::error_code>>>();
             completion::executor server_exec;
-            server_exec.spawn(detail::run_server_iterate(s, std::chrono::milliseconds(0), server_state, server_exec));
-            server_exec.run();
-            REQUIRE(server_state->completed);
-            REQUIRE(server_state->result.has_value());
-            REQUIRE(server_state->result->has_value());
+            const auto server_state = run_awaited(server_exec, s.iterate(std::chrono::milliseconds(0)));
+            REQUIRE(server_state.has_value());
+            REQUIRE(server_state->has_value());
 
-            auto client_state = std::make_shared<detail::coroutine_result_state<expected_bool_t>>();
             completion::executor client_exec;
-            client_exec.spawn(detail::run_iterate(c, std::chrono::milliseconds(0), client_state, client_exec));
-            client_exec.run();
-            REQUIRE(client_state->completed);
-            REQUIRE(client_state->result.has_value());
-            REQUIRE(client_state->result->has_value());
+            const auto client_state = run_awaited(client_exec, c.iterate(std::chrono::milliseconds(0)));
+            REQUIRE(client_state.has_value());
+            REQUIRE(client_state->has_value());
 
             if (c.get_stats().successful_connects > 0u)
             {
@@ -277,26 +178,20 @@ namespace kmx::aio::test::opc_ua::client_service_test
         REQUIRE(c.get_stats().successful_connects > 0u);
 
         {
-            auto state = std::make_shared<detail::coroutine_result_state<expected_void_t>>();
             completion::executor exec;
-            exec.spawn(detail::run_disconnect(c, state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
+            const auto state = run_awaited(exec, c.disconnect());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
         }
 
         for (int attempt = 0; attempt < 10; ++attempt)
         {
-            auto state = std::make_shared<detail::coroutine_result_state<expected_bool_t>>();
             completion::executor exec;
-            exec.spawn(detail::run_iterate(c, std::chrono::milliseconds(0), state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            if (!state->result->has_value())
+            const auto state = run_awaited(exec, c.iterate(std::chrono::milliseconds(0)));
+            REQUIRE(state.has_value());
+            if (!state->has_value())
                 break;
-            if (!state->result->value())
+            if (!state->value())
                 break;
         }
 
@@ -520,314 +415,216 @@ namespace kmx::aio::test::opc_ua::client_service_test
         client c {make_test_config()};
 
         completion::executor connect_exec;
-        auto connect_state = std::make_shared<coroutine_result_state<expected_void_t>>();
-        connect_exec.spawn(run_connect(c, connect_state, connect_exec));
-        connect_exec.run();
-        REQUIRE(connect_state->completed);
-        REQUIRE(connect_state->result.has_value());
-        REQUIRE(connect_state->result->has_value());
-
-        completion::executor iterate_exec;
-        auto iterate_state = std::make_shared<coroutine_result_state<expected_bool_t>>();
-        iterate_exec.spawn(run_iterate(c, std::chrono::milliseconds(0), iterate_state, iterate_exec));
-        iterate_exec.run();
-        REQUIRE(iterate_state->completed);
-        REQUIRE(iterate_state->result.has_value());
-        REQUIRE(iterate_state->result->has_value());
-
-        {
-            auto state = std::make_shared<coroutine_result_state<std::expected<read_result, std::error_code>>>();
-            completion::executor exec;
-            exec.spawn(run_read(c, "ns=2;s=Demo.Static.Scalar.String", state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            auto& res = *state->result;
-            REQUIRE(res.has_value());
-            REQUIRE(res->node_id == "ns=2;s=Demo.Static.Scalar.String");
-            REQUIRE(c.get_stats().read_requests == 1u);
-        }
-
-        {
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
-            completion::executor exec;
-            exec.spawn(run_write(c, "ns=2;s=Demo.Static.Scalar.String", "value", state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            auto& res = *state->result;
-            REQUIRE(res.has_value());
-            REQUIRE(c.get_stats().write_requests == 1u);
-        }
-
-        {
-            auto state = std::make_shared<coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            completion::executor exec;
-            exec.spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}, state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            auto& res = *state->result;
-            REQUIRE(res.has_value());
-            REQUIRE(res->output_arguments.size() == 2u);
-            REQUIRE(res->output_arguments[0] == "a");
-            REQUIRE(res->output_arguments[1] == "b");
-            REQUIRE(c.get_stats().call_requests == 1u);
-        }
-
-        {
-            auto state = std::make_shared<coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            completion::executor exec;
-            exec.spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {}, state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            auto& res = *state->result;
-            REQUIRE(res.has_value());
-            REQUIRE(res->output_arguments.empty());
-            REQUIRE(c.get_stats().call_requests == 2u);
-        }
-
-        {
-            auto state = std::make_shared<coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            completion::executor exec;
-            exec.spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"", "42"}, state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            auto& res = *state->result;
-            REQUIRE(res.has_value());
-            REQUIRE(res->output_arguments.size() == 2u);
-            REQUIRE(res->output_arguments[0].empty());
-            REQUIRE(res->output_arguments[1] == "42");
-            REQUIRE(c.get_stats().call_requests == 3u);
-        }
+        completion::executor exec;
+        const auto connect_state = run_awaited(exec, c.read_node("ns=2;s=Demo.Static.Scalar.String"));
+        REQUIRE(state.has_value());
+        const auto& res = *state;
+        REQUIRE(res.has_value());
+        REQUIRE(res->node_id == "ns=2;s=Demo.Static.Scalar.String");
+        REQUIRE(c.get_stats().read_requests == 1u);
     }
 
-    TEST_CASE("opc_ua client service requests return disconnected before activation", "[opc_ua][client][service]")
     {
-        client c {make_test_config()};
-
-        completion::executor connect_exec;
-        auto connect_state = std::make_shared<coroutine_result_state<expected_void_t>>();
-        connect_exec.spawn(run_connect(c, connect_state, connect_exec));
-        connect_exec.run();
-        REQUIRE(connect_state->completed);
-        REQUIRE(connect_state->result.has_value());
-        REQUIRE(connect_state->result->has_value());
-
-        {
-            auto state = std::make_shared<coroutine_result_state<std::expected<read_result, std::error_code>>>();
-            completion::executor exec;
-            exec.spawn(run_read(c, "ns=2;s=Demo.Static.Scalar.String", state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            REQUIRE(!state->result->has_value());
-            REQUIRE(state->result->error() == make_error_code(error::disconnected));
-            REQUIRE(c.get_stats().read_requests == 0u);
-        }
-
-        {
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
-            completion::executor exec;
-            exec.spawn(run_write(c, "ns=2;s=Demo.Static.Scalar.String", "value", state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            REQUIRE(!state->result->has_value());
-            REQUIRE(state->result->error() == make_error_code(error::disconnected));
-            REQUIRE(c.get_stats().write_requests == 0u);
-        }
-
-        {
-            auto state = std::make_shared<coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            completion::executor exec;
-            exec.spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}, state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            REQUIRE(!state->result->has_value());
-            REQUIRE(state->result->error() == make_error_code(error::disconnected));
-            REQUIRE(c.get_stats().call_requests == 0u);
-        }
+        completion::executor exec;
+        const auto state = run_awaited(exec, c.write_node("ns=2;s=Demo.Static.Scalar.String", "value"));
+        REQUIRE(state.has_value());
+        const auto& res = *state;
+        REQUIRE(res.has_value());
+        REQUIRE(c.get_stats().write_requests == 1u);
     }
 
-    TEST_CASE("opc_ua client service maps callback status errors", "[opc_ua][client][service]")
     {
-        client c {make_test_config()};
-
-        completion::executor connect_exec;
-        auto connect_state = std::make_shared<coroutine_result_state<expected_void_t>>();
-        connect_exec.spawn(run_connect(c, connect_state, connect_exec));
-        connect_exec.run();
-        REQUIRE(connect_state->completed);
-        REQUIRE(connect_state->result.has_value());
-        REQUIRE(connect_state->result->has_value());
-
-        completion::executor iterate_exec;
-        auto iterate_state = std::make_shared<coroutine_result_state<expected_bool_t>>();
-        iterate_exec.spawn(run_iterate(c, std::chrono::milliseconds(0), iterate_state, iterate_exec));
-        iterate_exec.run();
-        REQUIRE(iterate_state->completed);
-        REQUIRE(iterate_state->result.has_value());
-        REQUIRE(iterate_state->result->has_value());
-
-        {
-            c.__kmx_test_set_next_request_statuses(UA_STATUSCODE_BADTIMEOUT, UA_STATUSCODE_GOOD, UA_STATUSCODE_GOOD);
-            auto state = std::make_shared<coroutine_result_state<std::expected<read_result, std::error_code>>>();
-            completion::executor exec;
-            exec.spawn(run_read(c, "ns=2;s=Demo.Static.Scalar.String", state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            auto& res = *state->result;
-            REQUIRE(!res.has_value());
-            REQUIRE(res.error() == make_error_code(error::timed_out));
-            REQUIRE(c.get_stats().read_requests == 1u);
-        }
-
-        {
-            c.__kmx_test_set_next_request_statuses(UA_STATUSCODE_GOOD, UA_STATUSCODE_BADINTERNALERROR, UA_STATUSCODE_GOOD);
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
-            completion::executor exec;
-            exec.spawn(run_write(c, "ns=2;s=Demo.Static.Scalar.String", "value", state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            auto& res = *state->result;
-            REQUIRE(!res.has_value());
-            REQUIRE(res.error() == make_error_code(error::request_failed));
-            REQUIRE(c.get_stats().write_requests == 1u);
-        }
-
-        {
-            c.__kmx_test_set_next_request_statuses(UA_STATUSCODE_GOOD, UA_STATUSCODE_GOOD, UA_STATUSCODE_BADSECURECHANNELCLOSED);
-            auto state = std::make_shared<coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            completion::executor exec;
-            exec.spawn(run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}, state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            auto& res = *state->result;
-            REQUIRE(!res.has_value());
-            REQUIRE(res.error() == make_error_code(error::disconnected));
-            REQUIRE(c.get_stats().call_requests == 1u);
-        }
+        completion::executor exec;
+        const auto state = run_awaited(exec, c.call_method("ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}));
+        REQUIRE(state.has_value());
+        const auto& res = *state;
+        REQUIRE(res.has_value());
+        REQUIRE(res->output_arguments.size() == 2u);
+        REQUIRE(res->output_arguments[0] == "a");
+        REQUIRE(res->output_arguments[1] == "b");
+        REQUIRE(c.get_stats().call_requests == 1u);
     }
+
+    {
+        completion::executor exec;
+        const auto state = run_awaited(exec, c.call_method("ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {}));
+        REQUIRE(state.has_value());
+        const auto& res = *state;
+        REQUIRE(res.has_value());
+        REQUIRE(res->output_arguments.empty());
+        REQUIRE(c.get_stats().call_requests == 2u);
+    }
+
+    {
+        completion::executor exec;
+        const auto state = run_awaited(exec, c.call_method("ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"", "42"}));
+        REQUIRE(state.has_value());
+        const auto& res = *state;
+        REQUIRE(res.has_value());
+        REQUIRE(res->output_arguments.size() == 2u);
+        REQUIRE(res->output_arguments[0].empty());
+        REQUIRE(res->output_arguments[1] == "42");
+        REQUIRE(c.get_stats().call_requests == 3u);
+    }
+}
+
+TEST_CASE("opc_ua client service requests return disconnected before activation", "[opc_ua][client][service]")
+{
+    client c {make_test_config()};
+
+    completion::executor connect_exec;
+    completion::executor exec;
+    const auto connect_state = run_awaited(exec, c.read_node("ns=2;s=Demo.Static.Scalar.String"));
+    REQUIRE(state.has_value());
+    REQUIRE(!state->has_value());
+    REQUIRE(state->error() == make_error_code(error::disconnected));
+    REQUIRE(c.get_stats().read_requests == 0u);
+}
+
+{
+    completion::executor exec;
+    const auto state = run_awaited(exec, c.write_node("ns=2;s=Demo.Static.Scalar.String", "value"));
+    REQUIRE(state.has_value());
+    REQUIRE(!state->has_value());
+    REQUIRE(state->error() == make_error_code(error::disconnected));
+    REQUIRE(c.get_stats().write_requests == 0u);
+}
+
+{
+    completion::executor exec;
+    const auto state = run_awaited(exec, c.call_method("ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}));
+    REQUIRE(state.has_value());
+    REQUIRE(!state->has_value());
+    REQUIRE(state->error() == make_error_code(error::disconnected));
+    REQUIRE(c.get_stats().call_requests == 0u);
+}
+}
+
+TEST_CASE("opc_ua client service maps callback status errors", "[opc_ua][client][service]")
+{
+    client c {make_test_config()};
+
+    completion::executor connect_exec;
+    completion::executor exec;
+    const auto connect_state = run_awaited(exec, c.read_node("ns=2;s=Demo.Static.Scalar.String"));
+    REQUIRE(state.has_value());
+    const auto& res = *state;
+    REQUIRE(!res.has_value());
+    REQUIRE(res.error() == make_error_code(error::timed_out));
+    REQUIRE(c.get_stats().read_requests == 1u);
+}
+
+{
+    c.__kmx_test_set_next_request_statuses(UA_STATUSCODE_GOOD, UA_STATUSCODE_BADINTERNALERROR, UA_STATUSCODE_GOOD);
+    completion::executor exec;
+    const auto state = run_awaited(exec, c.write_node("ns=2;s=Demo.Static.Scalar.String", "value"));
+    REQUIRE(state.has_value());
+    const auto& res = *state;
+    REQUIRE(!res.has_value());
+    REQUIRE(res.error() == make_error_code(error::request_failed));
+    REQUIRE(c.get_stats().write_requests == 1u);
+}
+
+{
+    c.__kmx_test_set_next_request_statuses(UA_STATUSCODE_GOOD, UA_STATUSCODE_GOOD, UA_STATUSCODE_BADSECURECHANNELCLOSED);
+    completion::executor exec;
+    const auto state = run_awaited(exec, c.call_method("ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}));
+    REQUIRE(state.has_value());
+    const auto& res = *state;
+    REQUIRE(!res.has_value());
+    REQUIRE(res.error() == make_error_code(error::disconnected));
+    REQUIRE(c.get_stats().call_requests == 1u);
+}
+}
 #endif
 
-    TEST_CASE("opc_ua client read validates arguments and session", "[opc_ua][client][service]")
+TEST_CASE("opc_ua client read validates arguments and session", "[opc_ua][client][service]")
+{
+    client c {detail::make_test_config()};
+    completion::executor exec;
+
     {
-        client c {detail::make_test_config()};
-        completion::executor exec;
-
-        {
-            auto state = std::make_shared<detail::coroutine_result_state<std::expected<read_result, std::error_code>>>();
-            exec.spawn(detail::run_read(c, "", state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            auto& res = *state->result;
-            REQUIRE(!res.has_value());
-            REQUIRE(res.error() == make_error_code(error::invalid_configuration));
-            REQUIRE(c.get_stats().read_requests == 0u);
-        }
-
-        {
-            auto state = std::make_shared<detail::coroutine_result_state<std::expected<read_result, std::error_code>>>();
-            exec.spawn(detail::run_read(c, "ns=2;s=Demo.Static.Scalar.String", state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            auto& res = *state->result;
-            REQUIRE(!res.has_value());
-            REQUIRE(res.error() == make_error_code(error::not_initialized));
-            REQUIRE(c.get_stats().read_requests == 0u);
-        }
+        const auto state = run_awaited(exec, c.read_node(""));
+        REQUIRE(state.has_value());
+        const auto& res = *state;
+        REQUIRE(!res.has_value());
+        REQUIRE(res.error() == make_error_code(error::invalid_configuration));
+        REQUIRE(c.get_stats().read_requests == 0u);
     }
 
-    TEST_CASE("opc_ua client write validates arguments and session", "[opc_ua][client][service]")
     {
-        client c {detail::make_test_config()};
-        completion::executor exec;
+        const auto state = run_awaited(exec, c.read_node("ns=2;s=Demo.Static.Scalar.String"));
+        REQUIRE(state.has_value());
+        const auto& res = *state;
+        REQUIRE(!res.has_value());
+        REQUIRE(res.error() == make_error_code(error::not_initialized));
+        REQUIRE(c.get_stats().read_requests == 0u);
+    }
+}
 
-        {
-            auto state = std::make_shared<detail::coroutine_result_state<expected_void_t>>();
-            exec.spawn(detail::run_write(c, "", "value", state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            auto& res = *state->result;
-            REQUIRE(!res.has_value());
-            REQUIRE(res.error() == make_error_code(error::invalid_configuration));
-            REQUIRE(c.get_stats().write_requests == 0u);
-        }
+TEST_CASE("opc_ua client write validates arguments and session", "[opc_ua][client][service]")
+{
+    client c {detail::make_test_config()};
+    completion::executor exec;
 
-        {
-            auto state = std::make_shared<detail::coroutine_result_state<expected_void_t>>();
-            exec.spawn(detail::run_write(c, "ns=2;s=Demo.Static.Scalar.String", "", state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            auto& res = *state->result;
-            REQUIRE(!res.has_value());
-            REQUIRE(res.error() == make_error_code(error::invalid_configuration));
-            REQUIRE(c.get_stats().write_requests == 0u);
-        }
-
-        {
-            auto state = std::make_shared<detail::coroutine_result_state<expected_void_t>>();
-            exec.spawn(detail::run_write(c, "ns=2;s=Demo.Static.Scalar.String", "abc", state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            auto& res = *state->result;
-            REQUIRE(!res.has_value());
-            REQUIRE(res.error() == make_error_code(error::not_initialized));
-            REQUIRE(c.get_stats().write_requests == 0u);
-        }
+    {
+        const auto state = run_awaited(exec, c.write_node("", "value"));
+        REQUIRE(state.has_value());
+        const auto& res = *state;
+        REQUIRE(!res.has_value());
+        REQUIRE(res.error() == make_error_code(error::invalid_configuration));
+        REQUIRE(c.get_stats().write_requests == 0u);
     }
 
-    TEST_CASE("opc_ua client call validates arguments and session", "[opc_ua][client][service]")
     {
-        client c {detail::make_test_config()};
-        completion::executor exec;
-
-        {
-            auto state = std::make_shared<detail::coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            exec.spawn(detail::run_call(c, "", "ns=2;s=Demo.Method", {}, state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            auto& res = *state->result;
-            REQUIRE(!res.has_value());
-            REQUIRE(res.error() == make_error_code(error::invalid_configuration));
-            REQUIRE(c.get_stats().call_requests == 0u);
-        }
-
-        {
-            auto state = std::make_shared<detail::coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            exec.spawn(detail::run_call(c, "ns=2;s=Demo.Object", "", {}, state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            auto& res = *state->result;
-            REQUIRE(!res.has_value());
-            REQUIRE(res.error() == make_error_code(error::invalid_configuration));
-            REQUIRE(c.get_stats().call_requests == 0u);
-        }
-
-        {
-            auto state = std::make_shared<detail::coroutine_result_state<std::expected<method_call_result, std::error_code>>>();
-            exec.spawn(detail::run_call(c, "ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}, state, exec));
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            auto& res = *state->result;
-            REQUIRE(!res.has_value());
-            REQUIRE(res.error() == make_error_code(error::not_initialized));
-            REQUIRE(c.get_stats().call_requests == 0u);
-        }
+        const auto state = run_awaited(exec, c.write_node("ns=2;s=Demo.Static.Scalar.String", ""));
+        REQUIRE(state.has_value());
+        const auto& res = *state;
+        REQUIRE(!res.has_value());
+        REQUIRE(res.error() == make_error_code(error::invalid_configuration));
+        REQUIRE(c.get_stats().write_requests == 0u);
     }
+
+    {
+        const auto state = run_awaited(exec, c.write_node("ns=2;s=Demo.Static.Scalar.String", "abc"));
+        REQUIRE(state.has_value());
+        const auto& res = *state;
+        REQUIRE(!res.has_value());
+        REQUIRE(res.error() == make_error_code(error::not_initialized));
+        REQUIRE(c.get_stats().write_requests == 0u);
+    }
+}
+
+TEST_CASE("opc_ua client call validates arguments and session", "[opc_ua][client][service]")
+{
+    client c {detail::make_test_config()};
+    completion::executor exec;
+
+    {
+        const auto state = run_awaited(exec, c.call_method("", "ns=2;s=Demo.Method", {}));
+        REQUIRE(state.has_value());
+        const auto& res = *state;
+        REQUIRE(!res.has_value());
+        REQUIRE(res.error() == make_error_code(error::invalid_configuration));
+        REQUIRE(c.get_stats().call_requests == 0u);
+    }
+
+    {
+        const auto state = run_awaited(exec, c.call_method("ns=2;s=Demo.Object", "", {}));
+        REQUIRE(state.has_value());
+        const auto& res = *state;
+        REQUIRE(!res.has_value());
+        REQUIRE(res.error() == make_error_code(error::invalid_configuration));
+        REQUIRE(c.get_stats().call_requests == 0u);
+    }
+
+    {
+        const auto state = run_awaited(exec, c.call_method("ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}));
+        REQUIRE(state.has_value());
+        const auto& res = *state;
+        REQUIRE(!res.has_value());
+        REQUIRE(res.error() == make_error_code(error::not_initialized));
+        REQUIRE(c.get_stats().call_requests == 0u);
+    }
+}
 } // namespace kmx::aio::test::opc_ua::client_service_test

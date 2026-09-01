@@ -24,6 +24,9 @@
 #include <kmx/aio/readiness/openonload/extensions.hpp>
 #include <kmx/aio/task.hpp>
 #include <kmx/aio/test/executor_runner.hpp>
+#include <kmx/aio/test/fd_pair.hpp>
+#include <kmx/aio/test/outcome.hpp>
+#include <kmx/aio/test/system_probe.hpp>
 
 namespace kmx::aio::test::readiness::executor_api_test
 {
@@ -32,45 +35,6 @@ namespace kmx::aio::test::readiness::executor_api_test
     using namespace std::literals::chrono_literals;
     using kmx::aio::test::scoped_runner;
     using kmx::aio::test::wait_for_flag;
-
-    namespace detail
-    {
-        /// @brief A connected pair of non-blocking sockets, closed on destruction.
-        class socket_pair
-        {
-        public:
-            socket_pair() noexcept { valid_ = ::socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0, fds_) == 0; }
-
-            socket_pair(const socket_pair&) = delete;
-            socket_pair& operator=(const socket_pair&) = delete;
-
-            ~socket_pair() noexcept
-            {
-                if (valid_)
-                {
-                    ::close(fds_[0]);
-                    ::close(fds_[1]);
-                }
-            }
-
-            [[nodiscard]] bool valid() const noexcept { return valid_; }
-            [[nodiscard]] int local() const noexcept { return fds_[0]; }
-            [[nodiscard]] int peer() const noexcept { return fds_[1]; }
-
-        private:
-            int fds_[2] {-1, -1};
-            bool valid_ = false;
-        };
-
-        /// @brief What one asynchronous operation reported.
-        struct outcome
-        {
-            std::atomic_bool completed {false};
-            std::atomic_bool ok {false};
-            std::atomic_size_t value {0u};
-            std::error_code error {};
-        };
-    } // namespace detail
 
     // statistics
     TEST_CASE("statistics::reset zeroes every counter", "[readiness][executor][statistics]")
@@ -99,7 +63,7 @@ namespace kmx::aio::test::readiness::executor_api_test
 
     TEST_CASE("reset_stats clears counters the executor accumulated", "[readiness][executor][statistics]")
     {
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         executor exec;
@@ -113,7 +77,7 @@ namespace kmx::aio::test::readiness::executor_api_test
 
     TEST_CASE("register_fd and unregister_fd move the counters", "[readiness][executor][registration]")
     {
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         executor exec;
@@ -135,7 +99,7 @@ namespace kmx::aio::test::readiness::executor_api_test
 
     TEST_CASE("unregister_fd of an unknown descriptor is harmless", "[readiness][executor][registration]")
     {
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         executor exec;
@@ -315,15 +279,15 @@ namespace kmx::aio::test::readiness::executor_api_test
     // async_recvmsg / async_sendmsg / async_timeout
     TEST_CASE("async_sendmsg and async_recvmsg move a datagram", "[readiness][executor][msg]")
     {
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<executor>();
         REQUIRE(exec->register_fd(sockets.local()).has_value());
         REQUIRE(exec->register_fd(sockets.peer()).has_value());
 
-        detail::outcome sent;
-        detail::outcome received;
+        atomic_outcome sent;
+        atomic_outcome received;
         std::string payload {"readiness"};
         std::array<char, 64> buffer {};
 
@@ -375,13 +339,13 @@ namespace kmx::aio::test::readiness::executor_api_test
     {
         // The socket is empty when the receive starts, so the first recvmsg returns EAGAIN and the
         // coroutine parks on the executor - the readiness path proper, rather than the fast path.
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<executor>();
         REQUIRE(exec->register_fd(sockets.local()).has_value());
 
-        detail::outcome received;
+        atomic_outcome received;
         std::atomic_bool started {false};
         std::array<char, 64> buffer {};
 
@@ -422,7 +386,7 @@ namespace kmx::aio::test::readiness::executor_api_test
     {
         auto exec = std::make_shared<executor>();
 
-        detail::outcome sent;
+        atomic_outcome sent;
         std::string payload {"x"};
 
         auto body = [&sent, &payload, exec]() -> task<void>
@@ -452,7 +416,7 @@ namespace kmx::aio::test::readiness::executor_api_test
     {
         auto exec = std::make_shared<executor>();
 
-        detail::outcome waited;
+        atomic_outcome waited;
         std::chrono::steady_clock::time_point start {};
         std::chrono::steady_clock::time_point end {};
 
@@ -532,34 +496,12 @@ namespace kmx::aio::test::readiness::executor_api_test
     }
 
     // core pinning
-    namespace detail
-    {
-        /// @brief The first CPU this thread is allowed to run on.
-        /// @details Pinning to a core outside the process's own affinity mask fails, and on a machine
-        ///          under cgroup or taskset restrictions core 0 need not be in it.
-        [[nodiscard]] expected_int_t first_allowed_cpu() noexcept
-        {
-            cpu_set_t allowed {};
-            CPU_ZERO(&allowed);
-
-            const int ret = ::pthread_getaffinity_np(::pthread_self(), sizeof(cpu_set_t), &allowed);
-            if (ret != 0)
-                return std::unexpected(std::error_code(ret, std::generic_category()));
-
-            for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu)
-                if (CPU_ISSET(cpu, &allowed) != 0)
-                    return cpu;
-
-            return std::unexpected(std::make_error_code(std::errc::no_such_device));
-        }
-    } // namespace detail
-
     TEST_CASE("a configured core pins the I/O thread", "[readiness][executor][affinity]")
     {
-        const auto core = detail::first_allowed_cpu();
+        const auto core = first_allowed_cpu();
         REQUIRE(core.has_value());
 
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         executor_config config {};
@@ -601,7 +543,7 @@ namespace kmx::aio::test::readiness::executor_api_test
 
     TEST_CASE("a negative core leaves the I/O thread unpinned", "[readiness][executor][affinity]")
     {
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         executor_config config {};
@@ -623,7 +565,7 @@ namespace kmx::aio::test::readiness::executor_api_test
         REQUIRE(wait_for_flag(parked, 2s));
         std::this_thread::sleep_for(50ms);
 
-        const auto core = detail::first_allowed_cpu();
+        const auto core = first_allowed_cpu();
         REQUIRE(core.has_value());
         const auto affined = exec->is_io_thread_affined_to(*core);
 
@@ -638,8 +580,8 @@ namespace kmx::aio::test::readiness::executor_api_test
     {
         // cancel_waiters walks every subscription and has to skip the ones belonging to a different
         // descriptor rather than resuming the lot.
-        detail::socket_pair first;
-        detail::socket_pair second;
+        socket_pair first;
+        socket_pair second;
         REQUIRE(first.valid());
         REQUIRE(second.valid());
 
@@ -732,7 +674,7 @@ namespace kmx::aio::test::readiness::executor_api_test
         // The default, and the reference point for the inline case below: with a single worker, the
         // coroutine starts and resumes on that same worker, and the I/O thread only hands the
         // resumption over.
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<executor>(executor_config {.thread_count = 1u, .timeout_ms = 20u});
@@ -767,7 +709,7 @@ namespace kmx::aio::test::readiness::executor_api_test
         // The thread-per-core arrangement: the event is observed on the I/O thread and the coroutine
         // continues there, so the wake-up lands on a thread that is neither the one that started the
         // task - a scheduler worker, because spawn() still goes through the scheduler - nor the test's.
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         const executor_config config {.thread_count = 1u, .timeout_ms = 20u, .resumption = resumption_mode::inline_on_io_thread};
@@ -804,7 +746,7 @@ namespace kmx::aio::test::readiness::executor_api_test
         // must not run the coroutine. The waiter is handed to the scheduler instead, and what matters
         // is that it is resumed at all - a cancellation that took the inline path would either run
         // application code on the caller's thread or, worse, not run it.
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         const executor_config config {.thread_count = 1u, .timeout_ms = 20u, .resumption = resumption_mode::inline_on_io_thread};
@@ -837,7 +779,7 @@ namespace kmx::aio::test::readiness::executor_api_test
         // Two coroutines on one executor, each waiting on its own end of a socket pair, taking turns.
         // Every resumption after the first happens inside the event loop, so this is the arrangement
         // running under the loop rather than a single wake-up observed from outside it.
-        detail::socket_pair sockets;
+        socket_pair sockets;
         REQUIRE(sockets.valid());
 
         const executor_config config {.thread_count = 1u, .timeout_ms = 20u, .resumption = resumption_mode::inline_on_io_thread};
