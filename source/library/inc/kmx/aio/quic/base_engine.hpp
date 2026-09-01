@@ -7,6 +7,7 @@
 #ifndef PCH
     #include <arpa/inet.h>
     #include <array>
+    #include <atomic>
     #include <cerrno>
     #include <charconv>
     #include <cstddef>
@@ -23,6 +24,7 @@
     #include <string_view>
     #include <sys/socket.h>
     #include <system_error>
+    #include <thread>
     #include <unordered_set>
     #include <vector>
 #endif
@@ -35,6 +37,7 @@ extern "C"
 #include <kmx/aio/basic_types.hpp>
 #include <kmx/aio/buffer/pool.hpp>
 #include <kmx/aio/quic/engine.hpp>
+#include <kmx/aio/quic/read_park_list.hpp>
 #include <kmx/aio/quic/settings.hpp>
 #include <kmx/aio/readiness/descriptor/timer.hpp>
 #include <kmx/logger.hpp>
@@ -102,6 +105,15 @@ namespace kmx::aio::quic
     ///          it is compiled once, in base_engine.cpp, instead of once per executor/socket pair.
     /// @note The two operations that genuinely need the derived type are published by @ref base_impl: the socket
     ///       descriptor through @ref socket_fd_, and coroutine spawning through the @ref spawn_stream_task_ thunk.
+    /// @warning An lsquic engine carries no internal locking, and neither does this object: its connection tables,
+    ///          its payload queues and its pending-stream counters are plain members, deliberately. Everything that
+    ///          touches the engine - the packet pump, the stream callbacks lsquic makes back into this object, and
+    ///          engine teardown - must therefore run on the one thread that created it, which is the thread whose
+    ///          executor drives @ref base_impl::process. Nothing about a violation is visible at the point it
+    ///          happens: the engine corrupts its own state and the connection fails later, somewhere else. So the
+    ///          engine records that thread at creation and @ref check_engine_thread names the first call that comes
+    ///          from another one, in every build. Calling from another thread is not made safe by that - it is only
+    ///          made visible. Work that arises elsewhere belongs on the executor, not on the engine directly.
     struct primary_base_impl
     {
         /// @brief Alias for the lsquic connection status type.
@@ -151,8 +163,22 @@ namespace kmx::aio::quic
         std::unordered_set<::lsquic_stream_t*> post_handshake_streams_ {};
         /// @brief Optional callback that writes the initial payload of a post-handshake stream.
         std::function<void(::lsquic_stream_t*)> post_handshake_stream_writer_;
+        /// @brief Streams whose read interest is parked because @ref stream_payload_pool_ had no free buffer.
+        /// @details A parked stream is deliberately left unread. The bytes stay in lsquic's receive buffer, the
+        ///          flow-control window closes behind them and the peer stops sending, which is what
+        ///          backpressure is. @ref resume_parked_reads re-arms the streams once a buffer comes back, and
+        ///          @ref on_close drops one that is closed while parked, so no entry outlives its stream.
+        detail::read_park_list read_parked_streams_ {};
         /// @brief Watchdog tick period, in nanoseconds, used by the readiness-model idle path.
         const long readiness_idle_tick_ns_ {detail::readiness_watchdog_tick_ns_from_env()};
+        /// @brief The thread the lsquic engine was created on: the only one allowed to drive it.
+        /// @details Empty until @ref init_lsquic succeeds, which is why @ref check_engine_thread passes anything
+        ///          that happens before there is an engine to misuse.
+        std::thread::id engine_thread_ {};
+        /// @brief Whether a call from a foreign thread has already been reported.
+        /// @details Atomic because the threads that would set it are by definition racing. It exists so that a
+        ///          violated affinity costs one log line rather than one per datagram.
+        std::atomic_bool reported_foreign_thread_ {};
 
         /// @brief Constructs the engine core.
         /// @param spawn_stream_task The thunk spawning @ref stream_handler_ on the derived engine's executor.
@@ -199,6 +225,9 @@ namespace kmx::aio::quic
         static ::lsquic_stream_ctx_t* on_new_stream(void* stream_if_ctx, ::lsquic_stream_t* stream);
 
         /// @brief lsquic callback: drains a readable stream and dispatches the payload to @ref stream_handler_.
+        /// @details Reads only into a buffer leased from @ref stream_payload_pool_. When the pool is empty the
+        ///          stream is parked in @ref read_parked_streams_ and nothing is read, so the unread bytes stay
+        ///          where the peer can still account for them.
         /// @param stream The readable stream.
         static void on_read(::lsquic_stream_t* stream, ::lsquic_stream_ctx_t* ctx);
 
@@ -218,7 +247,7 @@ namespace kmx::aio::quic
         /// @return The borrowed `SSL_CTX` stored in @ref ssl_ctx_.
         static struct ssl_ctx_st* lookup_cert(void* cert_lu_ctx, const struct sockaddr* local, const char* sni);
 
-        /// @brief lsquic callback: drops a closed stream from the post-handshake bookkeeping.
+        /// @brief lsquic callback: drops a closed stream from the post-handshake and parked-read bookkeeping.
         /// @param stream The stream being closed.
         static void on_close(::lsquic_stream_t* stream, ::lsquic_stream_ctx_t* ctx);
 
@@ -273,7 +302,21 @@ namespace kmx::aio::quic
         static void prepare_recv_message(packet_buffer_t& packet_buf, ::sockaddr_storage& peer_addr, ::msghdr& msg,
                                          ::iovec (&iov)[1u]) noexcept;
 
+        /// @brief Reports the first call reaching the lsquic engine from a thread that does not own it.
+        /// @param operation What the caller was about to do, named in the log line.
+        /// @note Reports and returns; see the thread-affinity warning on this struct for why it cannot do more.
+        void check_engine_thread(std::string_view operation) noexcept;
+
+        /// @brief Re-arms read interest on the streams parked by an exhausted payload pool.
+        /// @details Runs from @ref drive_engine_once, the one pass both models tick through, so a buffer that
+        ///          comes back is picked up on the next tick without the pool having to know what lsquic is.
+        ///          Every parked stream is re-armed, not as many as there are free buffers: lsquic delivers
+        ///          on_read one stream at a time, and a stream that finds the pool empty again simply parks
+        ///          itself once more, which leaves the order they resume in lsquic's hands rather than ours.
+        void resume_parked_reads() noexcept;
+
         /// @brief Runs one lsquic processing pass and flushes any packets it produced.
+        /// @note Must run on the engine thread; see the thread-affinity warning on this struct.
         void drive_engine_once() noexcept;
 
         /// @brief Drives the engine a few times up front so a client's initial packets leave before the first receive.

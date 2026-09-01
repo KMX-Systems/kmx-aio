@@ -28,6 +28,8 @@
 #include <kmx/aio/readiness/executor.hpp>
 #include <kmx/aio/task.hpp>
 #include <kmx/aio/test/executor_runner.hpp>
+#include <kmx/aio/test/fd_pair.hpp>
+#include <kmx/aio/test/outcome.hpp>
 
 namespace kmx::aio::test::readiness::executor_cancellation_test
 {
@@ -37,41 +39,6 @@ namespace kmx::aio::test::readiness::executor_cancellation_test
     using kmx::aio::test::scoped_runner;
     using kmx::aio::test::wait_for_flag;
 
-    /// @brief A connected pair of non-blocking sockets, closed on destruction.
-    class socket_pair
-    {
-    public:
-        socket_pair() noexcept { valid_ = ::socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0, fds_) == 0; }
-
-        socket_pair(const socket_pair&) = delete;
-        socket_pair& operator=(const socket_pair&) = delete;
-
-        ~socket_pair() noexcept
-        {
-            if (valid_)
-            {
-                ::close(fds_[0]);
-                ::close(fds_[1]);
-            }
-        }
-
-        [[nodiscard]] bool valid() const noexcept { return valid_; }
-        [[nodiscard]] int watched() const noexcept { return fds_[0]; }
-        [[nodiscard]] int peer() const noexcept { return fds_[1]; }
-
-    private:
-        int fds_[2] {-1, -1};
-        bool valid_ = false;
-    };
-
-    /// @brief What a single wait_io() did, as seen from the test thread.
-    struct wait_outcome
-    {
-        std::atomic_bool parked {false};    ///< Set immediately before the wait is awaited.
-        std::atomic_bool completed {false}; ///< Set once the awaiting task ran to completion.
-        std::atomic_bool fired {false};     ///< What the wait reported: an event (true) or a cancel.
-    };
-
     // 1. unregister_fd() must resume what is waiting on the descriptor
     TEST_CASE("readiness executor: unregister_fd resumes a parked wait", "[readiness][executor][cancellation]")
     {
@@ -79,10 +46,10 @@ namespace kmx::aio::test::readiness::executor_cancellation_test
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<executor>();
-        REQUIRE(exec->register_fd(sockets.watched()).has_value());
+        REQUIRE(exec->register_fd(sockets.local()).has_value());
 
         wait_outcome outcome;
-        auto body = [&outcome, exec, fd = sockets.watched()]() -> task<void>
+        auto body = [&outcome, exec, fd = sockets.local()]() -> task<void>
         {
             outcome.parked.store(true, std::memory_order_release);
             const bool fired = co_await exec->wait_io(fd, event_type::read);
@@ -96,7 +63,7 @@ namespace kmx::aio::test::readiness::executor_cancellation_test
 
         // Nothing is ever written to the peer, so only the unregistration below can end this wait.
         std::this_thread::sleep_for(50ms);
-        exec->unregister_fd(sockets.watched());
+        exec->unregister_fd(sockets.local());
 
         REQUIRE(runner.wait_until_drained(5s));
         CHECK(outcome.completed.load(std::memory_order_acquire));
@@ -110,10 +77,10 @@ namespace kmx::aio::test::readiness::executor_cancellation_test
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<executor>();
-        REQUIRE(exec->register_fd(sockets.watched()).has_value());
+        REQUIRE(exec->register_fd(sockets.local()).has_value());
 
         wait_outcome outcome;
-        auto body = [&outcome, exec, fd = sockets.watched()]() -> task<void>
+        auto body = [&outcome, exec, fd = sockets.local()]() -> task<void>
         {
             outcome.parked.store(true, std::memory_order_release);
             const bool fired = co_await exec->wait_io(fd, event_type::read);
@@ -125,7 +92,7 @@ namespace kmx::aio::test::readiness::executor_cancellation_test
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(outcome.parked, 2s));
         std::this_thread::sleep_for(50ms);
-        exec->cancel_io(sockets.watched());
+        exec->cancel_io(sockets.local());
 
         REQUIRE(runner.wait_until_drained(5s));
         CHECK(outcome.completed.load(std::memory_order_acquire));
@@ -139,15 +106,15 @@ namespace kmx::aio::test::readiness::executor_cancellation_test
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<executor>();
-        REQUIRE(exec->register_fd(sockets.watched()).has_value());
+        REQUIRE(exec->register_fd(sockets.local()).has_value());
 
         // The cancellation happens first. A subscription that only consulted the waiter list would find
         // nothing to cancel and would then park behind it - the lost wake-up this ordering exists to
         // catch, and the reason the decision is made inside subscribe() under the same lock.
-        exec->cancel_io(sockets.watched());
+        exec->cancel_io(sockets.local());
 
         wait_outcome outcome;
-        auto body = [&outcome, exec, fd = sockets.watched()]() -> task<void>
+        auto body = [&outcome, exec, fd = sockets.local()]() -> task<void>
         {
             outcome.parked.store(true, std::memory_order_release);
             const bool fired = co_await exec->wait_io(fd, event_type::read);
@@ -172,18 +139,18 @@ namespace kmx::aio::test::readiness::executor_cancellation_test
         REQUIRE(sockets.valid());
 
         auto exec = std::make_shared<executor>();
-        REQUIRE(exec->register_fd(sockets.watched()).has_value());
-        exec->cancel_io(sockets.watched());
-        exec->unregister_fd(sockets.watched());
+        REQUIRE(exec->register_fd(sockets.local()).has_value());
+        exec->cancel_io(sockets.local());
+        exec->unregister_fd(sockets.local());
 
         // The kernel hands out the lowest free descriptor number, so a cancelled one comes back as an
         // unrelated socket soon enough - which is this sequence, minus the close. Registering it again
         // has to clear the mark, or every wait on the new socket would report a cancellation left
         // behind by the old one.
-        REQUIRE(exec->register_fd(sockets.watched()).has_value());
+        REQUIRE(exec->register_fd(sockets.local()).has_value());
 
         wait_outcome outcome;
-        auto body = [&outcome, exec, fd = sockets.watched()]() -> task<void>
+        auto body = [&outcome, exec, fd = sockets.local()]() -> task<void>
         {
             outcome.parked.store(true, std::memory_order_release);
             const bool fired = co_await exec->wait_io(fd, event_type::read);

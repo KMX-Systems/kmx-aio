@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <kmx/aio/readiness/executor.hpp>
+#include <kmx/aio/test/system_probe.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -18,24 +19,6 @@ namespace kmx::aio::test::integration::readiness_core_pinning_test
 {
     using namespace kmx::aio::readiness;
 
-    [[nodiscard]] static expected_int_t first_allowed_cpu_for_current_thread() noexcept
-    {
-        cpu_set_t allowed {};
-        CPU_ZERO(&allowed);
-
-        const int ret = ::pthread_getaffinity_np(::pthread_self(), sizeof(cpu_set_t), &allowed);
-        if (ret != 0)
-            return std::unexpected(std::error_code(ret, std::generic_category()));
-
-        for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu)
-        {
-            if (CPU_ISSET(cpu, &allowed) != 0)
-                return cpu;
-        }
-
-        return std::unexpected(std::make_error_code(std::errc::no_such_device));
-    }
-
     [[nodiscard]] static std::jthread delayed_stop(std::shared_ptr<executor> exec)
     {
         return std::jthread(
@@ -48,7 +31,7 @@ namespace kmx::aio::test::integration::readiness_core_pinning_test
 
     TEST_CASE("readiness executor pins I/O thread to configured core", "[readiness][integration][pinning]")
     {
-        const auto core_res = first_allowed_cpu_for_current_thread();
+        const auto core_res = first_allowed_cpu();
         REQUIRE(core_res.has_value());
 
         executor_config cfg {

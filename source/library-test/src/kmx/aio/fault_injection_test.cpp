@@ -40,6 +40,7 @@
     #include <kmx/aio/readiness/executor.hpp>
     #include <kmx/aio/task.hpp>
     #include <kmx/aio/test/executor_runner.hpp>
+    #include <kmx/aio/test/fd_pair.hpp>
     #include <kmx/aio/tls/stream.hpp>
 
 namespace kmx::aio::test::fault_injection_test
@@ -52,60 +53,6 @@ namespace kmx::aio::test::fault_injection_test
 
     namespace detail
     {
-        /// @brief A connected pair of non-blocking sockets, closed on destruction.
-        class socket_pair
-        {
-        public:
-            socket_pair() noexcept { valid_ = ::socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0, fds_) == 0; }
-
-            socket_pair(const socket_pair&) = delete;
-            socket_pair& operator=(const socket_pair&) = delete;
-
-            ~socket_pair() noexcept
-            {
-                if (valid_)
-                {
-                    ::close(fds_[0]);
-                    ::close(fds_[1]);
-                }
-            }
-
-            [[nodiscard]] bool valid() const noexcept { return valid_; }
-            [[nodiscard]] int local() const noexcept { return fds_[0]; }
-            [[nodiscard]] int peer() const noexcept { return fds_[1]; }
-
-        private:
-            int fds_[2] {-1, -1};
-            bool valid_ = false;
-        };
-
-        /// @brief A pipe whose ends are closed on destruction.
-        class pipe_pair
-        {
-        public:
-            pipe_pair() noexcept { valid_ = ::pipe(fds_) == 0; }
-
-            pipe_pair(const pipe_pair&) = delete;
-            pipe_pair& operator=(const pipe_pair&) = delete;
-
-            ~pipe_pair() noexcept
-            {
-                if (valid_)
-                {
-                    ::close(fds_[0]);
-                    ::close(fds_[1]);
-                }
-            }
-
-            [[nodiscard]] bool valid() const noexcept { return valid_; }
-            [[nodiscard]] int read_end() const noexcept { return fds_[0]; }
-            [[nodiscard]] int write_end() const noexcept { return fds_[1]; }
-
-        private:
-            int fds_[2] {-1, -1};
-            bool valid_ = false;
-        };
-
         /// @brief The least an inner stream has to be for tls::stream to hold one.
         struct tls_stub_stream
         {

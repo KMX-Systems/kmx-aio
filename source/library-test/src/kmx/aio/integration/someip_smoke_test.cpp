@@ -5,6 +5,8 @@
 
     #include <catch2/catch_test_macros.hpp>
 
+    #include <kmx/aio/test/sample_process.hpp>
+
     #include <sys/wait.h>
 
     #include <chrono>
@@ -19,86 +21,6 @@
 namespace kmx::aio::test::integration::someip_smoke_test
 {
     namespace fs = std::filesystem;
-
-    [[nodiscard]] static auto read_file_text(const fs::path& path) -> std::string
-    {
-        std::ifstream in(path);
-        if (!in.is_open())
-            return {};
-
-        return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
-    }
-
-    [[nodiscard]] static auto shell_quote(const std::string_view raw) -> std::string
-    {
-        std::string quoted;
-        quoted.reserve(raw.size() + 2u);
-        quoted.push_back('\'');
-        for (const char ch: raw)
-        {
-            if (ch == '\'')
-                quoted += "'\\''";
-            else
-                quoted.push_back(ch);
-        }
-        quoted.push_back('\'');
-        return quoted;
-    }
-
-    [[nodiscard]] static auto contains_markers_in_order(const std::string_view text,
-                                                        const std::initializer_list<std::string_view> markers) -> bool
-    {
-        std::size_t pos = 0;
-        for (const auto marker: markers)
-        {
-            const std::size_t found = text.find(marker, pos);
-            if (found == std::string_view::npos)
-                return false;
-            pos = found + marker.size();
-        }
-
-        return true;
-    }
-
-    [[nodiscard]] static auto find_repo_root() -> std::optional<fs::path>
-    {
-        auto cur = fs::current_path();
-        while (!cur.empty())
-        {
-            if (fs::exists(cur / "kmx-aio.qbs"))
-                return cur;
-
-            if (cur == cur.root_path())
-                break;
-            cur = cur.parent_path();
-        }
-
-        return std::nullopt;
-    }
-
-    [[nodiscard]] static auto find_binary_under_debug(const fs::path& repo_root,
-                                                      const std::string_view binary_name) -> std::optional<fs::path>
-    {
-        const std::vector<fs::path> debug_dirs = {
-            // Where the scripts build (see script/feature/common.sh), then the two in-tree locations a bare
-            // "qbs build" leaves behind depending on the directory it was run from.
-            repo_root / "output" / "debug",
-            repo_root / "debug",
-            repo_root / "source" / "debug",
-        };
-
-        for (const auto& debug_dir: debug_dirs)
-        {
-            if (!fs::exists(debug_dir) || !fs::is_directory(debug_dir))
-                continue;
-
-            for (const auto& entry: fs::recursive_directory_iterator(debug_dir))
-                if (entry.is_regular_file() && entry.path().filename() == binary_name)
-                    return entry.path();
-        }
-
-        return std::nullopt;
-    }
 
     TEST_CASE("someip echo server/client smoke", "[someip][integration][smoke][slow]")
     {

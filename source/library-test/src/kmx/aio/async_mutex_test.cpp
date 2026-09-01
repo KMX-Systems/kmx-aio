@@ -67,8 +67,9 @@ namespace kmx::aio::test::async_mutex_test
 
         enter();
 
-        // The coroutine ran to completion inside the call: await_ready() took the mutex, so there was
-        // never a suspension to be resumed from.
+        // The coroutine ran to completion inside the call: await_suspend() found the mutex free and
+        // took it, and returning false from there falls straight back into the coroutine body rather
+        // than returning to this caller.
         CHECK(reached_body);
 
         // And it gave the mutex back on the way out.

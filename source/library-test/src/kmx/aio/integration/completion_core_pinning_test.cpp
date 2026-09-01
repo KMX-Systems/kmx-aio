@@ -6,6 +6,7 @@
 #include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/completion/timer.hpp>
 #include <kmx/aio/task.hpp>
+#include <kmx/aio/test/system_probe.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -20,22 +21,6 @@ namespace kmx::aio::test::integration::completion_core_pinning_test
 {
     using namespace kmx::aio::completion;
 
-    [[nodiscard]] static expected_int_t first_allowed_cpu_for_current_thread() noexcept
-    {
-        cpu_set_t allowed {};
-        CPU_ZERO(&allowed);
-
-        const int ret = ::pthread_getaffinity_np(::pthread_self(), sizeof(cpu_set_t), &allowed);
-        if (ret != 0)
-            return std::unexpected(std::error_code(ret, std::generic_category()));
-
-        for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu)
-            if (CPU_ISSET(cpu, &allowed) != 0)
-                return cpu;
-
-        return std::unexpected(std::make_error_code(std::errc::no_such_device));
-    }
-
     [[nodiscard]] static task<void> hold_executor(executor& exec)
     {
         timer tmr {exec};
@@ -46,7 +31,7 @@ namespace kmx::aio::test::integration::completion_core_pinning_test
 
     TEST_CASE("completion executor pins I/O thread to configured core", "[completion][integration][pinning]")
     {
-        const auto core_res = first_allowed_cpu_for_current_thread();
+        const auto core_res = first_allowed_cpu();
         REQUIRE(core_res.has_value());
 
         executor_config cfg {

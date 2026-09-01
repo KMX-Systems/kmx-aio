@@ -29,6 +29,7 @@
     #include <kmx/aio/readiness/executor.hpp>
     #include <kmx/aio/readiness/tcp/stream.hpp>
 #endif
+#include <kmx/aio/test/tls_certs.hpp>
 
 namespace kmx::aio::test::tls::stream_test
 {
@@ -60,27 +61,6 @@ namespace kmx::aio::test::tls::stream_test
             }
         };
 
-        /// @brief An SSL_CTX released on destruction.
-        class scoped_ctx
-        {
-        public:
-            scoped_ctx() noexcept: ctx_(::SSL_CTX_new(::TLS_method())) {}
-
-            scoped_ctx(const scoped_ctx&) = delete;
-            scoped_ctx& operator=(const scoped_ctx&) = delete;
-
-            ~scoped_ctx() noexcept
-            {
-                if (ctx_ != nullptr)
-                    ::SSL_CTX_free(ctx_);
-            }
-
-            [[nodiscard]] ::SSL_CTX* get() const noexcept { return ctx_; }
-
-        private:
-            ::SSL_CTX* ctx_ {};
-        };
-
         // ALPN is configured in wire format: each entry is a length byte followed by that many bytes of
         // protocol name. "h2" and "http/1.1", the two this library's samples negotiate.
         constexpr std::array<std::uint8_t, 3u> alpn_h2 {2u, 'h', '2'};
@@ -89,7 +69,7 @@ namespace kmx::aio::test::tls::stream_test
 
     TEST_CASE("a TLS stream takes ownership of an SSL and its BIOs", "[core][tls][stream]")
     {
-        const detail::scoped_ctx ctx;
+        const scoped_ssl_ctx ctx;
         REQUIRE(ctx.get() != nullptr);
 
         // The destructor frees the SSL, and the SSL frees the two memory BIOs attached to it. Nothing
@@ -113,7 +93,7 @@ namespace kmx::aio::test::tls::stream_test
 
     TEST_CASE("next_layer reports the inner stream through a const holder", "[core][tls][stream]")
     {
-        const detail::scoped_ctx ctx;
+        const scoped_ssl_ctx ctx;
         REQUIRE(ctx.get() != nullptr);
 
         const stream<detail::stub_stream> tls_stream {detail::stub_stream {11}, ctx.get()};
@@ -126,7 +106,7 @@ namespace kmx::aio::test::tls::stream_test
 
     TEST_CASE("moving a TLS stream transfers the SSL", "[core][tls][stream][move]")
     {
-        const detail::scoped_ctx ctx;
+        const scoped_ssl_ctx ctx;
         REQUIRE(ctx.get() != nullptr);
 
         stream<detail::stub_stream> source {detail::stub_stream {3}, ctx.get()};
@@ -149,7 +129,7 @@ namespace kmx::aio::test::tls::stream_test
 
     TEST_CASE("set_alpn_protocols accepts a wire-format list", "[core][tls][stream][alpn]")
     {
-        const detail::scoped_ctx ctx;
+        const scoped_ssl_ctx ctx;
         REQUIRE(ctx.get() != nullptr);
 
         stream<detail::stub_stream> tls_stream {detail::stub_stream {}, ctx.get()};
@@ -159,7 +139,7 @@ namespace kmx::aio::test::tls::stream_test
 
     TEST_CASE("set_alpn_protocols rejects an empty list", "[core][tls][stream][alpn]")
     {
-        const detail::scoped_ctx ctx;
+        const scoped_ssl_ctx ctx;
         REQUIRE(ctx.get() != nullptr);
 
         stream<detail::stub_stream> tls_stream {detail::stub_stream {}, ctx.get()};
@@ -182,7 +162,7 @@ namespace kmx::aio::test::tls::stream_test
 
     TEST_CASE("selected_alpn is empty before a handshake", "[core][tls][stream][alpn]")
     {
-        const detail::scoped_ctx ctx;
+        const scoped_ssl_ctx ctx;
         REQUIRE(ctx.get() != nullptr);
 
         stream<detail::stub_stream> tls_stream {detail::stub_stream {}, ctx.get()};
@@ -194,7 +174,7 @@ namespace kmx::aio::test::tls::stream_test
 
     TEST_CASE("connect and accept states are settable", "[core][tls][stream]")
     {
-        const detail::scoped_ctx ctx;
+        const scoped_ssl_ctx ctx;
         REQUIRE(ctx.get() != nullptr);
 
         stream<detail::stub_stream> client {detail::stub_stream {}, ctx.get()};
@@ -215,7 +195,7 @@ namespace kmx::aio::test::tls::stream_test
 
     TEST_CASE("set_alpn_protocols rejects a malformed wire list", "[core][tls][stream][alpn][error]")
     {
-        const detail::scoped_ctx ctx;
+        const scoped_ssl_ctx ctx;
         REQUIRE(ctx.get() != nullptr);
 
         stream<detail::stub_stream> tls_stream {detail::stub_stream {}, ctx.get()};
@@ -244,7 +224,7 @@ namespace kmx::aio::test::tls::stream_test
 
     TEST_CASE("a TLS stream over a completion TCP stream owns and releases its SSL", "[core][tls][stream][instantiation]")
     {
-        const detail::scoped_ctx ctx;
+        const scoped_ssl_ctx ctx;
         REQUIRE(ctx.get() != nullptr);
 
         auto socket = file_descriptor::create_socket(AF_INET, SOCK_STREAM, 0);
@@ -263,7 +243,7 @@ namespace kmx::aio::test::tls::stream_test
 #if defined(KMX_AIO_FEATURE_READINESS)
     TEST_CASE("a TLS stream over a readiness TCP stream owns and releases its SSL", "[core][tls][stream][instantiation]")
     {
-        const detail::scoped_ctx ctx;
+        const scoped_ssl_ctx ctx;
         REQUIRE(ctx.get() != nullptr);
 
         auto socket = file_descriptor::create_socket(AF_INET, SOCK_STREAM, 0);
@@ -282,7 +262,7 @@ namespace kmx::aio::test::tls::stream_test
 
     TEST_CASE("the shipped instantiations reject a malformed ALPN list", "[core][tls][stream][instantiation][error]")
     {
-        const detail::scoped_ctx ctx;
+        const scoped_ssl_ctx ctx;
         REQUIRE(ctx.get() != nullptr);
         constexpr std::array<std::uint8_t, 3u> overrunning_length {9u, 'h', '2'};
 

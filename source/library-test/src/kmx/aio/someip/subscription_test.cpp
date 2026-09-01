@@ -5,6 +5,8 @@
 #include <kmx/aio/someip/client.hpp>
 #include <kmx/aio/someip/error.hpp>
 #include <kmx/aio/someip/subscription.hpp>
+#include <kmx/aio/test/executor_runner.hpp>
+#include <kmx/aio/test/outcome.hpp>
 
 #include <memory>
 #include <optional>
@@ -16,13 +18,6 @@ namespace kmx::aio::test::someip::subscription_test
 
     namespace detail
     {
-        template <typename Result>
-        struct coroutine_result_state
-        {
-            std::optional<Result> result;
-            bool completed = false;
-        };
-
         [[nodiscard]] client_config make_test_client_config()
         {
             return client_config {
@@ -45,125 +40,66 @@ namespace kmx::aio::test::someip::subscription_test
         }
     }
 
-    using namespace detail;
-
     TEST_CASE("someip subscription open fails when not bound", "[someip][subscription]")
     {
-        subscription s {make_test_subscription_config()};
-        auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
+        subscription s {detail::make_test_subscription_config()};
         completion::executor exec;
+        const auto state = run_awaited(exec, s.open());
 
-        auto body = [&]() -> task<void>
-        {
-            state->result.emplace(co_await s.open());
-            state->completed = true;
-            exec.stop();
-            co_return;
-        };
-        exec.spawn(body());
-        exec.run();
-
-        REQUIRE(state->completed);
-        REQUIRE(state->result.has_value());
-        REQUIRE_FALSE(state->result->has_value());
-        CHECK(state->result->error() == make_error_code(error::invalid_configuration));
+        REQUIRE(state.has_value());
+        REQUIRE_FALSE(state->has_value());
+        CHECK(state->error() == make_error_code(error::invalid_configuration));
     }
 
     TEST_CASE("someip subscription next times out when queue is empty", "[someip][subscription]")
     {
-        client c {make_test_client_config()};
-        subscription s {c, make_test_subscription_config()};
+        client c {detail::make_test_client_config()};
+        subscription s {c, detail::make_test_subscription_config()};
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
-            auto body = [&]() -> task<void>
-            {
-                state->result.emplace(co_await c.start());
-                state->completed = true;
-                exec.stop();
-                co_return;
-            };
-            exec.spawn(body());
-            exec.run();
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
+            const auto state = run_awaited(exec, c.start());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
         }
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
-            auto body = [&]() -> task<void>
-            {
-                state->result.emplace(co_await s.open());
-                state->completed = true;
-                exec.stop();
-                co_return;
-            };
-            exec.spawn(body());
-            exec.run();
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
+            const auto state = run_awaited(exec, s.open());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
         }
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<std::expected<event_notification, std::error_code>>>();
-            auto body = [&]() -> task<void>
-            {
-                state->result.emplace(co_await s.next());
-                state->completed = true;
-                exec.stop();
-                co_return;
-            };
-            exec.spawn(body());
-            exec.run();
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            REQUIRE_FALSE(state->result->has_value());
-            CHECK(state->result->error() == make_error_code(error::timed_out));
+            const auto state = run_awaited(exec, s.next());
+            REQUIRE(state.has_value());
+            REQUIRE_FALSE(state->has_value());
+            CHECK(state->error() == make_error_code(error::timed_out));
         }
     }
 
 #if defined(KMX_AIO_FEATURE_SOMEIP) && (!__has_include(<vsomeip/vsomeip.hpp>) && !__has_include(<vsomeip3/vsomeip.hpp>))
     TEST_CASE("someip subscription dropped_events increases when capacity is zero", "[someip][subscription][queue]")
     {
-        client c {make_test_client_config()};
+        client c {detail::make_test_client_config()};
 
-        subscription_config cfg = make_test_subscription_config();
+        subscription_config cfg = detail::make_test_subscription_config();
         cfg.notification_queue_capacity = 0u;
         subscription s {c, cfg};
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
-            auto body = [&]() -> task<void>
-            {
-                state->result.emplace(co_await c.start());
-                state->completed = true;
-                exec.stop();
-                co_return;
-            };
-            exec.spawn(body());
-            exec.run();
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
+            const auto state = run_awaited(exec, c.start());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
         }
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
-            auto body = [&]() -> task<void>
-            {
-                state->result.emplace(co_await s.open());
-                state->completed = true;
-                exec.stop();
-                co_return;
-            };
-            exec.spawn(body());
-            exec.run();
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
+            const auto state = run_awaited(exec, s.open());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
         }
 
         s.__kmx_test_push_event(event_notification {
@@ -179,42 +115,24 @@ namespace kmx::aio::test::someip::subscription_test
 
     TEST_CASE("someip subscription drops oldest when capacity is one", "[someip][subscription][queue]")
     {
-        client c {make_test_client_config()};
+        client c {detail::make_test_client_config()};
 
-        subscription_config cfg = make_test_subscription_config();
+        subscription_config cfg = detail::make_test_subscription_config();
         cfg.notification_queue_capacity = 1u;
         subscription s {c, cfg};
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
-            auto body = [&]() -> task<void>
-            {
-                state->result.emplace(co_await c.start());
-                state->completed = true;
-                exec.stop();
-                co_return;
-            };
-            exec.spawn(body());
-            exec.run();
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
+            const auto state = run_awaited(exec, c.start());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
         }
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
-            auto body = [&]() -> task<void>
-            {
-                state->result.emplace(co_await s.open());
-                state->completed = true;
-                exec.stop();
-                co_return;
-            };
-            exec.spawn(body());
-            exec.run();
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
+            const auto state = run_awaited(exec, s.open());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
         }
 
         s.__kmx_test_push_event(event_notification {
@@ -235,22 +153,12 @@ namespace kmx::aio::test::someip::subscription_test
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<std::expected<event_notification, std::error_code>>>();
-            auto body = [&]() -> task<void>
-            {
-                state->result.emplace(co_await s.next());
-                state->completed = true;
-                exec.stop();
-                co_return;
-            };
-            exec.spawn(body());
-            exec.run();
+            const auto state = run_awaited(exec, s.next());
 
-            REQUIRE(state->completed);
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
-            CHECK(state->result->value().event_id == 0x1002u);
-            CHECK(state->result->value().payload == std::vector<std::uint8_t>({2u}));
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
+            CHECK(state->value().event_id == 0x1002u);
+            CHECK(state->value().payload == std::vector<std::uint8_t>({2u}));
         }
 
         CHECK(s.dropped_events() == 1u);
@@ -258,42 +166,24 @@ namespace kmx::aio::test::someip::subscription_test
 
     TEST_CASE("someip subscription dropped_events resets across reopen", "[someip][subscription][queue][lifecycle]")
     {
-        client c {make_test_client_config()};
+        client c {detail::make_test_client_config()};
 
-        subscription_config cfg = make_test_subscription_config();
+        subscription_config cfg = detail::make_test_subscription_config();
         cfg.notification_queue_capacity = 0u;
         subscription s {c, cfg};
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
-            auto body = [&]() -> task<void>
-            {
-                state->result.emplace(co_await c.start());
-                state->completed = true;
-                exec.stop();
-                co_return;
-            };
-            exec.spawn(body());
-            exec.run();
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
+            const auto state = run_awaited(exec, c.start());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
         }
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
-            auto body = [&]() -> task<void>
-            {
-                state->result.emplace(co_await s.open());
-                state->completed = true;
-                exec.stop();
-                co_return;
-            };
-            exec.spawn(body());
-            exec.run();
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
+            const auto state = run_awaited(exec, s.open());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
         }
 
         s.__kmx_test_push_event(event_notification {
@@ -307,34 +197,16 @@ namespace kmx::aio::test::someip::subscription_test
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
-            auto body = [&]() -> task<void>
-            {
-                state->result.emplace(co_await s.close());
-                state->completed = true;
-                exec.stop();
-                co_return;
-            };
-            exec.spawn(body());
-            exec.run();
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
+            const auto state = run_awaited(exec, s.close());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
         }
 
         {
             completion::executor exec;
-            auto state = std::make_shared<coroutine_result_state<expected_void_t>>();
-            auto body = [&]() -> task<void>
-            {
-                state->result.emplace(co_await s.open());
-                state->completed = true;
-                exec.stop();
-                co_return;
-            };
-            exec.spawn(body());
-            exec.run();
-            REQUIRE(state->result.has_value());
-            REQUIRE(state->result->has_value());
+            const auto state = run_awaited(exec, s.open());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
         }
 
         s.__kmx_test_push_event(event_notification {

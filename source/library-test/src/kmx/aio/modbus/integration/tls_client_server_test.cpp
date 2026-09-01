@@ -1,6 +1,11 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <catch2/catch_test_macros.hpp>
 
+#include <kmx/aio/test/temp_dir.hpp>
+#include <kmx/aio/test/tls_certs.hpp>
+
+#include <kmx/aio/test/sample_process.hpp>
+
 #if defined(KMX_AIO_FEATURE_MODBUS)
     #include <kmx/aio/modbus/error.hpp>
     #include <kmx/aio/modbus/tls_client.hpp>
@@ -26,94 +31,6 @@ namespace kmx::aio::test::modbus::integration::tls_client_server_test
 
     static constexpr std::uint16_t tls_test_port = 15802u;
     static constexpr std::uint8_t tls_test_unit_id = 0x01u;
-
-    // Certificate helpers  (mirrors tls_mtls_client_server_test.cpp pattern)
-    static inline std::string shell_quote(const std::string& arg)
-    {
-        if (arg.find_first_of(" \t\n\"'$`\\!*?&|;()[]{}") == std::string::npos)
-            return arg;
-        std::string q = "'";
-        for (const char c: arg)
-            q += (c == '\'') ? std::string("'\\''") : std::string(1, c);
-        q += '\'';
-        return q;
-    }
-
-    static inline std::string read_file_text(const std::filesystem::path& path)
-    {
-        std::ifstream f(path);
-        return f.is_open() ? std::string((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>()) : std::string {};
-    }
-
-    struct cert_set
-    {
-        std::string ca_cert;
-        std::string server_cert;
-        std::string server_key;
-        std::string client_cert;
-        std::string client_key;
-    };
-
-    /// @brief Generate a CA-signed mTLS certificate set under @p cert_dir.
-    /// @details Reuses an existing valid set when present to reduce runtime flakiness.
-    [[nodiscard]] static cert_set ensure_modbus_certs(const std::filesystem::path& cert_dir)
-    {
-        const auto ca_key = (cert_dir / "ca_key.pem").string();
-        const auto ca_cert = (cert_dir / "ca_cert.pem").string();
-        const auto sv_key = (cert_dir / "server_key.pem").string();
-        const auto sv_csr = (cert_dir / "server.csr").string();
-        const auto sv_cert = (cert_dir / "server_cert.pem").string();
-        const auto cl_key = (cert_dir / "client_key.pem").string();
-        const auto cl_csr = (cert_dir / "client.csr").string();
-        const auto cl_cert = (cert_dir / "client_cert.pem").string();
-
-        const auto existing_ok = std::filesystem::exists(ca_cert) && std::filesystem::exists(sv_cert) && std::filesystem::exists(cl_cert) &&
-                                 std::filesystem::exists(sv_key) && std::filesystem::exists(cl_key) &&
-                                 read_file_text(ca_cert).find("BEGIN CERTIFICATE") != std::string::npos &&
-                                 read_file_text(sv_cert).find("BEGIN CERTIFICATE") != std::string::npos &&
-                                 read_file_text(cl_cert).find("BEGIN CERTIFICATE") != std::string::npos;
-
-        if (existing_ok)
-            return {ca_cert, sv_cert, sv_key, cl_cert, cl_key};
-
-        std::filesystem::create_directories(cert_dir);
-
-        // 1. Generate CA key + self-signed CA cert (RSA 2048, 30-day)
-        const auto ca_cmd = "openssl req -x509 -newkey rsa:2048 -keyout " + shell_quote(ca_key) + " -out " + shell_quote(ca_cert) +
-                            " -days 30 -nodes -subj '/CN=ModbusTestCA' >/dev/null 2>&1";
-        REQUIRE(std::system(ca_cmd.c_str()) == 0);
-
-        // 2. Server key + CSR + sign with CA
-        const auto sv_key_cmd = "openssl genrsa -out " + shell_quote(sv_key) + " 2048 >/dev/null 2>&1";
-        REQUIRE(std::system(sv_key_cmd.c_str()) == 0);
-
-        const auto sv_csr_cmd =
-            "openssl req -new -key " + shell_quote(sv_key) + " -out " + shell_quote(sv_csr) + " -subj '/CN=127.0.0.1' >/dev/null 2>&1";
-        REQUIRE(std::system(sv_csr_cmd.c_str()) == 0);
-
-        const auto sv_sign_cmd = "openssl x509 -req -in " + shell_quote(sv_csr) + " -CA " + shell_quote(ca_cert) + " -CAkey " +
-                                 shell_quote(ca_key) + " -CAcreateserial -out " + shell_quote(sv_cert) + " -days 30 >/dev/null 2>&1";
-        REQUIRE(std::system(sv_sign_cmd.c_str()) == 0);
-
-        // 3. Client key + CSR + sign with CA
-        const auto cl_key_cmd = "openssl genrsa -out " + shell_quote(cl_key) + " 2048 >/dev/null 2>&1";
-        REQUIRE(std::system(cl_key_cmd.c_str()) == 0);
-
-        const auto cl_csr_cmd =
-            "openssl req -new -key " + shell_quote(cl_key) + " -out " + shell_quote(cl_csr) + " -subj '/CN=modbus-client' >/dev/null 2>&1";
-        REQUIRE(std::system(cl_csr_cmd.c_str()) == 0);
-
-        const auto cl_sign_cmd = "openssl x509 -req -in " + shell_quote(cl_csr) + " -CA " + shell_quote(ca_cert) + " -CAkey " +
-                                 shell_quote(ca_key) + " -CAcreateserial -out " + shell_quote(cl_cert) + " -days 30 >/dev/null 2>&1";
-        REQUIRE(std::system(cl_sign_cmd.c_str()) == 0);
-
-        // Validate PEM headers
-        REQUIRE(read_file_text(ca_cert).find("BEGIN CERTIFICATE") != std::string::npos);
-        REQUIRE(read_file_text(sv_cert).find("BEGIN CERTIFICATE") != std::string::npos);
-        REQUIRE(read_file_text(cl_cert).find("BEGIN CERTIFICATE") != std::string::npos);
-
-        return {ca_cert, sv_cert, sv_key, cl_cert, cl_key};
-    }
 
     // Server handler helpers (minimal — just read one register)
     [[nodiscard]] static request_handler make_simple_holding_handler()
@@ -142,7 +59,11 @@ namespace kmx::aio::test::modbus::integration::tls_client_server_test
     // mTLS integration test
     TEST_CASE("modbus tls: mTLS client and server exchange registers", "[modbus][tls][mtls][integration][slow]")
     {
-        const auto certs = ensure_modbus_certs("/tmp/kmx_modbus_certs_exchange");
+        const scoped_temp_dir cert_dir {"kmx_modbus_certs_exchange"};
+        REQUIRE(cert_dir.valid());
+        const auto cert_set_opt = ensure_ca_signed_set(cert_dir.path(), "127.0.0.1", "modbus-client");
+        REQUIRE(cert_set_opt.has_value());
+        const auto& certs = *cert_set_opt;
 
         auto srv = std::make_shared<tls_server>();
         srv->set_handler(function_code::read_holding_registers, make_simple_holding_handler());
@@ -154,9 +75,9 @@ namespace kmx::aio::test::modbus::integration::tls_client_server_test
         std::optional<std::error_code> op_error;
 
         const server_config srv_cfg {.bind_address = "127.0.0.1", .port = tls_test_port, .unit_id = tls_test_unit_id};
-        const tls_config srv_tls {.cert_path = certs.server_cert,
-                                  .key_path = certs.server_key,
-                                  .ca_cert_path = certs.ca_cert,
+        const tls_config srv_tls {.cert_path = certs.server_cert.string(),
+                                  .key_path = certs.server_key.string(),
+                                  .ca_cert_path = certs.ca_cert.string(),
                                   .verify_peer = true,
                                   .sni_hostname = ""};
 
@@ -171,7 +92,8 @@ namespace kmx::aio::test::modbus::integration::tls_client_server_test
                 srv->stop();
             });
 
-        auto exchange = [&, exec, srv, &ca = certs.ca_cert, &ccert = certs.client_cert, &ckey = certs.client_key]() -> task<void>
+        auto exchange = [&, exec, srv, ca = certs.ca_cert.string(), ccert = certs.client_cert.string(),
+                         ckey = certs.client_key.string()]() -> task<void>
         {
             static_cast<void>(co_await exec->async_timeout(5'000'000u));
 
@@ -224,7 +146,11 @@ namespace kmx::aio::test::modbus::integration::tls_client_server_test
     // mTLS rejection: client omits certificate
     TEST_CASE("modbus tls: server rejects client with missing certificate", "[modbus][tls][no-client-cert][integration][slow]")
     {
-        const auto certs = ensure_modbus_certs("/tmp/kmx_modbus_certs_reject");
+        const scoped_temp_dir cert_dir {"kmx_modbus_certs_reject"};
+        REQUIRE(cert_dir.valid());
+        const auto cert_set_opt = ensure_ca_signed_set(cert_dir.path(), "127.0.0.1", "modbus-client");
+        REQUIRE(cert_set_opt.has_value());
+        const auto& certs = *cert_set_opt;
 
         auto srv = std::make_shared<tls_server>();
         srv->set_handler(function_code::read_holding_registers, make_simple_holding_handler());
@@ -236,9 +162,9 @@ namespace kmx::aio::test::modbus::integration::tls_client_server_test
         std::optional<std::error_code> op_error;
 
         const server_config srv_cfg {.bind_address = "127.0.0.1", .port = tls_test_port + 1u, .unit_id = tls_test_unit_id};
-        const tls_config srv_tls {.cert_path = certs.server_cert,
-                                  .key_path = certs.server_key,
-                                  .ca_cert_path = certs.ca_cert,
+        const tls_config srv_tls {.cert_path = certs.server_cert.string(),
+                                  .key_path = certs.server_key.string(),
+                                  .ca_cert_path = certs.ca_cert.string(),
                                   .verify_peer = true,
                                   .sni_hostname = ""}; // server requires client cert
 
@@ -253,7 +179,7 @@ namespace kmx::aio::test::modbus::integration::tls_client_server_test
                 srv->stop();
             });
 
-        auto exchange = [&, exec, srv, &ca = certs.ca_cert]() -> task<void>
+        auto exchange = [&, exec, srv, ca = certs.ca_cert.string()]() -> task<void>
         {
             static_cast<void>(co_await exec->async_timeout(5'000'000u));
 

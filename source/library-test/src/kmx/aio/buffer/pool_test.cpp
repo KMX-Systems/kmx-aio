@@ -114,6 +114,43 @@ namespace kmx::aio::test::buffer::pool_test
         REQUIRE(pool.available() == 1u);
     }
 
+    TEST_CASE("buffer::pool try_acquire reports exhaustion with an empty optional", "[buffer_pool][exhaustion][try_acquire]")
+    {
+        kmx::aio::buffer::pool<int, 2> pool;
+
+        auto first = pool.try_acquire();
+        auto second = pool.try_acquire();
+        REQUIRE(first.has_value());
+        REQUIRE(second.has_value());
+        REQUIRE(pool.is_full());
+
+        // Exhaustion is reported, not thrown: the caller decides what to do about the backpressure.
+        REQUIRE_FALSE(pool.try_acquire().has_value());
+        REQUIRE(pool.allocated() == 2u);
+
+        // A returned buffer makes the next attempt succeed again.
+        first.reset();
+        REQUIRE(pool.allocated() == 1u);
+        REQUIRE(pool.try_acquire().has_value());
+    }
+
+    TEST_CASE("buffer::pool try_acquire propagates constructor failures", "[buffer_pool][exception-safety][try_acquire]")
+    {
+        detail::unstable_buffer_ctor_calls = 0;
+        kmx::aio::buffer::pool<detail::unstable_buffer, 2> pool;
+
+        // A failing constructor is not exhaustion and must not be reported as one, or a caller waiting for
+        // buffers to come back would wait for buffers that were never taken.
+        REQUIRE_THROWS_AS(pool.try_acquire(), std::runtime_error);
+        REQUIRE(pool.allocated() == 0u);
+        REQUIRE(pool.available() == 2u);
+
+        const auto leased = pool.try_acquire();
+        REQUIRE(leased.has_value());
+        REQUIRE(pool.allocated() == 1u);
+        REQUIRE(pool.available() == 1u);
+    }
+
     TEST_CASE("buffer::pool supports complex types", "[buffer_pool][types]")
     {
         struct complex_buffer
