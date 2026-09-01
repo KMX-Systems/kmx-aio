@@ -250,8 +250,9 @@ namespace kmx::aio::benchmark
         // What a caller waits for between asking an idle executor to stop and getting its thread back.
         // The loop is parked in epoll_wait when the request arrives, so this measures how it learns of
         // one: either it is woken, or it finds out when the wait times out - config.timeout_ms, a fifth
-        // of a second by default, spent waiting for a timer.
-        const auto iterations = scaled(10u, scale);
+        // of a second by default, spent waiting for a timer. The join is inside the measurement because
+        // stop() returning is not what a caller waits for; run() returning on the other thread is.
+        const auto iterations = scaled(120u, scale);
         std::vector<double> samples {};
         samples.reserve(iterations);
 
@@ -268,11 +269,12 @@ namespace kmx::aio::benchmark
 
             const auto start = clock_t::now();
             exec->stop();
+            runner.join();
             samples.push_back(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(clock_t::now() - start).count()));
         }
 
         auto out = from_samples("readiness/stop an idle executor", samples);
-        out.note = "time from stop() to the event loop's thread being joined, at the default timeout_ms";
+        out.note = "stop() to run() having returned on the executor's thread, at the default timeout_ms";
         return out;
     }
 
@@ -287,11 +289,16 @@ namespace kmx::aio::benchmark
 
         exec->run();
         const auto elapsed = clock_t::now() - start;
-        return from_total("readiness/spawn+complete noop task", iterations, elapsed);
+
+        auto out = from_total("readiness/spawn+drain noop tasks (queued, then run)", iterations, elapsed);
+        out.note = "queued before run(): drain throughput with loop start-up in it, not comparable with the completion figure";
+        return out;
     }
 
     void register_readiness_cases(registry& reg) noexcept(false)
     {
+        reg.describe("readiness", "the epoll executor, to be read against the baseline round trips");
+
         reg.add("readiness/wait_events_vector", bench_wait_events_vector);
         reg.add("readiness/wait_events_span", bench_wait_events_span);
         reg.add("readiness/stop", bench_readiness_stop);
