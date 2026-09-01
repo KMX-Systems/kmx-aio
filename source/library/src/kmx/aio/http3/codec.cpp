@@ -124,8 +124,9 @@ namespace kmx::aio::http3
 
     std::vector<std::uint8_t> data_codec::encode_frame(cspan_uint8_t payload) noexcept(false)
     {
-        const auto body = encode(payload);
-        return frame_codec::encode(frame_type::data, body);
+        // Straight to the framer. encode() is the identity on a DATA payload, so materializing its
+        // result first only copies the whole body into a buffer whose sole use is to be copied again.
+        return frame_codec::encode(frame_type::data, payload);
     }
 
     std::expected<std::vector<std::uint8_t>, std::error_code> data_codec::decode_frame(cspan_uint8_t payload) noexcept
@@ -135,7 +136,10 @@ namespace kmx::aio::http3
             return std::unexpected(decoded.error());
         if (decoded->type != frame_type::data)
             return std::unexpected(kmx::aio::error_from_errno(EINVAL));
-        return decode(decoded->payload);
+
+        // decode() would copy the payload the framer has already extracted, into a buffer this frame
+        // is about to drop. Handing the frame's own storage over says the same thing without the copy.
+        return std::move(decoded->payload);
     }
 
     std::vector<std::uint8_t> settings_codec::encode(const settings& value) noexcept(false)
@@ -227,6 +231,7 @@ namespace kmx::aio::http3
     std::vector<std::uint8_t> goaway_codec::encode(const goaway_frame& value) noexcept(false)
     {
         std::vector<std::uint8_t> payload;
+        payload.reserve(detail::varint_size(value.stream_id));
         detail::encode_varint(payload, value.stream_id);
         return payload;
     }
@@ -753,7 +758,10 @@ namespace kmx::aio::http3::demo
                 auto body = data_codec::decode(frame.payload);
                 if (!body)
                     return std::unexpected(body.error());
-                message.body += detail::bytes_to_string(*body);
+
+                // Appended straight from the decoded bytes: bytes_to_string() would build a whole
+                // second copy of the body only for operator+= to copy it again and throw it away.
+                message.body.append(reinterpret_cast<const char*>(body->data()), body->size());
             }
         }
 
@@ -797,7 +805,10 @@ namespace kmx::aio::http3::demo
                 auto body = data_codec::decode(frame.payload);
                 if (!body)
                     return std::unexpected(body.error());
-                message.body += detail::bytes_to_string(*body);
+
+                // Appended straight from the decoded bytes: bytes_to_string() would build a whole
+                // second copy of the body only for operator+= to copy it again and throw it away.
+                message.body.append(reinterpret_cast<const char*>(body->data()), body->size());
             }
         }
 

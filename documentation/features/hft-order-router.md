@@ -14,9 +14,13 @@ It is not a market connectivity stack. The sample uses synthetic orders to demon
 
 ## Key Types and APIs
 
-- `kmx::aio::channel<order>`
-- `channel::try_push()` and `channel::try_pop()`
-- `channel::wait_until_can_send()`
+- `kmx::aio::channel<order>` — the typed ring. Index handling and backpressure live in its base,
+  `kmx::aio::basic_channel` (`<kmx/aio/basic_channel.hpp>`); `channel<T>` adds only the storage and the
+  element move in and out.
+- `channel::try_push()` and `channel::try_pop()` — both `[[nodiscard]]`: `try_push` reports a full
+  channel by returning `false` and drops the element on the floor if the caller ignores it.
+- `basic_channel::wait_until_can_send()`, `can_send()`, `producer_credits()`, `occupancy()`,
+  `capacity()`, `empty()`, `set_backpressure()`
 - `std::atomic_bool` and `std::atomic_uint64_t` for coordination and counters
 
 ## C++ Key Methods - Completion model
@@ -26,8 +30,10 @@ The sample uses the completion primitives below:
 ```cpp
 kmx::aio::channel<order> order_queue{4096u};
 
-order_queue.wait_until_can_send();
-order_queue.try_push(order{.id = next_id, .side = side::buy});
+// try_push returns false when the ring is full; block only then.
+auto o = order {.id = next_id, .direction = side::buy};
+while (!order_queue.try_push(std::move(o)))
+	order_queue.wait_until_can_send();
 
 auto maybe_order = order_queue.try_pop();
 if (maybe_order)

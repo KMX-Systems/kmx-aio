@@ -19,8 +19,14 @@ In the completion model the kernel performs I/O into/from the buffer before the 
 #include <kmx/aio/readiness/tcp/listener.hpp>
 
 kmx::aio::readiness::executor exec;
-kmx::aio::readiness::tcp::listener srv {exec, "0.0.0.0", 8080};
-srv.listen(128);                              // set backlog; non-coroutine
+
+// The listener binds an ip_address_t, not a string; build one from ipv4::any / ipv4::localhost
+// or from ipv4::parse_address for a value read at run time.
+kmx::aio::readiness::tcp::listener srv {exec, kmx::aio::make_ip_address(kmx::aio::ipv4::any), 8080u};
+
+// set backlog; non-coroutine, and the expected_void_t it returns is [[nodiscard]]
+if (const auto listening = srv.listen(128); !listening)
+    co_return std::unexpected(listening.error());
 
 while (true)
 {
@@ -59,8 +65,10 @@ co_await conn.write_all(std::span{msg.data(), msg.size()});
 #include <kmx/aio/completion/tcp/listener.hpp>
 
 kmx::aio::completion::executor exec;
-kmx::aio::completion::tcp::listener srv {exec, "0.0.0.0", 8080};
-srv.listen(128);
+kmx::aio::completion::tcp::listener srv {exec, kmx::aio::make_ip_address(kmx::aio::ipv4::any), 8080u};
+
+if (const auto listening = srv.listen(128); !listening)
+    co_return std::unexpected(listening.error());
 
 while (true)
 {
@@ -95,6 +103,21 @@ auto n = co_await conn.read_fixed(std::span{fixed_buf}, 0);
 // write from a registered buffer at index 0
 co_await conn.write_all_fixed(std::span{fixed_buf, *n}, 0);
 ```
+
+## Result Types
+
+Both models return the same aliases, declared in `<kmx/aio/task.hpp>` and `<kmx/aio/basic_types.hpp>`:
+
+| Operation | Return type |
+| :--- | :--- |
+| `read`, `write`, `read_fixed`, `write_fixed` | `task_returning_expected_size_t` |
+| `write_all`, `write_all_fixed` | `task_returning_expected_void_t` |
+| `accept` | `task<file_descriptor::expected_t>` |
+| `listen` | `expected_void_t` (not a coroutine) |
+
+These replace the per-class `result_t` / `result_task` aliases the stream and listener classes used to
+declare; the spelled-out `task<std::expected<std::size_t, std::error_code>>` forms remain valid, since
+the aliases name exactly those types.
 
 ## Samples
 

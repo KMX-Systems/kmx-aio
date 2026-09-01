@@ -230,6 +230,14 @@ namespace kmx::aio::gpu
     }
 #endif
 
+    void executor::resume_on_executor(const coroutine_handle_t handle) noexcept
+    {
+        auto* const previous = tls_current_gpu_executor;
+        tls_current_gpu_executor = this;
+        handle.resume();
+        tls_current_gpu_executor = previous;
+    }
+
     bool executor::poll_events() noexcept
     {
         bool work_done = false;
@@ -237,36 +245,50 @@ namespace kmx::aio::gpu
         // 1. Drain and resume pending tasks from spawn() queue.
         std::deque<coroutine_handle_t> pending;
         {
-            std::lock_guard<std::mutex> lock(queue_mutex_);
+            const std::lock_guard lock(queue_mutex_);
             pending = std::exchange(pending_tasks_, {});
         }
 
-        for (auto handle: pending)
+        for (const auto handle: pending)
         {
             if (handle)
             {
-                tls_current_gpu_executor = this;
-                handle.resume();
-                tls_current_gpu_executor = nullptr;
+                resume_on_executor(handle);
                 work_done = true;
             }
         }
 
-        // 2. Check waiting events for readiness and resume ready coroutines.
-        std::vector<void*> completed_events;
+        // 2. Collect the events that have fired and retire them, then resume their coroutines with the
+        //    lock released.
+        //
+        //    Resuming under the lock is what this arrangement exists to avoid. A resumed coroutine runs
+        //    application code, and the two things such code most naturally does next both take
+        //    queue_mutex_: awaiting another GPU event reaches register_waiting_coroutine(), and starting
+        //    more work reaches spawn(). Either one locks a non-recursive mutex the resuming thread
+        //    already holds, which is a deadlock - and the first of them is simply what a coroutine
+        //    awaiting two events in sequence does, not an unusual case.
+        //
+        //    Even where it did not deadlock it was undefined: register_waiting_coroutine() inserts into
+        //    waiting_events_, and an insert that rehashes invalidates the iterator the loop was about to
+        //    advance.
+        //
+        //    Retiring an entry before its coroutine runs also settles what happens when that coroutine
+        //    waits on the same event handle again - a real possibility, because CUDA reuses a destroyed
+        //    event's address. The new registration is a fresh entry made after this one is gone, rather
+        //    than something a later erase would silently delete.
+        std::vector<coroutine_handle_t> ready_handles;
+        bool retired_any = false;
         {
-            std::lock_guard<std::mutex> lock(queue_mutex_);
-            for (auto it = waiting_events_.begin(); it != waiting_events_.end(); ++it)
+            const std::lock_guard lock(queue_mutex_);
+            for (auto it = waiting_events_.begin(); it != waiting_events_.end();)
             {
-                auto event_handle = it->first;
-                auto coro_handle = it->second;
+                bool ready = false;
 
                 // Try to query event status (non-blocking).
                 try
                 {
-                    bool ready = false;
 #if defined(KMX_AIO_FEATURE_CUDA)
-                    const auto ret = ::cudaEventQuery(static_cast<::cudaEvent_t>(event_handle));
+                    const auto ret = ::cudaEventQuery(static_cast<::cudaEvent_t>(it->first));
                     if (ret == cudaSuccess)
                         ready = true;
                     else if (ret != cudaErrorNotReady)
@@ -274,34 +296,38 @@ namespace kmx::aio::gpu
 #else
                     ready = true;
 #endif
-
-                    if (ready)
-                    {
-                        completed_events.push_back(event_handle);
-                        if (coro_handle)
-                        {
-                            tls_current_gpu_executor = this;
-                            coro_handle.resume();
-                            tls_current_gpu_executor = nullptr;
-                            stats_.total_events_completed.fetch_add(1u, std::memory_order_release);
-                            work_done = true;
-                        }
-                    }
                 }
                 catch (...)
                 {
-                    // Silently ignore errors in event polling.
+                    // Silently ignore errors in event polling; the entry is dropped, as before.
                     stats_.error_count.fetch_add(1u, std::memory_order_relaxed);
-                    completed_events.push_back(event_handle);
+                    it = waiting_events_.erase(it);
+                    retired_any = true;
+                    continue;
                 }
-            }
 
-            // Remove completed events from waiting map.
-            for (auto event_handle: completed_events)
-                waiting_events_.erase(event_handle);
+                if (!ready)
+                {
+                    ++it;
+                    continue;
+                }
+
+                if (it->second)
+                    ready_handles.push_back(it->second);
+
+                it = waiting_events_.erase(it);
+                retired_any = true;
+            }
         }
 
-        return work_done || !completed_events.empty();
+        for (const auto handle: ready_handles)
+        {
+            resume_on_executor(handle);
+            stats_.total_events_completed.fetch_add(1u, std::memory_order_release);
+            work_done = true;
+        }
+
+        return work_done || retired_any;
     }
 
     bool executor::has_pending_work() noexcept

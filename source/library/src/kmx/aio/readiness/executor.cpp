@@ -8,6 +8,7 @@
 #include <kmx/aio/readiness/openonload/extensions.hpp>
 #include <kmx/logger.hpp>
 
+#include <array>
 #include <cerrno>
 #include <cstdint>
 #include <cstdlib>
@@ -210,13 +211,23 @@ namespace kmx::aio::readiness
             if (remember)
                 cancelled_fds_.insert(fd);
 
-            for (auto it = subscribers_.begin(); it != subscribers_.end();)
+            // Looked up rather than scanned. A descriptor holds one subscription slot per event it can
+            // be awaited on, and the list below names every one of them, so the entries to release are
+            // found by hashing two keys instead of walking every subscription this executor holds -
+            // which, on a process serving thousands of descriptors, is the difference between closing
+            // one socket in constant time and paying for every other socket still open.
+            //
+            // The list is the complete set of event_type enumerators, and has to stay that way: an
+            // enumerator added there and not here would leave its waiters suspended on a descriptor
+            // that is being taken away, which is exactly the coroutine leak the comment in
+            // unregister_fd() describes.
+            static constexpr std::array cancellable_events {event_type::read, event_type::write};
+
+            for (const auto type: cancellable_events)
             {
-                if (it->first.fd != fd)
-                {
-                    ++it;
+                const auto it = subscribers_.find({fd, type});
+                if (it == subscribers_.end())
                     continue;
-                }
 
                 for (const auto& waiting: it->second)
                 {
@@ -230,7 +241,7 @@ namespace kmx::aio::readiness
                     handles.push_back(waiting.handle);
                 }
 
-                it = subscribers_.erase(it);
+                subscribers_.erase(it);
             }
         }
 

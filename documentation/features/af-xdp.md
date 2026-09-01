@@ -10,7 +10,8 @@ AF_XDP support is completion-model only and feature-gated.
 
 ## Build Gate
 
-- `project.enable_af_xdp:true` (default)
+- `project.enable_af_xdp` — off by default; pass `project.enable_af_xdp:true` (or `project.full:true`)
+  to build it.
 
 ## Dependencies
 
@@ -53,7 +54,7 @@ const socket_config cfg {
     .need_wakeup = true,
 };
 
-auto sock_result = socket::create(exec, cfg);
+auto sock_result = socket::create(exec, cfg);   // socket::expected_t
 if (!sock_result)
     co_return;
 
@@ -70,7 +71,7 @@ for (;;)
     }
 
     auto& frame = *recv_result;
-    auto payload = std::span<const std::byte>(frame.data.data(), frame.length);
+    auto payload = cspan_byte_t(frame.data.data(), frame.length);
 
     co_await sock.send(payload);
     sock.release_frame(frame.addr);

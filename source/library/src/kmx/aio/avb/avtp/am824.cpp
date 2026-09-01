@@ -7,6 +7,7 @@
 #include <kmx/aio/error_code.hpp>
 
 #include <cerrno>
+#include <cstring>
 
 namespace kmx::aio::avb::avtp
 {
@@ -60,8 +61,8 @@ namespace kmx::aio::avb::avtp
         out[18] = static_cast<std::byte>(aaf_format_am824);
         out[19] = static_cast<std::byte>(0x05u); // 48 kHz nominal for sample app
 
-        for (std::size_t i = 0; i < payload.size(); ++i)
-            out[header_size + i] = payload[i];
+        if (!payload.empty())
+            std::memcpy(out.data() + header_size, payload.data(), payload.size());
 
         return out;
     }

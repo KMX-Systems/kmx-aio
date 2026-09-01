@@ -78,9 +78,10 @@ namespace kmx::aio::http2
         buffer[7u] = (stream_id >> 8u) & 0xFFu;
         buffer[8u] = stream_id & 0xFFu;
 
-        // Copy raw payload
-        for (std::size_t i {}; i < data.size(); ++i)
-            buffer[9u + i] = static_cast<std::uint8_t>(data[i]);
+        // Copy raw payload. A DATA frame carries up to 16 MiB, and a byte-at-a-time loop through a
+        // span is the one place in this builder where that size is paid for one element at a time.
+        if (!data.empty())
+            std::memcpy(buffer.data() + 9u, data.data(), data.size());
 
         return 9u + data.size();
     }

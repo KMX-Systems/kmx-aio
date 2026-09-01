@@ -357,12 +357,32 @@ combine several runs into one report on purpose.
 Coverage can be combined with a sanitizer — `project.enable_coverage:true` alongside
 `project.enable_asan:true` — though the two are usually more informative apart.
 
+### Fault Injection
+
+A coverage run also turns `project.enable_fault_injection:true` on. The branches that handle a failing
+`read`, `epoll_ctl` or `io_uring_submit` cannot be reached by calling the public API, so the gate
+compiles a faulting policy into the syscall seam (`source/library/inc/kmx/aio/detail/syscalls.hpp`) and
+the tests make individual calls fail on demand. Without it those branches are reported cold in every
+report.
+
+`script/run-coverage.sh` derives the setting from `KMX_COVERAGE`; `KMX_FAULT_INJECTION` overrides it in
+either direction, for measuring a build without the seam:
+
+```bash
+KMX_FAULT_INJECTION=false bash script/run-coverage.sh
+```
+
 ### Building With Coverage By Hand
 
 ```bash
 cd source
-qbs build -f source.qbs -d ../output/coverage config:debug -j"$(nproc)" project.enable_coverage:true
+qbs build -f source.qbs -d ../output/coverage config:debug -j"$(nproc)" \
+    project.enable_coverage:true \
+    project.enable_fault_injection:true
 ```
+
+`project.enable_fault_injection` is what `script/run-coverage.sh` adds on top of the coverage gate; drop
+it to measure a build without the syscall seam's faulting policy.
 
 This compiles with `--coverage -fprofile-update=atomic -fprofile-abs-path`. The atomic counter updates
 matter here: this library is threaded throughout, and the default non-atomic updates lose increments

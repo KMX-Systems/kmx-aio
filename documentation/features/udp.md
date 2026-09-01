@@ -9,6 +9,15 @@ UDP support is available in both execution models without any feature gate. Each
 | Caller manages `msghdr` | Required for `socket` | Required for `socket` |
 | Automatic address decode | ✅ `endpoint` overload | ✅ `endpoint` overload |
 
+Both headers stand on their own. `socket.hpp` used to include `endpoint.hpp` at the bottom; it no longer
+does, so a translation unit that names an `endpoint` has to include `endpoint.hpp` itself.
+
+The factory result types are spelled `expected_t` — `readiness::udp::endpoint::expected_t`,
+`completion::udp::socket::expected_t`, `completion::udp::endpoint::expected_t` — replacing the earlier
+`create_result`. `readiness::udp::socket` still names its factory result `create_result`. Read/write
+operations return the shared `task_returning_expected_size_t` alias rather than a per-class
+`result_task`.
+
 ## Socket Layer (low-level)
 
 The socket types expose raw `msghdr` for callers that need full control over `iovec`, control messages (cmsg), or interface selection.
@@ -40,7 +49,9 @@ kmx::aio::completion::executor exec;
 auto sock_result = kmx::aio::completion::udp::socket::create(exec);
 auto& sock = *sock_result;
 
-sock.bind("0.0.0.0", 9000);               // bind before receiving
+// bind takes an ip_address_t, not a string, and its expected_void_t result is [[nodiscard]]
+if (const auto bound = sock.bind(kmx::aio::make_ip_address(kmx::aio::ipv4::any), 9000u); !bound)
+    co_return std::unexpected(bound.error());
 
 ::msghdr msg {};
 // ... fill iov, name, namelen ...
@@ -54,7 +65,7 @@ auto n = co_await sock.recvmsg(&msg);
 ### `readiness::udp::endpoint`
 
 ```cpp
-#include <kmx/aio/readiness/udp/socket.hpp>  // pulls in endpoint.hpp
+#include <kmx/aio/readiness/udp/endpoint.hpp>  // include it directly; socket.hpp no longer pulls it in
 
 kmx::aio::readiness::executor exec;
 auto ep_result = kmx::aio::readiness::udp::endpoint::create(exec);
@@ -82,7 +93,7 @@ co_await ep.send(std::span{buf.data(), *n},
 The completion endpoint API is identical to the readiness endpoint but is backed by io_uring `recvmsg`/`sendmsg` operations:
 
 ```cpp
-#include <kmx/aio/completion/udp/socket.hpp>  // pulls in endpoint.hpp
+#include <kmx/aio/completion/udp/endpoint.hpp>  // include it directly; socket.hpp no longer pulls it in
 
 kmx::aio::completion::executor exec;
 auto ep_result = kmx::aio::completion::udp::endpoint::create(exec);

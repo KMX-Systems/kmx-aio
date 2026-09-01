@@ -10,13 +10,16 @@
 * **Zero-Overhead Abstractions**: Lightweight wrappers around system calls.
 * **Type-Safe Error Handling**: Extensive use of `std::expected` and `std::error_code` for robust error management.
 * **TCP Networking**: Built-in support for TCP listeners and streams.
-* **UDP Networking**: Dual-layer API in readiness model — low-level `readiness::udp::socket` and high-level `readiness::udp::endpoint` with automatic address management. Completion model provides socket-level `completion::udp::socket` only.
+* **UDP Networking**: Dual-layer API in both models — low-level `socket` wrapping `recvmsg`/`sendmsg` and high-level `endpoint` with span-based send/receive and automatic peer-address decoding, as `readiness::udp::{socket,endpoint}` and `completion::udp::{socket,endpoint}`.
 * **HTTP/2**: Full codec, stream, frame, and HPACK serialization stack (no model affinity).
 * **[TLS](https://www.rfc-editor.org/rfc/rfc8446)/[ALPN](https://www.rfc-editor.org/rfc/rfc7301)**: Encrypted streams ([BoringSSL](https://boringssl.googlesource.com/boringssl/)-backed, both models) with [Application Layer Protocol Negotiation](https://www.rfc-editor.org/rfc/rfc7301) for seamless HTTP/2 handshakes.
 * **[QUIC](https://datatracker.ietf.org/doc/rfc9000/) + [HTTP/3](https://www.rfc-editor.org/rfc/rfc9114)**: Full QUIC engine (both models) with [lsquic](https://github.com/litespeedtech/lsquic) backing; HTTP/3 server/client samples included.
 * **Async Timers**: Readiness timer (`timerfd` + `epoll`) and completion timer (`io_uring` timeout op).
 * **[V4L2](https://linuxtv.org) Async Capture** (Readiness + Completion): Readiness mode uses epoll-driven frame capture; completion mode uses `IORING_OP_POLL_ADD` plus synchronous `VIDIOC_DQBUF` (hybrid model) in the same io_uring executor. Targets V4L2 streaming devices such as USB webcams, [MIPI CSI-2](https://www.mipi.org/specifications/csi-2) pipelines, and [GMSL](https://en.wikipedia.org/wiki/Gigabit_Multimedia_Serial_Link) camera chains. Frames land in `co_await`-returned `frame_view` objects that auto-requeue mmap'd kernel buffers on destruction.
 * **Completion `async_poll(fd, mask)`**: First-class one-shot `IORING_OP_POLL_ADD` primitive to await arbitrary fd readiness (V4L2, eventfd, timerfd, signalfd, netlink) inside `completion::executor`; callers re-arm by invoking it again.
+* **Async Mutex**: `kmx::aio::async_mutex` is acquired with `co_await` and can be held across a suspension — it parks the coroutine instead of blocking the worker thread, and hands ownership straight from the releasing holder to the first waiter in line.
+* **Coroutine-Frame Slab Allocator**: `kmx::aio::allocator::slab` serves coroutine frames from a per-thread slab. Each frame carries its origin in a header, so one allocated on the executor thread and freed on another goes back to the right slab through a lock-free remote list rather than corrupting the heap.
+* **Thread-Pool Scheduler**: `kmx::aio::scheduler` runs submitted callables on a fixed set of workers, with `wait_until_idle()` for owners that have to outlive their own queued work.
 * **Buffer Pool Primitives**: `kmx::aio::buffer::pool` and `kmx::aio::buffer::handle` provide fixed-capacity RAII buffer leasing for deterministic zero-copy workflows.
 * **[Channel Backpressure](https://www.geeksforgeeks.org/computer-networks/back-pressure-in-distributed-systems/)**: `kmx::aio::channel` supports watermark-based producer throttling and credit reporting.
 * **[OPC UA](https://en.wikipedia.org/wiki/OPC_Unified_Architecture)**: Backend-neutral async client/server/subscription facade with [open62541](https://open62541.org) backend support; this repository drives it through completion-executor progression, with a shim fallback for feature-off builds and tests.
@@ -91,7 +94,7 @@ Quick reference showing which APIs are available in each execution model:
 | :--- | :---: | :---: | :---: | :--- |
 | [**TCP**](documentation/features/tcp.md) | ✅ | ✅ | | Listener, stream, accept, read, write |
 | [**UDP Socket**](documentation/features/udp.md) | ✅ | ✅ | | Low-level recvmsg/sendmsg |
-| [**UDP Endpoint**](documentation/features/udp.md) | ✅ | ❌ | | High-level span API; completion callers manage `msghdr`/`iovec` directly |
+| [**UDP Endpoint**](documentation/features/udp.md) | ✅ | ✅ | | High-level span API over the socket layer; automatic peer IP/port decoding |
 | [**TLS Stream**](documentation/features/tls-http2.md) | ✅ | ✅ | | Generic template; BoringSSL Memory BIO |
 | [**Timers**](documentation/features/timers.md) | ✅ | ✅ | | Readiness: timerfd + epoll; Completion: io_uring timeout ops |
 | [**AF_XDP Packets**](documentation/features/af-xdp.md) | ❌ | ✅ | ⚙ | Kernel-bypass; eBPF filtering; UMEM ring management |
@@ -106,7 +109,7 @@ Quick reference showing which APIs are available in each execution model:
 | [**QUIC Engine**](documentation/features/quic-http3.md) | ✅ | ✅ | ⚙ | lsquic-backed; HTTP/3 server/client samples |
 | [**SOME/IP**](documentation/features/someip.md) | ✅ | ✅ | ⚙ | Backend-neutral facade; vsomeip or stub backend; echo server/client samples |
 | [**SPDK Block I/O**](documentation/features/spdk.md) | ❌ | ✅ | ⚙ | NVMe, generic bdev; DPDK-backed |
-| [**V4L2 Capture**](documentation/features/v4l2.md) | ✅ | ✅ | ⚙ | Readiness: zero-copy mmap + epoll; Completion: `IORING_OP_POLL_ADD` + `VIDIOC_DQBUF` |
+| [**V4L2 Capture**](documentation/features/v4l2.md) | ✅ | ✅ | | No gate of its own; rides on whichever executor backend is enabled |
 
 ## Documentation
 
