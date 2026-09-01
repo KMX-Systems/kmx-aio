@@ -1,15 +1,27 @@
 # Core Primitives
 
-The library is built around a small set of core async primitives:
+The library is built around a small set of core async primitives, all of them in `kmx-aio-core`:
 
-- `kmx::aio::task<T>`: lazy coroutine task
-- `kmx::aio::executor_base`: shared executor lifecycle/synchronization base
-- `kmx::aio::allocator`: thread-local slab allocator for coroutine frame storage
-- `kmx::aio::file_descriptor`: RAII wrapper for Linux file descriptors
-- `kmx::aio::buffer::pool` and `kmx::aio::buffer::handle`: fixed-capacity buffer leasing
-- `kmx::aio::channel`: SPSC channel with watermark/credit backpressure
-- `kmx::aio::async_mutex`: a mutex acquired with `co_await`, holdable across a suspension
-- `kmx::aio::error_code`: error propagation with `std::expected`
+| Primitive | Header | Purpose |
+| :--- | :--- | :--- |
+| `kmx::aio::task<T>` | `<kmx/aio/task.hpp>` | Lazy coroutine task |
+| `kmx::aio::executor_base` | `<kmx/aio/executor_base.hpp>` | Shared executor lifecycle/synchronization base |
+| `kmx::aio::scheduler` | `<kmx/aio/scheduler.hpp>` | Thread-pool scheduler for plain callables |
+| `kmx::aio::allocator::slab` | `<kmx/aio/allocator/slab.hpp>` | Thread-local slab allocator for coroutine frame storage |
+| `kmx::aio::allocator::statistics` | `<kmx/aio/allocator/statistics.hpp>` | Allocation counters (`counter.hpp` for one counter) |
+| `kmx::aio::file_descriptor` | `<kmx/aio/file_descriptor.hpp>` | RAII wrapper for Linux file descriptors |
+| `kmx::aio::buffer::pool`, `buffer::handle` | `<kmx/aio/buffer/pool.hpp>`, `<kmx/aio/buffer/handle.hpp>` | Fixed-capacity buffer leasing |
+| `kmx::aio::channel<T>` | `<kmx/aio/channel.hpp>` | SPSC channel with watermark/credit backpressure |
+| `kmx::aio::basic_channel` | `<kmx/aio/basic_channel.hpp>` | The channel's untyped index and backpressure protocol |
+| `kmx::aio::async_mutex` | `<kmx/aio/async_mutex.hpp>` | A mutex acquired with `co_await`, holdable across a suspension |
+| `kmx::aio::error_code` | `<kmx/aio/error_code.hpp>` | Error propagation with `std::expected` |
+
+`<kmx/aio/aio.hpp>` includes the whole public API in one go.
+
+The allocator, buffer and channel headers were split out of the former `allocator.hpp`, `buffer.hpp`,
+`buffer_pool.hpp` and a single monolithic `channel.hpp`; those spellings no longer exist. The syscall
+seam they and the backends call through moved the other way, from `api/` to `inc/kmx/aio/detail/`, and
+is private — see [Architecture](../architecture.md#ownership-rules).
 
 ## Notes
 
@@ -53,8 +65,12 @@ All primitives reside in the root `kmx::aio` namespace and are fully execution-m
 
 ```cpp
 // SPSC channel handoff — works in any coroutine, both models.
-kmx::aio::channel<int, 128> q;
-q.try_push(42);
+// The capacity is a constructor argument, rounded up to the next power of two.
+kmx::aio::channel<int> q {128u};
+
+// try_push is [[nodiscard]]: it returns false when the ring is full and the element is dropped.
+while (!q.try_push(42))
+    q.wait_until_can_send();
 
 if (auto value = q.try_pop())
     use(*value);

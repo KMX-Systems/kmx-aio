@@ -5,7 +5,9 @@
 #include <kmx/aio/http3/frame.hpp>
 
 #include <array>
+#include <optional>
 #include <string>
+#include <utility>
 
 namespace kmx::aio::http3::qpack
 {
@@ -76,10 +78,14 @@ namespace kmx::aio::http3::qpack
         std::vector<lookup_result> lookups;
         lookups.reserve(headers.size());
 
-        // Single pass: perform all table lookups
+        // Single pass: perform all table lookups. The name-only search is skipped whenever the exact
+        // entry was found, because the encoder below never consults it in that case - and a second walk
+        // of the static table per header is the bulk of what encoding a small header block costs.
         for (const auto& [name, value]: headers)
         {
-            lookups.push_back({detail::find_exact(name, value), detail::find_name(name)});
+            auto exact_index = detail::find_exact(name, value);
+            auto name_index = exact_index.has_value() ? std::optional<std::uint64_t> {} : detail::find_name(name);
+            lookups.push_back({exact_index, name_index});
         }
 
         // Estimate capacity using cached lookup results
@@ -157,9 +163,6 @@ namespace kmx::aio::http3::qpack
         headers.reserve(6u); // Pre-reserve space for common client/server header blocks
         while (offset < payload.size())
         {
-            if (offset >= payload.size())
-                return std::unexpected(detail::qpack_decode_error());
-
             const auto representation = static_cast<field_representation>(payload[offset++]);
             if (representation == field_representation::indexed_field)
             {
@@ -190,9 +193,9 @@ namespace kmx::aio::http3::qpack
                 if (offset + value_len->first > payload.size())
                     return std::unexpected(detail::qpack_decode_error());
 
-                const std::string value(reinterpret_cast<const char*>(payload.data() + offset), static_cast<std::size_t>(value_len->first));
+                std::string value(reinterpret_cast<const char*>(payload.data() + offset), static_cast<std::size_t>(value_len->first));
                 offset += static_cast<std::size_t>(value_len->first);
-                headers.emplace_back(std::string(detail::static_table[index->first].first), value);
+                headers.emplace_back(std::string(detail::static_table[index->first].first), std::move(value));
                 continue;
             }
 
@@ -206,7 +209,7 @@ namespace kmx::aio::http3::qpack
             if (offset + name_len->first > payload.size())
                 return std::unexpected(detail::qpack_decode_error());
 
-            const std::string name(reinterpret_cast<const char*>(payload.data() + offset), static_cast<std::size_t>(name_len->first));
+            std::string name(reinterpret_cast<const char*>(payload.data() + offset), static_cast<std::size_t>(name_len->first));
             offset += static_cast<std::size_t>(name_len->first);
 
             auto value_len = detail::decode_varint(payload, offset);
@@ -216,10 +219,12 @@ namespace kmx::aio::http3::qpack
             if (offset + value_len->first > payload.size())
                 return std::unexpected(detail::qpack_decode_error());
 
-            const std::string value(reinterpret_cast<const char*>(payload.data() + offset), static_cast<std::size_t>(value_len->first));
+            std::string value(reinterpret_cast<const char*>(payload.data() + offset), static_cast<std::size_t>(value_len->first));
             offset += static_cast<std::size_t>(value_len->first);
 
-            headers.emplace_back(name, value);
+            // Moved, not copied: both strings were built here and have no other owner, so handing them
+            // over costs a pointer swap instead of a fresh allocation and copy per header field.
+            headers.emplace_back(std::move(name), std::move(value));
         }
 
         return headers;

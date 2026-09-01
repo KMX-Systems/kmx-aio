@@ -6,9 +6,15 @@ This feature provides a lightweight executor model for awaiting CUDA event compl
 
 ## Components
 
-- `gpu::executor`
-- `gpu::stream`
-- `gpu::event`
+| Type | Header |
+| :--- | :--- |
+| `gpu::executor`, `gpu::executor_config`, `gpu::statistics` | `<kmx/aio/gpu/executor.hpp>` |
+| `gpu::stream` | `<kmx/aio/gpu/stream.hpp>` |
+| `gpu::event` | `<kmx/aio/gpu/event.hpp>` (pulled in by `stream.hpp`) |
+| `gpu::stream_handle`, `gpu::event_handle` | `<kmx/aio/gpu/basic_types.hpp>` |
+
+The stream and event classes have headers of their own; `<kmx/aio/gpu/executor.hpp>` no longer declares
+them, so a translation unit that creates a stream includes `<kmx/aio/gpu/stream.hpp>` as well.
 
 Feature-gated through `project.enable_cuda`. Requires the NVIDIA driver and CUDA runtime/toolkit. Degrades gracefully when `enable_cuda:false`.
 
@@ -17,6 +23,11 @@ Feature-gated through `project.enable_cuda`. Requires the NVIDIA driver and CUDA
 Minimal API flow used by the GPU image-processing sample:
 
 ```cpp
+#include <kmx/aio/completion/executor.hpp>
+#include <kmx/aio/completion/v4l2/capture.hpp>
+#include <kmx/aio/gpu/executor.hpp>
+#include <kmx/aio/gpu/stream.hpp>
+
 kmx::aio::completion::executor io_exec;
 
 kmx::aio::gpu::executor_config gpu_cfg {
@@ -36,6 +47,19 @@ co_await event;
 
 gpu_exec->spawn(gpu_process_frame(std::move(host_frame)));
 const auto& stats = gpu_exec->get_statistics();
+```
+
+`spawn` takes a `task<T>` and the frame outlives the call, so do not hand it a lambda coroutine created
+in the same expression. The closure is a temporary destroyed at the end of the full-expression while the
+coroutine frame keeps a pointer into it, which leaves every capture dangling from the first suspension
+onwards:
+
+```cpp
+gpu_exec->spawn([&]() -> task<void> { ... }());   // WRONG: captures dangle
+
+auto body = [&]() -> task<void> { ... };          // named, outlives run()
+gpu_exec->spawn(body());                          // or spawn a coroutine function, whose
+                                                  // parameters are copied into the frame
 ```
 
 ## Full C++ Sample Project

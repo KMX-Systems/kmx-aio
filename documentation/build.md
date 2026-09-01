@@ -95,6 +95,15 @@ qbs build -f source/source.qbs config:debug \
 
 `project.all:true` is accepted as an alias and behaves the same.
 
+Note: `project.full:true` does not produce a binary that can be run. It puts QUIC next to SPDK and
+OPC UA in one image: QUIC moves this project's TLS code to BoringSSL, while SPDK and open62541 are
+prebuilt against the system OpenSSL and pull it into the same binary. Both export the same symbol names
+for types laid out differently, so the link succeeds without a diagnostic and the result reads an
+`SSL_CTX` at the wrong offsets at run time. `source/source.qbs` warns when it sees the combination.
+Use it to check that everything compiles, and disable one side of the clash for anything you intend to
+run — or use [the whole-tree build scripts](#whole-tree-build), which split the tree into feature sets
+that are each internally consistent.
+
 Note: aggregate flags are strict. With `project.full:true` (or `project.all:true`),
 all optional gates are activated. During resolve/build, QBS runs
 `script/bootstrap_optional_deps.sh` with the required feature flags so missing
@@ -229,6 +238,22 @@ qbs build -f source/source.qbs config:debug \
 SPDK links ISA-L (`-lisal`, `-lisal_crypto`) when the SPDK feature is enabled,
 which matches current runtime and link requirements on supported environments.
 
+## Whole-Tree Build
+
+Because no single set of gates compiles everything safely, a build that covers every translation unit is
+several builds. `script/gcc_full_build.sh` and `script/clang_full_build.sh` run them:
+
+```bash
+bash script/gcc_full_build.sh          # output/full-gcc/{quic,storage,avb}
+bash script/clang_full_build.sh        # output/full-clang/{quic,storage,avb}
+```
+
+Each wrapper names the profile candidates its compiler needs and forwards everything else to
+`script/full-build.sh`, which builds three feature sets — `quic` (BoringSSL side), `storage` (OpenSSL
+side: SPDK, OPC UA, SOME/IP) and `avb` — into one build root each. `--list-sets`, `--set <name>`,
+`--config`, `--clean` and `--keep-going` are the options you are likely to want; see
+[Script Reference](scripts.md#whole-tree-builds) for the full list and for what each set contains.
+
 ## Toolchain Profile Used By The Scripts
 
 A `qbs` command that names no profile uses the machine-wide `defaultProfile`, and a stale entry there
@@ -298,6 +323,7 @@ Default gate state in [source/source.qbs](../source/source.qbs) (current project
 - `project.enable_modbus:false`
 - `project.enable_someip:false`
 - `project.enable_cuda:false`
+- `project.enable_fault_injection:false`
 
 ## Instrumentation Gates
 
@@ -308,6 +334,8 @@ libraries, samples and the test binary alike:
 - `project.enable_ubsan:true` — UndefinedBehaviorSanitizer
 - `project.enable_tsan:true` — ThreadSanitizer
 - `project.enable_coverage:true` — gcov instrumentation (`--coverage`)
+- `project.enable_fault_injection:true` — compiles the syscall seam's faulting policy in, so a test can
+  make an individual system call fail on demand
 
 ASan and TSan are mutually exclusive and the build says so rather than producing a binary that half
 works; UBSan and coverage combine with anything.
@@ -318,6 +346,11 @@ depends on it and every library re-exports the dependency, which is what keeps a
 consistent: a static library compiled with `-fsanitize=address` needs the executable that links it to
 pull in the ASan runtime, and a coverage build that instruments only part of the tree leaves the rest
 out of the report rather than showing it as uncovered.
+
+`project.enable_fault_injection` is off by default and never wanted in a shipped build. The error
+branches behind a failing `read`, `epoll_ctl` or `io_uring_submit` cannot be reached by calling the
+public API, so `script/run-coverage.sh` turns it on and the tests drive them directly; `KMX_FAULT_INJECTION`
+overrides that decision in either direction.
 
 `script/run-sanitizer-tests.sh` and `script/run-coverage.sh` drive these builds and set the runtime
 environment the resulting binaries need. See [Testing](testing.md) for both.

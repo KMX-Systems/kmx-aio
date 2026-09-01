@@ -1,5 +1,6 @@
 #include <kmx/aio/http2/hpack.hpp>
 
+#include <cstring>
 #include <stdexcept>
 
 namespace kmx::aio::http2
@@ -28,13 +29,19 @@ namespace kmx::aio::http2
 
         // Name Length (Assuming length < 127 for minimal implementation)
         buffer[offset++] = static_cast<std::uint8_t>(name.size() & 0x7Fu);
-        for (char c: name)
-            buffer[offset++] = static_cast<std::uint8_t>(c);
+        if (!name.empty())
+        {
+            std::memcpy(buffer.data() + offset, name.data(), name.size());
+            offset += name.size();
+        }
 
         // Value Length (Assuming length < 127 for minimal implementation)
         buffer[offset++] = static_cast<std::uint8_t>(value.size() & 0x7Fu);
-        for (char c: value)
-            buffer[offset++] = static_cast<std::uint8_t>(c);
+        if (!value.empty())
+        {
+            std::memcpy(buffer.data() + offset, value.data(), value.size());
+            offset += value.size();
+        }
 
         return offset;
     }

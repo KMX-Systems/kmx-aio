@@ -128,16 +128,13 @@ namespace kmx::aio::quic::detail
             msg.msg_name = const_cast<void*>(reinterpret_cast<const void*>(specs[sent].dest_sa));
             msg.msg_namelen = (specs[sent].dest_sa->sa_family == AF_INET) ? sizeof(sockaddr_in) : sizeof(sockaddr_in6);
 
-            std::vector<::iovec> iov;
-            iov.reserve(specs[sent].iovlen);
-            for (unsigned i = 0; i < specs[sent].iovlen; ++i)
-                iov.push_back(::iovec {
-                    .iov_base = const_cast<void*>(specs[sent].iov[i].iov_base),
-                    .iov_len = specs[sent].iov[i].iov_len,
-                });
-
-            msg.msg_iov = iov.data();
-            msg.msg_iovlen = iov.size();
+            // lsquic hands over a ready-made iovec array, already of the type sendmsg wants. Copying it
+            // into a vector first bought nothing and cost a heap allocation and a free on every single
+            // packet this engine puts on the wire - the one callback in the whole QUIC path that runs
+            // per datagram. sendmsg does not write through msg_iov, so pointing at lsquic's own array
+            // is what the copy was standing in for.
+            msg.msg_iov = specs[sent].iov;
+            msg.msg_iovlen = specs[sent].iovlen;
 
             const ssize_t res = ::sendmsg(fd, &msg, 0);
             if (res < 0)

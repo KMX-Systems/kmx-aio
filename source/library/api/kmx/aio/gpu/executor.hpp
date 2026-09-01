@@ -207,7 +207,20 @@ namespace kmx::aio::gpu
 
         /// @brief Polls GPU events and resumes waiting coroutines.
         /// @return true if work was done, false if idle.
+        /// @warning Never call this holding @ref queue_mutex_, and never resume a coroutine while it is
+        ///          held: a resumption runs application code that may spawn a task or await another
+        ///          event, and both of those take that same non-recursive mutex.
         [[nodiscard]] bool poll_events() noexcept;
+
+        /// @brief Resumes one coroutine with this executor marked as the current one for the thread.
+        /// @param handle The coroutine to resume.
+        /// @details The marker is what @ref event::awaiter::await_suspend consults to decide between
+        ///          registering with this executor and busy-waiting on the event itself, so it has to be
+        ///          in place for the whole resumption. The previous value is restored rather than
+        ///          cleared, so a resumption that drives a nested poll does not leave the outer one
+        ///          running unmarked.
+        /// @warning Must be called with @ref queue_mutex_ released.
+        void resume_on_executor(coroutine_handle_t handle) noexcept;
 
         /// @brief Processes all pending GPU events (non-blocking).
         void process_events() noexcept;
