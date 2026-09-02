@@ -4,9 +4,19 @@ AVB support includes shared generic components with readiness/completion aliases
 
 ## Main Areas
 
-- raw Ethernet socket usage
-- gPTP clock synchronization
-- SRP stream reservation
+Each component implements a specific part of the IEEE 802.1Q suite, over raw `AF_PACKET` sockets bound
+to one Ethernet interface:
+
+| Component | Standard | Role |
+| :--- | :--- | :--- |
+| `avb::eth_socket` | - | Raw Ethernet Tx/Rx, aliased for both execution models |
+| `avb::gptp::clock` | [802.1AS](https://standards.ieee.org/ieee/802.1AS/6047/) | gPTP hardware clock discipline |
+| `avb::srp::client` | [802.1Qat/MSRP](https://standards.ieee.org/ieee/802.1Qat/4041/) | Stream reservation (MSRP/MVRP) |
+| `avb::avtp::am824` | [61883-6](https://en.wikipedia.org/wiki/IEC_61883) | AM824 audio framing |
+
+[802.1Qav](https://standards.ieee.org/ieee/802.1Qav/3945/) - the credit-based shaper that paces a
+reserved stream - is enforced by the network stack and the bridge rather than by this library; see
+the traffic-control setup under Runtime Requirements.
 
 ## Runtime Requirements
 

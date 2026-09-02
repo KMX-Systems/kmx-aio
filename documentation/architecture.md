@@ -198,3 +198,31 @@ CI coverage:
 - `artifact-split-smoke`: sample and test-consumer boundary guard plus expanded explicit sub-library consumer validation with local `open62541` and `SPDK` prefixes
 - `quic-smoke`: QUIC/HTTP3 integration smoke
 - `gpu-smoke`: CUDA sample + GPU-tagged tests when hardware is available
+
+## Why This Design
+
+Three libraries solve the same problem differently, and the choices below were made against them
+rather than in isolation.
+
+**Against [Seastar](https://seastar.io/).** Seastar's shared-nothing, core-pinned model is the one
+this library also wants, and `executor_config::core_id` is how it gets there. What is not adopted is
+Seastar's own future/promise vocabulary: coroutine frames are compiler-generated `kmx::aio::task`
+objects, so the same thread-per-core scaling is available through ordinary `co_await` rather than
+through a continuation-passing style that has to be learned before anything can be read.
+
+**Against [Boost.Asio](https://think-async.com/Asio/) and the proposed `std::net`.** Asio's decoupled
+TLS abstraction is deliberately mirrored here - `tls::stream<InnerStream>` is a template over whatever
+carries the bytes, exactly as `ssl::stream` is. What is not mirrored is the OS-agnostic layer beneath
+it: this library binds directly to Linux readiness and completion primitives, which is what allows
+`readiness::executor` and `completion::executor` to expose the actual semantics of `epoll` and
+`io_uring` instead of a lowest common denominator over both.
+
+**Against [libunifex](https://github.com/facebookexperimental/libunifex) and P2300
+(`std::execution`).** The sender/receiver model composes algorithms over asynchrony in a way `co_await`
+cannot. The trade is legibility: a P2300 pipeline is a graph of nodes, while a coroutine is a function
+that reads top to bottom. This library takes the second, on the grounds that the performance is
+equivalent and the control flow is what people have to maintain.
+
+None of these is a claim to be faster. `documentation/benchmarking.md` measures what this library
+actually costs, including the cases where its own two executors differ by more than any of these
+design choices would.
