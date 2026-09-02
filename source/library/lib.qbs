@@ -1,4 +1,5 @@
 import qbs
+import qbs.File
 
 StaticLibrary {
     Depends { name: "cpp" }
@@ -109,8 +110,21 @@ StaticLibrary {
 
             libs.push("ssl");
             libs.push("crypto");
-            libs.push("isal");
-            libs.push("isal_crypto");
+
+            // ISA-L only exists when SPDK found nasm 2.14+ at configure time; naming it against a
+            // prefix that has none turns a working SPDK into "cannot find -lisal". Follow the
+            // prefix, exactly as kmx-aio-spdk does.
+            var spdkPrefix = project.spdk_prefix;
+            if (spdkPrefix)
+            {
+                if (File.exists(spdkPrefix + "/lib/libisal.so") || File.exists(spdkPrefix + "/lib/libisal.a") ||
+                    File.exists(spdkPrefix + "/lib64/libisal.so") || File.exists(spdkPrefix + "/lib64/libisal.a"))
+                    libs.push("isal");
+
+                if (File.exists(spdkPrefix + "/lib/libisal_crypto.so") || File.exists(spdkPrefix + "/lib/libisal_crypto.a") ||
+                    File.exists(spdkPrefix + "/lib64/libisal_crypto.so") || File.exists(spdkPrefix + "/lib64/libisal_crypto.a"))
+                    libs.push("isal_crypto");
+            }
         }
 
         if (project.enable_quic)

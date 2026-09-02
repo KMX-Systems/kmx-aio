@@ -235,8 +235,43 @@ qbs build -f source/source.qbs config:debug \
     project.spdk_prefix:"/usr/local"
 ```
 
-SPDK links ISA-L (`-lisal`, `-lisal_crypto`) when the SPDK feature is enabled,
-which matches current runtime and link requirements on supported environments.
+### ISA-L
+
+SPDK builds ISA-L from its own submodules whenever it finds nasm 2.14 or newer at configure time,
+but it never links ISA-L into `libspdk_util.so` or `libspdk_accel.so` - those ship with the ISA-L
+symbols undefined, so whoever links the shared SPDK libraries has to supply `-lisal` and
+`-lisal_crypto`. What SPDK leaves in the install prefix is not dependable
+([spdk#2736](https://github.com/spdk/spdk/issues/2736),
+[spdk#3143](https://github.com/spdk/spdk/issues/3143)), and a prefix holding an ISA-L library that
+resolves none of those symbols looks healthy until an unrelated product fails to link with
+`undefined reference to 'isal_inflate'`.
+
+[script/feature/spdk/install-isal.sh](../script/feature/spdk/install-isal.sh) settles that at
+bootstrap time: it compares what the installed SPDK libraries still need against what the prefix
+and the SPDK build tree actually define, copies ISA-L over from the build tree when the prefix
+falls short, and fails with the offending symbol list rather than deferring the problem to a link.
+`script/feature/spdk/install-dependencies.sh` runs it, and so does CI. Run it by hand after any
+SPDK install done outside those scripts:
+
+```bash
+bash script/feature/spdk/install-isal.sh <spdk-source-dir> <spdk-install-prefix>
+```
+
+It also prints which file `-lisal` and `-lisal_crypto` resolve to and how many symbols each carries,
+so an ISA-L link failure can be answered from the bootstrap log instead of guessed at.
+
+Naming ISA-L on the link line is not by itself enough, and this is the part that bites. Nothing in a
+program calls into `libspdk_util.so` or `libspdk_accel.so` directly - both arrive through
+`libspdk_bdev.so`'s `DT_NEEDED`. Under `--as-needed`, which the GCC that Ubuntu ships enables by
+default, the linker drops those two where they sit on the command line, reads past `-lisal` with
+nothing left to resolve, and only pulls them back in once the archive is behind it; an archive is
+never rescanned, so their ISA-L symbols end up undefined against a prefix that is perfectly healthy.
+`kmx-aio-spdk` therefore exports `--no-as-needed`, which keeps every SPDK library at the point it is
+named so ISA-L resolves it in place. Anything linking the shared SPDK libraries needs that flag,
+whether or not it goes through this project's qbs files.
+
+The build follows the prefix rather than assuming: `-lisal`/`-lisal_crypto` are named only when the
+prefix holds them, so an SPDK built without nasm - and therefore without ISA-L - links just as well.
 
 ## Whole-Tree Build
 

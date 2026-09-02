@@ -52,6 +52,10 @@ make -j"${JOBS}"
 make install
 popd >/dev/null
 
+# SPDK leaves ISA-L out of its own shared libraries and does not dependably install it, so the
+# prefix has to be reconciled against the build tree before anything links against it.
+bash "${ROOT_DIR}/script/feature/spdk/install-isal.sh" "${SPDK_SRC_DIR}" "${SPDK_INSTALL_DIR}"
+
 echo "[spdk] Installed local prefix: ${SPDK_INSTALL_DIR}"
 echo "[spdk] Verify with: pkg-config --modversion spdk_nvme"
 echo "[spdk] Resolve with: qbs resolve -f source/source.qbs config:debug project.enable_spdk:true project.spdk_prefix:\"${SPDK_INSTALL_DIR}\""

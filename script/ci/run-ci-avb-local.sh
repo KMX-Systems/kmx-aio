@@ -228,6 +228,7 @@ run_artifact_split_smoke() {
                 --with-crypto --without-vfio-user --without-virtio --without-nvme-cuse
             make -j"$(nproc)"
             make install
+            bash "$repo_root/script/feature/spdk/install-isal.sh" "$PWD" "$PWD/../install-local"
         )
     fi
 
