@@ -84,3 +84,32 @@ Run slow scalar-conversion integration tests:
 "$TEST_BIN" "opc_ua compat async call converts typed outputs"
 "$TEST_BIN" "opc_ua compat async call returns bad type mismatch for unsupported output"
 ```
+
+## Deferred Work: Native Transport Integration
+
+What is implemented today drives stock open62541 transport and eventing, progressing it through
+`co_await client.iterate()`. A second approach was designed and deliberately deferred: injecting a
+custom `UA_EventLoop` and `UA_ConnectionManager` so that open62541's network I/O runs on kmx-aio
+executors and transport types directly, rather than alongside them.
+
+It was deferred because the `UA_EventLoop` contract is much wider than a timer shim. A custom
+implementation has to provide all of:
+
+- lifecycle: `start`, `stop`, `free`, `run`, `cancel`
+- clocks: `dateTime_now`, `dateTime_nowMonotonic`, `dateTime_localTimeUtcOffset`
+- timers: `nextTimer`, `addTimer`, `modifyTimer`, `removeTimer`
+- delayed callbacks: `addDelayedCallback`, `removeDelayedCallback`
+- event sources: `registerEventSource`, `deregisterEventSource`
+- recursive locking hooks: `lock`, `unlock`
+
+That is a project rather than a refinement, and the wrapper above gives applications a stable API
+whether or not it is ever done. Two notes for whoever picks it up:
+
+- The `UA_ConnectionManager` half is the smaller one and would come first, over
+  [`completion::executor`](../../source/library/api/kmx/aio/completion/executor.hpp),
+  [`tcp::listener`](../../source/library/api/kmx/aio/completion/tcp/listener.hpp) and
+  [`tcp::stream`](../../source/library/api/kmx/aio/completion/tcp/stream.hpp). Note the real layering:
+  `listener::accept()` yields an owned `file_descriptor`, and constructing a `tcp::stream` around it is
+  a separate step - connection state should not be modelled as though accept returned a stream.
+- The `UA_EventLoop` half is best built by following the structure of open62541's own POSIX event loop
+  rather than by writing a minimal adapter, because the interface above has to be satisfied completely.
