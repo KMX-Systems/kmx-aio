@@ -109,5 +109,14 @@ StaticLibrary {
             project.spdk_prefix ? project.spdk_prefix + "/lib" : "",
             project.spdk_prefix ? project.spdk_prefix + "/lib64" : "",
         ]
+
+        // libspdk_util.so and libspdk_accel.so are shipped with their ISA-L symbols undefined, and
+        // no program calls into them directly - they arrive through libspdk_bdev's DT_NEEDED. Under
+        // --as-needed, which the GCC that Ubuntu ships turns on by default, the linker therefore
+        // drops them where they sit on the command line, reads past -lisal with nothing left to
+        // resolve, and only pulls them back in once the archive is behind it. The result is a wall
+        // of "undefined reference to `isal_inflate'" against a prefix where ISA-L is present and
+        // correct. Keep every SPDK library the moment it is named, and ISA-L resolves them in place.
+        cpp.linkerFlags: [ "--no-as-needed" ]
     }
 }

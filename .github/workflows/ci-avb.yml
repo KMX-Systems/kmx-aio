@@ -108,6 +108,7 @@ jobs:
             --with-crypto --without-vfio-user --without-virtio --without-nvme-cuse
           make -j"$(nproc)"
           make install
+          bash "$GITHUB_WORKSPACE/script/feature/spdk/install-isal.sh" /tmp/spdk /tmp/spdk/install-local
 
       - name: Bootstrap AF_XDP dependencies
         run: |
