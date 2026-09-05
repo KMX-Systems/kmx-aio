@@ -2,6 +2,7 @@ import qbs
 
 CppApplication {
     name: "sample-someip-echo-client"
+    install: true
     condition: project.enable_someip
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"

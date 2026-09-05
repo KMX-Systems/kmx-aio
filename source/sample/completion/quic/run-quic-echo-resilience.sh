@@ -2,7 +2,21 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
-ld_path="/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-}"
+# The sample binaries were built with the machine's default C++ compiler, and a compiler installed
+# outside the distribution's own paths brings a libstdc++ newer than the one ldconfig points
+# libstdc++.so.6 at - so its directory has to lead. Asked of the compiler rather than written down, so
+# this follows whatever "c++" (or KMX_CXX) resolves to. libstdc++.so, not libstdc++.so.6: the versioned
+# name resolves against the loader's search path and names the system copy either way.
+cxx_runtime_library="$("${KMX_CXX:-c++}" -print-file-name=libstdc++.so 2>/dev/null || true)"
+if [[ -n "$cxx_runtime_library" && "$cxx_runtime_library" != "libstdc++.so" ]]; then
+    cxx_runtime_library="$(readlink -f "$cxx_runtime_library")"
+fi
+
+if [[ -f "${cxx_runtime_library:-}" ]]; then
+    ld_path="$(dirname "$cxx_runtime_library"):${LD_LIBRARY_PATH:-}"
+else
+    ld_path="${LD_LIBRARY_PATH:-}"
+fi
 
 ready_timeout_sec="${KMX_QUIC_READY_TIMEOUT_SEC:-2}"
 communication_window_sec="${KMX_QUIC_COMMUNICATION_WINDOW_SEC:-0.5}"
@@ -45,9 +59,32 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# The build roots that are actually written to: output/ is where the scripts under script/ build (see
+# script/feature/common.sh), and source/debug is where a bare "qbs build" run from source/ leaves its
+# artifacts. Repo-root debug/ is deliberately not among them - it can only be a leftover from an older
+# layout, and a sample picked out of one would be reported on as if it were current.
+#
+# install-root is skipped for the same reason it is everywhere else: every sample sets install: true, so
+# each binary also exists as an installed copy, and qbs never prunes that directory when the products
+# built change. The newest match across the roots wins, so building the same sample two ways does not
+# leave the older one in charge.
+# Only the roots that exist are handed to find. It exits non-zero for one that does not, this script runs
+# under "set -o pipefail", and the caller assigns the result - so on a tree that was never built there,
+# the whole script would abort here instead of reaching the "Missing QUIC echo binaries" message below.
 find_latest_binary() {
     local name="$1"
-    find "${repo_root}/debug" -type f -name "${name}" -printf '%T@ %p\n' 2>/dev/null |
+    local root
+    local -a roots=()
+
+    for root in "${repo_root}/output" "${repo_root}/source/debug"; do
+        if [[ -d "$root" ]]; then
+            roots+=("$root")
+        fi
+    done
+
+    ((${#roots[@]} > 0)) || return 0
+
+    find "${roots[@]}" -type f -name "${name}" -not -path '*/install-root/*' -printf '%T@ %p\n' 2>/dev/null |
         sort -nr |
         awk 'NR == 1 {print $2}'
 }
@@ -56,7 +93,7 @@ server_bin="$(find_latest_binary sample-quic-echo-server)"
 client_bin="$(find_latest_binary sample-quic-echo-client)"
 
 if [[ -z "${server_bin}" || -z "${client_bin}" ]]; then
-    echo "FAIL: Missing QUIC echo binaries in ${repo_root}/debug"
+    echo "FAIL: Missing QUIC echo binaries under ${repo_root}/output or ${repo_root}/source/debug"
     echo "Hint: build with qbs first."
     exit 1
 fi

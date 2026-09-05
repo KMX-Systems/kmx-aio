@@ -63,12 +63,12 @@ namespace kmx::aio::test::integration::quic_readiness_echo_smoke_test
                 fs::path("/tmp") / ("kmx_quic_readiness_echo_client_smoke_" + std::to_string(attempt_seed) + ".log");
             const std::string port_env = "KMX_QUIC_ECHO_PORT=" + std::to_string(test_port);
 
-            const std::string server_cmd = "env " + port_env + " LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} stdbuf -oL -eL " +
+            const std::string ld_library_path = toolchain_library_path();
+            const std::string server_cmd = "env " + port_env + " " + ld_library_path + " stdbuf -oL -eL " +
                                            shell_quote(server_bin_opt->string()) + " > " + shell_quote(server_log.string()) + " 2>&1";
-            const std::string client_cmd =
-                "timeout 30s env " + port_env +
-                " KMX_QUIC_ECHO_CLIENT_CLOSE_AFTER_RESPONSES=2 LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} stdbuf -oL -eL " +
-                shell_quote(client_bin_opt->string()) + " > " + shell_quote(client_log.string()) + " 2>&1";
+            const std::string client_cmd = "timeout 30s env " + port_env + " KMX_QUIC_ECHO_CLIENT_CLOSE_AFTER_RESPONSES=2 " +
+                                           ld_library_path + " stdbuf -oL -eL " + shell_quote(client_bin_opt->string()) + " > " +
+                                           shell_quote(client_log.string()) + " 2>&1";
 
             const std::string script =
                 "set -u -o pipefail; " + server_cmd + " & " +

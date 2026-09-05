@@ -84,7 +84,7 @@ qbs build --products sample-gpu-image-processing -f source/source.qbs config:deb
     project.enable_quic:false \
     project.enable_cuda:true
 
-GPU_BIN="$(find debug -type f -name sample-gpu-image-processing | head -n 1)"
+GPU_BIN="$(find debug -type f -name sample-gpu-image-processing -not -path '*/install-root/*' -print -quit)"
 "$GPU_BIN" --max-frames 1 --width 320 --height 240 --buffer-count 2 --gpu-device 0
 ```
 
@@ -94,12 +94,23 @@ Force NVIDIA on PRIME on-demand systems:
 __NV_PRIME_RENDER_OFFLOAD=1 \
 __GLX_VENDOR_LIBRARY_NAME=nvidia \
 __VK_LAYER_NV_optimus=NVIDIA_only \
-LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} \
     bash script/ci/run-ci-avb-local.sh --only gpu-smoke
 ```
+
+That script puts the compiler's own libstdc++ directory on `LD_LIBRARY_PATH` for the binaries it
+launches, so nothing has to be named here.
 
 Troubleshooting:
 
 - `nvidia-smi` missing or no GPUs listed: NVIDIA runtime/driver unavailable.
 - `cuda_runtime.h` missing: CUDA toolkit headers are not installed.
-- `GLIBCXX_3.4.35 not found`: run with `LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-}`.
+- `GLIBCXX_... not found`: the compiler that built the binary ships a newer libstdc++ than the one
+  ldconfig points `libstdc++.so.6` at. Put its directory first:
+
+  ```bash
+  # The guard matters: a compiler that cannot find the library echoes the bare name back, and
+  # resolving "libstdc++.so" would put the working directory at the front of the search path.
+  CXX_RUNTIME_LIB="$(${KMX_CXX:-c++} -print-file-name=libstdc++.so)"
+  CXX_RUNTIME_DIR="$([[ "$CXX_RUNTIME_LIB" == */* ]] && dirname "$(readlink -f "$CXX_RUNTIME_LIB")")"
+  export LD_LIBRARY_PATH="${CXX_RUNTIME_DIR:+$CXX_RUNTIME_DIR:}${LD_LIBRARY_PATH:-}"
+  ```

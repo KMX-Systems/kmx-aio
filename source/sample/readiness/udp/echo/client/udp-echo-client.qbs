@@ -4,6 +4,7 @@ CppApplication {
     Depends { name: "kmx-aio-readiness" }
 
     name: "sample-udp-echo-client"
+    install: true
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.debugInformation: true

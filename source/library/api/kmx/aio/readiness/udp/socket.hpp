@@ -35,7 +35,7 @@ namespace kmx::aio::readiness::udp
         /// @param fd   The socket descriptor.
         socket(executor& exec, file_descriptor&& fd) noexcept: io_base(exec, std::move(fd)) {}
         /// @brief Unregisters the descriptor and closes the socket.
-        ~socket() override = default;
+        ~socket() = default;
         /// @brief Move constructor — transfers ownership of the descriptor.
         socket(socket&&) noexcept = default;
         /// @brief Move assignment is disabled: the executor reference cannot be reseated.

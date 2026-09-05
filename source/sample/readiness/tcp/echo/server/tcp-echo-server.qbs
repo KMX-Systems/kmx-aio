@@ -5,6 +5,7 @@ CppApplication {
     Depends { name: "sample-tcp-echo-common" }
 
     name: "sample-tcp-echo-server"
+    install: true
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.debugInformation: true

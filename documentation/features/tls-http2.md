@@ -140,8 +140,8 @@ Complete buildable samples are already available in the repository:
 Run the TLS/ALPN sample pair:
 
 ```bash
-SERVER_BIN="$(find debug -type f -name sample-tls-h2-alpn-server | head -n 1)"
-CLIENT_BIN="$(find debug -type f -name sample-tls-h2-alpn-client | head -n 1)"
+SERVER_BIN="$(find debug -type f -name sample-tls-h2-alpn-server -not -path '*/install-root/*' -print -quit)"
+CLIENT_BIN="$(find debug -type f -name sample-tls-h2-alpn-client -not -path '*/install-root/*' -print -quit)"
 "$SERVER_BIN" &
 "$CLIENT_BIN"
 ```

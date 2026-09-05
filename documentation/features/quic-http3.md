@@ -23,7 +23,7 @@ in `output/quic-dependencies.json`, which the Qbs project reads. See
 ## Quick Smoke Tests
 
 ```bash
-TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+TEST_BIN="$(find debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
 "$TEST_BIN" "[quic][readiness][integration][smoke]"
 "$TEST_BIN" "[quic][http3][integration][smoke]"
 ```
@@ -69,8 +69,8 @@ auto recv_result = co_await engine.recv();
 Run completion HTTP/3 server and client samples:
 
 ```bash
-SERVER_BIN="$(find debug -type f -name sample-quic-http3-server | head -n 1)"
-CLIENT_BIN="$(find debug -type f -name sample-quic-http3-client | head -n 1)"
+SERVER_BIN="$(find debug -type f -name sample-quic-http3-server -not -path '*/install-root/*' -print -quit)"
+CLIENT_BIN="$(find debug -type f -name sample-quic-http3-client -not -path '*/install-root/*' -print -quit)"
 "$SERVER_BIN" &
 "$CLIENT_BIN"
 ```

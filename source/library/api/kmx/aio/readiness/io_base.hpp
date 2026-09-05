@@ -14,6 +14,8 @@ namespace kmx::aio::readiness
     /// @brief Shared I/O base for protocol-specific socket wrappers.
     /// @details Owns a file descriptor and unregisters it from the executor on destruction
     ///          while the executor lifetime token is still valid.
+    /// @note Not polymorphic: the destructor is protected and non-virtual, and there is no virtual I/O.
+    ///       The completion model's counterpart says the same by declaring no destructor at all.
     class io_base
     {
     public:
@@ -36,16 +38,6 @@ namespace kmx::aio::readiness
         /// @brief Non-copyable.
         io_base& operator=(const io_base&) = delete;
 
-        /// @brief Virtual destructor.
-        /// @details Unregisters the descriptor from executor if both descriptor and executor are still valid.
-        virtual ~io_base() noexcept
-        {
-            if (fd_.is_valid() && !exec_lifetime_.expired())
-                exec_.unregister_fd(fd_.get());
-        }
-
-        /// @brief Move constructor.
-        io_base(io_base&&) noexcept = default;
         /// @brief Move assignment is disabled because executor reference cannot be reseated.
         io_base& operator=(io_base&&) noexcept = delete;
 
@@ -54,6 +46,21 @@ namespace kmx::aio::readiness
         [[nodiscard]] fd_t get_fd() const noexcept { return fd_.get(); }
 
     protected:
+        /// @brief Move constructor.
+        /// @note Protected for the same reason the destructor is: moving one of these constructs an
+        ///       @c io_base that has to be destroyed again, which only a derived class can do. Left
+        ///       public it would advertise an operation no caller outside the hierarchy can complete.
+        io_base(io_base&&) noexcept = default;
+
+        /// @brief Unregisters the descriptor from the executor if both are still valid.
+        /// @note Protected and non-virtual: see the class note. A derived socket is destroyed as itself,
+        ///       never through an @c io_base*, which is what this says in the type system.
+        ~io_base() noexcept
+        {
+            if (fd_.is_valid() && !exec_lifetime_.expired())
+                exec_.unregister_fd(fd_.get());
+        }
+
         /// @brief Associated executor.
         executor& exec_;
         /// @brief Lifetime token to avoid touching executor after destruction.

@@ -156,18 +156,32 @@ StaticLibrary {
     }
     install: true
     name: "kmx-aio-lib"
-    files: [
-        // Public headers
-        "api/kmx/**.hpp",
-        "api/kmx/aio/**.hpp",
 
-        // Private headers
-        "inc/kmx/aio/**.hpp",
+    // The public headers, installed as a tree. installSourceBase strips the api/ prefix, so
+    // api/kmx/aio/task.hpp lands at include/kmx/aio/task.hpp and an installed tree can be compiled
+    // against with one -I<install-root>/include. They are installed from here and not from the
+    // sub-libraries: each of those lists its own share of api/ by name, and this is the one product
+    // that carries the whole directory, so this is the only place the tree is described once.
+    //
+    // HTTP/2, GPU, OPC UA and AVB are provided by dedicated sub-libraries; their headers live under
+    // the same api/ root and are covered by the wildcard below.
+    Group {
+        // "api/**/*.hpp", not "api/kmx/**.hpp": qbs reads ** as a whole path component, so the latter
+        // matches api/kmx/*.hpp and nothing below it. That is what the two patterns this replaced were
+        // working around, and between them they still reached only two levels of the tree.
+        name: "public headers"
+        files: ["api/**/*.hpp"]
+        qbs.install: true
+        qbs.installDir: "include"
+        qbs.installSourceBase: "api"
+    }
 
-        // HTTP/2, GPU and OPC UA are provided by dedicated sub-libraries
-
-        // AVB is provided by dedicated sub-library
-    ]
+    // Deliberately not installed: these are the library's own internals, and an installed tree that
+    // carried them would invite code outside the library to include them.
+    Group {
+        name: "private headers"
+        files: ["inc/**/*.hpp"]
+    }
     Export {
         Depends { name: "cpp" }
         Depends { name: "kmx-aio-core" }

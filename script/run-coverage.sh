@@ -35,7 +35,8 @@ options:
 
 environment:
   KMX_ENABLE_<FEATURE>   true/false, as for script/run-unit-tests.sh
-  GCOV                   the gcov binary to use; must match the compiler that built the tree
+  GCOV                   the gcov command to use; must match the compiler that built the tree, and may
+                         carry arguments - a clang build wants GCOV="llvm-cov gcov"
 USAGE
 }
 
@@ -70,42 +71,75 @@ tracefile="$report_dir/coverage.info"
 
 # gcov reads the .gcno the compiler wrote and the .gcda the run produced, and the two carry a format
 # version stamp that has to match the compiler exactly. The system gcov is frequently older than the
-# toolchain these builds use (GCC 16 out of /opt), and pairing them fails with a version error rather
-# than a wrong number - so the gcov next to the profile's compiler is the one to use.
+# compiler these builds use - the machine's default is routinely newer than the distribution's gcov, and
+# may not even be a GCC - and pairing them fails with a version error rather than a wrong number. So the
+# gcov next to the profile's own compiler is the one to use, and GCOV names one outright.
+#
+# Held as a command with its arguments rather than as a path, because for a clang build it is two words:
+# llvm-cov reads its own counters under a "gcov" subcommand, and there is no program called gcov to find.
+# A single string here is what makes GCOV="llvm-cov gcov" unusable - the shell then looks for a program
+# whose name contains a space.
+gcov_tool_cmd=()
+
 select_gcov_tool() {
     if [[ -n "${GCOV:-}" ]]; then
-        echo "$GCOV"
+        read -r -a gcov_tool_cmd <<< "$GCOV"
         return 0
     fi
 
-    local profile=""
+    local profile="" compiler="" bin_dir=""
     if [[ ${#qbs_profile_args[@]} -gt 0 ]]; then
         profile="${qbs_profile_args[0]#profile:}"
     fi
 
     if [[ -n "$profile" ]]; then
-        local compiler
         compiler="$(qbs_profile_cxx_compiler "$profile")"
-        if [[ -n "$compiler" ]]; then
-            local candidate="$(dirname "$compiler")/gcov"
-            if [[ -x "$candidate" ]]; then
-                echo "$candidate"
-                return 0
-            fi
-        fi
+        [[ -z "$compiler" ]] || bin_dir="$(dirname "$compiler")"
     fi
 
-    command -v gcov || true
+    # Which tool, not just where: now that the profile follows the machine's default compiler, that
+    # compiler can be a clang, and a clang-instrumented tree's counters are readable only by llvm-cov.
+    # Looking for a file called gcov beside it finds nothing, falls through to the distribution's GCC
+    # gcov, and that fails on the version stamp after the whole tree has been built and run.
+    if [[ "$qbs_profile_toolchain_type" == "clang" ]]; then
+        local llvm_cov=""
+        if [[ -n "$bin_dir" && -x "$bin_dir/llvm-cov" ]]; then
+            llvm_cov="$bin_dir/llvm-cov"
+        else
+            llvm_cov="$(command -v llvm-cov 2>/dev/null || true)"
+        fi
+
+        if [[ -z "$llvm_cov" ]]; then
+            {
+                echo "ERROR: this tree was built with clang, whose counters only llvm-cov can read, and"
+                echo "       no llvm-cov was found beside the compiler or on PATH. Install the matching"
+                echo "       LLVM tools, or name the command: GCOV='llvm-cov-20 gcov'."
+            } >&2
+            exit 1
+        fi
+
+        gcov_tool_cmd=("$llvm_cov" gcov)
+        return 0
+    fi
+
+    if [[ -n "$bin_dir" && -x "$bin_dir/gcov" ]]; then
+        gcov_tool_cmd=("$bin_dir/gcov")
+        return 0
+    fi
+
+    local system_gcov
+    system_gcov="$(command -v gcov 2>/dev/null || true)"
+    [[ -z "$system_gcov" ]] || gcov_tool_cmd=("$system_gcov")
 }
 
-gcov_tool="$(select_gcov_tool)"
-if [[ -z "$gcov_tool" ]]; then
+select_gcov_tool
+if [[ ${#gcov_tool_cmd[@]} -eq 0 ]]; then
     echo "ERROR: no gcov found. Install one, or point GCOV at the gcov matching your compiler." >&2
     exit 1
 fi
 
 echo "==> Coverage build tree: $KMX_BUILD_ROOT"
-echo "==> gcov: $gcov_tool ($("$gcov_tool" --version | head -n 1))"
+echo "==> gcov: ${gcov_tool_cmd[*]} ($("${gcov_tool_cmd[@]}" --version 2>/dev/null | head -n 1))"
 echo "==> qbs properties: ${qbs_instrumentation_args[*]}"
 
 if [[ "$keep_data" == "false" && -d "$KMX_BUILD_ROOT" ]]; then
@@ -129,6 +163,20 @@ fi
 
 mkdir -p "$report_dir"
 
+# lcov runs --gcov-tool as one program, so the two-word clang command reaches it through a wrapper rather
+# than as a string it would try to exec whole.
+gcov_tool_for_lcov="${gcov_tool_cmd[0]}"
+if [[ ${#gcov_tool_cmd[@]} -gt 1 ]]; then
+    gcov_tool_for_lcov="$report_dir/gcov-tool.sh"
+    {
+        echo '#!/usr/bin/env bash'
+        printf 'exec'
+        printf ' %q' "${gcov_tool_cmd[@]}"
+        printf ' "$@"\n'
+    } > "$gcov_tool_for_lcov"
+    chmod +x "$gcov_tool_for_lcov"
+fi
+
 report_with_gcov() {
     # The fallback, and what --gcov-only asks for: gcov alone, one .gcov listing per translation unit,
     # plus the per-file summary it prints as it goes.
@@ -140,7 +188,7 @@ report_with_gcov() {
     (
         cd "$gcov_dir"
         find "$KMX_BUILD_ROOT" -name '*.gcda' -print0 |
-            xargs -0 --no-run-if-empty "$gcov_tool" --branch-probabilities --preserve-paths
+            xargs -0 --no-run-if-empty "${gcov_tool_cmd[@]}" --branch-probabilities --preserve-paths
     ) > "$report_dir/gcov-summary.txt"
 
     # gcov reports on everything it was handed, the library sources and the Catch2 test sources alike.
@@ -215,7 +263,7 @@ echo "==> Capturing counters with lcov"
 lcov --capture \
     --directory "$KMX_BUILD_ROOT" \
     --base-directory "$repo_root" \
-    --gcov-tool "$gcov_tool" \
+    --gcov-tool "$gcov_tool_for_lcov" \
     --rc branch_coverage=1 \
     --output-file "$tracefile.all" \
     "${lcov_ignore_args[@]}" \

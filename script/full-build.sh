@@ -12,8 +12,10 @@
 # Every set gets its own build root under output/full-<toolchain>/<set>, so the passes cannot overwrite
 # one another's artifacts and rebuilding one set does not throw the others away.
 #
-# The toolchain is not chosen here: script/clang_full_build.sh and script/gcc_full_build.sh are the
-# entry points, and each names the profile and the extra properties its compiler needs.
+# Run on its own this builds with the machine's default C++ compiler, the one "c++" resolves to;
+# script/qbs-profile.sh explains how that becomes a qbs profile and how to point it elsewhere.
+# script/gcc_full_build.sh and script/clang_full_build.sh are thin wrappers that ask for one compiler
+# family by name instead, and keep their artifacts in a build root of their own.
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -34,10 +36,14 @@ full_build_sets=(quic storage avb)
 
 set_features() {
     case "$1" in
-        # BoringSSL lives here, so nothing that carries the system OpenSSL may join this set.
-        quic)    echo "readiness openonload http2 http3 quic modbus cuda" ;;
-        # The OpenSSL half: SPDK and open62541 are prebuilt against it, vsomeip sits next to them.
-        storage) echo "readiness openonload af_xdp spdk opc_ua someip modbus" ;;
+        # BoringSSL lives here, so nothing that carries the system OpenSSL may join this set. someip
+        # does qualify, which is not obvious: vsomeip is a Boost/IPC library and needs no TLS at all -
+        # its built objects reference zero OpenSSL symbols (checked 2026-09-04). It used to sit in the
+        # storage set purely by association with the two dependencies that do carry OpenSSL.
+        quic)    echo "readiness openonload http2 http3 quic modbus someip cuda" ;;
+        # The OpenSSL half, and only the parts of it that really are: SPDK and open62541 are prebuilt
+        # against the system OpenSSL and pull it into anything that links them.
+        storage) echo "readiness openonload af_xdp spdk opc_ua modbus" ;;
         # AVB pulls in the gPTP/SRP tree, which nothing else compiles.
         avb)     echo "readiness openonload af_xdp avb modbus v4l2" ;;
         *)       return 1 ;;
@@ -52,10 +58,9 @@ requested_sets=()
 extra_properties=()
 build_root_override=""
 
-# What the wrapper scripts pass in: a tag that names the toolchain in the build root, and a list of
-# profiles to try in order. QBS_PROFILE still wins over both, so a one-off build against some other
-# profile needs no change here.
-toolchain_tag="${KMX_FULL_BUILD_TAG:-build}"
+# Names the toolchain in the build root, so the passes of one compiler do not overwrite another's. The
+# wrapper scripts set it; a plain run builds with the default compiler and says so.
+toolchain_tag="${KMX_FULL_BUILD_TAG:-default}"
 
 usage() {
     cat <<'USAGE'
@@ -76,7 +81,9 @@ Options:
   -h, --help             This text.
 
 Environment:
-  QBS_PROFILE            Overrides the profile the wrapper script picked.
+  KMX_CXX                C++ compiler to build with (default: c++, the machine default).
+  KMX_CC                 C compiler beside it (default: cc).
+  QBS_PROFILE            Builds with this qbs profile instead, ignoring KMX_CXX.
   KMX_BUILD_ROOT         Same as --build-root.
 USAGE
 }
@@ -113,35 +120,36 @@ if [[ ${#requested_sets[@]} -gt 0 ]]; then
     full_build_sets=("${requested_sets[@]}")
 fi
 
-# script/qbs-profile.sh has already had its say - it honours QBS_PROFILE and otherwise prefers a GCC 16
-# profile, which is the right answer for the test runners and the wrong one for a clang build. When the
-# wrapper offered candidates of its own, the first installed one replaces that choice.
-select_full_build_profile() {
-    [[ -z "${QBS_PROFILE:-}" ]] || return 0
-    [[ -n "${KMX_FULL_BUILD_PROFILES:-}" ]] || return 0
+# Catch2 under /usr/local is commonly installed non-PIC, and clang links executables as PIE, so
+# kmx-aio-test then fails with
+#
+#     relocation R_X86_64_32 against `.rodata.str1.8' can not be used when making a PIE object
+#
+# naming Catch2 and nothing else. Linking the executables non-PIE is the one-line way past it and costs
+# only these binaries' address-space randomisation; rebuilding Catch2 with
+# -DCMAKE_POSITION_INDEPENDENT_CODE=ON is the real fix, and once that is done the check below stops
+# adding the flag on its own. GCC is unaffected, so this only applies when the selected profile is a
+# clang one - which, since the default compiler decides that now, is not something a wrapper script can
+# know on its own.
+# repo_root, not script_dir: sourcing feature/common.sh above left script_dir pointing at
+# script/feature/, since that file sets it for itself.
+source "$repo_root/script/feature/pic.sh"
 
-    local -a candidates=()
-    read -r -a candidates <<< "$KMX_FULL_BUILD_PROFILES"
-
-    local profile
-    for profile in "${candidates[@]}"; do
-        if qbs_profile_is_usable "$profile"; then
-            qbs_profile_args=("profile:$profile")
-            echo "==> Using qbs profile $profile"
+catch2_needs_no_pie() {
+    local library
+    for library in /usr/local/lib/libCatch2.a /usr/local/lib/libCatch2Main.a \
+                   /usr/lib/x86_64-linux-gnu/libCatch2.a /usr/lib/x86_64-linux-gnu/libCatch2Main.a; do
+        if library_needs_pic_rebuild "$library"; then
             return 0
         fi
     done
-
-    {
-        echo "ERROR: none of these qbs profiles selects an installed C++ compiler: ${candidates[*]}"
-        echo "       Name another one with QBS_PROFILE=<name>, or create one with 'qbs setup-toolchains'."
-        echo "       Profiles configured on this machine:"
-        qbs_configured_profiles | sed 's/^/           /'
-    } >&2
-    exit 1
+    return 1
 }
 
-select_full_build_profile
+if [[ "$qbs_profile_toolchain_type" == "clang" ]] && catch2_needs_no_pie; then
+    echo "==> Catch2 is not position-independent; linking with -no-pie"
+    extra_properties+=(modules.cpp.driverLinkerFlags:-no-pie)
+fi
 
 full_build_root="${build_root_override:-${KMX_BUILD_ROOT:-$repo_root/output/full-${toolchain_tag}}}"
 

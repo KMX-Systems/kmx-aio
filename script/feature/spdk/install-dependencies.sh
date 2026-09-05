@@ -8,25 +8,21 @@ SPDK_INSTALL_DIR="${SPDK_BASE}/install-local"
 SPDK_REF="${SPDK_REF:-v24.09}"
 JOBS="${JOBS:-$(nproc)}"
 
-if ! command -v apt-get >/dev/null 2>&1; then
-	echo "This script currently supports Ubuntu/Debian only (apt-get required)." >&2
-	exit 1
-fi
-
-if [[ "${EUID}" -ne 0 ]]; then
-	SUDO="sudo"
-else
-	SUDO=""
-fi
+# shellcheck source=../apt.sh
+source "${ROOT_DIR}/script/feature/apt.sh"
 
 if [[ -f "${SPDK_INSTALL_DIR}/lib/pkgconfig/spdk_nvme.pc" ]]; then
 	echo "[spdk] already installed locally: ${SPDK_INSTALL_DIR}"
 	exit 0
 fi
 
-echo "[spdk] Installing build dependencies (Ubuntu/Debian)..."
-${SUDO} apt-get update
-${SUDO} apt-get install -y \
+# Through apt_install_missing rather than a plain apt-get: source.qbs runs this from a Probe, in the
+# middle of "qbs resolve", where there is no terminal for a sudo password. An unconditional "apt-get
+# update" fails there even on a machine that has every one of these packages, and it fails with "sudo: a
+# password is required" - which names neither SPDK nor anything else the reader could act on. The
+# short-circuit above only covers a tree where SPDK has already been built.
+echo "[spdk] Checking build dependencies (Ubuntu/Debian)..."
+apt_install_missing spdk \
 	build-essential pkg-config meson ninja-build git \
 	python3 python3-jinja2 python3-pyelftools python3-tabulate \
 	libaio-dev libnuma-dev uuid-dev libssl-dev libelf-dev libpcap-dev

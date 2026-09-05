@@ -19,9 +19,33 @@ source_dir="$repo_root/source"
 qbs_build_root="${KMX_BUILD_ROOT:-$repo_root/output}"
 qbs_build_dir_args=(-d "$qbs_build_root")
 
-# Sets qbs_profile_args; see the comment at the top of that file for why the profile is not left to the
-# machine-wide default.
+# Sets qbs_profile_args and qbs_profile_toolchain_type for the machine's default C++ compiler, or for
+# the one KMX_CXX names; see the comment at the top of that file for why a profile is found or made
+# rather than left to qbs's own defaultProfile.
 source "$repo_root/script/qbs-profile.sh"
+
+# One built binary under a build root, and never the installed copy of it.
+#
+# Every product sets install: true and qbs performs the install step as part of "qbs build", so each
+# executable now exists twice under one build root: where it was linked, and again under
+# <config>/install-root/bin. A plain "find ... | head -n 1" between the two returns whichever the
+# directory order yields first, which is not the same answer on two machines - and qbs never prunes
+# install-root, so after a build with a different --products list or feature set the copy sitting there
+# is left over from the previous configuration. Skipping it keeps this lookup meaning what it did before
+# anything was installed: the binary this build produced.
+#
+# "-print -quit" rather than a pipe into head: find stops itself at the first match, with no second
+# process to close the pipe on it.
+find_build_binary() {
+    local root="$1" name="$2"
+
+    [[ -d "$root" ]] || return 0
+
+    # "|| true" because a directory find cannot descend into makes it exit non-zero after printing
+    # nothing useful, and the caller assigns this under "set -e": an unreadable corner of a build tree
+    # would end the run rather than move on to the next search root.
+    find "$root" -type f -name "$name" -not -path '*/install-root/*' -print -quit 2>/dev/null || true
+}
 
 find_test_bin_path() {
     # output/ first, then the in-source trees a bare "qbs build" leaves behind - these scripts and the CI
@@ -48,7 +72,7 @@ find_test_bin_path() {
     local root bin
     for root in "${search_roots[@]}"; do
         if [[ -d "$root" ]]; then
-            bin="$(find "$root" -type f -name kmx-aio-test | head -n 1 || true)"
+            bin="$(find_build_binary "$root" kmx-aio-test)"
             if [[ -n "$bin" ]]; then
                 echo "$bin"
                 return 0
@@ -239,6 +263,36 @@ apply_sanitizer_runtime_options() {
     fi
 }
 
+# Where the C++ standard library of the compiler these binaries were built with lives.
+#
+# A compiler installed outside the distribution's own paths brings its own libstdc++, and ldconfig still
+# points libstdc++.so.6 at the distribution's older one, so a binary built with it starts and dies on
+# "version GLIBCXX_3.4.36 not found". The directory is asked of the compiler rather than written down:
+# the answer follows whatever "c++" currently resolves to, which is the same compiler script/qbs-profile.sh
+# built these binaries with. Where the compiler is the distribution's own this names a directory the
+# loader already searches, and prepending it changes nothing.
+#
+# Asked once, here, rather than on every test binary these scripts launch.
+toolchain_cxx_runtime_path() {
+    local compiler library
+
+    compiler="${KMX_CXX:-c++}"
+    command -v "$compiler" >/dev/null 2>&1 || return 0
+
+    # libstdc++.so, not libstdc++.so.6: the versioned name is resolved against the loader's search path
+    # and comes back as the system copy even for a compiler that ships its own, while the bare .so is the
+    # link-time symlink sitting in the compiler's own library directory.
+    library="$("$compiler" -print-file-name=libstdc++.so 2>/dev/null || true)"
+    [[ -n "$library" && "$library" != "libstdc++.so" ]] || return 0
+
+    library="$(readlink -f "$library")"
+    [[ -f "$library" ]] || return 0
+
+    dirname "$library"
+}
+
+toolchain_cxx_runtime_dir="$(toolchain_cxx_runtime_path || true)"
+
 run_with_local_gcc_runtime() {
     local -a runtime_paths=()
 
@@ -246,9 +300,12 @@ run_with_local_gcc_runtime() {
     # these scripts launch is launched from here.
     apply_sanitizer_runtime_options
 
-    if [[ -d /opt/gcc-16/lib64 ]]; then
-        runtime_paths+=("/opt/gcc-16/lib64")
-    fi
+    # This project's own prefixes first, and the toolchain's directory after them. It is a whole library
+    # directory - /usr/lib64 or /usr/lib/<triplet> for a compiler the distribution installed, rather than
+    # the GCC-runtime-only directory of a compiler under /opt - and LD_LIBRARY_PATH outranks the
+    # DT_RUNPATH the binaries carry. Ahead of these it would let a distribution librte_*, libisal* or
+    # libvsomeip3 shadow the copy this project built into output/, in a test run that then reports on
+    # neither one reliably.
     if [[ -d "$repo_root/output/spdk-local/install-local/lib" ]]; then
         runtime_paths+=("$repo_root/output/spdk-local/install-local/lib")
     fi
@@ -257,6 +314,9 @@ run_with_local_gcc_runtime() {
     fi
     if [[ -d "$repo_root/output/someip/install-local/lib" ]]; then
         runtime_paths+=("$repo_root/output/someip/install-local/lib")
+    fi
+    if [[ -n "$toolchain_cxx_runtime_dir" ]]; then
+        runtime_paths+=("$toolchain_cxx_runtime_dir")
     fi
 
     local path_prefix=""

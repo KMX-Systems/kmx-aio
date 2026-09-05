@@ -88,9 +88,26 @@ require_cmd() {
     fi
 }
 
+# A compiler installed outside the distribution's own paths brings its own libstdc++, and ldconfig still
+# points libstdc++.so.6 at the distribution's older one, so a binary built with it dies at startup on
+# "version GLIBCXX_... not found". The directory is asked of the compiler that built the binaries -
+# whatever "c++" resolves to, or KMX_CXX - rather than written down, so this follows the machine's default
+# toolchain the same way the rest of the build scripts do. See toolchain_cxx_runtime_path() in
+# script/feature/common.sh, which this mirrors; this script deliberately stands alone, so it repeats it.
+cxx_runtime_dir=""
+if command -v "${KMX_CXX:-c++}" >/dev/null 2>&1; then
+    # libstdc++.so, not libstdc++.so.6: the versioned name resolves against the loader's search path and
+    # names the system copy even for a compiler that ships its own.
+    cxx_runtime_library="$("${KMX_CXX:-c++}" -print-file-name=libstdc++.so 2>/dev/null || true)"
+    if [[ -n "$cxx_runtime_library" && "$cxx_runtime_library" != "libstdc++.so" ]]; then
+        cxx_runtime_library="$(readlink -f "$cxx_runtime_library")"
+        [[ -f "$cxx_runtime_library" ]] && cxx_runtime_dir="$(dirname "$cxx_runtime_library")"
+    fi
+fi
+
 run_with_local_gcc_runtime() {
-    if [[ -d /opt/gcc-16/lib64 ]]; then
-        LD_LIBRARY_PATH="/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-}" "$@"
+    if [[ -n "$cxx_runtime_dir" ]]; then
+        LD_LIBRARY_PATH="${cxx_runtime_dir}:${LD_LIBRARY_PATH:-}" "$@"
     else
         "$@"
     fi
@@ -98,7 +115,7 @@ run_with_local_gcc_runtime() {
 
 find_test_bin() {
     local bin
-    bin="$(find "$qbs_build_root/debug" -type f -name kmx-aio-test | head -n 1 || true)"
+    bin="$(find "$qbs_build_root/debug" -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit 2>/dev/null || true)"
     if [[ -z "$bin" ]]; then
         echo "kmx-aio-test binary not found" >&2
         exit 1
@@ -141,8 +158,8 @@ run_build_and_test() {
     done
 
     local talker_bin listener_bin
-    talker_bin="$(find "$qbs_build_root/debug" -type f -name sample-avb-talker | head -n 1 || true)"
-    listener_bin="$(find "$qbs_build_root/debug" -type f -name sample-avb-listener | head -n 1 || true)"
+    talker_bin="$(find "$qbs_build_root/debug" -type f -name sample-avb-talker -not -path '*/install-root/*' -print -quit 2>/dev/null || true)"
+    listener_bin="$(find "$qbs_build_root/debug" -type f -name sample-avb-listener -not -path '*/install-root/*' -print -quit 2>/dev/null || true)"
     if [[ -z "$talker_bin" || -z "$listener_bin" ]]; then
         echo "sample-avb binaries not found" >&2
         exit 1
@@ -312,7 +329,7 @@ run_gpu_smoke() {
     )
 
     local sample_bin test_bin
-    sample_bin="$(find "$qbs_build_root/debug" -type f -name sample-gpu-image-processing | head -n 1 || true)"
+    sample_bin="$(find "$qbs_build_root/debug" -type f -name sample-gpu-image-processing -not -path '*/install-root/*' -print -quit 2>/dev/null || true)"
     if [[ -z "$sample_bin" ]]; then
         echo "sample-gpu-image-processing binary not found" >&2
         exit 1

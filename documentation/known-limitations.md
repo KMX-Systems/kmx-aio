@@ -47,6 +47,15 @@ The library aims for API parity between execution models where architecturally f
 
 - Linux-only library design.
 - io_uring is best on kernel 5.10+.
-- Toolchains in use: CI builds with GCC 14; the test-runner scripts prefer a GCC 16 profile
-  (`script/qbs-profile.sh`), and `script/clang_full_build.sh` targets clang-20. Older releases do not
-  implement the C++26 features the library is written against.
+- Toolchains in use: no version is named anywhere. The local scripts build with the machine's default
+  C++ compiler, whatever `c++` resolves to (`script/qbs-profile.sh`), and `script/gcc_full_build.sh` /
+  `script/clang_full_build.sh` ask for the default GCC or Clang instead. CI installs the newest GCC its
+  runner image offers and makes that the default (`script/ci/setup-default-toolchain.sh`), because a
+  stock image's default is not new enough: Ubuntu 24.04 ships GCC 13.3, which does not recognise
+  `-std=c++26` at all. The library is written against C++26 features that older releases of either
+  compiler do not implement, so a default compiler that predates them will not build the tree.
+- Clang builds against libstdc++ cannot use a run-time width or precision in a `std::format` spec
+  (`"{:.{}f}"`, `"{:-<{}}"`). The consteval format-string check calls libstdc++'s `__check_dynamic_spec`,
+  which that library declares and never defines: GCC folds the call away, Clang evaluates it and rejects
+  the format string as "not a constant expression". Build the padded text instead - see `left()`,
+  `right()`, `run_of()` and `fixed()` in `source/library-benchmark/src/kmx/aio/benchmark/harness.cpp`.

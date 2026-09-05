@@ -8,6 +8,7 @@
 #pragma once
 #ifndef PCH
     #include <chrono>
+    #include <cstdio>
     #include <cstdlib>
     #include <filesystem>
     #include <fstream>
@@ -16,6 +17,7 @@
     #include <optional>
     #include <string>
     #include <string_view>
+    #include <system_error>
     #include <vector>
 
     #include <sys/wait.h>
@@ -175,13 +177,86 @@ namespace kmx::aio::test
         return std::filesystem::temp_directory_path() / (prefix + "_" + std::to_string(now_ns) + ".log");
     }
 
-    /// @brief The LD_LIBRARY_PATH assignment a sample built with the gcc16 profile needs.
-    /// @details Without it such a binary dies at startup on `GLIBCXX_3.4.35' not found, which a smoke
-    ///          test would otherwise report as the sample failing rather than never having started.
-    /// @return An `env`-style assignment, ready to place before a command.
-    [[nodiscard]] inline std::string gcc16_library_path() noexcept(false)
+    /// @brief The directory holding the libstdc++ that the compiler which built this tree ships.
+    /// @details A sample built by a compiler newer than the system one dies at startup on
+    ///          `GLIBCXX_3.4.35' not found, which a smoke test would otherwise report as the sample
+    ///          failing rather than never having started. Which directory holds the matching runtime
+    ///          depends on the compiler the tree was built with, so it is asked for rather than written
+    ///          down - the same question script/feature/common.sh asks, in the same words.
+    ///
+    ///          libstdc++.so and not libstdc++.so.6: the versioned name resolves against the loader's
+    ///          own search path and comes back as the system copy even for a compiler that ships its
+    ///          own, while the bare .so is the link-time symlink sitting in the compiler's library
+    ///          directory. A compiler that cannot find it echoes the bare name straight back, which must
+    ///          not be turned into a path relative to the working directory.
+    ///
+    ///          Asked once per process: the answer cannot change while the test binary runs, and every
+    ///          sample it launches needs it.
+    /// @return The directory, or an empty string when there is nothing worth prepending.
+    [[nodiscard]] inline const std::string& toolchain_cxx_runtime_dir() noexcept(false)
     {
-        return "LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-}";
+        static const std::string cached = []() -> std::string
+        {
+            const char* const compiler_env = std::getenv("KMX_CXX");
+            const std::string compiler = ((compiler_env != nullptr) && (*compiler_env != '\0')) ? compiler_env : "c++";
+            const std::string command = compiler + " -print-file-name=libstdc++.so 2>/dev/null";
+
+            std::FILE* const pipe = ::popen(command.c_str(), "r");
+            if (pipe == nullptr)
+                return {};
+
+            std::string output;
+            char buffer[512u] {};
+            while (std::fgets(buffer, sizeof(buffer), pipe) != nullptr)
+                output += buffer;
+
+            if (::pclose(pipe) != 0)
+                return {};
+
+            while (!output.empty() && ((output.back() == '\n') || (output.back() == '\r')))
+                output.pop_back();
+
+            // The compiler echoing back the name it was asked about means "not found", and "libstdc++.so"
+            // is not a path: resolved against the working directory it would put that directory at the
+            // front of every sample's library search path.
+            if (output.empty() || (output == "libstdc++.so"))
+                return {};
+
+            std::error_code error;
+            const std::filesystem::path resolved = std::filesystem::canonical(output, error);
+            if (error || !std::filesystem::is_regular_file(resolved, error))
+                return {};
+
+            return resolved.parent_path().string();
+        }();
+
+        return cached;
+    }
+
+    /// @brief The LD_LIBRARY_PATH assignment a sample needs to start under the compiler that built it.
+    /// @details The toolchain's own directory goes last, after @p extra_dirs and before whatever the
+    ///          caller already had: it is a whole library directory - /usr/lib64 for a compiler the
+    ///          distribution installed - and putting it first would let a system copy of a dependency
+    ///          shadow the one this project built into output/.
+    /// @param extra_dirs Directories a sample needs besides the toolchain's, such as a locally built
+    ///        dependency prefix. Empty entries are ignored.
+    /// @return An `env`-style assignment, ready to place before a command.
+    [[nodiscard]] inline std::string toolchain_library_path(const std::initializer_list<std::string_view> extra_dirs = {}) noexcept(false)
+    {
+        std::string assignment = "LD_LIBRARY_PATH=";
+
+        for (const auto dir: extra_dirs)
+        {
+            if (!dir.empty())
+                assignment += shell_quote(dir) + ":";
+        }
+
+        const std::string& runtime_dir = toolchain_cxx_runtime_dir();
+        if (!runtime_dir.empty())
+            assignment += shell_quote(runtime_dir) + ":";
+
+        assignment += "${LD_LIBRARY_PATH:-}";
+        return assignment;
     }
 
 } // namespace kmx::aio::test

@@ -20,7 +20,7 @@ Validates that mTLS certificate generation and basic OpenSSL operations work cor
 ### Running
 
 ```bash
-TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+TEST_BIN="$(find debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
 "$TEST_BIN" "[tls][mtls][smoke]"
 ```
 
@@ -58,7 +58,7 @@ Comprehensive testing of mTLS certificate scenarios and edge cases encountered i
 ### Running
 
 ```bash
-TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+TEST_BIN="$(find debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
 "$TEST_BIN" "[tls][mtls][integration]"
 ```
 

@@ -9,12 +9,15 @@ cd source
 qbs build -f source.qbs config:debug -j"$(nproc)"
 cd ..
 
-TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
-if [[ -d /opt/gcc-16/lib64 ]]; then
-    LD_LIBRARY_PATH="/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-}" "$TEST_BIN"
-else
-    "$TEST_BIN"
-fi
+TEST_BIN="$(find debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
+# The compiler that built these binaries may ship a libstdc++ newer than the one ldconfig points
+# libstdc++.so.6 at, so its directory has to lead. Asked of the compiler rather than written down,
+# which is how the scripts under script/ follow the machine's default toolchain. The "*/*" guard is
+# what script/feature/common.sh has too: a compiler that cannot find the library echoes the bare name
+# straight back, and resolving that would put the working directory first instead.
+CXX_RUNTIME_LIB="$(${KMX_CXX:-c++} -print-file-name=libstdc++.so)"
+CXX_RUNTIME_DIR="$([[ "$CXX_RUNTIME_LIB" == */* ]] && dirname "$(readlink -f "$CXX_RUNTIME_LIB")")"
+LD_LIBRARY_PATH="${CXX_RUNTIME_DIR:+$CXX_RUNTIME_DIR:}${LD_LIBRARY_PATH:-}" "$TEST_BIN"
 ```
 
 ### Run All Integration Tests (CI-Equivalent)
@@ -32,12 +35,15 @@ qbs build -f source.qbs config:debug -j"$(nproc)" \
     project.enable_http3:true
 cd ..
 
-TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
-if [[ -d /opt/gcc-16/lib64 ]]; then
-    LD_LIBRARY_PATH="/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-}" "$TEST_BIN"
-else
-    "$TEST_BIN"
-fi
+TEST_BIN="$(find debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
+# The compiler that built these binaries may ship a libstdc++ newer than the one ldconfig points
+# libstdc++.so.6 at, so its directory has to lead. Asked of the compiler rather than written down,
+# which is how the scripts under script/ follow the machine's default toolchain. The "*/*" guard is
+# what script/feature/common.sh has too: a compiler that cannot find the library echoes the bare name
+# straight back, and resolving that would put the working directory first instead.
+CXX_RUNTIME_LIB="$(${KMX_CXX:-c++} -print-file-name=libstdc++.so)"
+CXX_RUNTIME_DIR="$([[ "$CXX_RUNTIME_LIB" == */* ]] && dirname "$(readlink -f "$CXX_RUNTIME_LIB")")"
+LD_LIBRARY_PATH="${CXX_RUNTIME_DIR:+$CXX_RUNTIME_DIR:}${LD_LIBRARY_PATH:-}" "$TEST_BIN"
 
 bash script/ci/run-ci-avb-local.sh --only all
 ```
@@ -51,12 +57,15 @@ cd source
 qbs build -f source.qbs config:debug -j"$(nproc)"
 cd ..
 
-TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
-if [[ -d /opt/gcc-16/lib64 ]]; then
-    LD_LIBRARY_PATH="/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-}" "$TEST_BIN"
-else
-    "$TEST_BIN"
-fi
+TEST_BIN="$(find debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
+# The compiler that built these binaries may ship a libstdc++ newer than the one ldconfig points
+# libstdc++.so.6 at, so its directory has to lead. Asked of the compiler rather than written down,
+# which is how the scripts under script/ follow the machine's default toolchain. The "*/*" guard is
+# what script/feature/common.sh has too: a compiler that cannot find the library echoes the bare name
+# straight back, and resolving that would put the working directory first instead.
+CXX_RUNTIME_LIB="$(${KMX_CXX:-c++} -print-file-name=libstdc++.so)"
+CXX_RUNTIME_DIR="$([[ "$CXX_RUNTIME_LIB" == */* ]] && dirname "$(readlink -f "$CXX_RUNTIME_LIB")")"
+LD_LIBRARY_PATH="${CXX_RUNTIME_DIR:+$CXX_RUNTIME_DIR:}${LD_LIBRARY_PATH:-}" "$TEST_BIN"
 ```
 
 Or use the CI-equivalent:
@@ -74,25 +83,31 @@ qbs build -f source.qbs config:debug -j"$(nproc)" \
     project.enable_http3:true
 cd ..
 
-TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
-if [[ -d /opt/gcc-16/lib64 ]]; then
-    LD_LIBRARY_PATH="/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-}" "$TEST_BIN"
-else
-    "$TEST_BIN"
-fi
+TEST_BIN="$(find debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
+# The compiler that built these binaries may ship a libstdc++ newer than the one ldconfig points
+# libstdc++.so.6 at, so its directory has to lead. Asked of the compiler rather than written down,
+# which is how the scripts under script/ follow the machine's default toolchain. The "*/*" guard is
+# what script/feature/common.sh has too: a compiler that cannot find the library echoes the bare name
+# straight back, and resolving that would put the working directory first instead.
+CXX_RUNTIME_LIB="$(${KMX_CXX:-c++} -print-file-name=libstdc++.so)"
+CXX_RUNTIME_DIR="$([[ "$CXX_RUNTIME_LIB" == */* ]] && dirname "$(readlink -f "$CXX_RUNTIME_LIB")")"
+LD_LIBRARY_PATH="${CXX_RUNTIME_DIR:+$CXX_RUNTIME_DIR:}${LD_LIBRARY_PATH:-}" "$TEST_BIN"
 ```
 
 Run a specific test repeatedly (flake guard):
 
 ```bash
-TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+TEST_BIN="$(find debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
+# The compiler that built these binaries may ship a libstdc++ newer than the one ldconfig points
+# libstdc++.so.6 at, so its directory has to lead. Asked of the compiler rather than written down,
+# which is how the scripts under script/ follow the machine's default toolchain. The "*/*" guard is
+# what script/feature/common.sh has too: a compiler that cannot find the library echoes the bare name
+# straight back, and resolving that would put the working directory first instead.
+CXX_RUNTIME_LIB="$(${KMX_CXX:-c++} -print-file-name=libstdc++.so)"
+CXX_RUNTIME_DIR="$([[ "$CXX_RUNTIME_LIB" == */* ]] && dirname "$(readlink -f "$CXX_RUNTIME_LIB")")"
 for i in $(seq 1 40); do
     echo "Run $i"
-    if [[ -d /opt/gcc-16/lib64 ]]; then
-        LD_LIBRARY_PATH="/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-}" timeout 20s "$TEST_BIN" "channel wait_until_can_send unblocks when consumer pops from a full ring"
-    else
-        timeout 20s "$TEST_BIN" "channel wait_until_can_send unblocks when consumer pops from a full ring"
-    fi
+    LD_LIBRARY_PATH="${CXX_RUNTIME_DIR:+$CXX_RUNTIME_DIR:}${LD_LIBRARY_PATH:-}" timeout 20s "$TEST_BIN" "channel wait_until_can_send unblocks when consumer pops from a full ring"
 done
 ```
 
@@ -122,7 +137,7 @@ bash script/ci/run-ci-avb-local.sh --only gpu-smoke
 Requires `project.enable_quic:true`:
 
 ```bash
-TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+TEST_BIN="$(find debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
 "$TEST_BIN" "[quic][readiness][integration][smoke]"
 "$TEST_BIN" "[quic][http3][integration][smoke]"
 ```
@@ -145,7 +160,7 @@ Two complementary test suites validate mTLS certificate generation, validation, 
 Basic validation of certificate generation and OpenSSL parsing:
 
 ```bash
-TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+TEST_BIN="$(find debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
 "$TEST_BIN" "[tls][mtls][smoke]"
 ```
 
@@ -163,7 +178,7 @@ Validates:
 Comprehensive testing of certificate scenarios and edge cases:
 
 ```bash
-TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+TEST_BIN="$(find debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
 "$TEST_BIN" "[tls][mtls][integration]"
 ```
 
@@ -181,7 +196,7 @@ Both test suites automatically generate temporary mTLS artifacts in `/tmp/kmx_mt
 ### OPC UA Service Tests
 
 ```bash
-TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+TEST_BIN="$(find debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
 "$TEST_BIN" "[opc_ua][client][service]~[slow]"
 ```
 
@@ -200,7 +215,7 @@ qbs build -f source/source.qbs config:debug -j"$(nproc)" \
 Run unit tests:
 
 ```bash
-TEST_BIN="$(find source/debug -type f -name kmx-aio-test | head -n 1)"
+TEST_BIN="$(find source/debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
 "$TEST_BIN" "[modbus]~[integration]"
 ```
 
@@ -242,8 +257,15 @@ qbs build --products sample-gpu-image-processing,kmx-aio-test -f source/source.q
     project.enable_quic:false \
     project.enable_cuda:true
 
-SAMPLE_BIN="$(find debug -type f -name sample-gpu-image-processing | head -n 1)"
-LD_LIBRARY_PATH=/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-} \
+SAMPLE_BIN="$(find debug -type f -name sample-gpu-image-processing -not -path '*/install-root/*' -print -quit)"
+# The compiler that built these binaries may ship a libstdc++ newer than the one ldconfig points
+# libstdc++.so.6 at, so its directory has to lead. Asked of the compiler rather than written down,
+# which is how the scripts under script/ follow the machine's default toolchain. The "*/*" guard is
+# what script/feature/common.sh has too: a compiler that cannot find the library echoes the bare name
+# straight back, and resolving that would put the working directory first instead.
+CXX_RUNTIME_LIB="$(${KMX_CXX:-c++} -print-file-name=libstdc++.so)"
+CXX_RUNTIME_DIR="$([[ "$CXX_RUNTIME_LIB" == */* ]] && dirname "$(readlink -f "$CXX_RUNTIME_LIB")")"
+LD_LIBRARY_PATH="${CXX_RUNTIME_DIR:+$CXX_RUNTIME_DIR:}${LD_LIBRARY_PATH:-}" \
     "$SAMPLE_BIN" --max-frames 1 --width 320 --height 240 --buffer-count 2 --gpu-device 0
 ```
 
@@ -287,9 +309,16 @@ qbs build -f source.qbs -d ../output/asan config:debug -j"$(nproc)" \
     project.enable_asan:true project.enable_ubsan:true
 cd ..
 
-TEST_BIN="$(find output/asan -type f -name kmx-aio-test | head -n 1)"
+TEST_BIN="$(find output/asan -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
+# The compiler that built these binaries may ship a libstdc++ newer than the one ldconfig points
+# libstdc++.so.6 at, so its directory has to lead. Asked of the compiler rather than written down,
+# which is how the scripts under script/ follow the machine's default toolchain. The "*/*" guard is
+# what script/feature/common.sh has too: a compiler that cannot find the library echoes the bare name
+# straight back, and resolving that would put the working directory first instead.
+CXX_RUNTIME_LIB="$(${KMX_CXX:-c++} -print-file-name=libstdc++.so)"
+CXX_RUNTIME_DIR="$([[ "$CXX_RUNTIME_LIB" == */* ]] && dirname "$(readlink -f "$CXX_RUNTIME_LIB")")"
 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 \
-    LD_LIBRARY_PATH="/opt/gcc-16/lib64:${LD_LIBRARY_PATH:-}" timeout 120s "$TEST_BIN"
+    LD_LIBRARY_PATH="${CXX_RUNTIME_DIR:+$CXX_RUNTIME_DIR:}${LD_LIBRARY_PATH:-}" timeout 120s "$TEST_BIN"
 ```
 
 The flags themselves live in one place, the `kmx_instrumentation` QBS module under
@@ -347,9 +376,11 @@ sudo dnf install lcov            # Fedora/RHEL
 ```
 
 The `.gcno` and `.gcda` files carry a format version stamp that has to match the compiler exactly, and
-these builds use a GCC that is usually newer than the system one. The script therefore uses the `gcov`
-sitting next to the profile's compiler rather than whatever is first in `PATH`; `GCOV=/path/to/gcov`
-overrides that choice.
+the compiler these builds use is usually newer than the system one - and, since the profile follows the
+machine's default compiler, may not be a GCC at all. The script therefore picks the tool by compiler
+family as well as by location: the `gcov` sitting next to the profile's compiler for a GCC build, and
+`llvm-cov gcov` for a clang one, whose counters no GCC `gcov` can read. `GCOV` overrides that choice and
+may name a command with arguments, as `GCOV="llvm-cov-20 gcov"`.
 
 Counters accumulate across runs by design, so each run clears them first. Pass `--keep-data` to
 combine several runs into one report on purpose.

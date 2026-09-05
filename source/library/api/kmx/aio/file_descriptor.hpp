@@ -38,7 +38,12 @@ namespace kmx::aio
         explicit file_descriptor(const fd_t fd) noexcept: fd_(fd) {}
 
         /// @brief Closes the owned descriptor if it is still valid.
-        virtual ~file_descriptor() noexcept;
+        /// @note Public and non-virtual, because this is a value type that happens also to be inherited
+        ///       from. Nothing is ever deleted through a @c file_descriptor*, and @c descriptor::epoll and
+        ///       @c descriptor::timer add no state of their own, so a vptr would only quadruple a wrapper
+        ///       around a single @c int. Protected is not available here: the class is constructed and
+        ///       destroyed on its own throughout the tree, and returned by value in @c expected_t.
+        ~file_descriptor() noexcept;
 
         /// @brief Non-copyable.
         file_descriptor(const file_descriptor&) = delete;

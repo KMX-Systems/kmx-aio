@@ -231,7 +231,7 @@ Note: with the default stub backend, the echo pair exercises request/response fu
 Run integration tests via Catch2 filter directly:
 
 ```bash
-TEST_BIN="$(find source/debug -type f -name kmx-aio-test | head -n 1)"
+TEST_BIN="$(find source/debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
 
 # Unit tests (all SOME/IP, excluding integration)
 "$TEST_BIN" "[someip]~[integration]"

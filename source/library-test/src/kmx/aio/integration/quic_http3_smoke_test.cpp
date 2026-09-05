@@ -86,9 +86,8 @@ namespace kmx::aio::test::integration::quic_http3_smoke_test
             fs::path("/tmp") /
             ((is_completion ? "kmx_http3_client_smoke_" : "kmx_quic_readiness_echo_client_smoke_") + std::to_string(now_ns) + ".log");
         const std::string port_env = (is_completion ? "KMX_QUIC_HTTP3_PORT=" : "KMX_QUIC_ECHO_PORT=") + std::to_string(test_port);
-        const std::string ld_library_path = "LD_LIBRARY_PATH=/opt/gcc-16/lib64:" +
-                                            (spdk_runtime_dir_opt.has_value() ? spdk_runtime_dir_opt->string() + ":" : std::string {}) +
-                                            "${LD_LIBRARY_PATH:-}";
+        const std::string spdk_runtime_dir = spdk_runtime_dir_opt.has_value() ? spdk_runtime_dir_opt->string() : std::string {};
+        const std::string ld_library_path = toolchain_library_path({spdk_runtime_dir});
 
         const std::string server_cmd = "env " + port_env + " " + ld_library_path + " stdbuf -oL -eL " +
                                        shell_quote(server_bin_opt->string()) + " > " + shell_quote(server_log.string()) + " 2>&1";

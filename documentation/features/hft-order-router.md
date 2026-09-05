@@ -64,7 +64,7 @@ The sample currently:
 
 ```bash
 qbs build -f source/source.qbs config:debug
-HFT_BIN="$(find debug -type f -name sample-hft-order-router | head -n 1)"
+HFT_BIN="$(find debug -type f -name sample-hft-order-router -not -path '*/install-root/*' -print -quit)"
 "$HFT_BIN"
 ```
 

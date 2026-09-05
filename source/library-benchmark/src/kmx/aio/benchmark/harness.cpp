@@ -225,6 +225,68 @@ namespace kmx::aio::benchmark
             return out;
         }
 
+        /// @brief Left-aligns text in a field, counting characters rather than bytes.
+        /// @param text The text to align.
+        /// @param width The field width.
+        /// @return The padded text.
+        /// @throws std::bad_alloc if the result cannot be stored.
+        static std::string left(const std::string_view text, const std::size_t width) noexcept(false)
+        {
+            const auto used = width_of(text);
+            std::string out {text};
+            out.append((used < width) ? (width - used) : 0u, ' ');
+            return out;
+        }
+
+        /// @brief A run of one character, used for indents and horizontal rules.
+        /// @param fill The character to repeat.
+        /// @param width How many times to repeat it.
+        /// @return The run.
+        /// @throws std::bad_alloc if the result cannot be stored.
+        static std::string run_of(const char fill, const std::size_t width) noexcept(false)
+        {
+            return std::string(width, fill);
+        }
+
+        /// @brief Formats a figure in fixed-point notation with the given number of decimals.
+        /// @details Spelled out per precision rather than as std::format("{:.{}f}", value, precision),
+        ///          which does not compile under clang against libstdc++: the dynamic-width path calls
+        ///          __check_dynamic_spec, which that combination leaves undefined. The three cases below
+        ///          are the ones the harness actually asks for and stay inside std::format; anything
+        ///          else falls through to snprintf, which formats identically and keeps the guarantee
+        ///          the name makes - a caller adding a third-decimal column gets three decimals, not a
+        ///          silently different notation.
+        /// @param value The figure.
+        /// @param precision Digits after the decimal point. Negative is read as zero, as printf does.
+        /// @return The formatted figure.
+        /// @throws std::bad_alloc if the result cannot be stored.
+        static std::string fixed(const double value, const int precision) noexcept(false)
+        {
+            switch (precision)
+            {
+                case 0:
+                    return std::format("{:.0f}", value);
+                case 1:
+                    return std::format("{:.1f}", value);
+                case 2:
+                    return std::format("{:.2f}", value);
+                default:
+                    break;
+            }
+
+            const int used = (precision > 0) ? precision : 0;
+
+            // Sized from what snprintf reports it would have written, so a large magnitude or a wide
+            // precision cannot silently truncate the figure.
+            const int needed = std::snprintf(nullptr, 0u, "%.*f", used, value);
+            if (needed < 0)
+                return std::format("{}", value);
+
+            std::string out(static_cast<std::size_t>(needed), '\0');
+            std::snprintf(out.data(), out.size() + 1u, "%.*f", used, value);
+            return out;
+        }
+
         /// @brief Appends one right-aligned column to a line.
         /// @param line The line being built.
         /// @param text The cell contents.
@@ -266,7 +328,7 @@ namespace kmx::aio::benchmark
             }
 
             const auto precision = (value < 10.0) ? 2 : ((value < 100.0) ? 1 : 0);
-            return std::format("{:.{}f} {}", value, precision, unit);
+            return std::format("{} {}", fixed(value, precision), unit);
         }
 
         /// @brief Formats a rate with three significant digits and an SI prefix.
@@ -294,7 +356,7 @@ namespace kmx::aio::benchmark
             }
 
             const auto precision = prefix.empty() ? 0 : ((value < 10.0) ? 2 : ((value < 100.0) ? 1 : 0));
-            return std::format("{:.{}f}{}/s", value, precision, prefix);
+            return std::format("{}{}/s", fixed(value, precision), prefix);
         }
 
         /// @brief Formats an operation count in groups of three digits.
@@ -375,7 +437,7 @@ namespace kmx::aio::benchmark
 
         note_width = std::min(note_width, note_width_cap);
 
-        auto header = std::format("{:<{}}", "case", name_width);
+        auto header = left("case", name_width);
         add_column(header, "mean", time_width);
         add_column(header, "min", time_width);
         add_column(header, "p50", time_width);
@@ -390,7 +452,7 @@ namespace kmx::aio::benchmark
             add_last_column(header, "what it means");
 
         std::println("{}", header);
-        std::println("{:-<{}}", "", rule_width);
+        std::println("{}", run_of('-', rule_width));
 
         // Sections are collected by group rather than taken from adjacency: a paired scenario
         // registers one case in each of two groups, so registration order no longer keeps a group's
@@ -421,7 +483,7 @@ namespace kmx::aio::benchmark
                 if (group_of(item.name) != group)
                     continue;
 
-                auto line = std::format("{:{}}{:<{}}", "", row_indent, case_of(item.name), name_width - row_indent);
+                auto line = run_of(' ', row_indent) + left(case_of(item.name), name_width - row_indent);
                 if (item.skipped)
                 {
                     // The numeric columns stay empty, so the reason lands under the note column like any other remark.
@@ -460,12 +522,12 @@ namespace kmx::aio::benchmark
 
                 // A note too long for the column carries on down it, under its own first line.
                 for (std::size_t i = 1u; i < note_lines.size(); ++i)
-                    std::println("{:{}}{}{}", "", columns_width, column_gap, note_lines[i]);
+                    std::println("{}{}{}", run_of(' ', columns_width), column_gap, note_lines[i]);
             }
         }
 
         std::println("");
-        std::println("{:-<{}}", "", rule_width);
+        std::println("{}", run_of('-', rule_width));
         std::println("mean, min, p50 and p99 are the cost of one operation; rate is 1 s / mean; ops is how many were measured.");
         std::println("A \"-\" means the case timed the whole loop rather than each operation, so it has no distribution to report,");
         std::println("or - under p99 alone - that it took fewer than {} samples, too few for a percentile to name anything.",
@@ -610,7 +672,7 @@ namespace kmx::aio::benchmark
 
         note_width = std::min(note_width, note_width_cap);
 
-        auto header = std::format("{:<{}}", "scenario", name_width);
+        auto header = left("scenario", name_width);
         add_column(header, "epoll", time_width);
         add_column(header, "io_uring", time_width);
         add_column(header, "delta", delta_width);
@@ -626,7 +688,7 @@ namespace kmx::aio::benchmark
         std::println("epoll against io_uring - one scenario, the same work, measured on both executors");
         std::println("");
         std::println("{}", header);
-        std::println("{:-<{}}", "", rule_width);
+        std::println("{}", run_of('-', rule_width));
 
         for (const auto* pair: present)
         {
@@ -643,7 +705,7 @@ namespace kmx::aio::benchmark
                 return side->skipped ? std::string {"skipped"} : duration_text(quoted_ns(*side));
             };
 
-            auto line = std::format("{:{}}{:<{}}", "", row_indent, pair->key, name_width - row_indent);
+            auto line = run_of(' ', row_indent) + left(pair->key, name_width - row_indent);
             add_column(line, cell(readiness_side), time_width);
             add_column(line, cell(completion_side), time_width);
 
@@ -681,11 +743,11 @@ namespace kmx::aio::benchmark
             std::println("{}", line);
 
             for (std::size_t i = 1u; i < note_lines.size(); ++i)
-                std::println("{:{}}{}{}", "", columns_width, column_gap, note_lines[i]);
+                std::println("{}{}{}", run_of(' ', columns_width), column_gap, note_lines[i]);
         }
 
         std::println("");
-        std::println("{:-<{}}", "", rule_width);
+        std::println("{}", run_of('-', rule_width));
         std::println("Each figure is the cost of one operation: the median where the case sampled every operation, the mean");
         std::println("where it timed a whole loop. delta is how the io_uring figure differs from the epoll one, so a negative");
         std::println("delta means io_uring was the faster of the two. The same figures appear in the table above, with their");

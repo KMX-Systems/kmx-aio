@@ -94,6 +94,6 @@ Build and run the AF_XDP packet-filter sample:
 
 ```bash
 qbs build -f source/source.qbs config:debug project.enable_af_xdp:true
-XDP_BIN="$(find debug -type f -name sample-xdp-packet-filter | head -n 1)"
+XDP_BIN="$(find debug -type f -name sample-xdp-packet-filter -not -path '*/install-root/*' -print -quit)"
 "$XDP_BIN" --help
 ```

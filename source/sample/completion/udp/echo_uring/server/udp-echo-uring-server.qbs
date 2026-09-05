@@ -7,6 +7,7 @@ CppApplication {
     // Or we use tcp-echo-common for random buffers if needed.
 
     name: "sample-udp-echo-uring-server"
+    install: true
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.debugInformation: true

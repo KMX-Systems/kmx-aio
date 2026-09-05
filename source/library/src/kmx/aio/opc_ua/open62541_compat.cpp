@@ -4,7 +4,6 @@
 #if !defined(KMX_AIO_FEATURE_OPC_UA)
 
     #include <string>
-    #include <string_view>
     #include <vector>
 
 namespace
@@ -90,7 +89,7 @@ extern "C"
         if ((client == nullptr) || (endpointUrl == nullptr))
             return UA_STATUSCODE_BADCONFIGURATIONERROR;
 
-        if (const std::string_view(endpointUrl).empty())
+        if (endpointUrl[0] == '\0')
             return UA_STATUSCODE_BADCONFIGURATIONERROR;
 
         client->channel_state = UA_SECURECHANNELSTATE_CONNECTED;

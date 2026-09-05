@@ -17,6 +17,7 @@ CppApplication {
     Depends { name: "kmx_instrumentation" }
 
     name: "kmx-aio-test"
+    install: true
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.debugInformation: true

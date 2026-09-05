@@ -116,7 +116,7 @@ Complete buildable samples are already available in the repository:
 Verify CLI parsing and the gPTP timeout path on a single host without a full AVB fabric:
 
 ```bash
-TALKER_BIN="$(find debug -type f -name sample-avb-talker | head -n 1)"
+TALKER_BIN="$(find debug -type f -name sample-avb-talker -not -path '*/install-root/*' -print -quit)"
 "$TALKER_BIN" --help
 "$TALKER_BIN" --iface eth0 --dest-mac 91:E0:F0:00:0E:80 --stream-id 1 --diagnostics-only
 ```
@@ -134,10 +134,10 @@ qbs build -f source/source.qbs config:debug -j"$(nproc)"
 1. Locate the sample binaries:
 
 ```bash
-find debug -type f -name sample-avb-talker
-find debug -type f -name sample-avb-listener
-find debug -type f -name sample-avb-readiness-talker
-find debug -type f -name sample-avb-readiness-listener
+find debug -type f -name sample-avb-talker -not -path '*/install-root/*'
+find debug -type f -name sample-avb-listener -not -path '*/install-root/*'
+find debug -type f -name sample-avb-readiness-talker -not -path '*/install-root/*'
+find debug -type f -name sample-avb-readiness-listener -not -path '*/install-root/*'
 ```
 
 1. Set capabilities:

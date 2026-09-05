@@ -21,7 +21,7 @@ namespace kmx::aio::readiness::tcp
         /// @param fd   The connected socket descriptor.
         stream(executor& exec, file_descriptor&& fd) noexcept: io_base(exec, std::move(fd)) {}
         /// @brief Unregisters the descriptor and closes the socket.
-        ~stream() override = default;
+        ~stream() = default;
         /// @brief Move constructor — transfers ownership of the descriptor.
         stream(stream&&) noexcept = default;
         /// @brief Move assignment is disabled: the executor reference cannot be reseated.

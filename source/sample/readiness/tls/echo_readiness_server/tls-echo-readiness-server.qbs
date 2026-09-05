@@ -4,6 +4,7 @@ CppApplication {
     Depends { name: "kmx-aio-readiness" }
 
     name: "sample-tls-echo-readiness-server"
+    install: true
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.debugInformation: true

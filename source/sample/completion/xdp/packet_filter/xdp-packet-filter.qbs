@@ -6,6 +6,7 @@ CppApplication {
     Depends { name: "kmx-aio-xdp" }
 
     name: "sample-xdp-packet-filter"
+    install: true
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.debugInformation: true

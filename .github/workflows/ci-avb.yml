@@ -18,11 +18,11 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y qbs liburing-dev libssl-dev catch2 gcc-14 g++-14
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
-          sudo update-alternatives --set g++ /usr/bin/g++-14
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
-          sudo update-alternatives --set gcc /usr/bin/gcc-14
+          sudo apt-get install -y qbs liburing-dev libssl-dev catch2
+
+      - name: Make the default toolchain build-capable
+        run: |
+          bash script/ci/setup-default-toolchain.sh
 
       - name: Configure and build debug
         run: |
@@ -38,7 +38,7 @@ jobs:
       - name: Run unit tests
         run: |
           cd source
-          TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+          TEST_BIN="$(find debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
           if [[ -z "$TEST_BIN" ]]; then
             echo "kmx-aio-test binary not found"
             exit 1
@@ -48,7 +48,7 @@ jobs:
       - name: Flake guard for channel backpressure wait
         run: |
           cd source
-          TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+          TEST_BIN="$(find debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
           if [[ -z "$TEST_BIN" ]]; then
             echo "kmx-aio-test binary not found"
             exit 1
@@ -61,8 +61,8 @@ jobs:
       - name: AVB sample CLI smoke tests
         run: |
           cd source
-          TALKER_BIN="$(find debug -type f -name sample-avb-talker | head -n 1)"
-          LISTENER_BIN="$(find debug -type f -name sample-avb-listener | head -n 1)"
+          TALKER_BIN="$(find debug -type f -name sample-avb-talker -not -path '*/install-root/*' -print -quit)"
+          LISTENER_BIN="$(find debug -type f -name sample-avb-listener -not -path '*/install-root/*' -print -quit)"
           if [[ -z "$TALKER_BIN" || -z "$LISTENER_BIN" ]]; then
             echo "sample-avb binaries not found"
             exit 1
@@ -82,13 +82,13 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y qbs liburing-dev libssl-dev catch2 gcc-14 g++-14 git cmake meson ninja-build \
+          sudo apt-get install -y qbs liburing-dev libssl-dev catch2 git cmake meson ninja-build \
             python3 python3-jinja2 python3-pyelftools python3-tabulate libaio-dev libnuma-dev uuid-dev libelf-dev \
             nasm autoconf automake libtool
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
-          sudo update-alternatives --set g++ /usr/bin/g++-14
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
-          sudo update-alternatives --set gcc /usr/bin/gcc-14
+
+      - name: Make the default toolchain build-capable
+        run: |
+          bash script/ci/setup-default-toolchain.sh
 
       - name: Bootstrap QUIC dependencies
         run: |
@@ -163,11 +163,11 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y qbs liburing-dev libssl-dev catch2 gcc-14 g++-14 git cmake
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
-          sudo update-alternatives --set g++ /usr/bin/g++-14
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
-          sudo update-alternatives --set gcc /usr/bin/gcc-14
+          sudo apt-get install -y qbs liburing-dev libssl-dev catch2 git cmake
+
+      - name: Make the default toolchain build-capable
+        run: |
+          bash script/ci/setup-default-toolchain.sh
 
       - name: Bootstrap QUIC dependencies
         run: |
@@ -197,7 +197,7 @@ jobs:
       - name: Run parametrized QUIC smoke tests (120s bounded runner)
         run: |
           cd source
-          TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+          TEST_BIN="$(find debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
           if [[ -z "$TEST_BIN" ]]; then
             echo "kmx-aio-test binary not found"
             exit 1
@@ -214,11 +214,11 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y qbs liburing-dev libssl-dev catch2 gcc-14 g++-14
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
-          sudo update-alternatives --set g++ /usr/bin/g++-14
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
-          sudo update-alternatives --set gcc /usr/bin/gcc-14
+          sudo apt-get install -y qbs liburing-dev libssl-dev catch2
+
+      - name: Make the default toolchain build-capable
+        run: |
+          bash script/ci/setup-default-toolchain.sh
 
       - name: Detect CUDA-capable runner
         id: cuda_check
@@ -260,7 +260,7 @@ jobs:
         if: steps.cuda_check.outputs.run_gpu == 'true'
         run: |
           cd source
-          SAMPLE_BIN="$(find debug -type f -name sample-gpu-image-processing | head -n 1)"
+          SAMPLE_BIN="$(find debug -type f -name sample-gpu-image-processing -not -path '*/install-root/*' -print -quit)"
           if [[ -z "$SAMPLE_BIN" ]]; then
             echo "sample-gpu-image-processing binary not found"
             exit 1
@@ -271,7 +271,7 @@ jobs:
         if: steps.cuda_check.outputs.run_gpu == 'true'
         run: |
           cd source
-          TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+          TEST_BIN="$(find debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
           if [[ -z "$TEST_BIN" ]]; then
             echo "kmx-aio-test binary not found"
             exit 1

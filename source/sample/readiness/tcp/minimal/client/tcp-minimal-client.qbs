@@ -4,6 +4,7 @@ CppApplication {
     Depends { name: "kmx-aio-readiness" }
 
     name: "sample-tcp-minimal-client"
+    install: true
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.debugInformation: true

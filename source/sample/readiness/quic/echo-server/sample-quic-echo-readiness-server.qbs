@@ -2,6 +2,7 @@ import qbs
 
 CppApplication {
     name: "sample-quic-echo-readiness-server"
+    install: true
     condition: project.enable_readiness && project.enable_quic
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"

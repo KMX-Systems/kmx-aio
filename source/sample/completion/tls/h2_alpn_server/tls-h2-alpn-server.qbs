@@ -4,6 +4,7 @@ CppApplication {
     Depends { name: "kmx-aio-completion" }
 
     name: "sample-tls-h2-alpn-server"
+    install: true
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.debugInformation: true

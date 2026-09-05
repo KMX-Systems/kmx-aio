@@ -4,6 +4,7 @@ CppApplication {
     Depends { name: "kmx-aio-completion" }
 
     name: "sample-tls-echo-completion-server"
+    install: true
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.debugInformation: true

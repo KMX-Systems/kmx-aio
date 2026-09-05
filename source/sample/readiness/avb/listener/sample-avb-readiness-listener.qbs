@@ -6,6 +6,7 @@ CppApplication {
     Depends { name: "kmx-aio-sample-common" }
 
     name: "sample-avb-readiness-listener"
+    install: true
     condition: project.enable_avb
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"

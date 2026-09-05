@@ -74,7 +74,7 @@ qbs build -f source/source.qbs config:debug -j"$(nproc)" \
 Run fast service tests (excluding slow integration cases):
 
 ```bash
-TEST_BIN="$(find debug -type f -name kmx-aio-test | head -n 1)"
+TEST_BIN="$(find debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
 "$TEST_BIN" "[opc_ua][client][service]~[slow]"
 ```
 

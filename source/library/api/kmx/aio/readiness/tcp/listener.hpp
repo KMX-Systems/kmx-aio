@@ -22,7 +22,7 @@ namespace kmx::aio::readiness::tcp
         /// @throws std::system_error If the socket could not be created, bound, or registered.
         listener(executor& exec, ip_address_t ip, const port_t port) noexcept(false);
         /// @brief Unregisters the descriptor and closes the listening socket.
-        ~listener() override = default;
+        ~listener() = default;
         /// @brief Move constructor — transfers ownership of the descriptor.
         listener(listener&&) noexcept = default;
         /// @brief Move assignment is disabled: the executor reference cannot be reseated.

@@ -37,10 +37,11 @@ benchmark_sets=(core quic storage avb gpu)
 set_features() {
     case "$1" in
         core)    echo "" ;;
-        # The BoringSSL half: QUIC and everything carried over it.
-        quic)    echo "http2 http3 quic modbus" ;;
-        # The OpenSSL half: SPDK and open62541 are prebuilt against it, vsomeip sits next to them.
-        storage) echo "af_xdp spdk opc_ua someip modbus" ;;
+        # The BoringSSL half: QUIC and everything carried over it, plus someip - vsomeip needs no TLS
+        # of its own, so it belongs on whichever side is convenient rather than with the OpenSSL two.
+        quic)    echo "http2 http3 quic modbus someip" ;;
+        # The OpenSSL half: SPDK and open62541 are prebuilt against the system OpenSSL.
+        storage) echo "af_xdp spdk opc_ua modbus" ;;
         # AVB pulls in the gPTP/SRP tree, which nothing else compiles.
         avb)     echo "af_xdp avb modbus v4l2" ;;
         # CUDA needs the toolkit and a device, so it is its own set rather than a default.

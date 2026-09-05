@@ -15,6 +15,9 @@ namespace kmx::aio
     /// @brief Common lifecycle and synchronization state shared by executors.
     /// @details Derived executors use this base to coordinate worker-thread
     /// lifetime, active-work accounting, and idle synchronization.
+    /// @note Not polymorphic: it is shared state rather than an interface, and the destructor is protected
+    ///       and non-virtual. An executor is held and destroyed as its own type - the @c shared_ptr the
+    ///       readiness and GPU models hand out is a @c shared_ptr to the concrete executor.
     class executor_base
     {
     public:
@@ -30,14 +33,15 @@ namespace kmx::aio
         /// @brief Non-movable.
         executor_base& operator=(executor_base&&) = delete;
 
-        /// @brief Releases base executor resources.
-        virtual ~executor_base() noexcept = default;
-
         /// @brief Returns a lifetime token that expires when the executor is destroyed.
         /// @return A weak token that becomes expired when the executor dies.
         [[nodiscard]] std::weak_ptr<void> get_lifetime_token() const noexcept { return lifetime_token_; }
 
     protected:
+        /// @brief Releases base executor resources.
+        /// @note Protected and non-virtual: see the class note.
+        ~executor_base() noexcept = default;
+
         /// @brief Number of units of work currently in flight.
         std::atomic_size_t active_work_ {};
         /// @brief Indicates whether the executor is running.

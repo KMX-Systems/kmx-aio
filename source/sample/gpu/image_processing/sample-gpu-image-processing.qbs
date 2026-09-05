@@ -2,6 +2,7 @@ import qbs
 
 CppApplication {
     name: "sample-gpu-image-processing"
+    install: true
     condition: project.enable_cuda
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"

@@ -2,6 +2,7 @@ import qbs
 
 CppApplication {
     name: "sample-quic-http3-client"
+    install: true
     condition: project.enable_http3 && project.enable_quic
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"

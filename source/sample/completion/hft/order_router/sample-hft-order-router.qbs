@@ -2,6 +2,7 @@ import qbs
 
 CppApplication {
     name: "sample-hft-order-router"
+    install: true
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.enableRtti: false

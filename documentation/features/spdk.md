@@ -98,7 +98,7 @@ DISCOVERY_BIN=$(find ./debug ./default -path "*/kmx-aio-sample-spdk-discovery" -
 [ -n "$DISCOVERY_BIN" ] || { echo "kmx-aio-sample-spdk-discovery not found"; exit 1; }
 "$DISCOVERY_BIN"
 "$DISCOVERY_BIN" Nvme0n1 Malloc0n1
-SPDK_MIN_BIN="$(find debug -type f -name sample-spdk-minimal | head -n 1)"
+SPDK_MIN_BIN="$(find debug -type f -name sample-spdk-minimal -not -path '*/install-root/*' -print -quit)"
 "$SPDK_MIN_BIN" --help
 ```
 

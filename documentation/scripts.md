@@ -13,10 +13,11 @@ These are the top-level scripts requested for full documentation.
 | `script/run-integration-tests.sh` | Global integration-test orchestrator | Runs enabled feature `run-integration-tests.sh` scripts against pre-built binaries. It auto-detects active features from `kmx-aio-test --list-tags` when `KMX_ENABLE_*` vars are not explicitly set. |
 | `script/run-sanitizer-tests.sh` | Sanitizer runner | Takes `asan`, `ubsan`, `asan+ubsan` (the default), `tsan` or `tsan+ubsan`. Builds into a tree of its own (`output/asan-ubsan`, ...) with the matching `project.enable_*` properties, sets `ASAN_OPTIONS`/`UBSAN_OPTIONS`/`TSAN_OPTIONS`/`LSAN_OPTIONS`, then delegates to `script/run-unit-tests.sh`. |
 | `script/run-benchmarks.sh` | Benchmark runner | Builds `kmx-aio-benchmark` in `config:release` with readiness and completion enabled, pins the process to one CPU per physical core, reports the CPU governor, and passes its arguments (`--filter`, `--scale`, `--repeats`) through to the binary. See [Benchmarking](benchmarking.md). |
-| `script/run-coverage.sh` | Coverage runner | Builds with `project.enable_coverage:true` into `output/coverage`, runs the unit tests (`--integration` adds the integration suites), and writes an lcov tracefile, HTML report and per-file summary to `output/coverage-report`. Falls back to plain `gcov` listings when lcov is absent, or on `--gcov-only`. |
-| `script/gcc_full_build.sh` | Whole-tree build with GCC | Names the GCC profile candidates (`gcc16`, `gcc-16`, `gcc13`, `gcc`) and the `output/full-gcc/` build root, then forwards everything to `script/full-build.sh`. |
-| `script/clang_full_build.sh` | Whole-tree build with clang | Names the clang profile candidates (`clang-20`, `clang20`, `clang`) and the `output/full-clang/` build root. Adds `-no-pie` when the installed Catch2 archives are not position-independent, then forwards to `script/full-build.sh`. |
-| `script/full-build.sh` | Whole-tree build driver | Compiles every translation unit in the tree as several internally consistent feature sets, one build root per set. Not an entry point on its own — the two wrappers above select the toolchain. See [Whole-Tree Builds](#whole-tree-builds). |
+| `script/run-coverage.sh` | Coverage runner | Builds with `project.enable_coverage:true` into `output/coverage`, runs the unit tests (`--integration` adds the integration suites), and writes an lcov tracefile, HTML report and per-file summary to `output/coverage-report`. Falls back to plain `gcov` listings when lcov is absent, or on `--gcov-only`. Picks `gcov` or `llvm-cov gcov` to match the profile's compiler; `GCOV` overrides, and may carry arguments. |
+| `script/gcc_full_build.sh` | Whole-tree build with GCC | Sets `KMX_CXX=g++` / `KMX_CC=gcc` — the machine's default GCC, no version named — and the `output/full-gcc/` build root, then forwards everything to `script/full-build.sh`. |
+| `script/clang_full_build.sh` | Whole-tree build with clang | Sets `KMX_CXX=clang++` / `KMX_CC=clang` — the machine's default Clang, no version named — and the `output/full-clang/` build root, then forwards everything to `script/full-build.sh`. |
+| `script/ci/setup-default-toolchain.sh` | CI toolchain setup | Installs the newest GCC the runner's package lists offer — no version written down — points the `c++`/`cc`/`g++`/`gcc` alternatives at it, checks that it accepts `-std=c++26`, and sets qbs's `defaultProfile` to the profile `script/qbs-profile.sh` derives for it, so the workflow's bare `qbs` commands follow the default toolchain. `KMX_CI_CXX`/`KMX_CI_CC` name a compiler to use instead. |
+| `script/full-build.sh` | Whole-tree build driver | Compiles every translation unit in the tree as several internally consistent feature sets, one build root per set. An entry point in its own right: run alone it builds with the machine's default compiler into `output/full-default/`, and the two wrappers above only ask for one compiler family instead. Adds `-no-pie` when the selected toolchain is a clang and the installed Catch2 archives are not position-independent. See [Whole-Tree Builds](#whole-tree-builds). |
 
 ## Feature Enablement Model
 
@@ -82,8 +83,8 @@ internally consistent and the sets together leaving no `.cpp` uncompiled:
 
 | Set | Features enabled on top of core + completion | Why it is separate |
 | :--- | :--- | :--- |
-| `quic` | `readiness openonload http2 http3 quic modbus cuda` | Carries BoringSSL, so nothing linked against the system OpenSSL may join it. |
-| `storage` | `readiness openonload af_xdp spdk opc_ua someip modbus` | The OpenSSL half: SPDK and open62541 are prebuilt against it, and vsomeip sits next to them. |
+| `quic` | `readiness openonload http2 http3 quic modbus someip cuda` | Carries BoringSSL, so nothing linked against the system OpenSSL may join it. `someip` qualifies: vsomeip references no OpenSSL symbols at all. |
+| `storage` | `readiness openonload af_xdp spdk opc_ua modbus` | The OpenSSL half: SPDK and open62541 are prebuilt against the system OpenSSL and pull it into anything linking them. |
 | `avb` | `readiness openonload af_xdp avb modbus v4l2` | AVB pulls in the gPTP/SRP tree, which nothing else compiles. |
 
 `readiness` and `openonload` appear in every set: neither conflicts with anything, and both change what
@@ -112,20 +113,26 @@ Both forward every option to `script/full-build.sh`:
 | `--build-root <dir>` | Parent directory for the per-set build roots (same as `KMX_BUILD_ROOT`). |
 | `--qbs-property <k:v>` | Extra property for every qbs invocation; repeatable. |
 
-`QBS_PROFILE` overrides the profile the wrapper picked. The wrappers otherwise try their candidate
-profiles in order and use the first one that resolves to an installed compiler, because
-`script/qbs-profile.sh` prefers GCC — the right answer for the test runners and the wrong one for a
-clang build.
+`KMX_CXX` and `KMX_CC` name the compiler to build with, defaulting to `c++` and `cc` — the machine's
+default toolchain. `QBS_PROFILE` names a qbs profile outright and ignores both. See
+[Toolchain Profile Used By The Scripts](build.md#toolchain-profile-used-by-the-scripts) for how a
+compiler becomes a profile.
 
 ```bash
-bash script/gcc_full_build.sh --list-sets                  # what each set enables
+bash script/full-build.sh --list-sets                      # what each set enables
+bash script/full-build.sh --config release                 # whole tree, default compiler, release
 bash script/clang_full_build.sh --set quic --clean         # one set, from scratch
 bash script/gcc_full_build.sh --config release --jobs 8
-QBS_PROFILE=clang20 bash script/clang_full_build.sh
+KMX_CXX=g++-17 KMX_CC=gcc-17 bash script/full-build.sh     # one particular compiler
 ```
 
 A run prints the profile it settled on, one line per set as it starts, and a summary of every set with
 its wall-clock time at the end.
+
+Each set leaves its finished artifacts collected under
+`output/full-<toolchain>/<set>/<config>/install-root/{bin,lib,include}` — one per set, since the sets
+exist precisely because their contents conflict. See
+[Collected Artifacts](build.md#collected-artifacts-install-root).
 
 ## Typical Usage
 

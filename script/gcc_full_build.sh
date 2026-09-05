@@ -5,13 +5,15 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# The first of these that resolves to an installed compiler is used; QBS_PROFILE still overrides. GCC 16
-# comes first because the library is written against C++26 features the older releases do not implement,
-# and because it is the toolchain the test runners already assume - a binary built here can be run by
-# script/run-unit-tests.sh without rebuilding it.
-export KMX_FULL_BUILD_PROFILES="${KMX_FULL_BUILD_PROFILES:-gcc16 gcc-16 gcc13 gcc}"
+# The compiler family, and nothing narrower: whichever GCC "g++" resolves to on this machine is the one
+# that gets used, and script/qbs-profile.sh makes it a profile. No version appears here, so a machine
+# that moves to the next GCC needs no edit; to build with a particular one, name it - KMX_CXX=g++-17
+# script/gcc_full_build.sh - or point QBS_PROFILE at a profile of your own. A machine carrying only the
+# versioned drivers is covered as well; see the note in script/clang_full_build.sh.
+export KMX_CXX="${KMX_CXX:-g++}"
+export KMX_CC="${KMX_CC:-gcc}"
 
-# Keeps the GCC artifacts in output/full-gcc/, next to and not on top of the clang ones.
+# Keeps the GCC artifacts in output/full-gcc/, next to and not on top of the other toolchains'.
 export KMX_FULL_BUILD_TAG="gcc"
 
 exec "$script_dir/full-build.sh" "$@"

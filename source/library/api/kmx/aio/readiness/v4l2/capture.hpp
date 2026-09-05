@@ -137,7 +137,7 @@ namespace kmx::aio::readiness::v4l2
         /// @brief Move assignment is disabled to keep ownership unambiguous.
         capture& operator=(capture&&) noexcept = delete;
         /// @brief Stops streaming, unmaps every buffer, and closes the device.
-        ~capture() noexcept override;
+        ~capture() noexcept;
 
         /// @brief Suspends until the driver has a filled frame, then returns it.
         ///

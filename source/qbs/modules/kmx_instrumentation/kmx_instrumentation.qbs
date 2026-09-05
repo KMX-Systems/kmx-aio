@@ -27,6 +27,17 @@ import qbs
 Module {
     Depends { name: "cpp" }
 
+    // Where an installed artifact lands under <build root>/<config>/install-root. Qbs defaults this to
+    // "/usr/local", which buries every artifact under install-root/usr/local/ - the right shape for a
+    // staging image to be copied onto a system, and the wrong one for the build output of a project
+    // nobody installs system-wide. Emptied here, so a build leaves install-root/{bin,lib,include}.
+    //
+    // It sits in this module for the same reason the flags below do: it has to hold for every product
+    // or the tree splits across two prefixes, and every product already reaches this module - the
+    // libraries by naming it, the samples and the test binary through the libraries' Export blocks.
+    // Repeating it in fifty product files is the arrangement that breaks the first time one is added.
+    qbs.installPrefix: ""
+
     property bool asan: project.enable_asan
     property bool ubsan: project.enable_ubsan
     property bool tsan: project.enable_tsan

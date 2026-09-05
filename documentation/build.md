@@ -279,33 +279,91 @@ Because no single set of gates compiles everything safely, a build that covers e
 several builds. `script/gcc_full_build.sh` and `script/clang_full_build.sh` run them:
 
 ```bash
+bash script/full-build.sh              # default compiler -> output/full-default/{quic,storage,avb}
 bash script/gcc_full_build.sh          # output/full-gcc/{quic,storage,avb}
 bash script/clang_full_build.sh        # output/full-clang/{quic,storage,avb}
 ```
 
-Each wrapper names the profile candidates its compiler needs and forwards everything else to
-`script/full-build.sh`, which builds three feature sets — `quic` (BoringSSL side), `storage` (OpenSSL
+`script/full-build.sh` on its own builds with the machine's default compiler; the two wrappers ask for
+one compiler family instead and keep their artifacts apart. All three build three feature sets — `quic` (BoringSSL side), `storage` (OpenSSL
 side: SPDK, OPC UA, SOME/IP) and `avb` — into one build root each. `--list-sets`, `--set <name>`,
 `--config`, `--clean` and `--keep-going` are the options you are likely to want; see
 [Script Reference](scripts.md#whole-tree-builds) for the full list and for what each set contains.
 
-## Toolchain Profile Used By The Scripts
+## Collected Artifacts: install-root
 
-A `qbs` command that names no profile uses the machine-wide `defaultProfile`, and a stale entry there
-fails every build with `Could not find selected C++ compiler`, naming neither the profile nor the
-project. The scripts under [script/](../script/) therefore choose the profile themselves, in
-[script/qbs-profile.sh](../script/qbs-profile.sh):
+Every build leaves its finished artifacts collected in one place, `<build root>/<config>/install-root`,
+alongside the per-product directories qbs builds into:
 
-1. `QBS_PROFILE=<name>` when set;
-2. otherwise the first of `gcc16`, `gcc-16` whose C++ compiler is actually installed - the test runners
-   put `/opt/gcc-16/lib64` on `LD_LIBRARY_PATH`, so GCC 16 is the toolchain they already assume;
-3. otherwise the machine default, which is what CI images want - but it is validated first, so a broken
-   default is reported with the list of profiles that would work instead.
+```
+output/debug/install-root/                     output/full-default/avb/release/install-root/
+├── bin/      the samples and kmx-aio-test     ├── bin/      27 executables
+├── lib/      libkmx-aio-*.a                   ├── lib/      7 static libraries
+└── include/  the public headers, as a tree    └── include/  98 headers
+```
 
-Each run prints the profile it settled on. To build with a different toolchain:
+This is qbs's own install step, which `qbs build` performs on its way out - there is no second command
+to run, and `--no-install` skips it. What lands there is decided in the project files:
+
+- `install: true` on a product installs its target: the static libraries into `lib/`, the sample
+  executables and `kmx-aio-test` into `bin/`.
+- The public headers are installed as a tree by a `Group` in `library/lib.qbs`, with
+  `qbs.installSourceBase: "api"` stripping the `api/` prefix - so `api/kmx/aio/task.hpp` becomes
+  `include/kmx/aio/task.hpp`, and an installed tree is compiled against with one
+  `-I<install-root>/include`.
+- `qbs.installPrefix` is emptied in the `kmx_instrumentation` module, which every product reaches. Qbs
+  defaults it to `/usr/local`, which would bury everything under `install-root/usr/local/`.
+
+Two things are deliberately left out. `kmx-aio-benchmark` is not installed - it is measured in place,
+by `script/run-benchmarks.sh`. Neither are the sample support libraries (`kmx-aio-sample-common`,
+`sample-tcp-echo-common`), which are build-internal glue rather than part of the library.
+
+A whole-tree build has **one install-root per feature set**, not one for the tree:
+`output/full-default/{quic,storage,avb}/release/install-root/`. They cannot be merged - the sets exist
+precisely because their contents conflict, and `kmx-aio-test` is a different binary in each. Pick the
+set whose features you want.
+
+The binaries there are copies, not symlinks, and still need the compiler's own libstdc++ on
+`LD_LIBRARY_PATH` like any other binary in the tree; see
+[Toolchain Profile Used By The Scripts](#toolchain-profile-used-by-the-scripts).
+
+`qbs install` re-runs just the install step against a build that is already there, and `--install-root`
+puts the result outside the build tree:
 
 ```bash
-QBS_PROFILE=clang20 script/run-unit-tests.sh
+cd source
+qbs install -f source.qbs -d ../output config:release --install-root /tmp/kmx-aio-stage
+```
+
+## Toolchain Profile Used By The Scripts
+
+The scripts under [script/](../script/) build with the machine's default C++ compiler - whatever `c++`
+and `cc` resolve to, which on a Debian-family system is what `update-alternatives` points them at. No
+compiler version is written down anywhere in them, so moving the alternative to another compiler is the
+whole of what it takes to build with it.
+
+A `qbs` command cannot be pointed at a bare compiler, only at a profile, and a command that names none
+uses the machine-wide `defaultProfile` - a setting this repository does not control, which routinely
+names a toolchain that was since renamed, removed or demoted. It then fails every build with `Could not
+find selected C++ compiler` naming neither the profile nor the project, or, worse, quietly builds with a
+compiler that is no longer the default. So [script/qbs-profile.sh](../script/qbs-profile.sh) finds or
+makes a profile for the compiler that is actually wanted:
+
+1. `QBS_PROFILE=<name>` when set, which wins over everything below;
+2. otherwise `KMX_CXX` (default `c++`) with `KMX_CC` (default `cc`) beside it, for which the script
+   keeps a profile of its own - `kmx-cxx` for the default `c++`, `kmx-gxx` for `g++`, and so on. It is
+   created on first use and rewritten whenever the command starts resolving to a different toolchain.
+
+Profiles that were not created this way are never adopted on their own, however well they match the
+compiler: a profile is a bundle of build settings and not just a compiler path. `QBS_PROFILE` is how a
+hand-made one gets used.
+
+Each run prints the profile it settled on and the compiler behind it. To build with a different
+toolchain:
+
+```bash
+KMX_CXX=g++ KMX_CC=gcc script/run-unit-tests.sh    # another compiler, profile handled for you
+QBS_PROFILE=kmx-spdk-local script/run-unit-tests.sh # a profile you maintain yourself
 ```
 
 Profiles themselves are inspected and repaired with `qbs config`:
@@ -313,9 +371,16 @@ Profiles themselves are inspected and repaired with `qbs config`:
 ```bash
 qbs config --list profiles                       # everything configured
 qbs config --list profiles.<name>                # one profile
-qbs config profiles.<name>.cpp.cxxCompilerName clang++-20
+qbs config --unset profiles.kmx-cxx              # forget a generated profile; the next build remakes it
 qbs config defaultProfile <name>
 ```
+
+One trap is worth knowing about, because the profiles above are written to avoid it. Clang picks C or
+C++ driver mode from the name it was invoked under, so a profile has to reach it through a name
+containing `++`. Point `cpp.cxxCompilerName` at the resolved `clang-24` binary instead and every C++
+link fails with undefined references to `std::cout`, because a driver named `clang` links no C++
+standard library. Note also that qbs joins `cpp.cxxCompilerName` onto `cpp.toolchainInstallPath` without
+noticing an absolute name, so the name written there must be bare.
 
 ## Persistent QBS Profile For Local SPDK
 

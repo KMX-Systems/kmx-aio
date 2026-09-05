@@ -6,6 +6,7 @@ CppApplication {
     Depends { name: "kmx-aio-spdk" }
 
     name: "sample-spdk-minimal"
+    install: true
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.debugInformation: true

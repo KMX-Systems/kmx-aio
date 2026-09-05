@@ -382,15 +382,31 @@ ensure_dependencies() {
 	done
 
 	install_hint="$(detect_package_hint "${unique_packages[*]}")"
-	echo "Missing dependencies: ${unique_packages[*]}" >&2
-	echo "Detected distro family: ${family}" >&2
-	echo "Install command: ${install_hint}" >&2
+	echo "[someip] Missing dependencies: ${unique_packages[*]}" >&2
+	echo "[someip] Detected distro family: ${family}" >&2
+	echo "[someip] Install command: ${install_hint}" >&2
+
+	# Asked for only when there is somebody to ask. source.qbs bootstraps optional dependencies from a
+	# Probe, so this also runs in the middle of "qbs resolve", with no terminal: "read" then sees EOF and
+	# returns non-zero, which under "set -e" ends the script on the spot, and install_packages would go
+	# on to run "apt-get update" through a sudo that has nowhere to prompt for a password. Neither
+	# failure names someip or the package at fault. The same reasoning is spelled out at the top of
+	# script/feature/apt.sh, which the installers that only install packages use instead.
+	if [[ ! -t 0 ]]; then
+		{
+			echo "[someip] Not running interactively, so nothing is installed here."
+			echo "[someip] Run the command above, or 'bash script/feature/someip/install-dependencies.sh'"
+			echo "[someip] from a terminal, and build again."
+		} >&2
+		exit 1
+	fi
+
 	read -r -p "Install missing dependencies now? [Y/n] " install_reply
 
 	if [[ -z "$install_reply" || "$install_reply" =~ ^[Yy]$ ]]; then
 		install_packages "$family" "${unique_packages[@]}"
 	else
-		echo "Dependency installation skipped by user." >&2
+		echo "[someip] Dependency installation skipped by user." >&2
 		exit 1
 	fi
 

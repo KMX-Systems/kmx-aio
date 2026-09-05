@@ -223,6 +223,10 @@ cannot. The trade is legibility: a P2300 pipeline is a graph of nodes, while a c
 that reads top to bottom. This library takes the second, on the grounds that the performance is
 equivalent and the control flow is what people have to maintain.
 
+This decision is about the async composition model only. It does not forbid adopting reflection or
+contracts where they reduce duplication or make invariants explicit; those are evaluated per feature,
+with compiler support and fallback behavior considered at review time.
+
 None of these is a claim to be faster. `documentation/benchmarking.md` measures what this library
 actually costs, including the cases where its own two executors differ by more than any of these
 design choices would.

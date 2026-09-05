@@ -35,7 +35,7 @@ qbs build -f source/source.qbs config:debug -j"$(nproc)" \
 Run Modbus unit tests:
 
 ```bash
-TEST_BIN="$(find source/debug -type f -name kmx-aio-test | head -n 1)"
+TEST_BIN="$(find source/debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
 timeout 25s "$TEST_BIN" "[modbus]~[integration]"
 ```
 
@@ -48,7 +48,7 @@ bash script/feature/modbus/run-integration-tests.sh
 Run specific TLS scenarios directly:
 
 ```bash
-TEST_BIN="$(find source/debug -type f -name kmx-aio-test | head -n 1)"
+TEST_BIN="$(find source/debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
 timeout 25s "$TEST_BIN" "modbus tls: mTLS client and server exchange registers"
 timeout 25s "$TEST_BIN" "modbus tls: server rejects client with missing certificate"
 ```
