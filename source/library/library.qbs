@@ -11,6 +11,7 @@ Project {
         "prj/gpu.qbs",
         "prj/opcua.qbs",
         "prj/modbus.qbs",
+        "prj/knx.qbs",
         "prj/someip.qbs",
         "prj/quic.qbs",
         "prj/xdp.qbs",

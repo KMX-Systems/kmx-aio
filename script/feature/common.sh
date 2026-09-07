@@ -94,6 +94,7 @@ feature_list=(
     spdk
     quic
     modbus
+    knx
     avb
     opc_ua
     someip

@@ -56,6 +56,8 @@ namespace kmx::aio::completion::udp
         /// @return Number of bytes received, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] task_returning_expected_size_t recvmsg(::msghdr* msg, const unsigned flags = 0u) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t recvmsg_until(::msghdr* msg, std::uint64_t timeout_ns,
+                                       const unsigned flags = 0u) noexcept(false);
 
         /// @brief Asynchronously sends a datagram via io_uring.
         /// @param msg   Message header describing payload buffers and peer address.

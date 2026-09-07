@@ -135,6 +135,9 @@ namespace kmx::aio::completion
         /// @return A task yielding the number of bytes received, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] task_returning_expected_size_t async_recvmsg(const fd_t fd, msghdr* msg, const unsigned flags = 0u) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t async_recvmsg_until(const fd_t fd, msghdr* msg,
+                                         std::uint64_t timeout_ns,
+                                         const unsigned flags = 0u) noexcept(false);
 
         /// @brief Prepares an asynchronous sendmsg.
         /// @param fd   Socket file descriptor.

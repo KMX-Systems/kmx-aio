@@ -24,7 +24,7 @@ These are the top-level scripts requested for full documentation.
 `script/feature/common.sh` defines execution behavior used by global scripts:
 
 - Feature list order:
-  - `completion`, `readiness`, `http2`, `http3`, `openonload`, `af_xdp`, `spdk`, `quic`, `modbus`, `avb`, `opc_ua`, `someip`, `v4l2`, `cuda`
+  - `completion`, `readiness`, `http2`, `http3`, `openonload`, `af_xdp`, `spdk`, `quic`, `modbus`, `knx`, `avb`, `opc_ua`, `someip`, `v4l2`, `cuda`
 - Default enabled feature:
   - `completion` only
 - Environment variable override format:
@@ -53,6 +53,7 @@ All current feature script directories and behavior:
 | `cuda` | `script/feature/cuda/install-dependencies.sh` | `script/feature/cuda/run-unit-tests.sh` (`[gpu]~[integration]`) | `script/feature/cuda/run-integration-tests.sh` (`[gpu][integration]`) | Includes environment validation via `script/feature/cuda/check_env.sh` (`nvidia-smi`, headers, optional `nvcc`). |
 | `http2` | `script/feature/http2/install-dependencies.sh` | `script/feature/http2/run-unit-tests.sh` (`[http2]~[integration]`) | `script/feature/http2/run-integration-tests.sh` (`[http2][integration]`) | No additional dependency install step required. |
 | `http3` | `script/feature/http3/install-dependencies.sh` | `script/feature/http3/run-unit-tests.sh` (`[http3]~[integration]`) | `script/feature/http3/run-integration-tests.sh` (`[http3][integration]`) | Installer delegates to QUIC dependency bootstrap (BoringSSL/lsquic path). |
+| `knx` | `script/feature/knx/install-dependencies.sh` | `script/feature/knx/run-unit-tests.sh` (`[knx]~[integration]`) | `script/feature/knx/run-integration-tests.sh` (`[knx][integration]`) | No additional dependency install step required. Socket-tagged integration tests use localhost UDP; `script/feature/knx/run-matrix-tests.sh` verifies minimal and readiness configurations. |
 | `modbus` | `script/feature/modbus/install-dependencies.sh` | `script/feature/modbus/run-unit-tests.sh` (`[modbus]~[integration]`) | `script/feature/modbus/run-integration-tests.sh` | Integration script creates/reuses TLS certs under `/tmp/kmx_modbus_certs_*`, runs `[modbus][integration]~[tls]`, then executes TLS tests in isolated invocations. |
 | `opc_ua` | `script/feature/opc_ua/install-dependencies.sh` | `script/feature/opc_ua/run-unit-tests.sh` (`[opc_ua]~[integration]`) | `script/feature/opc_ua/run-integration-tests.sh` (`[opc_ua][integration]`) | Bootstraps local `open62541` into `output/open62541/install-local`. |
 | `openonload` | `script/feature/openonload/install-dependencies.sh` | `script/feature/openonload/run-unit-tests.sh` (`[openonload]~[integration]`) | `script/feature/openonload/run-integration-tests.sh` (`[openonload][integration]`) | Verifies OpenOnload prerequisites and host support state. |
@@ -68,6 +69,7 @@ All current feature script directories and behavior:
 | :--- | :--- |
 | `script/feature/cuda/check_env.sh` | Non-invasive environment check for CUDA runtime/toolkit readiness. |
 | `script/feature/pic.sh` | `library_needs_pic_rebuild` — reports whether an already-built dependency archive still carries absolute relocations (`R_X86_64_32`), which a PIE link rejects. Every feature installer sources this so a tree built before `-DCMAKE_POSITION_INDEPENDENT_CODE=ON` is rebuilt rather than kept. The OPC UA installer adds a second check of its own for GCC LTO archives, which only the GCC driver can link. |
+| `script/feature/knx/run-matrix-tests.sh` | Builds and tests the KNX minimal completion configuration and the readiness-enabled configuration under separate `output/` roots. |
 | `script/feature/someip/run-smoke.sh` | End-to-end SOME/IP smoke runner with optional `--skip-build` and `--skip-samples`. Builds SOME/IP targets, runs `[someip]`, then executes sample binaries/log checks. |
 
 ## Whole-Tree Builds
@@ -83,7 +85,7 @@ internally consistent and the sets together leaving no `.cpp` uncompiled:
 
 | Set | Features enabled on top of core + completion | Why it is separate |
 | :--- | :--- | :--- |
-| `quic` | `readiness openonload http2 http3 quic modbus someip cuda` | Carries BoringSSL, so nothing linked against the system OpenSSL may join it. `someip` qualifies: vsomeip references no OpenSSL symbols at all. |
+| `quic` | `readiness openonload http2 http3 quic modbus knx someip cuda` | Carries BoringSSL, so nothing linked against the system OpenSSL may join it. `someip` qualifies: vsomeip references no OpenSSL symbols at all. |
 | `storage` | `readiness openonload af_xdp spdk opc_ua modbus` | The OpenSSL half: SPDK and open62541 are prebuilt against the system OpenSSL and pull it into anything linking them. |
 | `avb` | `readiness openonload af_xdp avb modbus v4l2` | AVB pulls in the gPTP/SRP tree, which nothing else compiles. |
 

@@ -24,6 +24,7 @@
 * **[Channel Backpressure](https://www.geeksforgeeks.org/computer-networks/back-pressure-in-distributed-systems/)**: `kmx::aio::channel` supports watermark-based producer throttling and credit reporting.
 * **[OPC UA](https://en.wikipedia.org/wiki/OPC_Unified_Architecture)**: Backend-neutral async client/server/subscription facade with [open62541](https://open62541.org) backend support; this repository drives it through completion-executor progression, with a shim fallback for feature-off builds and tests.
 * **[Modbus TCP and Modbus/TLS](https://modbus.org/)**: Feature-gated readiness-model client/server facade with framing helpers, TLS/mTLS coverage, and deterministic unit/integration test harnesses.
+* **[KNXnet/IP](https://en.wikipedia.org/wiki/KNX)**: Feature-gated building-automation stack implemented in-tree, with a `constexpr` cEMI and datapoint codec whose golden wire vectors are checked by `static_assert`, an I/O-free tunnelling session state machine, and an injected transport contract shared by both executor models.
 * **[SOME/IP](https://www.autosar.org/fileadmin/standards/R22-11/FO/AUTOSAR_PRS_SOMEIPProtocol.pdf)**: Backend-neutral async client/server/subscription facade for [AUTOSAR](https://www.autosar.org/) SOME/IP communication; [vsomeip](https://github.com/COVESA/vsomeip)-backed when available, with an in-process stub for deterministic unit testing without a daemon.
 * **GPU Completion Model ([CUDA](https://developer.nvidia.com/cuda/toolkit))**: Lightweight thread-per-core `gpu::executor` allowing `co_await` on asynchronous CUDA event completions (`gpu::event`) submitted to CUDA streams (`gpu::stream`).
 * **AVB (Audio Video Bridging, [IEEE 802.1](https://1.ieee802.org/avbridges/))**: Shared generic raw [Ethernet](https://en.wikipedia.org/wiki/Ethernet) socket, [gPTP](https://standards.ieee.org/ieee/802.1AS/6047/) clock synchronization, and [SRP](https://standards.ieee.org/ieee/802.1Qat/4041/) client with model-specific aliases for readiness and completion; sample-validated in both models.
@@ -65,6 +66,7 @@ Quick reference that groups features by domain and highlights only their applica
 | Feature | Applicability domain |
 | :--- | :--- |
 | [AVB/IEEE 802.1](documentation/features/avb.md) | Deterministic, synchronized audio/video streaming over real-time Ethernet networks |
+| [KNXnet/IP](documentation/features/knx.md) | Building automation: lighting, blinds, HVAC and metering over KNX group communication |
 | [Modbus](documentation/features/modbus.md) | Industrial PLC and field-device telemetry/control over Modbus TCP and Modbus/TLS |
 | [OPC UA](documentation/features/opc-ua.md) | Industrial interoperability for telemetry, control, and subscriptions in automation systems |
 | [SOME/IP](documentation/features/someip.md) | Service-oriented communication for AUTOSAR automotive systems |
@@ -103,6 +105,7 @@ Quick reference showing which APIs are available in each execution model:
 | [**HFT Order Router**](documentation/features/hft-order-router.md) | ❌ | ✅ | ⚙ | Sample demo; `kmx::aio::channel` with CPU pinning |
 | [**HTTP/2**](documentation/features/http2.md) | ✅ | ✅ | ⚙ | Full codec + ALPN; no executor affinity |
 | [**HTTP/3**](documentation/features/quic-http3.md) | ✅ | ✅ | ⚙ | HTTP/3 codec and message layer over QUIC |
+| [**KNXnet/IP**](documentation/features/knx.md) | ✅ | ✅ | ⚙ | In-tree codec, cEMI and datapoint types; tunnelling client over an injected transport |
 | [**Modbus**](documentation/features/modbus.md) | ✅ | ❌ | ⚙ | Readiness-model Modbus TCP + Modbus/TLS client/server APIs |
 | [**OPC UA**](documentation/features/opc-ua.md) | ✅ | ✅ | ⚙ | Backend-neutral facade; open62541 backend; completion-driven progression |
 | [**OpenOnload**](documentation/features/openonload.md) | ✅ | ❌ | ⚙ | Zero-copy extensions; headers-only; gracefully disabled when absent |

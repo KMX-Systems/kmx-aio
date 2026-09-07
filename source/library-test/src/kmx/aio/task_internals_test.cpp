@@ -163,6 +163,68 @@ namespace kmx::aio::test::task_internals_test
         CHECK(resumed);
     }
 
+    TEST_CASE("a task exposes lifecycle and internal cancellation", "[core][task][stop_token]")
+    {
+        bool stop_requested = false;
+        auto body = [&stop_requested](completion::executor& exec) -> task<void>
+        {
+            const auto token = co_await get_stop_token;
+            stop_requested = token.stop_requested();
+            exec.stop();
+        };
+
+        completion::executor exec;
+        auto running = body(exec);
+        CHECK(running.valid());
+        CHECK(!running.done());
+        CHECK(!running.stop_possible());
+        CHECK(running.request_stop());
+        CHECK(!running.request_stop());
+        CHECK(running.stop_possible());
+        CHECK(running.stop_requested());
+        exec.spawn(std::move(running));
+        exec.run();
+        CHECK(stop_requested);
+    }
+
+    TEST_CASE("an empty task has deterministic lifecycle state", "[core][task][lifecycle]")
+    {
+        task<void> empty;
+        CHECK(!empty.valid());
+        CHECK(empty.done());
+        CHECK(!empty.stop_possible());
+        CHECK(!empty.stop_requested());
+        CHECK(!empty.stop_token().stop_possible());
+        CHECK(!empty.request_stop());
+
+        auto moved = detail::int_task(7);
+        auto source = std::move(moved);
+        CHECK(!moved.valid());
+        CHECK(moved.done());
+        CHECK(source.valid());
+        CHECK(!source.done());
+    }
+
+    TEST_CASE("destroying an owned task requests internal cancellation", "[core][task][stop_token]")
+    {
+        bool observed = false;
+        {
+            auto body = [&observed]() -> task<void>
+            {
+                const auto token = co_await get_stop_token;
+                std::stop_callback callback(token, [&observed] { observed = true; });
+                observed = token.stop_requested();
+                co_await std::suspend_always {};
+            };
+
+            auto abandoned = body();
+            CHECK(abandoned.valid());
+            CHECK(!abandoned.done());
+        }
+
+        CHECK(!observed);
+    }
+
     TEST_CASE("a sub-task inherits the stop token of the task awaiting it", "[core][task][stop_token]")
     {
         // await_suspend copies the awaiting coroutine's token into a sub-task that has none of its own,
@@ -186,7 +248,13 @@ namespace kmx::aio::test::task_internals_test
         };
 
         source.request_stop();
-        exec.spawn(std::move(body()).with_stop_token(source.get_token()));
+        auto running = std::move(body()).with_stop_token(source.get_token());
+        CHECK(running.stop_possible());
+        CHECK(running.stop_requested());
+        CHECK(running.stop_token().stop_requested());
+        CHECK(running.stop_token().stop_requested());
+        CHECK(!running.request_stop());
+        exec.spawn(std::move(running));
         exec.run();
 
         CHECK(token_possible);

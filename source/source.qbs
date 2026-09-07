@@ -36,6 +36,9 @@ Project {
     property bool enable_opc_ua: full || all || false
     property bool opc_ua_vendored: true
     property bool enable_modbus: full || all || false
+    property bool enable_knx: full || all || false
+    property bool enable_knx_secure: enable_knx && (full || all || false)
+    property bool enable_knx_keyring: enable_knx_secure && (full || all || false)
     property string opc_ua_prefix: sourceDirectory + "/../output/open62541/install-local"
     property bool enable_someip: full || all || false
     property bool someip_vendored: true

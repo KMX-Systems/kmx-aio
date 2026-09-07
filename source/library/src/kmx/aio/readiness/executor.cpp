@@ -9,6 +9,7 @@
 #include <kmx/logger.hpp>
 
 #include <array>
+#include <chrono>
 #include <cerrno>
 #include <cstdint>
 #include <cstdlib>
@@ -255,7 +256,9 @@ namespace kmx::aio::readiness
         }
     }
 
-    bool executor::subscribe(const fd_t fd, const event_type type, coroutine_handle_t handle, bool* const cancelled) noexcept(false)
+    bool executor::subscribe(const fd_t fd, const event_type type, coroutine_handle_t handle,
+                             bool* const cancelled, bool* const timed_out,
+                             const std::uint32_t deadline_ms) noexcept(false)
     {
         const std::lock_guard lock(subscribers_mutex_);
 
@@ -273,7 +276,7 @@ namespace kmx::aio::readiness
         }
 
         // operator[] might throw std::bad_alloc
-        subscribers_[{fd, type}].push_back(waiter {handle, cancelled});
+        subscribers_[{fd, type}].push_back(waiter {handle, cancelled, timed_out, deadline_ms});
         return true;
     }
 
@@ -592,6 +595,32 @@ namespace kmx::aio::readiness
             resume_waiter(handle);
     }
 
+    void executor::expire_waiters(const std::uint32_t now_ms)
+    {
+        std::vector<coroutine_handle_t> handles;
+        {
+            const std::lock_guard lock(subscribers_mutex_);
+            for (auto& [key, waiters] : subscribers_)
+            {
+                for (auto it = waiters.begin(); it != waiters.end();)
+                {
+                    if ((it->deadline_ms != 0u) &&
+                        (static_cast<std::int32_t>(now_ms - it->deadline_ms) >= 0))
+                    {
+                        if (it->timed_out != nullptr)
+                            *it->timed_out = true;
+                        handles.push_back(it->handle);
+                        it = waiters.erase(it);
+                    }
+                    else
+                        ++it;
+                }
+            }
+        }
+        for (const auto handle: handles)
+            resume_waiter(handle);
+    }
+
     bool executor::on_io_thread() const noexcept
     {
         return t_current_io_executor == this;
@@ -640,8 +669,25 @@ namespace kmx::aio::readiness
         // about to write. At the default max_events that is twelve kilobytes of zeroing per iteration.
         for (std::vector<epoll_event> events(config_.max_events);;)
         {
+            const auto now = std::chrono::steady_clock::now().time_since_epoch();
+            const auto now_ms = static_cast<std::uint32_t>(
+                std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
+            expire_waiters(now_ms);
+            std::uint32_t wait_timeout_ms = config_.timeout_ms;
+            {
+                const std::lock_guard lock(subscribers_mutex_);
+                for (const auto& [key, waiters]: subscribers_)
+                    for (const auto& pending: waiters)
+                        if (pending.deadline_ms != 0u)
+                        {
+                            const auto remaining = static_cast<std::int32_t>(pending.deadline_ms - now_ms);
+                            wait_timeout_ms = std::min<std::uint32_t>(
+                                wait_timeout_ms, remaining > 0 ? static_cast<std::uint32_t>(remaining) : 0u);
+                        }
+            }
+
             metrics_.total_epoll_waits.fetch_add(1u, mem_order);
-            const auto events_result = epoll_fd_.wait_events(std::span(events), config_.timeout_ms);
+            const auto events_result = epoll_fd_.wait_events(std::span(events), wait_timeout_ms);
             if (!events_result)
             {
                 if (events_result.error().value() == EINTR)

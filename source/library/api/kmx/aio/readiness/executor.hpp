@@ -104,6 +104,13 @@ namespace kmx::aio::readiness
     class executor: public executor_base, public std::enable_shared_from_this<executor>
     {
     public:
+        enum class wait_status : std::uint8_t
+        {
+            ready,
+            cancelled,
+            timed_out,
+        };
+
         /// @brief Constructs the executor.
         /// @throws std::system_error If epoll creation fails.
         /// @throws std::bad_alloc If scheduler creation fails.
@@ -148,6 +155,33 @@ namespace kmx::aio::readiness
             };
 
             return io_awaiter {*this, fd, type};
+        }
+
+        [[nodiscard]] auto wait_io_until(const fd_t fd, const event_type type,
+                                         const std::uint32_t deadline_ms) noexcept
+        {
+            struct io_awaiter
+            {
+                executor& exec;
+                fd_t fd;
+                event_type type;
+                std::uint32_t deadline_ms;
+                bool cancelled = false;
+                bool timed_out = false;
+
+                bool await_ready() const noexcept { return false; }
+                bool await_suspend(coroutine_handle_t h) noexcept(false)
+                {
+                    return exec.subscribe(fd, type, h, &cancelled, &timed_out, deadline_ms);
+                }
+                [[nodiscard]] wait_status await_resume() const noexcept
+                {
+                    return timed_out ? wait_status::timed_out
+                                     : (cancelled ? wait_status::cancelled : wait_status::ready);
+                }
+            };
+
+            return io_awaiter {*this, fd, type, deadline_ms};
         }
 
         /// @brief Cancels every wait_io() currently suspended on @p fd.
@@ -257,7 +291,8 @@ namespace kmx::aio::readiness
         /// @return `false` when the descriptor is already cancelled and the caller must not suspend.
         /// @throws std::bad_alloc If the subscription map could not grow.
         [[nodiscard]] bool subscribe(const fd_t fd, const event_type type, coroutine_handle_t handle,
-                                     bool* const cancelled) noexcept(false);
+                                     bool* const cancelled, bool* const timed_out = nullptr,
+                                     std::uint32_t deadline_ms = 0u) noexcept(false);
 
         // Resumes every waiter on fd, flagging each as cancelled first.
         // @param remember Keep the descriptor marked so a subscription arriving afterwards is refused
@@ -285,6 +320,7 @@ namespace kmx::aio::readiness
         /// @param fd   The descriptor the event fired on.
         /// @param type The event that fired.
         void resume_if_found(const fd_t fd, const event_type type);
+        void expire_waiters(std::uint32_t now_ms);
 
         /// @brief Wakes the event loop out of epoll_wait immediately.
         /// @details Written to when the loop is asked to stop. Without it the loop learns of a stop
@@ -381,6 +417,8 @@ namespace kmx::aio::readiness
             coroutine_handle_t handle;
             /// @brief Points into the awaiter's frame; set before resuming a cancelled wait.
             bool* cancelled;
+            bool* timed_out = nullptr;
+            std::uint32_t deadline_ms = 0u;
         };
 
         /// @brief Waiters parked on each (descriptor, event) pair, in arrival order.

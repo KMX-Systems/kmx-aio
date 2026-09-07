@@ -1,0 +1,4 @@
+<Keyring version="1">
+  <Key device-id="secure-a" key-id="ops" password-id="ops" encrypted-key="aabb8899eeffccdd2233001166774455" />
+  <Key device-id="secure-b" key-id="ops" password-id="ops" encrypted-key="54761032dcfe98baab89efcd23016745" />
+</Keyring>

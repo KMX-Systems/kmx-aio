@@ -1,0 +1,75 @@
+name: ci-knx
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  knx-matrix-and-release-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qbs liburing-dev libssl-dev catch2
+
+      - name: Make the default toolchain build-capable
+        run: |
+          bash script/ci/setup-default-toolchain.sh
+
+      - name: Run KNX matrix tests
+        run: |
+          set -euo pipefail
+          mkdir -p output/ci-logs/knx
+          bash script/feature/knx/run-matrix-tests.sh | tee output/ci-logs/knx/matrix.log
+
+      - name: Run KNX release gates
+        run: |
+          set -euo pipefail
+          mkdir -p output/ci-logs/knx
+          bash script/feature/knx/run-release-gates.sh | tee output/ci-logs/knx/release-gates.log
+
+      - name: Run KNX secure and keyring conformance suites
+        run: |
+          set -euo pipefail
+          mkdir -p output/ci-logs/knx
+          bash script/feature/knx/run-secure-conformance.sh | tee output/ci-logs/knx/secure-conformance.log
+          bash script/feature/knx/run-keyring-conformance.sh | tee output/ci-logs/knx/keyring-conformance.log
+
+      - name: Validate vendor interoperability import bundle
+        run: |
+          set -euo pipefail
+          mkdir -p output/ci-logs/knx
+          bash script/feature/knx/run-vendor-interoperability.sh --validate | tee output/ci-logs/knx/vendor-interop-validate.log
+
+      - name: Verify and render KNX interoperability evidence
+        run: |
+          set -euo pipefail
+          bash script/feature/knx/interoperability-matrix.sh verify
+          bash script/feature/knx/interoperability-matrix.sh render
+
+      - name: Upload KNX evidence artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: knx-interoperability-evidence
+          path: |
+            documentation/features/knx/interoperability/evidence.tsv
+            documentation/features/knx/interoperability/matrix.md
+            documentation/features/knx/interoperability/vendor-results.tsv
+            documentation/features/knx/conformance/secure-profile-vectors.tsv
+            documentation/features/knx/conformance/keyrings/cases.tsv
+            documentation/features/knx/conformance/keyrings/passwords.tsv
+            output/ci-logs/knx/matrix.log
+            output/ci-logs/knx/release-gates.log
+            output/ci-logs/knx/secure-conformance.log
+            output/ci-logs/knx/keyring-conformance.log
+            output/ci-logs/knx/vendor-interop-validate.log

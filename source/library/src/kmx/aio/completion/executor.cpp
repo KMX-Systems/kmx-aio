@@ -218,6 +218,46 @@ namespace kmx::aio::completion
         co_return static_cast<std::size_t>(*result);
     }
 
+    task_returning_expected_size_t executor::async_recvmsg_until(const fd_t fd, msghdr* msg,
+                                                                 const std::uint64_t timeout_ns,
+                                                                 const unsigned flags) noexcept(false)
+    {
+        io_context ctx {};
+        __kernel_timespec timeout {
+            .tv_sec = static_cast<decltype(__kernel_timespec::tv_sec)>(timeout_ns / 1'000'000'000ULL),
+            .tv_nsec = static_cast<decltype(__kernel_timespec::tv_nsec)>(timeout_ns % 1'000'000'000ULL),
+        };
+
+        auto* const recv_sqe = ::io_uring_get_sqe(&ring_);
+        auto* const timeout_sqe = ::io_uring_get_sqe(&ring_);
+        if ((recv_sqe == nullptr) || (timeout_sqe == nullptr))
+        {
+            metrics_.submission_full_count.fetch_add(1u, mem_order);
+            co_return std::unexpected(std::make_error_code(std::errc::no_buffer_space));
+        }
+
+        ::io_uring_prep_recvmsg(recv_sqe, fd, msg, flags);
+        recv_sqe->flags |= IOSQE_IO_LINK;
+        ::io_uring_prep_link_timeout(timeout_sqe, &timeout, 0u);
+        ::io_uring_sqe_set_data(recv_sqe, &ctx);
+        // The linked timeout must never resume the coroutine. The receive CQE is the sole continuation;
+        // its result is -ECANCELED when the timeout wins and is translated below.
+        ::io_uring_sqe_set_data(timeout_sqe, nullptr);
+
+        if (const auto sub = submit(); !sub)
+            co_return std::unexpected(sub.error());
+
+        metrics_.total_submissions.fetch_add(2u, mem_order);
+        co_await io_awaiter {ctx};
+
+        if (ctx.result == -ECANCELED)
+            co_return std::unexpected(std::error_code(ETIMEDOUT, std::generic_category()));
+        if (ctx.result < 0)
+            co_return std::unexpected(std::error_code(-ctx.result, std::generic_category()));
+
+        co_return static_cast<std::size_t>(ctx.result);
+    }
+
     task_returning_expected_size_t executor::async_sendmsg(const fd_t fd, const msghdr* msg, const unsigned flags) noexcept(false)
     {
         const auto result =

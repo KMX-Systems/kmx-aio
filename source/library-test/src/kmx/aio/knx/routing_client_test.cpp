@@ -1,0 +1,405 @@
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#include <catch2/catch_test_macros.hpp>
+
+#include <kmx/aio/completion/executor.hpp>
+#include <kmx/aio/knx/gateway.hpp>
+#include <kmx/aio/knx/routing.hpp>
+#include <kmx/aio/test/knx/telegram.hpp>
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <deque>
+#include <netinet/in.h>
+#include <vector>
+
+namespace kmx::aio::test::knx::routing_client_test
+{
+    using namespace kmx::aio::knx;
+    std::uint32_t routing_now_ms = 0u;
+
+    [[nodiscard]] std::uint32_t routing_clock_now() noexcept
+    {
+        return routing_now_ms;
+    }
+
+    class loopback_routing_transport final: public datagram_transport
+    {
+    public:
+        bool joined = false;
+        bool invalid_peer = false;
+        std::vector<std::uint8_t> last_sent {};
+
+        void enqueue(std::vector<std::uint8_t> packet)
+        {
+            incoming_.push_back(std::move(packet));
+        }
+
+        [[nodiscard]] task_returning_expected_size_t send(
+            const cspan_byte_t payload,
+            const sockaddr*,
+            const ::socklen_t) noexcept(false) override
+        {
+            const auto* bytes = reinterpret_cast<const std::uint8_t*>(payload.data());
+            last_sent.assign(bytes, bytes + payload.size());
+            co_return expected_size_t {payload.size()};
+        }
+
+        [[nodiscard]] task_returning_expected_size_t receive(
+            const span_byte_t buffer,
+            transport_peer& peer) noexcept(false) override
+        {
+            if (incoming_.empty())
+                co_return std::unexpected(make_error_code(error::timeout));
+
+            const auto payload = std::move(incoming_.front());
+            incoming_.pop_front();
+            if (payload.size() > buffer.size())
+                co_return std::unexpected(make_error_code(error::invalid_length));
+
+            peer = {};
+            auto& sender = reinterpret_cast<sockaddr_in&>(peer.address);
+            sender.sin_family = AF_INET;
+            sender.sin_port = htons(3671u);
+            sender.sin_addr.s_addr = htonl(0x7F000001u);
+            peer.length = sizeof(sockaddr_in);
+            if (invalid_peer)
+            {
+                peer.length = sizeof(sockaddr_in) - 1u;
+                sender.sin_port = 0u;
+            }
+
+            for (std::size_t i = 0u; i < payload.size(); ++i)
+                buffer[i] = static_cast<std::byte>(payload[i]);
+            co_return expected_size_t {payload.size()};
+        }
+
+        [[nodiscard]] expected_void_t join_multicast_group(
+            const multicast_group_configuration&) noexcept override
+        {
+            joined = true;
+            return {};
+        }
+
+        [[nodiscard]] expected_void_t leave_multicast_group(
+            const multicast_group_configuration&) noexcept override
+        {
+            joined = false;
+            return {};
+        }
+
+    private:
+        std::deque<std::vector<std::uint8_t>> incoming_ {};
+    };
+
+    TEST_CASE("knx routing client joins and leaves multicast runtime", "[knx][routing][unit]")
+    {
+        loopback_routing_transport transport;
+        routing::client client {transport};
+        REQUIRE(client.start().has_value());
+        CHECK(transport.joined);
+        REQUIRE(client.stop().has_value());
+        CHECK(!transport.joined);
+    }
+
+    TEST_CASE("knx routing client records busy, lost and reflected messages", "[knx][routing][unit]")
+    {
+        loopback_routing_transport transport;
+        routing::client client {transport};
+        client.note_busy(250u);
+        client.note_lost();
+        client.note_reflected();
+
+        CHECK(client.counters().busy_messages == 1u);
+        CHECK(client.counters().lost_messages == 1u);
+        CHECK(client.counters().reflected_messages == 1u);
+        CHECK(client.counters().busy_backoff_ms == 250u);
+    }
+
+    TEST_CASE("knx gateway stops routing and server lifecycles together", "[knx][gateway][unit]")
+    {
+        loopback_routing_transport transport;
+        gateway value {transport};
+        REQUIRE(value.start().has_value());
+        CHECK(transport.joined);
+        REQUIRE(value.stop().has_value());
+        CHECK(!transport.joined);
+
+        completion::executor executor;
+        bool shut_down = false;
+        auto run = [&]() -> task<void>
+        {
+            const auto result = co_await value.serve_once();
+            shut_down = !result.has_value() && result.error() == make_error_code(error::shutdown);
+            executor.stop();
+        };
+        executor.spawn(run());
+        executor.run();
+        CHECK(shut_down);
+    }
+
+    TEST_CASE("knx gateway exposes continuous server loop", "[knx][gateway][unit]")
+    {
+        loopback_routing_transport transport;
+        gateway value {transport};
+        REQUIRE(value.shutdown().has_value());
+
+        completion::executor executor;
+        bool stopped = false;
+        auto run = [&]() -> task<void>
+        {
+            const auto result = co_await value.serve();
+            stopped = !result.has_value() && result.error() == make_error_code(error::shutdown);
+            executor.stop();
+        };
+        executor.spawn(run());
+        executor.run();
+        CHECK(stopped);
+    }
+
+    TEST_CASE("knx gateway can restart after stop", "[knx][gateway][unit]")
+    {
+        loopback_routing_transport transport;
+        gateway value {transport};
+        REQUIRE(value.start().has_value());
+        REQUIRE(value.stop().has_value());
+        REQUIRE(value.start().has_value());
+
+        CHECK(transport.joined);
+        REQUIRE(value.stop().has_value());
+        CHECK(!transport.joined);
+    }
+
+    TEST_CASE("knx routing client sends indication after start", "[knx][routing][integration]")
+    {
+        loopback_routing_transport transport;
+        routing::client client {transport};
+        REQUIRE(client.start().has_value());
+
+        bool sent = false;
+        completion::executor executor;
+        auto run = [&]() -> task<void>
+        {
+            sent = (co_await client.send_indication(routing::indication {4u, sample_cemi})).has_value();
+            executor.stop();
+        };
+
+        executor.spawn(run());
+        executor.run();
+
+        REQUIRE(sent);
+        const auto decoded = routing::decode_indication_packet(transport.last_sent);
+        REQUIRE(decoded.has_value());
+        CHECK(decoded->channel_id == 4u);
+        CHECK(decoded->cemi_bytes.size() == sample_cemi.size());
+    }
+
+    TEST_CASE("knx routing client receives indication payload", "[knx][routing][integration]")
+    {
+        loopback_routing_transport transport;
+        routing::client client {transport};
+        REQUIRE(client.start().has_value());
+
+        std::array<std::uint8_t, frame::communication_header_size + routing::indication_header_size + sample_cemi.size()> packet {};
+        REQUIRE(routing::encode_indication_packet(packet, routing::indication {7u, sample_cemi}).has_value());
+        transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
+
+        bool received = false;
+        completion::executor executor;
+        auto run = [&]() -> task<void>
+        {
+            const auto indication = co_await client.receive_indication();
+            received = indication.has_value() &&
+                (indication->channel_id == 7u) &&
+                (indication->cemi_bytes == std::vector<std::uint8_t>(sample_cemi.begin(), sample_cemi.end()));
+            executor.stop();
+        };
+
+        executor.spawn(run());
+        executor.run();
+        CHECK(received);
+    }
+
+    TEST_CASE("knx routing client receives busy and lost controls", "[knx][routing][integration]")
+    {
+        loopback_routing_transport transport;
+        routing::client client {transport};
+        REQUIRE(client.start().has_value());
+
+        std::array<std::uint8_t, 8u> busy_packet {};
+        REQUIRE(routing::encode_busy_packet(busy_packet, routing::busy {.wait_time_ms = 125u}).has_value());
+        transport.enqueue(std::vector<std::uint8_t>(busy_packet.begin(), busy_packet.end()));
+
+        bool busy_received = false;
+        completion::executor busy_executor;
+        auto busy_run = [&]() -> task<void>
+        {
+            const auto result = co_await client.receive_event();
+            const auto* value = result.has_value() ? std::get_if<routing::busy>(&result.value()) : nullptr;
+            busy_received = (value != nullptr) && (value->wait_time_ms == 125u);
+            busy_executor.stop();
+        };
+        busy_executor.spawn(busy_run());
+        busy_executor.run();
+        CHECK(busy_received);
+        CHECK(client.counters().busy_messages == 1u);
+
+        std::array<std::uint8_t, 8u> lost_packet {};
+        REQUIRE(routing::encode_lost_message_packet(lost_packet, routing::lost_message {.count = 3u}).has_value());
+        transport.enqueue(std::vector<std::uint8_t>(lost_packet.begin(), lost_packet.end()));
+
+        bool lost_received = false;
+        completion::executor lost_executor;
+        auto lost_run = [&]() -> task<void>
+        {
+            const auto result = co_await client.receive_event();
+            const auto* value = result.has_value() ? std::get_if<routing::lost_message>(&result.value()) : nullptr;
+            lost_received = (value != nullptr) && (value->count == 3u);
+            lost_executor.stop();
+        };
+        lost_executor.spawn(lost_run());
+        lost_executor.run();
+        CHECK(lost_received);
+        CHECK(client.counters().lost_messages == 3u);
+    }
+
+    TEST_CASE("knx routing client rejects malformed source peer metadata", "[knx][routing][unit]")
+    {
+        loopback_routing_transport transport;
+        transport.invalid_peer = true;
+        routing::client client {transport};
+        REQUIRE(client.start().has_value());
+        std::array<std::uint8_t, 8u> packet {};
+        REQUIRE(routing::encode_busy_packet(packet, routing::busy {.wait_time_ms = 10u}).has_value());
+        transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
+
+        bool rejected = false;
+        completion::executor executor;
+        auto run = [&]() -> task<void>
+        {
+            const auto result = co_await client.receive_event();
+            rejected = !result.has_value() && result.error() == make_error_code(error::connection_failed);
+            executor.stop();
+        };
+        executor.spawn(run());
+        executor.run();
+        CHECK(rejected);
+    }
+
+    TEST_CASE("knx routing client suppresses reflected indications", "[knx][routing][integration]")
+    {
+        loopback_routing_transport transport;
+        routing::client client {transport};
+        REQUIRE(client.start().has_value());
+
+        completion::executor send_executor;
+        auto send_run = [&]() -> task<void>
+        {
+            REQUIRE((co_await client.send_indication(routing::indication {2u, sample_cemi})).has_value());
+            send_executor.stop();
+        };
+        send_executor.spawn(send_run());
+        send_executor.run();
+
+        transport.enqueue(transport.last_sent);
+        std::array<std::uint8_t, 8u> busy_packet {};
+        REQUIRE(routing::encode_busy_packet(busy_packet, routing::busy {.wait_time_ms = 75u}).has_value());
+        transport.enqueue(std::vector<std::uint8_t>(busy_packet.begin(), busy_packet.end()));
+
+        bool received_busy = false;
+        completion::executor receive_executor;
+        auto receive_run = [&]() -> task<void>
+        {
+            const auto result = co_await client.receive_event();
+            const auto* value = result.has_value() ? std::get_if<routing::busy>(&result.value()) : nullptr;
+            received_busy = (value != nullptr) && (value->wait_time_ms == 75u);
+            receive_executor.stop();
+        };
+        receive_executor.spawn(receive_run());
+        receive_executor.run();
+        CHECK(received_busy);
+        CHECK(client.counters().reflected_messages == 1u);
+    }
+
+    TEST_CASE("knx routing client enforces busy backoff before sending", "[knx][routing][unit]")
+    {
+        routing_now_ms = 100u;
+        loopback_routing_transport transport;
+        routing::client client {transport, {}, &routing_clock_now};
+        REQUIRE(client.start().has_value());
+        client.note_busy(50u);
+
+        bool blocked = false;
+        completion::executor blocked_executor;
+        auto blocked_run = [&]() -> task<void>
+        {
+            const auto result = co_await client.send_indication(routing::indication {1u, sample_cemi});
+            blocked = !result.has_value() && result.error() == make_error_code(error::timeout);
+            blocked_executor.stop();
+        };
+        blocked_executor.spawn(blocked_run());
+        blocked_executor.run();
+        CHECK(blocked);
+
+        routing_now_ms = 150u;
+        bool sent = false;
+        completion::executor sent_executor;
+        auto sent_run = [&]() -> task<void>
+        {
+            sent = (co_await client.send_indication(routing::indication {1u, sample_cemi})).has_value();
+            sent_executor.stop();
+        };
+        sent_executor.spawn(sent_run());
+        sent_executor.run();
+        CHECK(sent);
+        routing_now_ms = 0u;
+    }
+
+    TEST_CASE("knx routing client sends busy and lost controls", "[knx][routing][integration]")
+    {
+        loopback_routing_transport transport;
+        routing::client client {transport};
+        REQUIRE(client.start().has_value());
+
+        bool sent_busy = false;
+        bool sent_lost = false;
+        completion::executor executor;
+        auto run = [&]() -> task<void>
+        {
+            sent_busy = (co_await client.send_busy(routing::busy {.wait_time_ms = 90u})).has_value();
+            const auto busy = routing::decode_busy_packet(transport.last_sent);
+            sent_busy = sent_busy && busy.has_value() && (busy->wait_time_ms == 90u);
+            sent_lost = (co_await client.send_lost_message(routing::lost_message {.count = 2u})).has_value();
+            const auto lost = routing::decode_lost_message_packet(transport.last_sent);
+            sent_lost = sent_lost && lost.has_value() && (lost->count == 2u);
+            executor.stop();
+        };
+        executor.spawn(run());
+        executor.run();
+        CHECK(sent_busy);
+        CHECK(sent_lost);
+    }
+
+    TEST_CASE("knx routing client clears transient state on restart", "[knx][routing][unit]")
+    {
+        routing_now_ms = 100u;
+        loopback_routing_transport transport;
+        routing::client client {transport, {}, &routing_clock_now};
+        REQUIRE(client.start().has_value());
+        client.note_busy(100u);
+        REQUIRE(client.stop().has_value());
+        REQUIRE(client.start().has_value());
+
+        bool sent = false;
+        completion::executor executor;
+        auto run = [&]() -> task<void>
+        {
+            sent = (co_await client.send_indication(routing::indication {1u, sample_cemi})).has_value();
+            executor.stop();
+        };
+        executor.spawn(run());
+        executor.run();
+        CHECK(sent);
+        routing_now_ms = 0u;
+    }
+}

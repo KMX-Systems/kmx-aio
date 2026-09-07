@@ -135,6 +135,7 @@ qbs build -f source/source.qbs config:debug \
     project.enable_quic:true \
     project.enable_http3:true \
     project.enable_modbus:true \
+    project.enable_knx:true \
     project.enable_openonload:true \
     project.enable_af_xdp:true \
     project.enable_spdk:true \
@@ -421,6 +422,7 @@ Default gate state in [source/source.qbs](../source/source.qbs) (current project
 - `project.enable_avb:false`
 - `project.enable_opc_ua:false`
 - `project.enable_modbus:false`
+- `project.enable_knx:false`
 - `project.enable_someip:false`
 - `project.enable_cuda:false`
 - `project.enable_fault_injection:false`

@@ -3,6 +3,7 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <cstdint>
     #include <cstddef>
     #include <expected>
     #include <span>
@@ -49,6 +50,9 @@ namespace kmx::aio::completion::udp
         /// @return A task yielding the received byte count or an error.
         [[nodiscard]] task_returning_expected_size_t recv(span_byte_t buffer, sockaddr_storage& peer_addr,
                                                           ::socklen_t& out_peer_addr_len) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t recv_until(span_byte_t buffer, sockaddr_storage& peer_addr,
+                                    ::socklen_t& out_peer_addr_len,
+                                    std::uint64_t timeout_ns) noexcept(false);
 
         /// @brief Receives a datagram and decodes the peer IP and port.
         /// @param buffer Destination buffer for payload bytes.

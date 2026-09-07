@@ -74,6 +74,39 @@ build_tree="$(tr '+' '-' <<< "$selection")"
 export KMX_SANITIZERS="$selection"
 export KMX_BUILD_ROOT="$repo_root/output/$build_tree"
 
+# QBS synthesizes the Linux target triple from its platform model. Clang packages can carry sanitizer
+# runtimes under the driver's native triple instead of QBS's vendor spelling; fail before a long build
+# if the selected runtime cannot be found under the target spelling the compiler/linker will request.
+sanitizer_cxx="${KMX_CXX:-c++}"
+if [[ "$sanitizer_cxx" == */* || -n "$(command -v "$sanitizer_cxx" 2>/dev/null || true)" ]]; then
+    sanitizer_cxx_path="$(command -v "$sanitizer_cxx" 2>/dev/null || printf '%s' "$sanitizer_cxx")"
+    if [[ "$("$sanitizer_cxx_path" --version 2>/dev/null | head -n 1)" == *clang* ]]; then
+        sanitizer_resource_dir="$("$sanitizer_cxx_path" -print-resource-dir 2>/dev/null || true)"
+        sanitizer_target_dir="$sanitizer_resource_dir/lib/x86_64-pc-linux-gnu"
+        sanitizer_runtimes=()
+        [[ "$selection" == *asan* ]] && sanitizer_runtimes+=(libclang_rt.asan_static.a)
+        [[ "$selection" == *ubsan* ]] && sanitizer_runtimes+=(libclang_rt.ubsan_standalone.a)
+        for sanitizer_runtime in "${sanitizer_runtimes[@]}"; do
+            if [[ -n "$sanitizer_resource_dir" && ! -f "$sanitizer_target_dir/$sanitizer_runtime" ]]; then
+                echo "ERROR: Clang sanitizer runtime '$sanitizer_runtime' is missing for QBS target x86_64-pc-linux-gnu." >&2
+                echo "       Clang resource directory: $sanitizer_resource_dir" >&2
+                echo "       Installed runtime candidates:" >&2
+                candidate_found="false"
+                candidate=""
+                for candidate in "$sanitizer_resource_dir"/lib/*/"$sanitizer_runtime"; do
+                    if [[ -f "$candidate" ]]; then
+                        echo "       $candidate" >&2
+                        candidate_found="true"
+                    fi
+                done
+                [[ "$candidate_found" == "true" ]] || echo "       (none found)" >&2
+                echo "       Install the matching compiler-rt target runtime or configure QBS to use the compiler's native target triple." >&2
+                exit 1
+            fi
+        done
+    fi
+fi
+
 echo "==> Sanitizers: $selection"
 echo "==> Build tree: $KMX_BUILD_ROOT"
 

@@ -18,6 +18,12 @@ namespace kmx::aio::completion::udp
         co_return co_await exec_.async_recvmsg(fd_.get(), msg, flags);
     }
 
+    task_returning_expected_size_t socket::recvmsg_until(::msghdr* msg, const std::uint64_t timeout_ns,
+                                                         const unsigned flags) noexcept(false)
+    {
+        co_return co_await exec_.async_recvmsg_until(fd_.get(), msg, timeout_ns, flags);
+    }
+
     task_returning_expected_size_t socket::sendmsg(const ::msghdr* msg, const unsigned flags) noexcept(false)
     {
         co_return co_await exec_.async_sendmsg(fd_.get(), msg, flags);

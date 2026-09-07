@@ -52,6 +52,9 @@ namespace kmx::aio::readiness::udp
         /// @throws std::system_error If submission or await path fails.
         [[nodiscard]] task_returning_expected_size_t recv(span_byte_t buffer, sockaddr_storage& peer_addr,
                                                           ::socklen_t& out_peer_addr_len) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t recv_until(span_byte_t buffer, sockaddr_storage& peer_addr,
+                                    ::socklen_t& out_peer_addr_len,
+                                    std::uint32_t deadline_ms) noexcept(false);
 
         /// @brief Receive a datagram and decode sender IP/port in addition to raw sockaddr data.
         /// @param buffer Destination byte span for payload data.

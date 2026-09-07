@@ -40,7 +40,7 @@ set_features() {
         # does qualify, which is not obvious: vsomeip is a Boost/IPC library and needs no TLS at all -
         # its built objects reference zero OpenSSL symbols (checked 2026-09-04). It used to sit in the
         # storage set purely by association with the two dependencies that do carry OpenSSL.
-        quic)    echo "readiness openonload http2 http3 quic modbus someip cuda" ;;
+        quic)    echo "readiness openonload http2 http3 quic modbus knx someip cuda" ;;
         # The OpenSSL half, and only the parts of it that really are: SPDK and open62541 are prebuilt
         # against the system OpenSSL and pull it into anything that links them.
         storage) echo "readiness openonload af_xdp spdk opc_ua modbus" ;;

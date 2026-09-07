@@ -5,11 +5,9 @@
 ### Run All Unit Tests
 
 ```bash
-cd source
-qbs build -f source.qbs config:debug -j"$(nproc)"
-cd ..
+qbs build -d output/debug -f source/source.qbs config:debug -j"$(nproc)"
 
-TEST_BIN="$(find debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
+TEST_BIN="$(find output/debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
 # The compiler that built these binaries may ship a libstdc++ newer than the one ldconfig points
 # libstdc++.so.6 at, so its directory has to lead. Asked of the compiler rather than written down,
 # which is how the scripts under script/ follow the machine's default toolchain. The "*/*" guard is
@@ -29,7 +27,6 @@ bash script/ci/run-ci-avb-local.sh --only all
 ### Run All Tests (Unit + Integration)
 
 ```bash
-cd source
 qbs build -f source.qbs config:debug -j"$(nproc)" \
     project.enable_readiness:true \
     project.enable_http3:true
@@ -233,6 +230,46 @@ bash script/feature/modbus/run-integration-tests.sh
 ```
 
 `run-integration-tests.sh` also prepares temporary TLS cert sets under `/tmp/kmx_modbus_certs_exchange` and `/tmp/kmx_modbus_certs_reject` and runs TLS-tagged cases in isolated invocations.
+
+### KNX Tests
+
+Build with KNX enabled:
+
+```bash
+qbs resolve -f source/source.qbs config:debug \
+    project.enable_knx:true
+
+qbs build -f source/source.qbs config:debug -j"$(nproc)" \
+    project.enable_knx:true
+```
+
+Run unit tests:
+
+```bash
+TEST_BIN="$(find source/debug -type f -name kmx-aio-test -not -path '*/install-root/*' -print -quit)"
+"$TEST_BIN" "[knx]~[integration]"
+```
+
+Run integration tests:
+
+```bash
+"$TEST_BIN" "[knx][integration]"
+```
+
+Or use the scripted feature flow:
+
+```bash
+bash script/feature/knx/run-unit-tests.sh
+bash script/feature/knx/run-integration-tests.sh
+```
+
+No KNX test needs a network interface, a privileged socket or a peer: the client tests drive an injected
+in-memory transport, and the codec tests run on captured wire bytes. Service-specific tags are `[address]`,
+`[cemi]`, `[dpt]`, `[codec]`, `[frame]`, `[connection]`, `[discovery]`, `[datagram]`, `[session]` and
+`[client]`.
+
+The golden wire vectors in `source/library/inc/kmx/aio/knx/detail/codec_vectors.hpp` are `static_assert`
+checks, so a change to the KNX wire format fails the build before any test runs.
 
 ## Scripted Test Orchestration
 

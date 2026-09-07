@@ -52,9 +52,9 @@ namespace kmx::aio
     struct promise_base
     {
         /// @brief Continuation to resume when the coroutine reaches final suspend.
-        coroutine_handle_t continuation_;
+        coroutine_handle_t continuation_ = nullptr;
         /// @brief Stored exception captured from the coroutine body.
-        std::exception_ptr exception_;
+        std::exception_ptr exception_ {};
         /// @brief Stop source associated with the coroutine instance.
         std::stop_source stop_source_;
         /// @brief Stop token handed down from whoever started or awaited this coroutine.
@@ -62,7 +62,15 @@ namespace kmx::aio
         ///       co_await get_stop_token yields a token nothing can ever signal - cancellation that
         ///       compiles, type-checks and silently never fires. A token set here takes precedence, and is
         ///       inherited by every task this one awaits, so a single stop_source cancels a whole chain.
-        std::stop_token stop_token_;
+        std::stop_token stop_token_ {};
+        bool has_external_stop_token_ = false;
+
+        promise_base() noexcept = default;
+
+        promise_base(const promise_base&) = delete;
+        promise_base& operator=(const promise_base&) = delete;
+        promise_base(promise_base&&) = delete;
+        promise_base& operator=(promise_base&&) = delete;
 
         /// @brief Allocates coroutine frame storage.
         /// @param size The frame size requested by the compiler.
@@ -234,6 +242,7 @@ namespace kmx::aio
         {
             if (handle_)
             {
+                (void) request_stop();
                 report_unretrieved_exception();
                 handle_.destroy();
             }
@@ -270,6 +279,46 @@ namespace kmx::aio
         ///       them without writing the undefined behaviour it would be testing.
         bool await_ready() const noexcept { return !handle_ || handle_.done(); } // LCOV_EXCL_BR_LINE
 
+        /// @brief Indicates whether this wrapper owns a coroutine frame.
+        [[nodiscard]] bool valid() const noexcept { return static_cast<bool>(handle_); }
+
+        /// @brief Indicates whether the owned coroutine has reached final suspend.
+        [[nodiscard]] bool done() const noexcept { return !handle_ || handle_.done(); }
+
+        /// @brief Requests cancellation through the task's internal stop source.
+        /// @return `true` when this call newly requested stop, otherwise `false`.
+        bool request_stop() noexcept
+        {
+            if (!handle_)
+                return false;
+
+            auto& promise = handle_.promise();
+            if (promise.has_external_stop_token_)
+                return false;
+            if (!promise.stop_token_.stop_possible())
+                promise.stop_token_ = promise.stop_source_.get_token();
+            return promise.stop_source_.request_stop();
+        }
+
+        /// @brief Indicates whether this task has a stop token available to its body.
+        [[nodiscard]] bool stop_possible() const noexcept
+        {
+            return handle_ && handle_.promise().stop_token_.stop_possible();
+        }
+
+        /// @brief Indicates whether this task's observed stop token is already cancelled.
+        [[nodiscard]] bool stop_requested() const noexcept
+        {
+            return handle_ && handle_.promise().stop_token_.stop_requested();
+        }
+
+        /// @brief Returns the stop token observed by the coroutine body.
+        /// @return An empty token for an empty task, otherwise the effective internal or external token.
+        [[nodiscard]] std::stop_token stop_token() const noexcept
+        {
+            return handle_ ? handle_.promise().stop_token_ : std::stop_token {};
+        }
+
         /// @brief Gives this task a stop token before it starts.
         /// @param token The token to observe; inherited by every task this one awaits.
         /// @return This task, so it can be passed straight to spawn().
@@ -277,7 +326,10 @@ namespace kmx::aio
         task&& with_stop_token(std::stop_token token) && noexcept
         {
             if (handle_)
+            {
                 handle_.promise().stop_token_ = std::move(token);
+                handle_.promise().has_external_stop_token_ = true;
+            }
 
             return std::move(*this);
         }
@@ -344,7 +396,7 @@ namespace kmx::aio
         }
 
         /// @brief The owned coroutine handle, if any.
-        handle_type handle_;
+        handle_type handle_ = nullptr;
     };
 
     template <typename T>

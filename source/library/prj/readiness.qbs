@@ -3,6 +3,7 @@ import qbs
 StaticLibrary {
     Depends { name: "cpp" }
     Depends { name: "kmx-aio-core" }
+    Depends { name: "kmx-aio-knx"; condition: project.enable_knx }
     Depends { name: "kmx_instrumentation" }
 
     name: "kmx-aio-readiness"
@@ -43,6 +44,7 @@ StaticLibrary {
             "../api/kmx/aio/readiness/descriptor/**.hpp",
             "../api/kmx/aio/readiness/tcp/**.hpp",
             "../api/kmx/aio/readiness/udp/**.hpp",
+            "../api/kmx/aio/readiness/knx/**.hpp",
             "../api/kmx/aio/readiness/tls/**.hpp",
             "../api/kmx/aio/readiness/v4l2/**.hpp",
             "../src/kmx/aio/readiness/executor.cpp",

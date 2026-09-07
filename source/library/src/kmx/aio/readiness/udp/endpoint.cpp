@@ -35,6 +35,23 @@ namespace kmx::aio::readiness::udp
         co_return result;
     }
 
+    task_returning_expected_size_t endpoint::recv_until(span_byte_t buffer, sockaddr_storage& peer_addr,
+                                                        ::socklen_t& out_peer_addr_len,
+                                                        const std::uint32_t deadline_ms) noexcept(false)
+    {
+        out_peer_addr_len = 0u;
+        iovec iov {buffer.data(), buffer.size()};
+        msghdr msg {};
+        msg.msg_name = &peer_addr;
+        msg.msg_namelen = sizeof(peer_addr);
+        msg.msg_iov = &iov;
+        msg.msg_iovlen = 1u;
+        const auto result = co_await socket_.recvmsg_until(&msg, deadline_ms);
+        if (result)
+            out_peer_addr_len = msg.msg_namelen;
+        co_return result;
+    }
+
     task_returning_expected_size_t endpoint::recv(span_byte_t buffer, sockaddr_storage& peer_addr, ::socklen_t& out_peer_addr_len,
                                                   ip_address_t& out_peer_ip, port_t& out_peer_port) noexcept(false)
     {

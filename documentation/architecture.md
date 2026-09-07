@@ -227,6 +227,17 @@ This decision is about the async composition model only. It does not forbid adop
 contracts where they reduce duplication or make invariants explicit; those are evaluated per feature,
 with compiler support and fallback behavior considered at review time.
 
+**One documented departure from the `std::error_code` convention.** The pure KNX layer — addresses, cEMI
+and datapoint types in `api/kmx/aio/knx/{address,cemi,dpt}.hpp` — returns `std::expected<T, knx::error>`
+rather than `std::expected<T, std::error_code>`. `make_error_code` reaches a function-local static
+`std::error_category`, which is not a constant expression, and `std::error_code` is not a literal type, so
+a codec that reported failures that way could not be exercised during translation at all. Reporting the
+enumeration is what lets that codec run inside `static_assert` over captured wire bytes, which is how a
+change to the KNX wire format stops the build instead of shipping a library that talks to nothing. The I/O
+layer converts once, at `frame::decode_cemi`, and every public coroutine API still returns
+`std::error_code`. An edit that "restores consistency" here would silently un-`constexpr` the codec, and
+nothing would fail to compile. See `documentation/features/knx.md`.
+
 None of these is a claim to be faster. `documentation/benchmarking.md` measures what this library
 actually costs, including the cases where its own two executors differ by more than any of these
 design choices would.

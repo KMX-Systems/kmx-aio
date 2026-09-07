@@ -42,6 +42,30 @@ namespace kmx::aio::readiness::udp
         }
     }
 
+    task_returning_expected_size_t socket::recvmsg_until(::msghdr* msg, const std::uint32_t deadline_ms,
+                                                         const int flags) noexcept(false)
+    {
+        if (msg == nullptr)
+            co_return std::unexpected(error_from_errno(EINVAL));
+
+        while (true)
+        {
+            const ssize_t n = ::recvmsg(fd_.get(), msg, flags);
+            if (n >= 0)
+                co_return static_cast<std::size_t>(n);
+            if (would_block(errno))
+            {
+                const auto status = co_await exec_.wait_io_until(fd_.get(), event_type::read, deadline_ms);
+                if (status == executor::wait_status::timed_out)
+                    co_return std::unexpected(error_from_errno(ETIMEDOUT));
+                if (status == executor::wait_status::cancelled)
+                    co_return std::unexpected(to_std_error_code(error_code::operation_cancelled));
+                continue;
+            }
+            co_return std::unexpected(error_from_errno());
+        }
+    }
+
     task_returning_expected_size_t socket::sendmsg(const ::msghdr* msg, const int flags) noexcept(false)
     {
         if (msg == nullptr)

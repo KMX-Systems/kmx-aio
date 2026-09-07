@@ -1,0 +1,12 @@
+# KNX Interoperability Matrix
+
+Generated: 2026-09-07T13:56:55Z
+
+| Profile | Peer and version | Transport | Result | Capture | Notes | Last updated |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| SEARCH / DESCRIPTION | loopback | UDP 3671 | passing | test-output/knx-search-description.txt | In-tree discovery profile validation | 2026-09-07T13:56:23Z |
+| Tunnelling, no Secure | loopback | UDP | passing | test-output/knx-tunnelling-no-secure.txt | In-tree tunnelling loopback lifecycle | 2026-09-07T13:56:23Z |
+| Routing indication/control | loopback | UDP multicast | passing | test-output/knx-routing-indication-control.txt | In-tree routing indication/control coverage | 2026-09-07T13:56:23Z |
+| Client <-> in-tree server | loopback | injected UDP transport | passing | test-output/knx-client-server-loopback.txt | In-tree server lifecycle coverage | 2026-09-07T13:56:23Z |
+| IP Secure | loopback | UDP | passing | test-output/knx-ip-data-secure-conformance.txt | In-tree secure profile vector conformance coverage | 2026-09-07T13:56:23Z |
+| Data Secure | loopback | UDP | passing | test-output/knx-ip-data-secure-conformance.txt | In-tree secure profile vector conformance coverage | 2026-09-07T13:56:23Z |

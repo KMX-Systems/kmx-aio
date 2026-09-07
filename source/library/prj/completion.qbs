@@ -3,6 +3,7 @@ import qbs
 StaticLibrary {
     Depends { name: "cpp" }
     Depends { name: "kmx-aio-core" }
+    Depends { name: "kmx-aio-knx"; condition: project.enable_knx }
     Depends { name: "kmx_instrumentation" }
 
     name: "kmx-aio-completion"
@@ -43,6 +44,7 @@ StaticLibrary {
             "../api/kmx/aio/completion/**.hpp",
             "../api/kmx/aio/completion/tcp/**.hpp",
             "../api/kmx/aio/completion/udp/**.hpp",
+            "../api/kmx/aio/completion/knx/**.hpp",
             "../api/kmx/aio/completion/tls/**.hpp",
             "../api/kmx/aio/completion/v4l2/**.hpp",
             "../inc/kmx/aio/completion/**.hpp",

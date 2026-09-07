@@ -47,6 +47,8 @@ namespace kmx::aio::readiness::udp
         /// @return A task yielding the number of bytes received, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] task_returning_expected_size_t recvmsg(::msghdr* msg, int flags = 0) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t recvmsg_until(::msghdr* msg, std::uint32_t deadline_ms,
+                                       int flags = 0) noexcept(false);
         /// @brief Suspends until the socket is writable, then sends one message.
         /// @param msg   Message descriptor for buffers and ancillary data.
         /// @param flags Flags forwarded to `sendmsg`.
