@@ -102,22 +102,40 @@ set_alternative /usr/bin/gcc gcc "$cc"
 
 echo "==> Default C++ compiler: $(c++ --version | head -n 1)"
 
-# The library is written against C++26. A compiler that does not take the flag fails every product with
-# "unrecognized command-line option", which says nothing about why CI chose it.
-if ! echo 'int main() {}' | c++ -std=c++26 -x c++ -fsyntax-only - 2>/dev/null; then
-    {
-        echo "ERROR: the default C++ compiler does not accept -std=c++26, which this project needs."
-        echo "       $(c++ --version | head -n 1)"
-        echo "       Name a newer one with KMX_CI_CXX / KMX_CI_CC."
-    } >&2
-    exit 1
-fi
-
 # Every "qbs build" in the workflow names no profile and so uses the machine-wide defaultProfile. Point
 # that at the profile script/qbs-profile.sh keeps for the default compiler, and the workflow needs to
 # know nothing about toolchains at all.
 # shellcheck source=../qbs-profile.sh
 source "$repo_root/script/qbs-profile.sh"
 
-qbs config defaultProfile "${qbs_profile_args[0]#profile:}"
-echo "==> qbs defaultProfile: $(qbs config defaultProfile)"
+profile="${qbs_profile_args[0]#profile:}"
+qbs config defaultProfile "$profile"
+echo "==> qbs defaultProfile: $profile"
+
+# The library is written against C++26. A compiler that does not take the flag fails every product with
+# "unrecognized command-line option", which says nothing about why CI chose it.
+#
+# Asked of the compiler the profile resolves to, and not of "c++": a profile is what qbs builds through,
+# and the two have already differed once. qbs assembles the command as installPath + toolchainPrefix +
+# compilerName, so a profile made from a Debian driver can name a different binary than the alternative
+# it was derived from - and a check on "c++" then passes while every translation unit fails.
+profile_cxx="$(qbs_profile_cxx_compiler "$profile")"
+if [[ -z "$profile_cxx" || ! -x "$profile_cxx" ]]; then
+    {
+        echo "ERROR: qbs profile '$profile' resolves to no usable C++ compiler${profile_cxx:+ ('$profile_cxx')}."
+        echo "       Name a compiler with KMX_CI_CXX / KMX_CI_CC, or a profile with QBS_PROFILE."
+    } >&2
+    exit 1
+fi
+
+echo "==> Profile C++ compiler: $profile_cxx ($("$profile_cxx" --version | head -n 1))"
+
+if ! echo 'int main() {}' | "$profile_cxx" -std=c++26 -x c++ -fsyntax-only - 2>/dev/null; then
+    {
+        echo "ERROR: the compiler qbs profile '$profile' builds with does not accept -std=c++26, which"
+        echo "       this project needs."
+        echo "       $profile_cxx: $("$profile_cxx" --version | head -n 1)"
+        echo "       Name a newer one with KMX_CI_CXX / KMX_CI_CC."
+    } >&2
+    exit 1
+fi

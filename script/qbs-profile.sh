@@ -24,7 +24,7 @@
 # the strength of its compiler alone would quietly apply the rest of it. QBS_PROFILE is how a hand-made
 # profile gets used.
 #
-# Two traps shape how the profiles below are written, and both cost an afternoon to find.
+# Three traps shape how the profiles below are written, and each cost an afternoon to find.
 #
 # Clang picks C or C++ driver mode from the name it was invoked under. A profile that names the resolved
 # "clang-24" binary compiles C++ sources happily and then fails every link with undefined references to
@@ -35,6 +35,15 @@
 # already be absolute, which turns "/usr/bin/c++" into "/usr/lib/llvm-24/bin//usr/bin/c++" and resolves
 # no products at all - so the name written into a profile is always bare, and the resolved binary is used
 # only to find the directory it lives in.
+#
+# And a Debian-style driver such as "/usr/bin/g++-14" - which is what "c++" resolves to once
+# update-alternatives is pointed at a newer GCC - makes setup-toolchains record a cpp.toolchainPrefix of
+# "x86_64-linux-gnu-" and drop the version altogether. Leaving cpp.cxxCompilerName out then does not mean
+# "the compiler this profile was made from": qbs assembles installPath + prefix + its own default name
+# and runs "/usr/bin/x86_64-linux-gnu-g++", the triplet symlink the distro still points at the stock GCC.
+# So the driver's own name is always written down, even when the directory already answers to it under
+# the default name - the prefix is not known until setup-toolchains has run, so there is no moment at
+# which omitting the name can be shown to be safe.
 
 qbs_profile_args=()
 
@@ -50,11 +59,12 @@ qbs_profile_setting() {
 }
 
 # Prints the C++ compiler a profile resolves to, the same way qbs derives it: an explicit
-# cpp.cxxCompilerName if the profile sets one, otherwise the toolchain type's default name, looked up
-# under cpp.toolchainInstallPath when that is set and in PATH when it is not.
+# cpp.cxxCompilerName if the profile sets one, otherwise the toolchain type's default name - either way
+# behind cpp.toolchainPrefix, looked up under cpp.toolchainInstallPath when that is set and in PATH when
+# it is not.
 qbs_profile_cxx_compiler() {
     local profile="$1"
-    local compiler_name install_path
+    local compiler_name install_path prefix
 
     compiler_name="$(qbs_profile_setting "$profile" cpp.cxxCompilerName)"
     if [[ -z "$compiler_name" ]]; then
@@ -69,6 +79,12 @@ qbs_profile_cxx_compiler() {
         echo "$compiler_name"
         return 0
     fi
+
+    # The prefix goes in front of a stored name as much as in front of a default one: the name is written
+    # without it precisely because qbs puts it back. Dropping it here would report the wrong binary for
+    # exactly the profiles where the two differ.
+    prefix="$(qbs_profile_setting "$profile" cpp.toolchainPrefix)"
+    compiler_name="${prefix}${compiler_name}"
 
     install_path="$(qbs_profile_setting "$profile" cpp.toolchainInstallPath)"
     if [[ -n "$install_path" ]]; then
@@ -256,39 +272,30 @@ qbs_toolchain_cc_name() {
 # than to whatever happens to be first in PATH, so it is handed the compiler's real binary and the
 # directory that comes with it.
 #
-# The compiler names written afterwards are always bare and always contain "++"; see the two traps at the
-# top of this file for what each of those avoids.
+# The compiler names written afterwards are always written down, always bare and always contain "++"; see
+# the three traps at the top of this file for what each of those avoids.
 qbs_ensure_profile_for_compiler() {
     local cxx="$1" cc="$2"
-    local profile toolchain_type cxx_real install_dir default_cxx_name cxx_name cc_name
+    local profile toolchain_type cxx_real install_dir cxx_name cc_name
 
     profile="$(qbs_generated_profile_name "$cxx")"
     toolchain_type="$(qbs_compiler_toolchain_type "$cxx")"
     cxx_real="$(readlink -f "$cxx")"
     install_dir="$(dirname "$cxx_real")"
 
-    if [[ "$toolchain_type" == "clang" ]]; then
-        default_cxx_name="clang++"
-    else
-        default_cxx_name="g++"
-    fi
-
-    # The usual driver of this toolchain directory already is this compiler, which is the common case:
-    # "c++" resolves into the toolchain's own directory, where "clang++" sits beside it. Writing no name
-    # at all then leaves qbs to its defaults, which are right for the C compiler too.
-    if [[ "$(readlink -f "$install_dir/$default_cxx_name" 2>/dev/null)" == "$cxx_real" ]]; then
-        cxx_name=""
-        cc_name=""
-    elif ! cxx_name="$(qbs_toolchain_cxx_name "$install_dir" "$toolchain_type" "$(basename "$cxx_real")")"; then
+    # Named outright, and never left to qbs even when this directory's "g++" or "clang++" already is this
+    # very compiler: what qbs falls back on is prefix + default name, and the prefix is setup-toolchains'
+    # to choose further down. See the third trap at the top of this file for what the omission cost.
+    if ! cxx_name="$(qbs_toolchain_cxx_name "$install_dir" "$toolchain_type" "$(basename "$cxx_real")")"; then
         {
             echo "ERROR: '$cxx' resolves to '$cxx_real', and no C++ driver sits beside it in"
             echo "       '$install_dir'. A clang invoked under a name without '++' links no C++ standard"
             echo "       library, so this toolchain cannot be used as it stands."
         } >&2
         return 1
-    else
-        cc_name="$(qbs_toolchain_cc_name "$install_dir" "$toolchain_type" "$cxx_name" "$cc")"
     fi
+
+    cc_name="$(qbs_toolchain_cc_name "$install_dir" "$toolchain_type" "$cxx_name" "$cc")"
 
     # Already in step with the compiler, so leave it alone: rewriting it on every build would re-resolve
     # the project each time. The install path is what moves when the command starts resolving to another
