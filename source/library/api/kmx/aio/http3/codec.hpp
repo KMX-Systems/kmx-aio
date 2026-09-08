@@ -2,19 +2,21 @@
 /// @brief HTTP/3 codec definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/http3/control.hpp>
-    #include <kmx/aio/http3/frame.hpp>
-    #include <kmx/aio/http3/message.hpp>
-    #include <kmx/aio/http3/settings.hpp>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_HTTP3)
+    #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/http3/control.hpp>
+        #include <kmx/aio/http3/frame.hpp>
+        #include <kmx/aio/http3/message.hpp>
+        #include <kmx/aio/http3/settings.hpp>
 
-    #include <expected>
-    #include <string>
-    #include <string_view>
-    #include <system_error>
-    #include <vector>
-#endif
+        #include <expected>
+        #include <string>
+        #include <string_view>
+        #include <system_error>
+        #include <vector>
+    #endif
 
 namespace kmx::aio::http3
 {
@@ -194,3 +196,4 @@ namespace kmx::aio::http3::demo
         static std::expected<response_message, std::error_code> parse_response_frames(cspan_uint8_t payload) noexcept;
     };
 } // namespace kmx::aio::http3::demo
+#endif // KMX_AIO_FEATURE_HTTP3

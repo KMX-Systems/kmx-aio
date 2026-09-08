@@ -16,7 +16,7 @@ int main(int argc, const char* argv[]) noexcept
     try
     {
         std::string bdev_name = "kmx-spdk-fallback";
-        if (argc >= 2 && argv[1] && std::string_view(argv[1]).size() > 0u)
+        if ((argc >= 2) && argv[1] && (std::string_view(argv[1]).size() > 0u))
             bdev_name = argv[1];
 
         kmx::aio::completion::executor exec;
@@ -27,10 +27,8 @@ int main(int argc, const char* argv[]) noexcept
 
         // Release hardware resources cleanly via spdk lifecycle
         if (auto fini = kmx::aio::completion::spdk::runtime::finalize(); !fini)
-        {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK finalize failed: {}",
-                             fini.error().message());
-        }
+                         fini.error().message());
 
         return ok->load(std::memory_order_relaxed) ? 0 : 1;
     }

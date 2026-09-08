@@ -78,7 +78,7 @@ namespace kmx::aio::test::core_internals_test
         CHECK_FALSE(slab.owns(theirs));
         CHECK(other.owns(theirs));
 
-        int on_the_stack = 0;
+        int on_the_stack {};
         CHECK_FALSE(slab.owns(&on_the_stack));
     }
 
@@ -134,6 +134,47 @@ namespace kmx::aio::test::core_internals_test
         {
             co_return value;
         }
+
+        /// @brief Awaits the throwing task<int> and records that its exception surfaced here.
+        /// @param exec The executor whose loop to stop once the task has been awaited.
+        /// @param caught Set when the exception reached this coroutine.
+        /// @param ran Set once the coroutine ran to completion.
+        /// @return A task the caller spawns.
+        /// @throws std::bad_alloc (coroutine frame allocation).
+        task<void> catch_from_throwing_task(completion::executor& exec, bool& caught, bool& ran) noexcept(false)
+        {
+            try
+            {
+                const int value = co_await throwing_task();
+                (void) value;
+            }
+            catch (const test_error&)
+            {
+                caught = true;
+            }
+
+            ran = true;
+            exec.stop();
+        }
+
+        /// @brief Awaits the throwing task<void> and records that its exception surfaced here.
+        /// @param exec The executor whose loop to stop once the task has been awaited.
+        /// @param caught Set when the exception reached this coroutine.
+        /// @return A task the caller spawns.
+        /// @throws std::bad_alloc (coroutine frame allocation).
+        task<void> catch_from_throwing_void_task(completion::executor& exec, bool& caught) noexcept(false)
+        {
+            try
+            {
+                co_await throwing_void_task();
+            }
+            catch (const test_error&)
+            {
+                caught = true;
+            }
+
+            exec.stop();
+        }
     } // namespace detail
 
     TEST_CASE("an exception thrown in a task body reaches the awaiting coroutine", "[core][task][exception]")
@@ -142,25 +183,10 @@ namespace kmx::aio::test::core_internals_test
         // observes it: the body's throw is caught by the promise's unhandled_exception, parked in the
         // promise, and rethrown out of await_resume when the awaiting coroutine resumes.
         completion::executor exec;
-        bool caught = false;
-        bool ran = false;
+        bool caught {};
+        bool ran {};
 
-        auto body = [&exec, &caught, &ran]() -> task<void>
-        {
-            try
-            {
-                const int value = co_await detail::throwing_task();
-                (void) value;
-            }
-            catch (const detail::test_error&)
-            {
-                caught = true;
-            }
-
-            ran = true;
-            exec.stop();
-        };
-        exec.spawn(body());
+        exec.spawn(detail::catch_from_throwing_task(exec, caught, ran));
         exec.run();
 
         CHECK(ran);
@@ -170,22 +196,9 @@ namespace kmx::aio::test::core_internals_test
     TEST_CASE("an exception thrown in a void task reaches the awaiting coroutine", "[core][task][exception]")
     {
         completion::executor exec;
-        bool caught = false;
+        bool caught {};
 
-        auto body = [&exec, &caught]() -> task<void>
-        {
-            try
-            {
-                co_await detail::throwing_void_task();
-            }
-            catch (const detail::test_error&)
-            {
-                caught = true;
-            }
-
-            exec.stop();
-        };
-        exec.spawn(body());
+        exec.spawn(detail::catch_from_throwing_void_task(exec, caught));
         exec.run();
 
         CHECK(caught);
@@ -194,7 +207,7 @@ namespace kmx::aio::test::core_internals_test
     TEST_CASE("a task carries its value to the awaiting coroutine", "[core][task]")
     {
         completion::executor exec;
-        int observed = 0;
+        int observed {};
 
         auto body = [&exec, &observed]() -> task<void>
         {
@@ -279,7 +292,7 @@ namespace kmx::aio::test::core_internals_test
 
         // The ring cannot hold more than its usable capacity, so a watermark beyond that would mean a
         // throttle that never engages and a producer that fills the ring instead.
-        std::size_t pushed = 0u;
+        std::size_t pushed {};
         while (ch.try_push(int {static_cast<int>(pushed)}))
             ++pushed;
 

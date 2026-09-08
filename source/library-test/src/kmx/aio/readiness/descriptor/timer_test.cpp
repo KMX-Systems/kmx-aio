@@ -41,6 +41,60 @@ namespace kmx::aio::test::readiness::descriptor::timer_test
             std::atomic_uint64_t expirations {0u};
             std::error_code error {};
         };
+
+        /// @brief Waits on the timer and records the expiration count or the error it reported.
+        task<void> record_wait(wait_outcome& outcome, timer& timer_ref, const std::shared_ptr<executor>& exec) noexcept(false)
+        {
+            const auto result = co_await timer_ref.wait(*exec);
+            if (result)
+            {
+                outcome.ok.store(true, std::memory_order_release);
+                outcome.expirations.store(*result, std::memory_order_release);
+            }
+            else
+                outcome.error = result.error();
+
+            outcome.completed.store(true, std::memory_order_release);
+        }
+
+        /// @brief Waits on an already-expired timer and records how many expirations it reported.
+        task<void> record_expirations(wait_outcome& outcome, timer& timer_ref, const std::shared_ptr<executor>& exec) noexcept(false)
+        {
+            const auto result = co_await timer_ref.wait(*exec);
+            if (result)
+            {
+                outcome.ok.store(true, std::memory_order_release);
+                outcome.expirations.store(*result, std::memory_order_release);
+            }
+
+            outcome.completed.store(true, std::memory_order_release);
+        }
+
+        /// @brief Parks on a timer only a cancel can end, and records what the wait reported.
+        task<void> record_cancelled_wait(wait_outcome& outcome, std::atomic_bool& parked, timer& timer_ref,
+                                         const std::shared_ptr<executor>& exec) noexcept(false)
+        {
+            parked.store(true, std::memory_order_release);
+            const auto result = co_await timer_ref.wait(*exec);
+            if (!result)
+                outcome.error = result.error();
+            else
+                outcome.ok.store(true, std::memory_order_release);
+
+            outcome.completed.store(true, std::memory_order_release);
+        }
+
+        /// @brief Waits on a descriptor that is not a timerfd, and records the read failure.
+        task<void> record_failed_wait(wait_outcome& outcome, timer& tmr, const std::shared_ptr<executor>& exec) noexcept(false)
+        {
+            const auto result = co_await tmr.wait(*exec);
+            if (!result)
+                outcome.error = result.error();
+            else
+                outcome.ok.store(true, std::memory_order_release);
+
+            outcome.completed.store(true, std::memory_order_release);
+        }
     } // namespace detail
 
     TEST_CASE("timer::create returns a valid timerfd", "[readiness][timerfd][create]")
@@ -151,22 +205,7 @@ namespace kmx::aio::test::readiness::descriptor::timer_test
         REQUIRE(exec->register_fd(tmr->get()).has_value());
 
         detail::wait_outcome outcome;
-        auto body = [&outcome, &timer_ref = *tmr, exec]() -> task<void>
-        {
-            const auto result = co_await timer_ref.wait(*exec);
-            if (result)
-            {
-                outcome.ok.store(true, std::memory_order_release);
-                outcome.expirations.store(*result, std::memory_order_release);
-            }
-            else
-            {
-                outcome.error = result.error();
-            }
-
-            outcome.completed.store(true, std::memory_order_release);
-        };
-        exec->spawn(body());
+        exec->spawn(detail::record_wait(outcome, *tmr, exec));
 
         scoped_runner runner {*exec};
         REQUIRE(runner.wait_until_drained(5s));
@@ -187,18 +226,7 @@ namespace kmx::aio::test::readiness::descriptor::timer_test
         REQUIRE(exec->register_fd(tmr->get()).has_value());
 
         detail::wait_outcome outcome;
-        auto body = [&outcome, &timer_ref = *tmr, exec]() -> task<void>
-        {
-            const auto result = co_await timer_ref.wait(*exec);
-            if (result)
-            {
-                outcome.ok.store(true, std::memory_order_release);
-                outcome.expirations.store(*result, std::memory_order_release);
-            }
-
-            outcome.completed.store(true, std::memory_order_release);
-        };
-        exec->spawn(body());
+        exec->spawn(detail::record_expirations(outcome, *tmr, exec));
 
         scoped_runner runner {*exec};
         // This wait never parks, so no epoll event follows it and run() gets no occasion to re-check
@@ -223,18 +251,7 @@ namespace kmx::aio::test::readiness::descriptor::timer_test
         REQUIRE(exec->register_fd(tmr->get()).has_value());
 
         detail::wait_outcome outcome;
-        auto body = [&outcome, &timer_ref = *tmr, exec]() -> task<void>
-        {
-            const auto result = co_await timer_ref.wait(*exec);
-            if (result)
-            {
-                outcome.ok.store(true, std::memory_order_release);
-                outcome.expirations.store(*result, std::memory_order_release);
-            }
-
-            outcome.completed.store(true, std::memory_order_release);
-        };
-        exec->spawn(body());
+        exec->spawn(detail::record_expirations(outcome, *tmr, exec));
 
         scoped_runner runner {*exec};
         // As above: the read succeeds without parking, so the task's flag is the signal, not run()
@@ -259,18 +276,7 @@ namespace kmx::aio::test::readiness::descriptor::timer_test
 
         std::atomic_bool parked {false};
         detail::wait_outcome outcome;
-        auto body = [&outcome, &parked, &timer_ref = *tmr, exec]() -> task<void>
-        {
-            parked.store(true, std::memory_order_release);
-            const auto result = co_await timer_ref.wait(*exec);
-            if (!result)
-                outcome.error = result.error();
-            else
-                outcome.ok.store(true, std::memory_order_release);
-
-            outcome.completed.store(true, std::memory_order_release);
-        };
-        exec->spawn(body());
+        exec->spawn(detail::record_cancelled_wait(outcome, parked, *tmr, exec));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(parked, 2s));
@@ -295,17 +301,7 @@ namespace kmx::aio::test::readiness::descriptor::timer_test
 
         auto exec = std::make_shared<executor>();
         detail::wait_outcome outcome;
-        auto body = [&outcome, &tmr, exec]() -> task<void>
-        {
-            const auto result = co_await tmr.wait(*exec);
-            if (!result)
-                outcome.error = result.error();
-            else
-                outcome.ok.store(true, std::memory_order_release);
-
-            outcome.completed.store(true, std::memory_order_release);
-        };
-        exec->spawn(body());
+        exec->spawn(detail::record_failed_wait(outcome, tmr, exec));
 
         scoped_runner runner {*exec};
         // This wait never parks, so no epoll event follows it and run() gets no occasion to re-check

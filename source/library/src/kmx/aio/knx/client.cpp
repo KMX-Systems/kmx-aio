@@ -14,12 +14,10 @@ namespace kmx::aio::knx
             frame::max_datagram_size - frame::communication_header_size - frame::tunnelling_request_header_size;
     }
 
-    tunnelling_client::operation_guard::operation_guard(tunnelling_client& owner) noexcept:
-        owner_(&owner)
+    tunnelling_client::operation_guard::operation_guard(tunnelling_client& owner) noexcept: owner_(&owner)
     {
-        bool expected = false;
-        acquired_ = owner.operation_active_.compare_exchange_strong(
-            expected, true, std::memory_order_acquire, std::memory_order_relaxed);
+        bool expected {};
+        acquired_ = owner.operation_active_.compare_exchange_strong(expected, true, std::memory_order_acquire, std::memory_order_relaxed);
     }
 
     tunnelling_client::operation_guard::~operation_guard() noexcept
@@ -28,16 +26,17 @@ namespace kmx::aio::knx
             owner_->operation_active_.store(false, std::memory_order_release);
     }
 
-    tunnelling_client::tunnelling_client(datagram_transport& transport,
-                                         const sockaddr_storage& peer,
-                                         const ::socklen_t peer_length,
-                                         const tunnelling_config config,
-                                         const clock_now_function clock_now,
-                                         const secure::configuration secure_config,
-                                         secure::provider* const secure_provider) noexcept:
-        transport_(transport), peer_(peer), peer_length_(peer_length), clock_now_(clock_now),
-        secure_config_(secure_config), secure_provider_(secure_provider),
-        secure_replay_(secure_config_.replay_window), session_(config)
+    tunnelling_client::tunnelling_client(datagram_transport& transport, const sockaddr_storage& peer, const ::socklen_t peer_length,
+                                         const tunnelling_config config, const clock_now_function clock_now,
+                                         const secure::configuration secure_config, secure::provider* const secure_provider) noexcept:
+        transport_(transport),
+        peer_(peer),
+        peer_length_(peer_length),
+        clock_now_(clock_now),
+        secure_config_(secure_config),
+        secure_provider_(secure_provider),
+        secure_replay_(secure_config_.replay_window),
+        session_(config)
     {
         configured_peer_valid_ = (peer_length_ <= sizeof(sockaddr_storage));
         if (configured_peer_valid_ && (peer_.ss_family == AF_INET))
@@ -53,13 +52,12 @@ namespace kmx::aio::knx
         if ((kind == endpoint_kind::data) && !data_peer_valid_)
             return false;
 
-        if ((expected_length == 0u) || (expected_length > sizeof(sockaddr_storage)) ||
-            (peer.length == 0u) || (peer.length > sizeof(sockaddr_storage)) ||
+        if ((expected_length == 0u) || (expected_length > sizeof(sockaddr_storage)) || (peer.length == 0u) ||
+            (peer.length > sizeof(sockaddr_storage)) ||
             ((expected_peer.ss_family != AF_UNSPEC) && (peer.address.ss_family != expected_peer.ss_family)))
             return false;
         if ((kind == endpoint_kind::control) && (expected_peer.ss_family == AF_UNSPEC))
-            return (peer.address.ss_family == AF_UNSPEC) ||
-                   ((peer.address.ss_family == AF_INET) && (peer.length >= sizeof(sockaddr_in)));
+            return (peer.address.ss_family == AF_UNSPEC) || ((peer.address.ss_family == AF_INET) && (peer.length >= sizeof(sockaddr_in)));
 
         switch (expected_peer.ss_family)
         {
@@ -69,8 +67,7 @@ namespace kmx::aio::knx
                     return false;
                 const auto& expected = reinterpret_cast<const sockaddr_in&>(expected_peer);
                 const auto& actual = reinterpret_cast<const sockaddr_in&>(peer.address);
-                return (expected.sin_port == actual.sin_port) &&
-                       (expected.sin_addr.s_addr == actual.sin_addr.s_addr);
+                return (expected.sin_port == actual.sin_port) && (expected.sin_addr.s_addr == actual.sin_addr.s_addr);
             }
             case AF_INET6:
             {
@@ -78,14 +75,12 @@ namespace kmx::aio::knx
                     return false;
                 const auto& expected = reinterpret_cast<const sockaddr_in6&>(expected_peer);
                 const auto& actual = reinterpret_cast<const sockaddr_in6&>(peer.address);
-                return (expected.sin6_port == actual.sin6_port) &&
-                       (expected.sin6_flowinfo == actual.sin6_flowinfo) &&
+                return (expected.sin6_port == actual.sin6_port) && (expected.sin6_flowinfo == actual.sin6_flowinfo) &&
                        (expected.sin6_scope_id == actual.sin6_scope_id) &&
                        (std::memcmp(&expected.sin6_addr, &actual.sin6_addr, sizeof(expected.sin6_addr)) == 0);
             }
             default:
-                return (peer.length == expected_length) &&
-                       (std::memcmp(&peer.address, &expected_peer, expected_length) == 0);
+                return (peer.length == expected_length) && (std::memcmp(&peer.address, &expected_peer, expected_length) == 0);
         }
     }
 
@@ -95,8 +90,7 @@ namespace kmx::aio::knx
             return clock_now_();
 
         const auto now = std::chrono::steady_clock::now().time_since_epoch();
-        return static_cast<std::uint32_t>(
-            std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
+        return static_cast<std::uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
     }
 
     std::uint32_t tunnelling_client::operation_deadline_ms() const noexcept
@@ -104,39 +98,34 @@ namespace kmx::aio::knx
         return now_ms() + session_.ack_timeout_ms();
     }
 
-    std::expected<std::vector<std::uint8_t>, std::error_code> tunnelling_client::protect_payload(
-        const std::span<const std::uint8_t> payload, const std::uint64_t sequence) const noexcept
+    expected_byte_buffer_t tunnelling_client::protect_payload(const cspan_uint8_t payload, const std::uint64_t sequence) const noexcept
     {
         if (secure_config_.selected == secure::profile::none)
-            return std::vector<std::uint8_t>(payload.begin(), payload.end());
+            return byte_buffer_t(payload.begin(), payload.end());
         if (secure_provider_ == nullptr)
             return std::unexpected(make_error_code(error::secure_unsupported));
         return secure_provider_->protect(payload, sequence);
     }
 
-    std::expected<std::vector<std::uint8_t>, std::error_code> tunnelling_client::unprotect_payload(
-        const std::span<const std::uint8_t> payload, const std::uint64_t sequence) const noexcept
+    expected_byte_buffer_t tunnelling_client::unprotect_payload(const cspan_uint8_t payload, const std::uint64_t sequence) const noexcept
     {
         if (secure_config_.selected == secure::profile::none)
-            return std::vector<std::uint8_t>(payload.begin(), payload.end());
+            return byte_buffer_t(payload.begin(), payload.end());
         if (secure_provider_ == nullptr)
             return std::unexpected(make_error_code(error::secure_unsupported));
         return secure_provider_->unprotect(payload, sequence);
     }
 
-    task_returning_expected_void_t tunnelling_client::send_packet(
-        const cspan_uint8_t packet, const endpoint_kind kind) noexcept(false)
+    task_returning_expected_void_t tunnelling_client::send_packet(const cspan_uint8_t packet, const endpoint_kind kind) noexcept(false)
     {
         const auto& destination = (kind == endpoint_kind::data) ? data_peer_ : peer_;
         const auto destination_length = (kind == endpoint_kind::data) ? data_peer_length_ : peer_length_;
-        if (!configured_peer_valid_ || (destination_length == 0u) ||
-            (destination_length > sizeof(sockaddr_storage)) ||
+        if (!configured_peer_valid_ || (destination_length == 0u) || (destination_length > sizeof(sockaddr_storage)) ||
             ((kind == endpoint_kind::data) && !data_peer_valid_))
             co_return std::unexpected(make_error_code(error::invalid_configuration));
 
         const auto* bytes = reinterpret_cast<const std::byte*>(packet.data());
-        const auto result = co_await transport_.send(cspan_byte_t { bytes, packet.size() },
-                                                     reinterpret_cast<const sockaddr*>(&destination),
+        const auto result = co_await transport_.send(cspan_byte_t {bytes, packet.size()}, reinterpret_cast<const sockaddr*>(&destination),
                                                      destination_length);
         if (!result)
             co_return std::unexpected(result.error());
@@ -145,18 +134,18 @@ namespace kmx::aio::knx
         co_return expected_void_t {};
     }
 
-    std::expected<std::vector<std::uint8_t>, std::error_code> tunnelling_client::secure_wrap_data_packet(
+    expected_byte_buffer_t tunnelling_client::secure_wrap_data_packet(
         const cspan_uint8_t packet, const std::uint64_t sequence) const noexcept
     {
         if (!secure_data_enabled())
-            return std::vector<std::uint8_t>(packet.begin(), packet.end());
+            return byte_buffer_t(packet.begin(), packet.end());
         if (secure_provider_ == nullptr)
             return std::unexpected(make_error_code(error::secure_unsupported));
         return secure::protect_packet(*secure_provider_, secure_config_.selected, packet, sequence);
     }
 
-    std::expected<datagram, std::error_code> tunnelling_client::decode_received_packet(
-        const cspan_uint8_t packet, const endpoint_kind kind) noexcept
+    datagram_result_t tunnelling_client::decode_received_packet(const cspan_uint8_t packet,
+                                                                                       const endpoint_kind kind) noexcept
     {
         const auto decoded = decode_datagram(packet);
         if (!decoded.has_value())
@@ -170,8 +159,7 @@ namespace kmx::aio::knx
         if (secure_provider_ == nullptr)
             return std::unexpected(make_error_code(error::secure_unsupported));
 
-        const auto unprotected = secure::unprotect_packet(
-            *secure_provider_, secure_config_.selected, packet, &secure_replay_);
+        const auto unprotected = secure::unprotect_packet(*secure_provider_, secure_config_.selected, packet, &secure_replay_);
         if (!unprotected.has_value())
             return std::unexpected(unprotected.error());
 
@@ -182,8 +170,7 @@ namespace kmx::aio::knx
     {
         transport_peer peer {};
         auto* bytes = reinterpret_cast<std::byte*>(receive_buffer_.data());
-        const auto result = co_await transport_.receive_until(
-            span_byte_t { bytes, receive_buffer_.size() }, peer, session_.deadline_ms());
+        const auto result = co_await transport_.receive_until(span_byte_t {bytes, receive_buffer_.size()}, peer, session_.deadline_ms());
         if (!result)
             co_return std::unexpected(result.error());
         if (!peer_matches(peer, kind))
@@ -191,37 +178,35 @@ namespace kmx::aio::knx
         if (result.value() > receive_buffer_.size())
             co_return std::unexpected(make_error_code(error::invalid_length));
 
-        const auto decoded = decode_received_packet({ receive_buffer_.data(), result.value() }, kind);
+        const auto decoded = decode_received_packet({receive_buffer_.data(), result.value()}, kind);
         if (!decoded.has_value())
             co_return std::unexpected(decoded.error());
 
         if (const auto* response = std::get_if<connect_response_frame>(&decoded->payload))
         {
             const auto& endpoint = response->data_endpoint;
-            if (endpoint.protocol != 0x01u || endpoint.endpoint.port == 0u)
+            if ((endpoint.protocol != 0x01u) || (endpoint.endpoint.port == 0u))
                 co_return std::unexpected(make_error_code(error::unsupported_hpai));
 
             data_peer_ = {};
             auto& data_address = reinterpret_cast<sockaddr_in&>(data_peer_);
             data_address.sin_family = AF_INET;
             data_address.sin_port = htons(endpoint.endpoint.port);
-            std::memcpy(&data_address.sin_addr.s_addr, endpoint.endpoint.address.data(),
-                        endpoint.endpoint.address.size());
+            std::memcpy(&data_address.sin_addr.s_addr, endpoint.endpoint.address.data(), endpoint.endpoint.address.size());
             data_peer_length_ = sizeof(sockaddr_in);
             data_peer_valid_ = true;
         }
         else if (const auto* response = std::get_if<ipv6_connect_response_frame>(&decoded->payload))
         {
             const auto& endpoint = response->data_endpoint;
-            if (endpoint.protocol != 0x01u || endpoint.endpoint.port == 0u)
+            if ((endpoint.protocol != 0x01u) || (endpoint.endpoint.port == 0u))
                 co_return std::unexpected(make_error_code(error::unsupported_hpai));
 
             data_peer_ = {};
             auto& data_address = reinterpret_cast<sockaddr_in6&>(data_peer_);
             data_address.sin6_family = AF_INET6;
             data_address.sin6_port = htons(endpoint.endpoint.port);
-            std::memcpy(&data_address.sin6_addr, endpoint.endpoint.address.data(),
-                        endpoint.endpoint.address.size());
+            std::memcpy(&data_address.sin6_addr, endpoint.endpoint.address.data(), endpoint.endpoint.address.size());
             data_peer_length_ = sizeof(sockaddr_in6);
             data_peer_valid_ = true;
         }
@@ -229,8 +214,7 @@ namespace kmx::aio::knx
         co_return session_.dispatch_session_datagram(decoded.value(), now_ms());
     }
 
-    task_returning_expected_void_t tunnelling_client::connect(
-        const connect_request_frame& request) noexcept(false)
+    task_returning_expected_void_t tunnelling_client::connect(const connect_request_frame& request) noexcept(false)
     {
         const auto stop_token = co_await get_stop_token;
         if (stop_token.stop_requested())
@@ -242,17 +226,14 @@ namespace kmx::aio::knx
             co_return std::unexpected(make_error_code(error::invalid_configuration));
         if ((secure_config_.selected != secure::profile::none) && (secure_provider_ == nullptr))
             co_return std::unexpected(make_error_code(error::secure_unsupported));
-        if ((request.control_endpoint.protocol != 0x01u) ||
-            (request.data_endpoint.protocol != 0x01u) ||
-            (request.control_endpoint.endpoint.port == 0u) ||
-            (request.data_endpoint.endpoint.port == 0u))
+        if ((request.control_endpoint.protocol != 0x01u) || (request.data_endpoint.protocol != 0x01u) ||
+            (request.control_endpoint.endpoint.port == 0u) || (request.data_endpoint.endpoint.port == 0u))
             co_return std::unexpected(make_error_code(
-                (request.control_endpoint.protocol != 0x01u) || (request.data_endpoint.protocol != 0x01u)
-                    ? error::unsupported_hpai
-                    : error::invalid_configuration));
+                (request.control_endpoint.protocol != 0x01u) || (request.data_endpoint.protocol != 0x01u) ? error::unsupported_hpai :
+                                                                                                            error::invalid_configuration));
 
         clear_data_peer();
-    reset_secure_state();
+        reset_secure_state();
         std::array<std::uint8_t, 26u> packet {};
         if (const auto result = session_.start_connect(packet, request, operation_deadline_ms()); !result.has_value())
             co_return std::unexpected(result.error());
@@ -275,8 +256,7 @@ namespace kmx::aio::knx
         }
     }
 
-    task_returning_expected_void_t tunnelling_client::connect(
-        const ipv6_connect_request_frame& request) noexcept(false)
+    task_returning_expected_void_t tunnelling_client::connect(const ipv6_connect_request_frame& request) noexcept(false)
     {
         const auto stop_token = co_await get_stop_token;
         if (stop_token.stop_requested())
@@ -291,8 +271,8 @@ namespace kmx::aio::knx
         if ((request.control_endpoint.protocol != 0x01u) || (request.data_endpoint.protocol != 0x01u) ||
             (request.control_endpoint.endpoint.port == 0u) || (request.data_endpoint.endpoint.port == 0u))
             co_return std::unexpected(make_error_code(
-                (request.control_endpoint.protocol != 0x01u) || (request.data_endpoint.protocol != 0x01u)
-                    ? error::unsupported_hpai : error::invalid_configuration));
+                (request.control_endpoint.protocol != 0x01u) || (request.data_endpoint.protocol != 0x01u) ? error::unsupported_hpai :
+                                                                                                            error::invalid_configuration));
 
         clear_data_peer();
         reset_secure_state();
@@ -318,8 +298,7 @@ namespace kmx::aio::knx
         }
     }
 
-    task_returning_expected_void_t tunnelling_client::send(
-        const std::span<const std::uint8_t> cemi_bytes) noexcept(false)
+    task_returning_expected_void_t tunnelling_client::send(const cspan_uint8_t cemi_bytes) noexcept(false)
     {
         const auto stop_token = co_await get_stop_token;
         if (stop_token.stop_requested())
@@ -333,17 +312,13 @@ namespace kmx::aio::knx
 
         std::array<std::uint8_t, frame::max_datagram_size> packet {};
 
-        if (const auto sequence = session_.prepare_request_packet(packet,
-                                                                  static_cast<std::uint8_t>(session_.channel_id()),
-                                                                  cemi_bytes,
+        if (const auto sequence = session_.prepare_request_packet(packet, static_cast<std::uint8_t>(session_.channel_id()), cemi_bytes,
                                                                   operation_deadline_ms());
             !sequence.has_value())
-        {
             co_return std::unexpected(sequence.error());
-        }
 
         cspan_uint8_t outbound_packet = session_.active_request_packet();
-        std::vector<std::uint8_t> secure_packet_storage {};
+        byte_buffer_t secure_packet_storage {};
         if (secure_data_enabled())
         {
             const auto secure_packet = secure_wrap_data_packet(session_.active_request_packet(), next_secure_sequence());
@@ -409,7 +384,7 @@ namespace kmx::aio::knx
         }
     }
 
-    task<std::expected<datagram, std::error_code>> tunnelling_client::receive_datagram() noexcept(false)
+    datagram_task_t tunnelling_client::receive_datagram() noexcept(false)
     {
         const auto stop_token = co_await get_stop_token;
         if (stop_token.stop_requested())
@@ -421,7 +396,7 @@ namespace kmx::aio::knx
         co_return co_await receive_datagram_impl();
     }
 
-    task<std::expected<datagram, std::error_code>> tunnelling_client::receive_datagram_impl() noexcept(false)
+    datagram_task_t tunnelling_client::receive_datagram_impl() noexcept(false)
     {
         const auto stop_token = co_await get_stop_token;
         if (stop_token.stop_requested())
@@ -434,29 +409,24 @@ namespace kmx::aio::knx
 
         transport_peer peer {};
         auto* bytes = reinterpret_cast<std::byte*>(receive_buffer_.data());
-        const auto received = co_await transport_.receive(
-            span_byte_t { bytes, receive_buffer_.size() }, peer);
+        const auto received = co_await transport_.receive(span_byte_t {bytes, receive_buffer_.size()}, peer);
         if (!received)
             co_return std::unexpected(received.error());
         if ((received.value() == 0u) || (received.value() > receive_buffer_.size()))
             co_return std::unexpected(make_error_code(error::invalid_length));
 
-        const auto outer = decode_datagram({ receive_buffer_.data(), received.value() });
+        const auto outer = decode_datagram({receive_buffer_.data(), received.value()});
         if (!outer.has_value())
             co_return std::unexpected(outer.error());
 
-        const auto expects_data_peer =
-            (outer->service_type == frame::tunnelling_request_service) ||
-            (outer->service_type == frame::tunnelling_ack_service) ||
-            (secure_data_enabled() && (outer->service_type == secure::secure_service));
-        const auto expected_kind = expects_data_peer && data_peer_valid_
-            ? endpoint_kind::data
-            : endpoint_kind::control;
+        const auto expects_data_peer = (outer->service_type == frame::tunnelling_request_service) ||
+                                       (outer->service_type == frame::tunnelling_ack_service) ||
+                                       (secure_data_enabled() && (outer->service_type == secure::secure_service));
+        const auto expected_kind = expects_data_peer && data_peer_valid_ ? endpoint_kind::data : endpoint_kind::control;
         if (!peer_matches(peer, expected_kind))
             co_return std::unexpected(make_error_code(error::connection_failed));
 
-        const auto decoded = decode_received_packet(
-            { receive_buffer_.data(), received.value() }, expected_kind);
+        const auto decoded = decode_received_packet({receive_buffer_.data(), received.value()}, expected_kind);
         if (!decoded.has_value())
             co_return std::unexpected(decoded.error());
 
@@ -464,7 +434,7 @@ namespace kmx::aio::knx
         co_return decoded.value();
     }
 
-    task<std::expected<std::vector<std::uint8_t>, std::error_code>> tunnelling_client::receive_cemi() noexcept(false)
+    cemi_bytes_task_t tunnelling_client::receive_cemi() noexcept(false)
     {
         const auto stop_token = co_await get_stop_token;
         if (stop_token.stop_requested())
@@ -479,8 +449,7 @@ namespace kmx::aio::knx
         co_return std::move(received->bytes);
     }
 
-    task<std::expected<tunnelling_client::received_cemi, std::error_code>>
-    tunnelling_client::receive_cemi_impl() noexcept(false)
+    tunnelling_client::received_cemi_task_t tunnelling_client::receive_cemi_impl() noexcept(false)
     {
         const auto stop_token = co_await get_stop_token;
         if (stop_token.stop_requested())
@@ -512,8 +481,7 @@ namespace kmx::aio::knx
             const auto accepted = session_.dispatch_session_datagram(received.value(), now_ms());
             if (!accepted.has_value())
             {
-                if (accepted.error() == make_error_code(error::sequence_error) &&
-                    session_.duplicate_indication(*request))
+                if ((accepted.error() == make_error_code(error::sequence_error)) && session_.duplicate_indication(*request))
                 {
                     std::array<std::uint8_t, frame::communication_header_size + frame::tunnelling_ack_size> duplicate_ack {};
                     const auto prepared = session_.prepare_tunnelling_ack_packet(duplicate_ack, *request);
@@ -524,8 +492,7 @@ namespace kmx::aio::knx
                         const auto secured = secure_wrap_data_packet(duplicate_ack, next_secure_sequence());
                         if (!secured.has_value())
                             co_return std::unexpected(secured.error());
-                        if (const auto sent = co_await send_packet(
-                                {secured->data(), secured->size()}, endpoint_kind::data); !sent)
+                        if (const auto sent = co_await send_packet({secured->data(), secured->size()}, endpoint_kind::data); !sent)
                             co_return std::unexpected(sent.error());
                     }
                     else
@@ -547,8 +514,7 @@ namespace kmx::aio::knx
                 const auto secured = secure_wrap_data_packet(ack, next_secure_sequence());
                 if (!secured.has_value())
                     co_return std::unexpected(secured.error());
-                if (const auto sent = co_await send_packet(
-                        {secured->data(), secured->size()}, endpoint_kind::data); !sent)
+                if (const auto sent = co_await send_packet({secured->data(), secured->size()}, endpoint_kind::data); !sent)
                     co_return std::unexpected(sent.error());
             }
             else
@@ -559,14 +525,14 @@ namespace kmx::aio::knx
 
             co_return received_cemi {
                 .frame = request->cemi,
-                .bytes = std::vector<std::uint8_t>(request->cemi_bytes.begin(), request->cemi_bytes.end()),
+                .bytes = byte_buffer_t(request->cemi_bytes.begin(), request->cemi_bytes.end()),
             };
         }
     }
 
     task_returning_expected_void_t tunnelling_client::send_group_service(const group_address destination, const apci service,
-                                                                        const apdu_payload& value,
-                                                                        const l_data_options& options) noexcept(false)
+                                                                         const apdu_payload& value,
+                                                                         const l_data_options& options) noexcept(false)
     {
         std::array<std::uint8_t, cemi::max_l_data_size> message {};
         const auto size = cemi::encode(message, cemi_message_code::l_data_req, individual_address {}, destination, service, value, options);
@@ -577,24 +543,24 @@ namespace kmx::aio::knx
     }
 
     task_returning_expected_void_t tunnelling_client::write_group_value(const group_address destination, const dpt::payload& value,
-                                                                       const l_data_options options) noexcept(false)
+                                                                        const l_data_options options) noexcept(false)
     {
         co_return co_await send_group_service(destination, apci::group_value_write, value.apdu(), options);
     }
 
     task_returning_expected_void_t tunnelling_client::read_group_value(const group_address destination,
-                                                                      const l_data_options options) noexcept(false)
+                                                                       const l_data_options options) noexcept(false)
     {
         co_return co_await send_group_service(destination, apci::group_value_read, apdu_payload {}, options);
     }
 
     task_returning_expected_void_t tunnelling_client::respond_group_value(const group_address destination, const dpt::payload& value,
-                                                                         const l_data_options options) noexcept(false)
+                                                                          const l_data_options options) noexcept(false)
     {
         co_return co_await send_group_service(destination, apci::group_value_response, value.apdu(), options);
     }
 
-    task<std::expected<telegram, std::error_code>> tunnelling_client::receive_telegram() noexcept(false)
+    telegram_task_t tunnelling_client::receive_telegram() noexcept(false)
     {
         const auto stop_token = co_await get_stop_token;
         if (stop_token.stop_requested())
@@ -632,15 +598,15 @@ namespace kmx::aio::knx
 
             transport_peer peer {};
             auto* bytes = reinterpret_cast<std::byte*>(receive_buffer_.data());
-            const auto received = co_await transport_.receive_until(
-                span_byte_t { bytes, receive_buffer_.size() }, peer, operation_deadline_ms());
+            const auto received =
+                co_await transport_.receive_until(span_byte_t {bytes, receive_buffer_.size()}, peer, operation_deadline_ms());
             if (received)
             {
                 if (!peer_matches(peer, endpoint_kind::control))
                     co_return std::unexpected(make_error_code(error::connection_failed));
                 if ((received.value() == 0u) || (received.value() > receive_buffer_.size()))
                     co_return std::unexpected(make_error_code(error::invalid_length));
-                const auto decoded = decode_datagram({ receive_buffer_.data(), received.value() });
+                const auto decoded = decode_datagram({receive_buffer_.data(), received.value()});
                 if (!decoded.has_value())
                     co_return std::unexpected(decoded.error());
                 if (decoded->service_type != connection::disconnect_response_service)
@@ -653,5 +619,26 @@ namespace kmx::aio::knx
             if (const auto retry = session_.on_disconnect_timeout(); !retry.has_value())
                 co_return std::unexpected(retry.error());
         }
+    }
+
+    void tunnelling_client::shutdown() noexcept
+    {
+        session_.shutdown();
+        clear_data_peer();
+        reset_secure_state();
+    }
+
+    void tunnelling_client::reset() noexcept
+    {
+        session_.reset();
+        clear_data_peer();
+        reset_secure_state();
+    }
+
+    void tunnelling_client::clear_data_peer() noexcept
+    {
+        data_peer_ = {};
+        data_peer_length_ = 0u;
+        data_peer_valid_ = false;
     }
 }

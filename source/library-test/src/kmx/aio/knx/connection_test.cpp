@@ -192,7 +192,8 @@ namespace kmx::aio::test::knx::connection_test
 
         std::array<std::uint8_t, 8u> response_packet {};
         REQUIRE(connection::encode_connectionstate_response_packet(response_packet,
-                                                                   connectionstate_response_frame { 9u, connect_status::no_error }).has_value());
+                                                                   connectionstate_response_frame {9u, connect_status::no_error})
+                    .has_value());
         const auto response = connection::decode_connectionstate_response_packet(response_packet);
         REQUIRE(response.has_value());
         CHECK(response->channel_id == 9u);

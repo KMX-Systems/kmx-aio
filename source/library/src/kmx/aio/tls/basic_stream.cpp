@@ -2,6 +2,7 @@
 /// @brief The single compiled copy of the TLS handshake and record loops.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/tls/basic_stream.hpp>
+#include <kmx/aio/exception.hpp>
 
 #ifndef PCH
     #include <array>
@@ -20,7 +21,7 @@ namespace kmx::aio::tls
     {
         ssl_ = ::SSL_new(ctx);
         if (!ssl_)
-            throw std::bad_alloc();
+            throw bad_alloc();
 
         net_read_bio_ = detail::tls_syscalls::bio_new(::BIO_s_mem());
         net_write_bio_ = detail::tls_syscalls::bio_new(::BIO_s_mem());
@@ -32,7 +33,7 @@ namespace kmx::aio::tls
             if (net_write_bio_)
                 ::BIO_free(net_write_bio_);
             ::SSL_free(ssl_);
-            throw std::bad_alloc();
+            throw bad_alloc();
         }
 
         ::SSL_set_bio(ssl_, net_read_bio_, net_write_bio_);
@@ -78,7 +79,7 @@ namespace kmx::aio::tls
 
     std::string_view basic_stream::selected_alpn() const noexcept
     {
-        const unsigned char* data = nullptr;
+        const unsigned char* data {};
         unsigned len {};
         const std::lock_guard lock(engine_mutex_);
         ::SSL_get0_alpn_selected(ssl_, &data, &len);
@@ -162,9 +163,7 @@ namespace kmx::aio::tls
             }
 
             if (ret > 0)
-            {
                 co_return static_cast<std::size_t>(ret);
-            }
 
             if (err == SSL_ERROR_WANT_READ)
             {
@@ -179,13 +178,9 @@ namespace kmx::aio::tls
                     co_return std::unexpected(w_res.error());
             }
             else if (err == SSL_ERROR_ZERO_RETURN)
-            {
                 co_return 0u;
-            }
             else
-            {
                 co_return std::unexpected(std::make_error_code(std::errc::protocol_error));
-            }
         }
     }
 
@@ -227,9 +222,7 @@ namespace kmx::aio::tls
                     co_return std::unexpected(w_res.error());
             }
             else
-            {
                 co_return std::unexpected(std::make_error_code(std::errc::protocol_error));
-            }
         }
     }
 
@@ -280,9 +273,7 @@ namespace kmx::aio::tls
             ++read_bio_fills_;
         }
         else
-        {
             co_return std::unexpected(std::make_error_code(std::errc::connection_aborted));
-        }
 
         co_return expected_void_t {};
     }

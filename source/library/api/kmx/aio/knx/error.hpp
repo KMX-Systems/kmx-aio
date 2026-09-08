@@ -8,10 +8,12 @@
 /// The I/O layer converts once, at its boundary, with @ref kmx::aio::knx::make_error_code.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <cstdint>
-    #include <system_error>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_KNX)
+    #ifndef PCH
+        #include <cstdint>
+        #include <system_error>
+    #endif
 
 namespace kmx::aio::knx
 {
@@ -84,3 +86,4 @@ namespace std
     {
     };
 }
+#endif // KMX_AIO_FEATURE_KNX

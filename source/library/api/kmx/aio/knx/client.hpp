@@ -1,24 +1,26 @@
 /// @file aio/knx/client.hpp
 /// @brief Coroutine-oriented KNXnet/IP tunnelling client boundary.
 #pragma once
-#ifndef PCH
-    #include <atomic>
-    #include <array>
-    #include <cstdint>
-    #include <expected>
-    #include <span>
-    #include <sys/socket.h>
-    #include <vector>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_KNX)
+    #ifndef PCH
+        #include <atomic>
+        #include <array>
+        #include <cstdint>
+        #include <expected>
+        #include <span>
+        #include <sys/socket.h>
+        #include <vector>
+    #endif
 
-#include <kmx/aio/basic_types.hpp>
-#include <kmx/aio/task.hpp>
-#include <kmx/aio/knx/cemi.hpp>
-#include <kmx/aio/knx/connection.hpp>
-#include <kmx/aio/knx/dpt.hpp>
-#include <kmx/aio/knx/session.hpp>
-#include <kmx/aio/knx/secure.hpp>
-#include <kmx/aio/knx/transport.hpp>
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/aio/knx/cemi.hpp>
+    #include <kmx/aio/knx/connection.hpp>
+    #include <kmx/aio/knx/dpt.hpp>
+    #include <kmx/aio/knx/session.hpp>
+    #include <kmx/aio/knx/secure.hpp>
+    #include <kmx/aio/knx/transport.hpp>
 
 namespace kmx::aio::knx
 {
@@ -32,7 +34,7 @@ namespace kmx::aio::knx
         /// @brief The decoded message.
         cemi_frame frame {};
         /// @brief The cEMI octets the message was decoded from.
-        std::vector<std::uint8_t> bytes {};
+        byte_buffer_t bytes {};
 
         /// @brief Returns the application payload.
         [[nodiscard]] cspan_uint8_t payload() const noexcept { return frame.payload(bytes); }
@@ -43,11 +45,18 @@ namespace kmx::aio::knx
         /// @tparam Main The datapoint main type.
         /// @return The decoded value, or the reason it could not be decoded.
         template <std::uint16_t Main>
-        [[nodiscard]] std::expected<typename dpt::traits<Main>::value_t, error> value_as() const noexcept
+        [[nodiscard]] dpt::decode_result_t<Main> value_as() const noexcept
         {
             return dpt::traits<Main>::decode(value());
         }
     };
+
+    /// @brief A received telegram, or the error explaining why none was obtained.
+    using telegram_result_t = std::expected<telegram, std::error_code>;
+    /// @brief Task yielding a received telegram or the error that stopped the receive.
+    using telegram_task_t = task<telegram_result_t>;
+    /// @brief Task yielding raw cEMI octets or the error that stopped the receive.
+    using cemi_bytes_task_t = task<expected_byte_buffer_t>;
 
     class tunnelling_client final
     {
@@ -68,7 +77,7 @@ namespace kmx::aio::knx
         [[nodiscard]] bool closing() const noexcept { return state() == session_state::closing; }
         [[nodiscard]] bool closed() const noexcept { return state() == session_state::closed; }
         [[nodiscard]] std::uint32_t last_activity_ms() const noexcept { return session_.last_activity_ms(); }
-        [[nodiscard]] std::expected<void, std::error_code> poll() noexcept
+        [[nodiscard]] expected_void_t poll() noexcept
         {
             return session_.check_inactivity(now_ms());
         }
@@ -85,15 +94,13 @@ namespace kmx::aio::knx
         [[nodiscard]] task_returning_expected_void_t connect(
             const ipv6_connect_request_frame& request) noexcept(false);
         [[nodiscard]] task_returning_expected_void_t send(
-            std::span<const std::uint8_t> cemi_bytes) noexcept(false);
-        [[nodiscard]] std::expected<std::vector<std::uint8_t>, std::error_code> protect_payload(
-            std::span<const std::uint8_t> payload, std::uint64_t sequence) const noexcept;
-        [[nodiscard]] std::expected<std::vector<std::uint8_t>, std::error_code> unprotect_payload(
-            std::span<const std::uint8_t> payload, std::uint64_t sequence) const noexcept;
+            cspan_uint8_t cemi_bytes) noexcept(false);
+        [[nodiscard]] expected_byte_buffer_t protect_payload(cspan_uint8_t payload, std::uint64_t sequence) const noexcept;
+        [[nodiscard]] expected_byte_buffer_t unprotect_payload(cspan_uint8_t payload, std::uint64_t sequence) const noexcept;
         [[nodiscard]] task_returning_expected_void_t heartbeat() noexcept(false);
-        [[nodiscard]] task<std::expected<datagram, std::error_code>> receive_datagram() noexcept(false);
-        [[nodiscard]] task<std::expected<std::vector<std::uint8_t>, std::error_code>> receive_cemi() noexcept(false);
-        [[nodiscard]] task<std::expected<telegram, std::error_code>> receive_telegram() noexcept(false);
+        [[nodiscard]] datagram_task_t receive_datagram() noexcept(false);
+        [[nodiscard]] cemi_bytes_task_t receive_cemi() noexcept(false);
+        [[nodiscard]] telegram_task_t receive_telegram() noexcept(false);
         [[nodiscard]] task_returning_expected_void_t disconnect() noexcept(false);
 
         /// @brief Sends an A_GroupValue_Write telegram.
@@ -120,19 +127,9 @@ namespace kmx::aio::knx
         [[nodiscard]] task_returning_expected_void_t respond_group_value(group_address destination, const dpt::payload& value,
                                                                         l_data_options options = {}) noexcept(false);
 
-        void shutdown() noexcept
-        {
-            session_.shutdown();
-            clear_data_peer();
-            reset_secure_state();
-        }
+        void shutdown() noexcept;
 
-        void reset() noexcept
-        {
-            session_.reset();
-            clear_data_peer();
-            reset_secure_state();
-        }
+        void reset() noexcept;
 
     private:
         class operation_guard
@@ -146,15 +143,20 @@ namespace kmx::aio::knx
             [[nodiscard]] bool acquired() const noexcept { return acquired_; }
 
         private:
-            tunnelling_client* owner_ = nullptr;
-            bool acquired_ = false;
+            tunnelling_client* owner_ {};
+            bool acquired_ {};
         };
 
         struct received_cemi
         {
             cemi_frame frame {};
-            std::vector<std::uint8_t> bytes {};
+            byte_buffer_t bytes {};
         };
+
+        /// @brief A received cEMI message, or the error explaining why none was obtained.
+        using received_cemi_result_t = std::expected<received_cemi, std::error_code>;
+        /// @brief Task yielding a received cEMI message or the error that stopped the receive.
+        using received_cemi_task_t = task<received_cemi_result_t>;
 
         enum class endpoint_kind : std::uint8_t
         {
@@ -163,20 +165,13 @@ namespace kmx::aio::knx
         };
 
         [[nodiscard]] bool peer_matches(const transport_peer& peer, endpoint_kind kind) const noexcept;
-        void clear_data_peer() noexcept
-        {
-            data_peer_ = {};
-            data_peer_length_ = 0u;
-            data_peer_valid_ = false;
-        }
+        void clear_data_peer() noexcept;
         [[nodiscard]] std::uint32_t now_ms() const noexcept;
         [[nodiscard]] std::uint32_t operation_deadline_ms() const noexcept;
         [[nodiscard]] task_returning_expected_void_t send_packet(
             cspan_uint8_t packet, endpoint_kind kind) noexcept(false);
-        [[nodiscard]] std::expected<datagram, std::error_code> decode_received_packet(
-            cspan_uint8_t packet, endpoint_kind kind) noexcept;
-        [[nodiscard]] std::expected<std::vector<std::uint8_t>, std::error_code> secure_wrap_data_packet(
-            cspan_uint8_t packet, std::uint64_t sequence) const noexcept;
+        [[nodiscard]] datagram_result_t decode_received_packet(cspan_uint8_t packet, endpoint_kind kind) noexcept;
+        [[nodiscard]] expected_byte_buffer_t secure_wrap_data_packet(cspan_uint8_t packet, std::uint64_t sequence) const noexcept;
         [[nodiscard]] bool secure_data_enabled() const noexcept
         {
             return secure_config_.selected != secure::profile::none;
@@ -187,8 +182,8 @@ namespace kmx::aio::knx
             secure_sequence_ = 1u;
             secure_replay_ = secure::replay_window_state {secure_config_.replay_window};
         }
-        [[nodiscard]] task<std::expected<datagram, std::error_code>> receive_datagram_impl() noexcept(false);
-        [[nodiscard]] task<std::expected<received_cemi, std::error_code>> receive_cemi_impl() noexcept(false);
+        [[nodiscard]] datagram_task_t receive_datagram_impl() noexcept(false);
+        [[nodiscard]] received_cemi_task_t receive_cemi_impl() noexcept(false);
         [[nodiscard]] task_returning_expected_void_t receive_into_session(endpoint_kind kind) noexcept(false);
         [[nodiscard]] task_returning_expected_void_t send_group_service(group_address destination, apci service, const apdu_payload& value,
                                                                        const l_data_options& options) noexcept(false);
@@ -196,17 +191,18 @@ namespace kmx::aio::knx
         datagram_transport& transport_;
         sockaddr_storage peer_ {};
         ::socklen_t peer_length_ = 0u;
-        bool configured_peer_valid_ = false;
+        bool configured_peer_valid_ {};
         sockaddr_storage data_peer_ {};
         ::socklen_t data_peer_length_ = 0u;
-        bool data_peer_valid_ = false;
-        clock_now_function clock_now_ = nullptr;
+        bool data_peer_valid_ {};
+        clock_now_function clock_now_ {};
         secure::configuration secure_config_ {};
-        secure::provider* secure_provider_ = nullptr;
+        secure::provider* secure_provider_ {};
         std::uint64_t secure_sequence_ = 1u;
         secure::replay_window_state secure_replay_ {};
-        std::atomic_bool operation_active_ = false;
+        std::atomic_bool operation_active_ {};
         tunnelling_session session_;
         std::array<std::uint8_t, frame::max_datagram_size> receive_buffer_ {};
     };
 }
+#endif // KMX_AIO_FEATURE_KNX

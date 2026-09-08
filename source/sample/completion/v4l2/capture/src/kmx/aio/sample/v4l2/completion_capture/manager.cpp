@@ -90,7 +90,7 @@ namespace kmx::aio::sample::v4l2::completion_capture
 
         while (true)
         {
-            if (config_.max_frames > 0u && metrics_.frames_captured.load(mem_order) >= config_.max_frames)
+            if ((config_.max_frames > 0u) && (metrics_.frames_captured.load(mem_order) >= config_.max_frames))
             {
                 kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "Reached max_frames limit ({}). Stopping.",
                                  config_.max_frames);

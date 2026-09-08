@@ -109,7 +109,7 @@ namespace kmx::aio::modbus::frame
     std::expected<std::vector<std::uint8_t>, std::error_code> encode_write_multiple_registers(
         const std::uint16_t address, const std::span<const std::uint16_t> values) noexcept
     {
-        if (values.empty() || values.size() > max_write_registers)
+        if (values.empty() || (values.size() > max_write_registers))
             return std::unexpected(make_error_code(error::frame_too_large));
 
         const auto n = static_cast<std::uint16_t>(values.size());
@@ -130,7 +130,7 @@ namespace kmx::aio::modbus::frame
     std::expected<std::vector<std::uint8_t>, std::error_code> encode_write_multiple_coils(const std::uint16_t address,
                                                                                           const cspan_uint8_t values) noexcept
     {
-        if (values.empty() || values.size() > max_write_coils)
+        if (values.empty() || (values.size() > max_write_coils))
             return std::unexpected(make_error_code(error::frame_too_large));
 
         const auto n = static_cast<std::uint16_t>(values.size());
@@ -185,7 +185,7 @@ namespace kmx::aio::modbus::frame
         const std::uint8_t byte_count = pdu[1];
         const std::size_t expected_bytes = static_cast<std::size_t>(count) * 2u;
 
-        if (byte_count != expected_bytes || pdu.size() < 2u + expected_bytes)
+        if ((byte_count != expected_bytes) || (pdu.size() < 2u + expected_bytes))
             return std::unexpected(make_error_code(error::malformed_frame));
 
         register_values result;
@@ -214,7 +214,7 @@ namespace kmx::aio::modbus::frame
         const std::uint8_t byte_count = pdu[1];
         const std::size_t expected_bytes = (static_cast<std::size_t>(count) + bits_per_byte - 1u) / bits_per_byte;
 
-        if (byte_count != expected_bytes || pdu.size() < 2u + expected_bytes)
+        if ((byte_count != expected_bytes) || (pdu.size() < 2u + expected_bytes))
             return std::unexpected(make_error_code(error::malformed_frame));
 
         // Unpack bits into one byte per coil (0 or 1)

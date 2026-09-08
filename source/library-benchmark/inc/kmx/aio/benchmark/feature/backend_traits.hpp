@@ -352,7 +352,7 @@ namespace kmx::aio::benchmark::feature
         /// @brief Extra socket(2) flags this model needs on every descriptor it drives.
         /// @details None. The kernel completes the operation rather than reporting readiness, so
         ///          there is nothing for a non-blocking flag to do here.
-        static constexpr int socket_flags = 0;
+        static constexpr int socket_flags {};
 
         /// @brief Owns an executor for the duration of a scenario.
         class holder

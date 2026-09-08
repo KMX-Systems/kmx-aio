@@ -2,17 +2,19 @@
 /// @brief Minimal AVTP AAF/AM824 framing helpers for AVB talker/listener samples.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <cstddef>
-    #include <cstdint>
-    #include <expected>
-    #include <span>
-    #include <system_error>
-    #include <vector>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_AVB)
+    #ifndef PCH
+        #include <cstddef>
+        #include <cstdint>
+        #include <expected>
+        #include <span>
+        #include <system_error>
+        #include <vector>
 
-    #include <kmx/aio/avb/avb_types.hpp>
-    #include <kmx/aio/basic_types.hpp>
-#endif
+        #include <kmx/aio/avb/avb_types.hpp>
+        #include <kmx/aio/basic_types.hpp>
+    #endif
 
 namespace kmx::aio::avb::avtp
 {
@@ -63,3 +65,4 @@ namespace kmx::aio::avb::avtp
     /// @return Parsed frame view or an error.
     [[nodiscard]] std::expected<am824_frame_view, std::error_code> parse_am824_frame(cspan_byte_t frame) noexcept;
 } // namespace kmx::aio::avb::avtp
+#endif // KMX_AIO_FEATURE_AVB

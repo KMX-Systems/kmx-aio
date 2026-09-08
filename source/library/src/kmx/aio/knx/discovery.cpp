@@ -18,7 +18,7 @@ namespace kmx::aio::knx::discovery
                 return false;
             const auto& expected = reinterpret_cast<const sockaddr_in&>(peer_);
             const auto& actual = reinterpret_cast<const sockaddr_in&>(peer.address);
-            return expected.sin_port == actual.sin_port && expected.sin_addr.s_addr == actual.sin_addr.s_addr;
+            return (expected.sin_port == actual.sin_port) && (expected.sin_addr.s_addr == actual.sin_addr.s_addr);
         }
         if (peer_.ss_family == AF_INET6)
         {
@@ -26,14 +26,13 @@ namespace kmx::aio::knx::discovery
                 return false;
             const auto& expected = reinterpret_cast<const sockaddr_in6&>(peer_);
             const auto& actual = reinterpret_cast<const sockaddr_in6&>(peer.address);
-            return expected.sin6_port == actual.sin6_port && expected.sin6_scope_id == actual.sin6_scope_id &&
-                   std::memcmp(&expected.sin6_addr, &actual.sin6_addr, sizeof(expected.sin6_addr)) == 0;
+            return (expected.sin6_port == actual.sin6_port) && (expected.sin6_scope_id == actual.sin6_scope_id) &&
+                   (std::memcmp(&expected.sin6_addr, &actual.sin6_addr, sizeof(expected.sin6_addr)) == 0);
         }
         return false;
     }
 
-    task<std::expected<search_response, std::error_code>> client::search_packet(
-        const cspan_uint8_t packet) noexcept(false)
+    search_task_t client::search_packet(const cspan_uint8_t packet) noexcept(false)
     {
         const auto* bytes = reinterpret_cast<const std::byte*>(packet.data());
         const auto sent = co_await transport_.send(
@@ -62,8 +61,7 @@ namespace kmx::aio::knx::discovery
         co_return search_response {decoded_ipv6.value()};
     }
 
-    task<std::expected<search_response, std::error_code>> client::search(
-        const search_request_frame& request) noexcept(false)
+    search_task_t client::search(const search_request_frame& request) noexcept(false)
     {
         std::array<std::uint8_t, frame::communication_header_size + search_request_body_size> packet {};
         const auto encoded = encode_search_request_packet(packet, request);
@@ -72,8 +70,7 @@ namespace kmx::aio::knx::discovery
         co_return co_await search_packet(packet);
     }
 
-    task<std::expected<search_response, std::error_code>> client::search(
-        const ipv6_search_request_frame& request) noexcept(false)
+    search_task_t client::search(const ipv6_search_request_frame& request) noexcept(false)
     {
         std::array<std::uint8_t, frame::communication_header_size + ipv6_search_request_body_size> packet {};
         const auto encoded = encode_ipv6_search_request_packet(packet, request);
@@ -82,78 +79,74 @@ namespace kmx::aio::knx::discovery
         co_return co_await search_packet(packet);
     }
 
-    namespace
+    static bool valid_dibs(const cspan_uint8_t dibs) noexcept
     {
-        bool valid_dibs(const cspan_uint8_t dibs) noexcept
+        std::size_t offset {};
+        while (offset < dibs.size())
         {
-            std::size_t offset = 0u;
-            while (offset < dibs.size())
-            {
-                const auto remaining = dibs.size() - offset;
-                const auto length = static_cast<std::size_t>(dibs[offset]);
-                if ((length < 2u) || (length > remaining))
-                    return false;
-                offset += length;
-            }
-            return offset == dibs.size();
+            const auto remaining = dibs.size() - offset;
+            const auto length = static_cast<std::size_t>(dibs[offset]);
+            if ((length < 2u) || (length > remaining))
+                return false;
+            offset += length;
         }
-
-        std::expected<hpai, std::error_code> decode_discovery_hpai(const cspan_uint8_t source) noexcept
-        {
-            if (!source.empty() && source[0] == 20u)
-                return std::unexpected(make_error_code(error::unsupported_hpai));
-            if (source.size() < connection::hpai_size || source[0] != connection::hpai_size)
-                return std::unexpected(make_error_code(error::malformed_frame));
-            if (source[1] != 0x01u)
-                return std::unexpected(make_error_code(error::unsupported_hpai));
-
-            hpai value {};
-            value.protocol = source[1];
-            value.endpoint.address = { source[2], source[3], source[4], source[5] };
-            value.endpoint.port = static_cast<std::uint16_t>((static_cast<std::uint16_t>(source[6]) << 8u) |
-                                                              static_cast<std::uint16_t>(source[7]));
-            return value;
-        }
-
-        void encode_discovery_hpai(const span_uint8_t dest, const hpai& value) noexcept
-        {
-            dest[0] = static_cast<std::uint8_t>(connection::hpai_size);
-            dest[1] = value.protocol;
-            dest[2] = value.endpoint.address[0];
-            dest[3] = value.endpoint.address[1];
-            dest[4] = value.endpoint.address[2];
-            dest[5] = value.endpoint.address[3];
-            dest[6] = static_cast<std::uint8_t>((value.endpoint.port >> 8u) & 0xFFu);
-            dest[7] = static_cast<std::uint8_t>(value.endpoint.port & 0xFFu);
-        }
-
-        void encode_ipv6_discovery_hpai(const span_uint8_t dest, const ipv6_hpai& value) noexcept
-        {
-            dest[0] = static_cast<std::uint8_t>(connection::ipv6_hpai_size);
-            dest[1] = value.protocol;
-            for (std::size_t i = 0u; i < value.endpoint.address.size(); ++i)
-                dest[2u + i] = value.endpoint.address[i];
-            dest[18u] = static_cast<std::uint8_t>(value.endpoint.port >> 8u);
-            dest[19u] = static_cast<std::uint8_t>(value.endpoint.port & 0xFFu);
-        }
-
-        std::expected<ipv6_hpai, std::error_code> decode_ipv6_discovery_hpai(const cspan_uint8_t source) noexcept
-        {
-            if ((source.size() < connection::ipv6_hpai_size) || (source[0] != connection::ipv6_hpai_size))
-                return std::unexpected(make_error_code(error::malformed_frame));
-            if (source[1] != 0x01u)
-                return std::unexpected(make_error_code(error::unsupported_hpai));
-            ipv6_hpai value {};
-            value.protocol = source[1];
-            for (std::size_t i = 0u; i < value.endpoint.address.size(); ++i)
-                value.endpoint.address[i] = source[2u + i];
-            value.endpoint.port = static_cast<std::uint16_t>((static_cast<std::uint16_t>(source[18u]) << 8u) | source[19u]);
-            return value;
-        }
+        return offset == dibs.size();
     }
 
-    std::expected<void, std::error_code> encode_search_request_packet(
-        const span_uint8_t dest, const search_request_frame& request) noexcept
+    static std::expected<hpai, std::error_code> decode_discovery_hpai(const cspan_uint8_t source) noexcept
+    {
+        if (!source.empty() && (source[0] == 20u))
+            return std::unexpected(make_error_code(error::unsupported_hpai));
+        if ((source.size() < connection::hpai_size) || (source[0] != connection::hpai_size))
+            return std::unexpected(make_error_code(error::malformed_frame));
+        if (source[1] != 0x01u)
+            return std::unexpected(make_error_code(error::unsupported_hpai));
+
+        hpai value {};
+        value.protocol = source[1];
+        value.endpoint.address = { source[2], source[3], source[4], source[5] };
+        value.endpoint.port = static_cast<std::uint16_t>((static_cast<std::uint16_t>(source[6]) << 8u) |
+                                                          static_cast<std::uint16_t>(source[7]));
+        return value;
+    }
+
+    static void encode_discovery_hpai(const span_uint8_t dest, const hpai& value) noexcept
+    {
+        dest[0] = static_cast<std::uint8_t>(connection::hpai_size);
+        dest[1] = value.protocol;
+        dest[2] = value.endpoint.address[0];
+        dest[3] = value.endpoint.address[1];
+        dest[4] = value.endpoint.address[2];
+        dest[5] = value.endpoint.address[3];
+        dest[6] = static_cast<std::uint8_t>((value.endpoint.port >> 8u) & 0xFFu);
+        dest[7] = static_cast<std::uint8_t>(value.endpoint.port & 0xFFu);
+    }
+
+    static void encode_ipv6_discovery_hpai(const span_uint8_t dest, const ipv6_hpai& value) noexcept
+    {
+        dest[0] = static_cast<std::uint8_t>(connection::ipv6_hpai_size);
+        dest[1] = value.protocol;
+        for (std::size_t i = 0u; i < value.endpoint.address.size(); ++i)
+            dest[2u + i] = value.endpoint.address[i];
+        dest[18u] = static_cast<std::uint8_t>(value.endpoint.port >> 8u);
+        dest[19u] = static_cast<std::uint8_t>(value.endpoint.port & 0xFFu);
+    }
+
+    static std::expected<ipv6_hpai, std::error_code> decode_ipv6_discovery_hpai(const cspan_uint8_t source) noexcept
+    {
+        if ((source.size() < connection::ipv6_hpai_size) || (source[0] != connection::ipv6_hpai_size))
+            return std::unexpected(make_error_code(error::malformed_frame));
+        if (source[1] != 0x01u)
+            return std::unexpected(make_error_code(error::unsupported_hpai));
+        ipv6_hpai value {};
+        value.protocol = source[1];
+        for (std::size_t i = 0u; i < value.endpoint.address.size(); ++i)
+            value.endpoint.address[i] = source[2u + i];
+        value.endpoint.port = static_cast<std::uint16_t>((static_cast<std::uint16_t>(source[18u]) << 8u) | source[19u]);
+        return value;
+    }
+
+    expected_void_t encode_search_request_packet(const span_uint8_t dest, const search_request_frame& request) noexcept
     {
         const auto total_length = frame::communication_header_size + search_request_body_size;
         if (dest.size() < total_length)
@@ -178,7 +171,7 @@ namespace kmx::aio::knx::discovery
         const auto header = frame::decode_communication_header(packet);
         if (!header.has_value())
             return std::unexpected(header.error());
-        if (header->protocol_version != 0x10u || header->service_type != search_request_service)
+        if ((header->protocol_version != 0x10u) || (header->service_type != search_request_service))
             return std::unexpected(make_error_code(error::unsupported_service));
         if ((header->total_length != packet.size()) || (packet.size() != frame::communication_header_size + search_request_body_size))
             return std::unexpected(make_error_code(error::malformed_frame));
@@ -191,8 +184,7 @@ namespace kmx::aio::knx::discovery
         return search_request_frame { endpoint.value() };
     }
 
-    std::expected<void, std::error_code> encode_ipv6_search_request_packet(
-        const span_uint8_t dest, const ipv6_search_request_frame& request) noexcept
+    expected_void_t encode_ipv6_search_request_packet(const span_uint8_t dest, const ipv6_search_request_frame& request) noexcept
     {
         constexpr auto total_length = frame::communication_header_size + ipv6_search_request_body_size;
         if (dest.size() < total_length)
@@ -226,8 +218,7 @@ namespace kmx::aio::knx::discovery
         return ipv6_search_request_frame {endpoint.value()};
     }
 
-    std::expected<void, std::error_code> encode_search_response_packet(
-        const span_uint8_t dest, const search_response_frame& response) noexcept
+    expected_void_t encode_search_response_packet(const span_uint8_t dest, const search_response_frame& response) noexcept
     {
         constexpr std::size_t fixed_body_size = connection::hpai_size;
         const auto total_length = frame::communication_header_size + fixed_body_size + response.device_info_blocks.size();
@@ -257,7 +248,7 @@ namespace kmx::aio::knx::discovery
         const auto header = frame::decode_communication_header(packet);
         if (!header.has_value())
             return std::unexpected(header.error());
-        if (header->protocol_version != 0x10u || header->service_type != search_response_service)
+        if ((header->protocol_version != 0x10u) || (header->service_type != search_response_service))
             return std::unexpected(make_error_code(error::unsupported_service));
         if ((header->total_length != packet.size()) ||
             (packet.size() < frame::communication_header_size + connection::hpai_size + 2u))
@@ -278,8 +269,7 @@ namespace kmx::aio::knx::discovery
         return response;
     }
 
-    std::expected<void, std::error_code> encode_ipv6_search_response_packet(
-        const span_uint8_t dest, const ipv6_search_response_frame& response) noexcept
+    expected_void_t encode_ipv6_search_response_packet(const span_uint8_t dest, const ipv6_search_response_frame& response) noexcept
     {
         const auto total_length = frame::communication_header_size + connection::ipv6_hpai_size + response.device_info_blocks.size();
         if ((total_length > frame::max_frame_size) || (dest.size() < total_length))
@@ -322,7 +312,7 @@ namespace kmx::aio::knx::discovery
         return response;
     }
 
-    std::expected<void, std::error_code> encode_description_request_packet(const span_uint8_t dest) noexcept
+    expected_void_t encode_description_request_packet(const span_uint8_t dest) noexcept
     {
         if (dest.size() < frame::communication_header_size)
             return std::unexpected(make_error_code(error::invalid_length));
@@ -340,14 +330,13 @@ namespace kmx::aio::knx::discovery
             return std::unexpected(header.error());
         if ((header->protocol_version != 0x10u) || (header->service_type != description_request_service))
             return std::unexpected(make_error_code(error::unsupported_service));
-        if (header->total_length != packet.size() || packet.size() != frame::communication_header_size)
+        if ((header->total_length != packet.size()) || (packet.size() != frame::communication_header_size))
             return std::unexpected(make_error_code(error::malformed_frame));
 
         return description_request_frame {};
     }
 
-    std::expected<void, std::error_code> encode_description_response_packet(
-        const span_uint8_t dest, const description_response_frame& response) noexcept
+    expected_void_t encode_description_response_packet(const span_uint8_t dest, const description_response_frame& response) noexcept
     {
         const auto total_length = frame::communication_header_size + response.device_info_blocks.size();
         if ((total_length > frame::max_frame_size) || (dest.size() < total_length))

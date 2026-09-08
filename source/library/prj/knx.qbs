@@ -4,20 +4,12 @@ StaticLibrary {
     Depends { name: "cpp" }
     Depends { name: "kmx-aio-core" }
     Depends { name: "kmx_instrumentation" }
+    Depends { name: "kmx_features" }
 
     name: "kmx-aio-knx"
     condition: project.enable_knx
     cpp.cxxLanguageVersion: "c++26"
     cpp.enableRtti: false
-    cpp.defines: {
-        var defs = [];
-        defs.push("KMX_AIO_FEATURE_KNX=1");
-        if (project.enable_knx_secure)
-            defs.push("KMX_AIO_FEATURE_KNX_SECURE=1");
-        if (project.enable_knx_keyring)
-            defs.push("KMX_AIO_FEATURE_KNX_KEYRING=1");
-        return defs;
-    }
     cpp.includePaths: [
         "../api",
         "../inc",
@@ -33,6 +25,7 @@ StaticLibrary {
     Export {
         Depends { name: "cpp" }
         Depends { name: "kmx-aio-core" }
+        Depends { name: "kmx_features" }
         cpp.includePaths: [ product.sourceDirectory + "/../api" ]
     }
 }

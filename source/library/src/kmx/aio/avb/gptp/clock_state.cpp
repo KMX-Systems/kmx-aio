@@ -142,7 +142,7 @@ namespace kmx::aio::avb::gptp
         const auto* const f = reinterpret_cast<const pdelay_resp_follow_up_frame_t*>(data);
         if (f->body.requesting_port_id != local_port_id_)
             return;
-        if (t1_pdelay_req_ == 0 || t4_pdelay_res_ == 0)
+        if ((t1_pdelay_req_ == 0) || (t4_pdelay_res_ == 0))
             return;
 
         t3_remote_ = f->body.response_origin_timestamp.to_ns();

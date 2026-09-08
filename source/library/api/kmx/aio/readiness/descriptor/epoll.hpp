@@ -1,13 +1,15 @@
 /// @file aio/readiness/descriptor/epoll.hpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <span>
-    #include <vector>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_READINESS)
+    #ifndef PCH
+        #include <span>
+        #include <vector>
 
-    #include <kmx/aio/file_descriptor.hpp>
-    #include <kmx/aio/readiness/basic_types.hpp>
-#endif
+        #include <kmx/aio/file_descriptor.hpp>
+        #include <kmx/aio/readiness/basic_types.hpp>
+    #endif
 
 namespace kmx::aio::readiness::descriptor
 {
@@ -84,3 +86,4 @@ namespace kmx::aio::readiness::descriptor
                                                                                            const int timeout_ms = -1) noexcept;
     };
 } // namespace kmx::aio::descriptor
+#endif // KMX_AIO_FEATURE_READINESS

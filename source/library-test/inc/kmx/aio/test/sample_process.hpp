@@ -69,7 +69,7 @@ namespace kmx::aio::test
     [[nodiscard]] inline bool contains_markers_in_order(const std::string_view text,
                                                         const std::initializer_list<std::string_view> markers) noexcept
     {
-        std::size_t pos = 0u;
+        std::size_t pos {};
         for (const auto marker: markers)
         {
             const std::size_t found = text.find(marker, pos);
@@ -177,25 +177,12 @@ namespace kmx::aio::test
         return std::filesystem::temp_directory_path() / (prefix + "_" + std::to_string(now_ns) + ".log");
     }
 
-    /// @brief The directory holding the libstdc++ that the compiler which built this tree ships.
-    /// @details A sample built by a compiler newer than the system one dies at startup on
-    ///          `GLIBCXX_3.4.35' not found, which a smoke test would otherwise report as the sample
-    ///          failing rather than never having started. Which directory holds the matching runtime
-    ///          depends on the compiler the tree was built with, so it is asked for rather than written
-    ///          down - the same question script/feature/common.sh asks, in the same words.
-    ///
-    ///          libstdc++.so and not libstdc++.so.6: the versioned name resolves against the loader's
-    ///          own search path and comes back as the system copy even for a compiler that ships its
-    ///          own, while the bare .so is the link-time symlink sitting in the compiler's library
-    ///          directory. A compiler that cannot find it echoes the bare name straight back, which must
-    ///          not be turned into a path relative to the working directory.
-    ///
-    ///          Asked once per process: the answer cannot change while the test binary runs, and every
-    ///          sample it launches needs it.
-    /// @return The directory, or an empty string when there is nothing worth prepending.
-    [[nodiscard]] inline const std::string& toolchain_cxx_runtime_dir() noexcept(false)
+    namespace detail
     {
-        static const std::string cached = []() -> std::string
+        /// @brief Asks the active compiler where its own libstdc++ lives.
+        /// @return The directory, or an empty string when there is nothing worth prepending.
+        /// @throws std::bad_alloc (string allocation).
+        [[nodiscard]] inline std::string query_toolchain_cxx_runtime_dir() noexcept(false)
         {
             const char* const compiler_env = std::getenv("KMX_CXX");
             const std::string compiler = ((compiler_env != nullptr) && (*compiler_env != '\0')) ? compiler_env : "c++";
@@ -228,7 +215,28 @@ namespace kmx::aio::test
                 return {};
 
             return resolved.parent_path().string();
-        }();
+        }
+    } // namespace detail
+
+    /// @brief The directory holding the libstdc++ that the compiler which built this tree ships.
+    /// @details A sample built by a compiler newer than the system one dies at startup on
+    ///          `GLIBCXX_3.4.35' not found, which a smoke test would otherwise report as the sample
+    ///          failing rather than never having started. Which directory holds the matching runtime
+    ///          depends on the compiler the tree was built with, so it is asked for rather than written
+    ///          down - the same question script/feature/common.sh asks, in the same words.
+    ///
+    ///          libstdc++.so and not libstdc++.so.6: the versioned name resolves against the loader's
+    ///          own search path and comes back as the system copy even for a compiler that ships its
+    ///          own, while the bare .so is the link-time symlink sitting in the compiler's library
+    ///          directory. A compiler that cannot find it echoes the bare name straight back, which must
+    ///          not be turned into a path relative to the working directory.
+    ///
+    ///          Asked once per process: the answer cannot change while the test binary runs, and every
+    ///          sample it launches needs it.
+    /// @return The directory, or an empty string when there is nothing worth prepending.
+    [[nodiscard]] inline const std::string& toolchain_cxx_runtime_dir() noexcept(false)
+    {
+        static const std::string cached = detail::query_toolchain_cxx_runtime_dir();
 
         return cached;
     }

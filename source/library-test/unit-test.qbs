@@ -16,6 +16,7 @@ CppApplication {
     Depends { name: "kmx-aio-spdk"; condition: project.enable_spdk }
     Depends { name: "kmx-aio-avb"; condition: project.enable_avb }
     Depends { name: "kmx_instrumentation" }
+    Depends { name: "kmx_features" }
 
     name: "kmx-aio-test"
     install: true
@@ -23,36 +24,6 @@ CppApplication {
     cpp.cxxLanguageVersion: "c++26"
     cpp.debugInformation: true
     cpp.enableRtti: false
-    cpp.defines: {
-        var defs = [];
-        if (project.enable_readiness)
-            defs.push("KMX_AIO_FEATURE_READINESS=1");
-        if (project.enable_openonload)
-            defs.push("KMX_AIO_FEATURE_OPENONLOAD=1");
-        if (project.enable_af_xdp)
-            defs.push("KMX_AIO_FEATURE_AF_XDP=1");
-        if (project.enable_spdk)
-            defs.push("KMX_AIO_FEATURE_SPDK=1");
-        if (project.enable_quic)
-            defs.push("KMX_AIO_FEATURE_QUIC=1");
-        if (project.enable_avb)
-            defs.push("KMX_AIO_FEATURE_AVB=1");
-        if (project.enable_opc_ua)
-            defs.push("KMX_AIO_FEATURE_OPC_UA=1");
-        if (project.enable_modbus)
-            defs.push("KMX_AIO_FEATURE_MODBUS=1");
-        if (project.enable_knx)
-            defs.push("KMX_AIO_FEATURE_KNX=1");
-        if (project.enable_knx_secure)
-            defs.push("KMX_AIO_FEATURE_KNX_SECURE=1");
-        if (project.enable_knx_keyring)
-            defs.push("KMX_AIO_FEATURE_KNX_KEYRING=1");
-        if (project.enable_someip)
-            defs.push("KMX_AIO_FEATURE_SOMEIP=1");
-        if (project.enable_cuda)
-            defs.push("KMX_AIO_FEATURE_CUDA=1");
-        return defs;
-    }
     cpp.includePaths: [
         "inc",
         "inc_dep",

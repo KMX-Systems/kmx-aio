@@ -16,7 +16,7 @@
 namespace kmx::aio::test::knx::routing_client_test
 {
     using namespace kmx::aio::knx;
-    std::uint32_t routing_now_ms = 0u;
+    std::uint32_t routing_now_ms {};
 
     [[nodiscard]] std::uint32_t routing_clock_now() noexcept
     {
@@ -26,8 +26,8 @@ namespace kmx::aio::test::knx::routing_client_test
     class loopback_routing_transport final: public datagram_transport
     {
     public:
-        bool joined = false;
-        bool invalid_peer = false;
+        bool joined {};
+        bool invalid_peer {};
         std::vector<std::uint8_t> last_sent {};
 
         void enqueue(std::vector<std::uint8_t> packet)
@@ -92,6 +92,59 @@ namespace kmx::aio::test::knx::routing_client_test
         std::deque<std::vector<std::uint8_t>> incoming_ {};
     };
 
+    namespace detail
+    {
+        /// @brief Reads one indication and records whether it carried the expected channel and cEMI.
+        task<void> receive_indication(routing::client& client, bool& received, completion::executor& executor) noexcept(false)
+        {
+            const auto indication = co_await client.receive_indication();
+            received = indication.has_value() && (indication->channel_id == 7u) &&
+                       (indication->cemi_bytes == std::vector<std::uint8_t>(sample_cemi.begin(), sample_cemi.end()));
+            executor.stop();
+        }
+
+        /// @brief Reads one event and records whether it was the expected ROUTING_BUSY.
+        task<void> receive_busy(routing::client& client, bool& busy_received, completion::executor& busy_executor) noexcept(false)
+        {
+            const auto result = co_await client.receive_event();
+            const auto* value = result.has_value() ? std::get_if<routing::busy>(&result.value()) : nullptr;
+            busy_received = (value != nullptr) && (value->wait_time_ms == 125u);
+            busy_executor.stop();
+        }
+
+        /// @brief Reads one event and records whether it was the expected ROUTING_LOST_MESSAGE.
+        task<void> receive_lost_message(routing::client& client, bool& lost_received, completion::executor& lost_executor) noexcept(false)
+        {
+            const auto result = co_await client.receive_event();
+            const auto* value = result.has_value() ? std::get_if<routing::lost_message>(&result.value()) : nullptr;
+            lost_received = (value != nullptr) && (value->count == 3u);
+            lost_executor.stop();
+        }
+
+        /// @brief Reads one event past a reflected indication and records whether it was the expected busy.
+        task<void> receive_busy_after_reflection(routing::client& client, bool& received_busy,
+                                                 completion::executor& receive_executor) noexcept(false)
+        {
+            const auto result = co_await client.receive_event();
+            const auto* value = result.has_value() ? std::get_if<routing::busy>(&result.value()) : nullptr;
+            received_busy = (value != nullptr) && (value->wait_time_ms == 75u);
+            receive_executor.stop();
+        }
+
+        /// @brief Sends a busy and a lost-message control, decoding each one back off the transport.
+        task<void> send_busy_and_lost(routing::client& client, const loopback_routing_transport& transport, bool& sent_busy,
+                                      bool& sent_lost, completion::executor& executor) noexcept(false)
+        {
+            sent_busy = (co_await client.send_busy(routing::busy {.wait_time_ms = 90u})).has_value();
+            const auto busy = routing::decode_busy_packet(transport.last_sent);
+            sent_busy = sent_busy && busy.has_value() && (busy->wait_time_ms == 90u);
+            sent_lost = (co_await client.send_lost_message(routing::lost_message {.count = 2u})).has_value();
+            const auto lost = routing::decode_lost_message_packet(transport.last_sent);
+            sent_lost = sent_lost && lost.has_value() && (lost->count == 2u);
+            executor.stop();
+        }
+    } // namespace detail
+
     TEST_CASE("knx routing client joins and leaves multicast runtime", "[knx][routing][unit]")
     {
         loopback_routing_transport transport;
@@ -126,7 +179,7 @@ namespace kmx::aio::test::knx::routing_client_test
         CHECK(!transport.joined);
 
         completion::executor executor;
-        bool shut_down = false;
+        bool shut_down {};
         auto run = [&]() -> task<void>
         {
             const auto result = co_await value.serve_once();
@@ -145,7 +198,7 @@ namespace kmx::aio::test::knx::routing_client_test
         REQUIRE(value.shutdown().has_value());
 
         completion::executor executor;
-        bool stopped = false;
+        bool stopped {};
         auto run = [&]() -> task<void>
         {
             const auto result = co_await value.serve();
@@ -176,7 +229,7 @@ namespace kmx::aio::test::knx::routing_client_test
         routing::client client {transport};
         REQUIRE(client.start().has_value());
 
-        bool sent = false;
+        bool sent {};
         completion::executor executor;
         auto run = [&]() -> task<void>
         {
@@ -204,18 +257,10 @@ namespace kmx::aio::test::knx::routing_client_test
         REQUIRE(routing::encode_indication_packet(packet, routing::indication {7u, sample_cemi}).has_value());
         transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
 
-        bool received = false;
+        bool received {};
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            const auto indication = co_await client.receive_indication();
-            received = indication.has_value() &&
-                (indication->channel_id == 7u) &&
-                (indication->cemi_bytes == std::vector<std::uint8_t>(sample_cemi.begin(), sample_cemi.end()));
-            executor.stop();
-        };
 
-        executor.spawn(run());
+        executor.spawn(detail::receive_indication(client, received, executor));
         executor.run();
         CHECK(received);
     }
@@ -230,16 +275,9 @@ namespace kmx::aio::test::knx::routing_client_test
         REQUIRE(routing::encode_busy_packet(busy_packet, routing::busy {.wait_time_ms = 125u}).has_value());
         transport.enqueue(std::vector<std::uint8_t>(busy_packet.begin(), busy_packet.end()));
 
-        bool busy_received = false;
+        bool busy_received {};
         completion::executor busy_executor;
-        auto busy_run = [&]() -> task<void>
-        {
-            const auto result = co_await client.receive_event();
-            const auto* value = result.has_value() ? std::get_if<routing::busy>(&result.value()) : nullptr;
-            busy_received = (value != nullptr) && (value->wait_time_ms == 125u);
-            busy_executor.stop();
-        };
-        busy_executor.spawn(busy_run());
+        busy_executor.spawn(detail::receive_busy(client, busy_received, busy_executor));
         busy_executor.run();
         CHECK(busy_received);
         CHECK(client.counters().busy_messages == 1u);
@@ -248,16 +286,9 @@ namespace kmx::aio::test::knx::routing_client_test
         REQUIRE(routing::encode_lost_message_packet(lost_packet, routing::lost_message {.count = 3u}).has_value());
         transport.enqueue(std::vector<std::uint8_t>(lost_packet.begin(), lost_packet.end()));
 
-        bool lost_received = false;
+        bool lost_received {};
         completion::executor lost_executor;
-        auto lost_run = [&]() -> task<void>
-        {
-            const auto result = co_await client.receive_event();
-            const auto* value = result.has_value() ? std::get_if<routing::lost_message>(&result.value()) : nullptr;
-            lost_received = (value != nullptr) && (value->count == 3u);
-            lost_executor.stop();
-        };
-        lost_executor.spawn(lost_run());
+        lost_executor.spawn(detail::receive_lost_message(client, lost_received, lost_executor));
         lost_executor.run();
         CHECK(lost_received);
         CHECK(client.counters().lost_messages == 3u);
@@ -273,7 +304,7 @@ namespace kmx::aio::test::knx::routing_client_test
         REQUIRE(routing::encode_busy_packet(packet, routing::busy {.wait_time_ms = 10u}).has_value());
         transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
 
-        bool rejected = false;
+        bool rejected {};
         completion::executor executor;
         auto run = [&]() -> task<void>
         {
@@ -306,16 +337,9 @@ namespace kmx::aio::test::knx::routing_client_test
         REQUIRE(routing::encode_busy_packet(busy_packet, routing::busy {.wait_time_ms = 75u}).has_value());
         transport.enqueue(std::vector<std::uint8_t>(busy_packet.begin(), busy_packet.end()));
 
-        bool received_busy = false;
+        bool received_busy {};
         completion::executor receive_executor;
-        auto receive_run = [&]() -> task<void>
-        {
-            const auto result = co_await client.receive_event();
-            const auto* value = result.has_value() ? std::get_if<routing::busy>(&result.value()) : nullptr;
-            received_busy = (value != nullptr) && (value->wait_time_ms == 75u);
-            receive_executor.stop();
-        };
-        receive_executor.spawn(receive_run());
+        receive_executor.spawn(detail::receive_busy_after_reflection(client, received_busy, receive_executor));
         receive_executor.run();
         CHECK(received_busy);
         CHECK(client.counters().reflected_messages == 1u);
@@ -329,7 +353,7 @@ namespace kmx::aio::test::knx::routing_client_test
         REQUIRE(client.start().has_value());
         client.note_busy(50u);
 
-        bool blocked = false;
+        bool blocked {};
         completion::executor blocked_executor;
         auto blocked_run = [&]() -> task<void>
         {
@@ -342,7 +366,7 @@ namespace kmx::aio::test::knx::routing_client_test
         CHECK(blocked);
 
         routing_now_ms = 150u;
-        bool sent = false;
+        bool sent {};
         completion::executor sent_executor;
         auto sent_run = [&]() -> task<void>
         {
@@ -361,20 +385,10 @@ namespace kmx::aio::test::knx::routing_client_test
         routing::client client {transport};
         REQUIRE(client.start().has_value());
 
-        bool sent_busy = false;
-        bool sent_lost = false;
+        bool sent_busy {};
+        bool sent_lost {};
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            sent_busy = (co_await client.send_busy(routing::busy {.wait_time_ms = 90u})).has_value();
-            const auto busy = routing::decode_busy_packet(transport.last_sent);
-            sent_busy = sent_busy && busy.has_value() && (busy->wait_time_ms == 90u);
-            sent_lost = (co_await client.send_lost_message(routing::lost_message {.count = 2u})).has_value();
-            const auto lost = routing::decode_lost_message_packet(transport.last_sent);
-            sent_lost = sent_lost && lost.has_value() && (lost->count == 2u);
-            executor.stop();
-        };
-        executor.spawn(run());
+        executor.spawn(detail::send_busy_and_lost(client, transport, sent_busy, sent_lost, executor));
         executor.run();
         CHECK(sent_busy);
         CHECK(sent_lost);
@@ -390,7 +404,7 @@ namespace kmx::aio::test::knx::routing_client_test
         REQUIRE(client.stop().has_value());
         REQUIRE(client.start().has_value());
 
-        bool sent = false;
+        bool sent {};
         completion::executor executor;
         auto run = [&]() -> task<void>
         {

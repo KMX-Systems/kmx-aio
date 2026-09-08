@@ -1,13 +1,15 @@
 /// @file aio/readiness/io_base.hpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <memory>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_READINESS)
+    #ifndef PCH
+        #include <memory>
 
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/file_descriptor.hpp>
-    #include <kmx/aio/readiness/executor.hpp>
-#endif
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/file_descriptor.hpp>
+        #include <kmx/aio/readiness/executor.hpp>
+    #endif
 
 namespace kmx::aio::readiness
 {
@@ -69,3 +71,4 @@ namespace kmx::aio::readiness
         file_descriptor fd_;
     };
 } // namespace kmx::aio::readiness
+#endif // KMX_AIO_FEATURE_READINESS

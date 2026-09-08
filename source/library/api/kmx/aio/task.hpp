@@ -52,7 +52,7 @@ namespace kmx::aio
     struct promise_base
     {
         /// @brief Continuation to resume when the coroutine reaches final suspend.
-        coroutine_handle_t continuation_ = nullptr;
+        coroutine_handle_t continuation_ {};
         /// @brief Stored exception captured from the coroutine body.
         std::exception_ptr exception_ {};
         /// @brief Stop source associated with the coroutine instance.
@@ -63,7 +63,7 @@ namespace kmx::aio
         ///       compiles, type-checks and silently never fires. A token set here takes precedence, and is
         ///       inherited by every task this one awaits, so a single stop_source cancels a whole chain.
         std::stop_token stop_token_ {};
-        bool has_external_stop_token_ = false;
+        bool has_external_stop_token_ {};
 
         promise_base() noexcept = default;
 
@@ -374,30 +374,33 @@ namespace kmx::aio
         /// @note Only a finished coroutine can hold one; a task abandoned before it ran, or moved from,
         ///       has nothing to report. The exception is rethrown into a local catch purely to reach
         ///       what() - it cannot escape, which is what the destructor's noexcept needs.
-        void report_unretrieved_exception() const noexcept
-        {
-            if (!handle_.done() || !handle_.promise().exception_)
-                return;
-
-            try
-            {
-                std::rethrow_exception(handle_.promise().exception_);
-            }
-            catch (const std::exception& e)
-            {
-                logger::log(logger::level::error, std::source_location::current(),
-                            "task destroyed without ever being awaited; its exception is lost: {}", e.what());
-            }
-            catch (...)
-            {
-                logger::log(logger::level::error, std::source_location::current(),
-                            "task destroyed without ever being awaited; its exception is lost");
-            }
-        }
+        void report_unretrieved_exception() const noexcept;
 
         /// @brief The owned coroutine handle, if any.
-        handle_type handle_ = nullptr;
+        handle_type handle_ {};
     };
+
+    template <typename T>
+    void task<T>::report_unretrieved_exception() const noexcept
+    {
+        if (!handle_.done() || !handle_.promise().exception_)
+            return;
+
+        try
+        {
+            std::rethrow_exception(handle_.promise().exception_);
+        }
+        catch (const std::exception& e)
+        {
+            logger::log(logger::level::error, std::source_location::current(),
+                        "task destroyed without ever being awaited; its exception is lost: {}", e.what());
+        }
+        catch (...)
+        {
+            logger::log(logger::level::error, std::source_location::current(),
+                        "task destroyed without ever being awaited; its exception is lost");
+        }
+    }
 
     template <typename T>
     task<T> promise<T>::get_return_object() noexcept(false)

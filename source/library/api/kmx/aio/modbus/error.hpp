@@ -2,10 +2,12 @@
 /// @brief Modbus-specific error domain for framing and transport failures.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <cstdint>
-    #include <system_error>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_MODBUS)
+    #ifndef PCH
+        #include <cstdint>
+        #include <system_error>
+    #endif
 
 namespace kmx::aio::modbus
 {
@@ -61,3 +63,4 @@ namespace std
     {
     };
 }
+#endif // KMX_AIO_FEATURE_MODBUS

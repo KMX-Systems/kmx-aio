@@ -27,7 +27,7 @@ namespace kmx::aio::test::knx::secure_test
         [[nodiscard]] std::expected<std::vector<std::uint8_t>, std::error_code> unprotect(
             const std::span<const std::uint8_t> packet, const std::uint64_t sequence) noexcept override
         {
-            if (packet.empty() || packet.back() != static_cast<std::uint8_t>(sequence & 0xFFu))
+            if (packet.empty() || (packet.back() != static_cast<std::uint8_t>(sequence & 0xFFu)))
                 return std::unexpected(std::make_error_code(std::errc::protocol_error));
             return std::vector<std::uint8_t>(packet.begin(), packet.end() - 1);
         }

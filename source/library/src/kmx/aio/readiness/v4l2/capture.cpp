@@ -52,11 +52,9 @@ namespace kmx::aio::readiness::v4l2
         buf.index = index_;
 
         if (::ioctl(device_fd_, VIDIOC_QBUF, &buf) < 0)
-        {
             // Best-effort: log but do not throw from a destructor.
-            kmx::logger::log(kmx::logger::level::warn, std::source_location::current(), "VIDIOC_QBUF failed for buffer {}: {}", index_,
-                             std::strerror(errno));
-        }
+        kmx::logger::log(kmx::logger::level::warn, std::source_location::current(), "VIDIOC_QBUF failed for buffer {}: {}", index_,
+                         std::strerror(errno));
     }
 
     cspan_byte_t frame_view::data() const noexcept
@@ -165,7 +163,7 @@ namespace kmx::aio::readiness::v4l2
             {
                 // Unmap already mapped buffers before returning.
                 for (auto& b: buffers)
-                    if (b.ptr && b.ptr != MAP_FAILED)
+                    if (b.ptr && (b.ptr != MAP_FAILED))
                         ::munmap(b.ptr, b.length);
 
                 return std::unexpected(kmx::aio::from_errno(errno));
@@ -176,7 +174,7 @@ namespace kmx::aio::readiness::v4l2
             if (ptr == MAP_FAILED) // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
             {
                 for (auto& b: buffers)
-                    if (b.ptr && b.ptr != MAP_FAILED)
+                    if (b.ptr && (b.ptr != MAP_FAILED))
                         ::munmap(b.ptr, b.length);
 
                 return std::unexpected(kmx::aio::from_errno(errno));
@@ -232,7 +230,7 @@ namespace kmx::aio::readiness::v4l2
     void capture::unmap_buffers() noexcept
     {
         for (auto& buf: buffers_)
-            if (buf.ptr && buf.ptr != MAP_FAILED)
+            if (buf.ptr && (buf.ptr != MAP_FAILED))
                 ::munmap(buf.ptr, buf.length);
 
         buffers_.clear();

@@ -9,13 +9,10 @@
 
 namespace kmx::aio::someip
 {
-    namespace
+    [[nodiscard]] static std::uint32_t service_key(const service_id_t service_id, const instance_id_t instance_id) noexcept
     {
-        [[nodiscard]] std::uint32_t service_key(const service_id_t service_id, const instance_id_t instance_id) noexcept
-        {
-            return (static_cast<std::uint32_t>(service_id) << 16u) | static_cast<std::uint32_t>(instance_id);
-        }
-    } // anonymous namespace
+        return (static_cast<std::uint32_t>(service_id) << 16u) | static_cast<std::uint32_t>(instance_id);
+    }
 
     struct client::impl
     {
@@ -24,7 +21,7 @@ namespace kmx::aio::someip
         client_config config;
         compat::client_runtime runtime;
         mutable statistics stats;
-        bool started = false;
+        bool started {};
         std::unordered_set<std::uint32_t> available_services;
 #if !defined(KMX_AIO_HAS_VSOMEIP_HEADER)
         std::optional<std::uint32_t> next_call_status;

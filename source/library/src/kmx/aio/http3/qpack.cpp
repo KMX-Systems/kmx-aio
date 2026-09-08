@@ -42,7 +42,7 @@ namespace kmx::aio::http3::qpack
         [[nodiscard]] std::optional<std::uint64_t> find_exact(const std::string_view name, std::string_view value) noexcept
         {
             for (std::size_t index = 0u; index < static_table.size(); ++index)
-                if (static_table[index].first == name && static_table[index].second == value)
+                if ((static_table[index].first == name) && (static_table[index].second == value))
                     return static_cast<std::uint64_t>(index);
             return std::nullopt;
         }
@@ -97,20 +97,14 @@ namespace kmx::aio::http3::qpack
             const auto& [name, value] = headers[i];
 
             if (exact_index.has_value())
-            {
                 estimated_capacity += detail::varint_size(*exact_index);
-            }
             else
             {
                 const auto value_encoded_size = detail::varint_size(value.size()) + value.size();
                 if (name_index.has_value())
-                {
                     estimated_capacity += detail::varint_size(*name_index) + value_encoded_size;
-                }
                 else
-                {
                     estimated_capacity += detail::varint_size(name.size()) + name.size() + value_encoded_size;
-                }
             }
         }
 

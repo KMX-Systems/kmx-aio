@@ -19,7 +19,7 @@ int main(int argc, const char* argv[]) noexcept
 
     try
     {
-        std::uint32_t queue_id = 0u;
+        std::uint32_t queue_id {};
         if (argc >= 3)
             queue_id = static_cast<std::uint32_t>(std::stoul(argv[2]));
 

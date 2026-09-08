@@ -2,10 +2,12 @@
 /// @brief OPC UA-specific error domain for wrapper-level failures.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <cstdint>
-    #include <system_error>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_OPC_UA)
+    #ifndef PCH
+        #include <cstdint>
+        #include <system_error>
+    #endif
 
 namespace kmx::aio::opc_ua
 {
@@ -54,3 +56,4 @@ namespace std
     {
     };
 }
+#endif // KMX_AIO_FEATURE_OPC_UA

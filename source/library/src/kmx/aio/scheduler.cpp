@@ -123,11 +123,9 @@ namespace kmx::aio
         {
             const std::lock_guard lock(queue_mutex_);
             if (queue_.empty() && (active_ == 0u))
-            {
                 // notify outside is not possible here without another unlock dance; notifying under the
-                // lock is correct, only marginally less efficient.
-                idle_cv_.notify_all();
-            }
+            // lock is correct, only marginally less efficient.
+            idle_cv_.notify_all();
         }
     }
 } // namespace kmx::aio

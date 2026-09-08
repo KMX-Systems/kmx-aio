@@ -18,33 +18,10 @@ StaticLibrary {
     Depends { name: "kmx-aio-spdk"; condition: project.enable_spdk }
     Depends { name: "kmx-aio-avb"; condition: project.enable_avb }
     Depends { name: "kmx_instrumentation" }
+    Depends { name: "kmx_features" }
     consoleApplication: true
     cpp.cxxLanguageVersion: "c++26"
     cpp.enableRtti: false
-    cpp.defines: {
-        var defs = [];
-        if (project.enable_openonload)
-            defs.push("KMX_AIO_FEATURE_OPENONLOAD=1");
-        if (project.enable_af_xdp)
-            defs.push("KMX_AIO_FEATURE_AF_XDP=1");
-        if (project.enable_spdk)
-            defs.push("KMX_AIO_FEATURE_SPDK=1");
-        if (project.enable_quic)
-            defs.push("KMX_AIO_FEATURE_QUIC=1");
-        if (project.enable_avb)
-            defs.push("KMX_AIO_FEATURE_AVB=1");
-        if (project.enable_opc_ua)
-            defs.push("KMX_AIO_FEATURE_OPC_UA=1");
-        if (project.enable_modbus)
-            defs.push("KMX_AIO_FEATURE_MODBUS=1");
-        if (project.enable_knx)
-            defs.push("KMX_AIO_FEATURE_KNX=1");
-        if (project.enable_someip)
-            defs.push("KMX_AIO_FEATURE_SOMEIP=1");
-        if (project.enable_cuda)
-            defs.push("KMX_AIO_FEATURE_CUDA=1");
-        return defs;
-    }
     cpp.includePaths: [
         "api",
         "inc",
@@ -179,6 +156,17 @@ StaticLibrary {
         qbs.installSourceBase: "api"
     }
 
+    // The one installed header that is not under api/: source/source.qbs writes it into the build
+    // directory during "qbs resolve", from the feature flags this build was configured with. It is
+    // what tells code compiled against the installed tree which of the optional APIs below are really
+    // there, so it is installed beside them rather than left behind in the build directory.
+    Group {
+        name: "generated feature configuration"
+        files: [project.generated_include_dir + "/kmx/aio/config.hpp"]
+        qbs.install: true
+        qbs.installDir: "include/kmx/aio"
+    }
+
     // Deliberately not installed: these are the library's own internals, and an installed tree that
     // carried them would invite code outside the library to include them.
     Group {
@@ -200,6 +188,7 @@ StaticLibrary {
         Depends { name: "kmx-aio-spdk"; condition: project.enable_spdk }
         Depends { name: "kmx-aio-avb"; condition: project.enable_avb }
         Depends { name: "kmx_instrumentation" }
+        Depends { name: "kmx_features" }
         cpp.includePaths: [ product.sourceDirectory + "/api" ].concat(project.tls_include_paths)
         cpp.libraryPaths: [
             project.enable_spdk && project.spdk_prefix ? project.spdk_prefix + "/lib" : "",

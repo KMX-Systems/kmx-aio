@@ -330,9 +330,7 @@ namespace kmx::aio::sample::tcp::echo::server
         const auto rx_active = stats->rx_active.load(std::memory_order_relaxed);
         const auto tx_active = stats->tx_active.load(std::memory_order_relaxed);
         if (!rx_active && !tx_active)
-        {
             stats->closed.store(true, std::memory_order_relaxed);
-        }
     }
 
     void manager::ui_loop(std::stop_token stop_token) const
@@ -359,9 +357,7 @@ namespace kmx::aio::sample::tcp::echo::server
                 for (const auto& [client_id, stats]: connections_)
                 {
                     if (!stats)
-                    {
                         continue;
-                    }
                     snapshot.push_back(snapshot_entry {
                         .client_id = client_id,
                         .tx = stats->bytes_sent.load(std::memory_order_relaxed),

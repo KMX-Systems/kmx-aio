@@ -57,7 +57,7 @@ namespace kmx::aio::test::async_mutex_test
     TEST_CASE("locking an unheld async_mutex does not suspend the caller", "[core][async_mutex]")
     {
         async_mutex mutex;
-        bool reached_body = false;
+        bool reached_body {};
 
         const auto enter = [&]() -> detail::fire_and_forget
         {

@@ -2,9 +2,11 @@
 /// @brief HTTP/2 frame definitions and utilities.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <kmx/aio/basic_types.hpp>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_HTTP2)
+    #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+    #endif
 
 /// @brief HTTP/2 core protocol definitions and utilities
 namespace kmx::aio::http2
@@ -34,7 +36,7 @@ namespace kmx::aio::http2
         continuation = 9u
     };
 
-#pragma pack(push, 1)
+    #pragma pack(push, 1)
     /// @brief Represents a standard 9-byte HTTP/2 frame header
     struct frame_header
     {
@@ -43,7 +45,7 @@ namespace kmx::aio::http2
         std::uint8_t flags;      ///< 8-bit frame flags
         std::uint32_t stream_id; ///< 31-bit stream ID (1-bit reserved)
     };
-#pragma pack(pop)
+    #pragma pack(pop)
 
     /// @brief Creates a complete GOAWAY frame for graceful connection teardown
     /// @param buffer Destination buffer
@@ -54,3 +56,4 @@ namespace kmx::aio::http2
     std::size_t make_goaway(span_uint8_t buffer, const std::uint32_t last_stream_id, const std::uint32_t error_code) noexcept(false);
 
 } // namespace kmx::aio::http2
+#endif // KMX_AIO_FEATURE_HTTP2

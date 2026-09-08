@@ -2,15 +2,17 @@
 /// @brief Backend-neutral subscription facade for SOME/IP events.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <cstdint>
-    #include <expected>
-    #include <memory>
-    #include <system_error>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_SOMEIP)
+    #ifndef PCH
+        #include <cstdint>
+        #include <expected>
+        #include <memory>
+        #include <system_error>
 
-    #include <kmx/aio/someip/types.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+        #include <kmx/aio/someip/types.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::someip
 {
@@ -73,21 +75,21 @@ namespace kmx::aio::someip
         /// @note The counter is per runtime session; it resets when close() and open() are called.
         [[nodiscard]] std::uint64_t dropped_events() const noexcept;
 
-        // Test-only injection hook – available when the real vsomeip backend is absent.
-#if defined(KMX_AIO_FEATURE_SOMEIP) && defined(KMX_AIO_SOMEIP_LINK_BACKEND)
-    #if __has_include(<vsomeip/vsomeip.hpp>)
-        #define KMX_AIO_HAS_VSOMEIP_HEADER 1
-    #elif __has_include(<vsomeip3/vsomeip.hpp>)
-        #define KMX_AIO_HAS_VSOMEIP_HEADER 1
+    // Test-only injection hook – available when the real vsomeip backend is absent.
+    #if defined(KMX_AIO_SOMEIP_LINK_BACKEND)
+        #if __has_include(<vsomeip/vsomeip.hpp>)
+            #define KMX_AIO_HAS_VSOMEIP_HEADER 1
+        #elif __has_include(<vsomeip3/vsomeip.hpp>)
+            #define KMX_AIO_HAS_VSOMEIP_HEADER 1
+        #endif
     #endif
-#endif
 
-#if !defined(KMX_AIO_HAS_VSOMEIP_HEADER)
+    #if !defined(KMX_AIO_HAS_VSOMEIP_HEADER)
         /// @brief Test-only: pushes a synthetic event directly into the internal queue.
         /// @param notification Event to inject.
         /// @warning Available only in stub/test builds without real vsomeip headers.
         void __kmx_test_push_event(event_notification notification);
-#endif
+    #endif
 
     private:
         struct impl;
@@ -96,3 +98,4 @@ namespace kmx::aio::someip
     };
 
 } // namespace kmx::aio::someip
+#endif // KMX_AIO_FEATURE_SOMEIP

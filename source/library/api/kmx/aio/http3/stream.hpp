@@ -2,11 +2,13 @@
 /// @brief HTTP/3 stream definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <kmx/aio/http3/frame.hpp>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_HTTP3)
+    #ifndef PCH
+        #include <kmx/aio/http3/frame.hpp>
 
-    #include <cstdint>
-#endif
+        #include <cstdint>
+    #endif
 
 namespace kmx::aio::http3
 {
@@ -84,3 +86,4 @@ namespace kmx::aio::http3
         bool recv_closed_ {false};
     };
 } // namespace kmx::aio::http3
+#endif // KMX_AIO_FEATURE_HTTP3

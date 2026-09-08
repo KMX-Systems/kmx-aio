@@ -2,6 +2,11 @@
 /// @brief V4L2 capture types shared across the V4L2 pillar.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
+// Not guarded on KMX_AIO_FEATURE_READINESS, unlike the rest of this directory. These are pure
+// types - structs, constexpr constants and defaulted comparisons, with nothing defined out of
+// line - so they need no part of the readiness library, and <kmx/aio/completion/v4l2/capture.hpp>
+// names them from the completion side. Guarding them would make the completion model's V4L2 API
+// depend on a library it does not use.
 #ifndef PCH
     #include <cstdint>
     #include <string>

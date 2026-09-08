@@ -2,17 +2,19 @@
 /// @brief Public API for the IEEE 802.1Qat SRP (MSRP) stream reservation client.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <chrono>
-    #include <expected>
-    #include <memory>
-    #include <string_view>
-    #include <system_error>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_AVB)
+    #ifndef PCH
+        #include <chrono>
+        #include <expected>
+        #include <memory>
+        #include <string_view>
+        #include <system_error>
 
-    #include <kmx/aio/avb/avb_types.hpp>
-    #include <kmx/aio/avb/srp/messages.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+        #include <kmx/aio/avb/avb_types.hpp>
+        #include <kmx/aio/avb/srp/messages.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::avb::srp
 {
@@ -81,3 +83,4 @@ namespace kmx::aio::avb::srp
         std::unique_ptr<state> state_;
     };
 }
+#endif // KMX_AIO_FEATURE_AVB

@@ -34,12 +34,47 @@
 namespace kmx::aio::test::lifecycle_edges_test
 {
     using namespace std::literals::chrono_literals;
+#if defined(KMX_AIO_FEATURE_READINESS)
     using kmx::aio::test::scoped_runner;
+#endif
     using kmx::aio::test::wait_for_flag;
 
     namespace detail
     {
+
+        /// @brief Waits out a 5 ms timeout, then stops the completion executor from a thread it owns.
+        task<void> stop_completion_after_timeout(completion::executor& exec, std::atomic_bool& ran) noexcept(false)
+        {
+            const auto waited = co_await exec.async_timeout(5'000'000u); // 5ms
+            (void) waited;
+            ran.store(true, std::memory_order_release);
+            exec.stop();
+        }
     } // namespace detail
+
+#if defined(KMX_AIO_FEATURE_READINESS)
+    namespace detail
+    {
+
+        /// @brief Waits out a 2 ms timeout, then stops the executor from a thread it owns.
+        task<void> stop_after_short_timeout(const std::shared_ptr<readiness::executor>& exec, std::atomic_bool& ran) noexcept(false)
+        {
+            const auto waited = co_await exec->async_timeout(2'000'000u);
+            (void) waited;
+            ran.store(true, std::memory_order_release);
+            exec->stop();
+        }
+
+        /// @brief Waits out a 5 ms timeout, then stops the executor from a thread it owns.
+        task<void> stop_after_timeout(const std::shared_ptr<readiness::executor>& exec, std::atomic_bool& ran) noexcept(false)
+        {
+            const auto waited = co_await exec->async_timeout(5'000'000u);
+            (void) waited;
+            ran.store(true, std::memory_order_release);
+            exec->stop();
+        }
+    } // namespace detail
+#endif // KMX_AIO_FEATURE_READINESS
 
     // io_base teardown, through the two stream types that derive from it
 #if defined(KMX_AIO_FEATURE_READINESS)
@@ -165,14 +200,7 @@ namespace kmx::aio::test::lifecycle_edges_test
             auto exec = std::make_shared<readiness::executor>();
             watch = exec;
 
-            auto body = [exec, &ran]() -> task<void>
-            {
-                const auto waited = co_await exec->async_timeout(2'000'000u);
-                (void) waited;
-                ran.store(true, std::memory_order_release);
-                exec->stop();
-            };
-            exec->spawn(body());
+            exec->spawn(detail::stop_after_short_timeout(exec, ran));
             exec->run();
             exec->stop();
         }
@@ -217,14 +245,7 @@ namespace kmx::aio::test::lifecycle_edges_test
         completion::executor exec;
         std::atomic_bool ran {false};
 
-        auto body = [&exec, &ran]() -> task<void>
-        {
-            const auto waited = co_await exec.async_timeout(5'000'000u); // 5ms
-            (void) waited;
-            ran.store(true, std::memory_order_release);
-            exec.stop();
-        };
-        exec.spawn(body());
+        exec.spawn(detail::stop_completion_after_timeout(exec, ran));
         exec.run();
 
         CHECK(ran.load(std::memory_order_acquire));
@@ -241,14 +262,7 @@ namespace kmx::aio::test::lifecycle_edges_test
         auto exec = std::make_shared<readiness::executor>();
         std::atomic_bool ran {false};
 
-        auto body = [exec, &ran]() -> task<void>
-        {
-            const auto waited = co_await exec->async_timeout(5'000'000u);
-            (void) waited;
-            ran.store(true, std::memory_order_release);
-            exec->stop();
-        };
-        exec->spawn(body());
+        exec->spawn(detail::stop_after_timeout(exec, ran));
         exec->run();
 
         CHECK(ran.load(std::memory_order_acquire));

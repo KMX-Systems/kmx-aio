@@ -26,13 +26,13 @@ namespace kmx::aio::sample::quic::http3_server
         {
             constexpr std::uint16_t default_port = 12345u;
             const char* const env = std::getenv("KMX_QUIC_HTTP3_PORT");
-            if (!env || env[0] == '\0')
+            if (!env || (env[0] == '\0'))
                 return default_port;
 
             std::uint32_t parsed {};
             const char* const end = env + std::char_traits<char>::length(env);
             const auto [ptr, ec] = std::from_chars(env, end, parsed);
-            if (ec != std::errc() || ptr != end || parsed == 0u || parsed > 65535u)
+            if ((ec != std::errc()) || (ptr != end) || (parsed == 0u) || (parsed > 65535u))
                 return default_port;
 
             return static_cast<std::uint16_t>(parsed);
@@ -57,11 +57,9 @@ namespace kmx::aio::sample::quic::http3_server
         if (control_state)
         {
             if (control_state->saw_settings)
-            {
                 std::cout << "[HTTP/3 Server] Received peer control stream SETTINGS"
-                          << " max_field_section_size=" << control_state->negotiated_settings.max_field_section_size
-                          << " qpack_blocked_streams=" << control_state->negotiated_settings.qpack_blocked_streams << "\n";
-            }
+                      << " max_field_section_size=" << control_state->negotiated_settings.max_field_section_size
+                      << " qpack_blocked_streams=" << control_state->negotiated_settings.qpack_blocked_streams << "\n";
 
             if (control_state->goaway.has_value())
                 std::cout << "[HTTP/3 Server] Received peer GOAWAY stream_id=" << control_state->goaway->stream_id << "\n";
@@ -118,7 +116,7 @@ namespace kmx::aio::sample::quic::http3_server
         response_frames.insert(response_frames.end(), body_frame.begin(), body_frame.end());
         std::string response(reinterpret_cast<const char*>(response_frames.data()), response_frames.size());
 
-        std::size_t written = 0;
+        std::size_t written {};
         while (written < response.size())
         {
             const ssize_t chunk = ::lsquic_stream_write(stream, response.data() + written, response.size() - written);
@@ -176,9 +174,7 @@ namespace kmx::aio::sample::quic::http3_server
 
         auto process_res = co_await engine.process();
         if (!process_res)
-        {
             std::cerr << "Engine process error: " << process_res.error().message() << "\n";
-        }
         ::SSL_CTX_free(ssl_ctx);
     }
 }

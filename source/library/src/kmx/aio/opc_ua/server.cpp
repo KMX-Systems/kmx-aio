@@ -9,7 +9,7 @@
 
 namespace kmx::aio::opc_ua
 {
-    namespace
+    namespace server_internal
     {
         enum class lifecycle_state
         {
@@ -32,15 +32,15 @@ namespace kmx::aio::opc_ua
                     return make_error_code(error::internal_error);
             }
         }
-    }
+    } // namespace server_internal
 
     struct server::impl
     {
         explicit impl(server_config cfg) noexcept: config(std::move(cfg)) {}
 
         server_config config;
-        UA_Server* native_server = nullptr;
-        lifecycle_state state = lifecycle_state::idle;
+        UA_Server* native_server {};
+        server_internal::lifecycle_state state = server_internal::lifecycle_state::idle;
         statistics stats;
 
         ~impl() noexcept
@@ -66,7 +66,8 @@ namespace kmx::aio::opc_ua
         if (impl_->native_server != nullptr)
             co_return std::unexpected(make_error_code(error::invalid_configuration));
 
-        if (impl_->config.mode != security_mode::none && (impl_->config.certificate_path.empty() || impl_->config.private_key_path.empty()))
+        if ((impl_->config.mode != security_mode::none) &&
+            (impl_->config.certificate_path.empty() || impl_->config.private_key_path.empty()))
             co_return std::unexpected(make_error_code(error::invalid_configuration));
 
         impl_->native_server = UA_Server_new();
@@ -78,10 +79,10 @@ namespace kmx::aio::opc_ua
         {
             UA_Server_delete(impl_->native_server);
             impl_->native_server = nullptr;
-            co_return std::unexpected(map_status_to_error(status));
+            co_return std::unexpected(server_internal::map_status_to_error(status));
         }
 
-        impl_->state = lifecycle_state::running;
+        impl_->state = server_internal::lifecycle_state::running;
         co_return expected_void_t {};
     }
 
@@ -90,18 +91,18 @@ namespace kmx::aio::opc_ua
         if (impl_->native_server == nullptr)
             co_return std::unexpected(make_error_code(error::not_initialized));
 
-        impl_->state = lifecycle_state::stopping;
+        impl_->state = server_internal::lifecycle_state::stopping;
 
         const UA_StatusCode status = UA_Server_run_shutdown(impl_->native_server);
         if (status != UA_STATUSCODE_GOOD)
         {
-            impl_->state = lifecycle_state::running;
-            co_return std::unexpected(map_status_to_error(status));
+            impl_->state = server_internal::lifecycle_state::running;
+            co_return std::unexpected(server_internal::map_status_to_error(status));
         }
 
         UA_Server_delete(impl_->native_server);
         impl_->native_server = nullptr;
-        impl_->state = lifecycle_state::idle;
+        impl_->state = server_internal::lifecycle_state::idle;
         co_return expected_void_t {};
     }
 

@@ -29,12 +29,7 @@ namespace kmx::aio::quic::detail
         /// @return `true` when this is the first stream parked since the list was last drained.
         /// @note The return value exists so that backpressure costs one log line per episode rather than one
         ///       per stream: with a busy connection and an empty pool, every readable stream parks in turn.
-        bool park(::lsquic_stream* const stream)
-        {
-            const bool first_of_episode = streams_.empty();
-            streams_.insert(stream);
-            return first_of_episode;
-        }
+        bool park(::lsquic_stream* const stream);
 
         /// @brief Drops a stream from the list, whether or not it was parked.
         /// @param stream The stream lsquic is closing.

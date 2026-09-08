@@ -40,14 +40,10 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
         ::SSL_CTX_set_alpn_select_cb(ssl_ctx_, alpn_select_cb, nullptr);
 
         if (::SSL_CTX_use_certificate_chain_file(ssl_ctx_, config_.cert_file.c_str()) <= 0)
-        {
             return false;
-        }
 
         if (::SSL_CTX_use_PrivateKey_file(ssl_ctx_, config_.key_file.c_str(), SSL_FILETYPE_PEM) <= 0)
-        {
             return false;
-        }
 
         readiness::executor_config exec_config {
             .thread_count = config_.executor_threads,
@@ -130,7 +126,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
 
             std::array<char, 9u> ack_buf {};
             auto r_ack = co_await stream.read(span_char_t(ack_buf.data(), ack_buf.size()));
-            if (!r_ack || *r_ack < ack_buf.size() || ack_buf[3] != 4 || ack_buf[4] != 1)
+            if (!r_ack || (*r_ack < ack_buf.size()) || (ack_buf[3] != 4) || (ack_buf[4] != 1))
             {
                 metrics_.failures.fetch_add(1u, std::memory_order_relaxed);
                 co_return;
@@ -141,7 +137,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
             while (total < req_hdr.size())
             {
                 auto r = co_await stream.read(span_char_t(req_hdr.data() + total, req_hdr.size() - total));
-                if (!r || *r == 0u)
+                if (!r || (*r == 0u))
                     break;
                 total += *r;
             }
@@ -157,7 +153,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
                 while (total < payload_len)
                 {
                     auto r = co_await stream.read(span_char_t(payload.data() + total, payload_len - total));
-                    if (!r || *r == 0u)
+                    if (!r || (*r == 0u))
                         break;
                     total += *r;
                 }

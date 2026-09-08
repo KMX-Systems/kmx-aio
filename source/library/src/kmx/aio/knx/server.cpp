@@ -6,57 +6,52 @@
 
 namespace kmx::aio::knx
 {
-    namespace
+    [[nodiscard]] static expected_void_t validate_connect_request(const hpai& control, const hpai& data) noexcept
     {
-        [[nodiscard]] std::expected<void, std::error_code> validate_connect_request(
-            const hpai& control, const hpai& data) noexcept
-        {
-            if ((control.protocol != 0x01u) || (data.protocol != 0x01u))
-                return std::unexpected(make_error_code(error::unsupported_hpai));
-            if ((control.endpoint.port == 0u) || (data.endpoint.port == 0u))
-                return std::unexpected(make_error_code(error::invalid_configuration));
-            return {};
-        }
+        if ((control.protocol != 0x01u) || (data.protocol != 0x01u))
+            return std::unexpected(make_error_code(error::unsupported_hpai));
+        if ((control.endpoint.port == 0u) || (data.endpoint.port == 0u))
+            return std::unexpected(make_error_code(error::invalid_configuration));
+        return {};
+    }
 
-        [[nodiscard]] std::expected<void, std::error_code> validate_connect_request(
-            const ipv6_hpai& control, const ipv6_hpai& data) noexcept
-        {
-            if ((control.protocol != 0x01u) || (data.protocol != 0x01u))
-                return std::unexpected(make_error_code(error::unsupported_hpai));
-            if ((control.endpoint.port == 0u) || (data.endpoint.port == 0u))
-                return std::unexpected(make_error_code(error::invalid_configuration));
-            return {};
-        }
+    [[nodiscard]] static expected_void_t validate_connect_request(const ipv6_hpai& control, const ipv6_hpai& data) noexcept
+    {
+        if ((control.protocol != 0x01u) || (data.protocol != 0x01u))
+            return std::unexpected(make_error_code(error::unsupported_hpai));
+        if ((control.endpoint.port == 0u) || (data.endpoint.port == 0u))
+            return std::unexpected(make_error_code(error::invalid_configuration));
+        return {};
+    }
 
-        [[nodiscard]] transport_peer make_data_peer(
-            const transport_peer& control_peer, const hpai& endpoint) noexcept
+    [[nodiscard]] static transport_peer make_data_peer(
+        const transport_peer& control_peer, const hpai& endpoint) noexcept
+    {
+        auto result = control_peer;
+        if (result.address.ss_family == AF_INET)
         {
-            auto result = control_peer;
-            if (result.address.ss_family == AF_INET)
-            {
-                auto& address = reinterpret_cast<sockaddr_in&>(result.address);
-                std::memcpy(&address.sin_addr.s_addr, endpoint.endpoint.address.data(),
-                            endpoint.endpoint.address.size());
-                address.sin_port = htons(endpoint.endpoint.port);
-                result.length = sizeof(sockaddr_in);
-            }
-            return result;
+            auto& address = reinterpret_cast<sockaddr_in&>(result.address);
+            std::memcpy(&address.sin_addr.s_addr, endpoint.endpoint.address.data(),
+                        endpoint.endpoint.address.size());
+            address.sin_port = htons(endpoint.endpoint.port);
+            result.length = sizeof(sockaddr_in);
         }
+        return result;
+    }
 
-        [[nodiscard]] transport_peer make_data_peer(
-            const transport_peer& control_peer, const ipv6_hpai& endpoint) noexcept
+    [[nodiscard]] static transport_peer make_data_peer(
+        const transport_peer& control_peer, const ipv6_hpai& endpoint) noexcept
+    {
+        auto result = control_peer;
+        if (result.address.ss_family == AF_INET6)
         {
-            auto result = control_peer;
-            if (result.address.ss_family == AF_INET6)
-            {
-                auto& address = reinterpret_cast<sockaddr_in6&>(result.address);
-                std::memcpy(&address.sin6_addr, endpoint.endpoint.address.data(),
-                            endpoint.endpoint.address.size());
-                address.sin6_port = htons(endpoint.endpoint.port);
-                result.length = sizeof(sockaddr_in6);
-            }
-            return result;
+            auto& address = reinterpret_cast<sockaddr_in6&>(result.address);
+            std::memcpy(&address.sin6_addr, endpoint.endpoint.address.data(),
+                        endpoint.endpoint.address.size());
+            address.sin6_port = htons(endpoint.endpoint.port);
+            result.length = sizeof(sockaddr_in6);
         }
+        return result;
     }
 
     generic_server::generic_server(datagram_transport& transport, const server_config config,
@@ -88,7 +83,7 @@ namespace kmx::aio::knx
 
     std::uint8_t generic_server::active_channels() const noexcept
     {
-        std::uint8_t count = 0u;
+        std::uint8_t count {};
         for (std::uint16_t id = 1u; id < channels_.size(); ++id)
         {
             if (channels_[id].active)
@@ -128,13 +123,13 @@ namespace kmx::aio::knx
             (expected_peer.address.ss_family != peer.address.ss_family))
             return false;
 
-        if (peer.address.ss_family == AF_INET && peer.length >= sizeof(sockaddr_in))
+        if ((peer.address.ss_family == AF_INET) && (peer.length >= sizeof(sockaddr_in)))
         {
             const auto& expected = reinterpret_cast<const sockaddr_in&>(expected_peer.address);
             const auto& actual = reinterpret_cast<const sockaddr_in&>(peer.address);
             return (expected.sin_port == actual.sin_port) && (expected.sin_addr.s_addr == actual.sin_addr.s_addr);
         }
-        if (peer.address.ss_family == AF_INET6 && peer.length >= sizeof(sockaddr_in6))
+        if ((peer.address.ss_family == AF_INET6) && (peer.length >= sizeof(sockaddr_in6)))
         {
             const auto& expected = reinterpret_cast<const sockaddr_in6&>(expected_peer.address);
             const auto& actual = reinterpret_cast<const sockaddr_in6&>(peer.address);
@@ -146,7 +141,7 @@ namespace kmx::aio::knx
     }
 
     task_returning_expected_void_t generic_server::send_datagram(
-        const std::vector<std::uint8_t>& packet, const transport_peer& peer) noexcept(false)
+        const byte_buffer_t& packet, const transport_peer& peer) noexcept(false)
     {
         const auto* bytes = reinterpret_cast<const std::byte*>(packet.data());
         const auto sent = co_await transport_.send(
@@ -158,7 +153,7 @@ namespace kmx::aio::knx
         co_return expected_void_t {};
     }
 
-    task<std::expected<server_event, std::error_code>> generic_server::serve_once() noexcept(false)
+    server_event_task_t generic_server::serve_once() noexcept(false)
     {
         if (shutdown_)
             co_return std::unexpected(make_error_code(error::shutdown));
@@ -178,7 +173,7 @@ namespace kmx::aio::knx
         if (!decoded.has_value())
             co_return std::unexpected(decoded.error());
 
-        std::vector<std::uint8_t> response;
+        byte_buffer_t response;
 
         if (const auto* request = std::get_if<ipv6_connect_request_frame>(&decoded->payload))
         {
@@ -328,7 +323,7 @@ namespace kmx::aio::knx
             observe_activity(channel);
             co_return server_event {
                 request->channel_id,
-                std::vector<std::uint8_t>(request->cemi_bytes.begin(), request->cemi_bytes.end()),
+                byte_buffer_t(request->cemi_bytes.begin(), request->cemi_bytes.end()),
             };
         }
 
@@ -360,7 +355,7 @@ namespace kmx::aio::knx
     }
 
     task_returning_expected_void_t generic_server::send(
-        const std::uint8_t channel_id, const std::span<const std::uint8_t> cemi_bytes) noexcept(false)
+        const std::uint8_t channel_id, const cspan_uint8_t cemi_bytes) noexcept(false)
     {
         if (!channel_active(channel_id))
             co_return std::unexpected(make_error_code(error::invalid_configuration));
@@ -373,7 +368,7 @@ namespace kmx::aio::knx
         if (!encoded.has_value())
             co_return std::unexpected(encoded.error());
         const auto size = frame::communication_header_size + frame::tunnelling_request_header_size + cemi_bytes.size();
-        std::vector<std::uint8_t> packet(buffer.begin(), buffer.begin() + size);
+        byte_buffer_t packet(buffer.begin(), buffer.begin() + size);
         const auto sent = co_await send_datagram(packet, channels_[channel_id].data_peer);
         if (!sent)
             co_return std::unexpected(sent.error());

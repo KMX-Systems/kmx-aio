@@ -2,13 +2,15 @@
 /// @brief Completion-model TCP listener using io_uring IORING_OP_ACCEPT.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_COMPLETION)
+    #ifndef PCH
 
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/completion/executor.hpp>
-    #include <kmx/aio/completion/io_base.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/completion/executor.hpp>
+        #include <kmx/aio/completion/io_base.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::completion::tcp
 {
@@ -56,3 +58,4 @@ namespace kmx::aio::completion::tcp
     };
 
 } // namespace kmx::aio::completion::tcp
+#endif // KMX_AIO_FEATURE_COMPLETION

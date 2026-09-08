@@ -2,15 +2,17 @@
 /// @brief Backend-neutral async OPC UA server facade.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <chrono>
-    #include <expected>
-    #include <memory>
-    #include <system_error>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_OPC_UA)
+    #ifndef PCH
+        #include <chrono>
+        #include <expected>
+        #include <memory>
+        #include <system_error>
 
-    #include <kmx/aio/opc_ua/types.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+        #include <kmx/aio/opc_ua/types.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::opc_ua
 {
@@ -61,3 +63,4 @@ namespace kmx::aio::opc_ua
     };
 
 } // namespace kmx::aio::opc_ua
+#endif // KMX_AIO_FEATURE_OPC_UA

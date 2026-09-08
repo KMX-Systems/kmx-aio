@@ -1,17 +1,19 @@
 /// @file aio/knx/connection.hpp
 /// @brief KNXnet/IP HPAI and tunnelling connection frame helpers.
 #pragma once
-#ifndef PCH
-    #include <array>
-    #include <cstdint>
-    #include <expected>
-    #include <span>
-    #include <system_error>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_KNX)
+    #ifndef PCH
+        #include <array>
+        #include <cstdint>
+        #include <expected>
+        #include <span>
+        #include <system_error>
+    #endif
 
-#include <kmx/aio/basic_types.hpp>
-#include <kmx/aio/knx/address.hpp>
-#include <kmx/aio/knx/frame.hpp>
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/knx/address.hpp>
+    #include <kmx/aio/knx/frame.hpp>
 
 namespace kmx::aio::knx
 {
@@ -29,13 +31,13 @@ namespace kmx::aio::knx
     struct ipv4_endpoint
     {
         std::array<std::uint8_t, 4u> address {};
-        std::uint16_t port = 0u;
+        std::uint16_t port {};
     };
 
     struct ipv6_endpoint
     {
         std::array<std::uint8_t, 16u> address {};
-        std::uint16_t port = 0u;
+        std::uint16_t port {};
     };
 
     struct hpai
@@ -58,7 +60,7 @@ namespace kmx::aio::knx
 
     struct ipv6_connect_response_frame
     {
-        std::uint8_t channel_id = 0u;
+        std::uint8_t channel_id {};
         connect_status status = connect_status::no_error;
         ipv6_hpai data_endpoint {};
         individual_address assigned_address {};
@@ -72,7 +74,7 @@ namespace kmx::aio::knx
 
     struct connect_response_frame
     {
-        std::uint8_t channel_id = 0u;
+        std::uint8_t channel_id {};
         connect_status status = connect_status::no_error;
         hpai data_endpoint {};
         /// @brief The individual address the interface assigned to this tunnel, from the CRD.
@@ -83,23 +85,23 @@ namespace kmx::aio::knx
 
     struct connectionstate_request_frame
     {
-        std::uint8_t channel_id = 0u;
+        std::uint8_t channel_id {};
     };
 
     struct connectionstate_response_frame
     {
-        std::uint8_t channel_id = 0u;
+        std::uint8_t channel_id {};
         connect_status status = connect_status::no_error;
     };
 
     struct disconnect_request_frame
     {
-        std::uint8_t channel_id = 0u;
+        std::uint8_t channel_id {};
     };
 
     struct disconnect_response_frame
     {
-        std::uint8_t channel_id = 0u;
+        std::uint8_t channel_id {};
         connect_status status = connect_status::no_error;
     };
 
@@ -124,37 +126,36 @@ namespace kmx::aio::knx
         /// @brief KNX layer code of a link layer tunnel, the only layer this build requests.
         inline constexpr std::uint8_t tunnel_link_layer = 0x02u;
 
-        [[nodiscard]] std::expected<void, std::error_code> encode_connect_request_packet(
-            span_uint8_t dest, const connect_request_frame& request) noexcept;
+        [[nodiscard]] expected_void_t encode_connect_request_packet(span_uint8_t dest, const connect_request_frame& request) noexcept;
         [[nodiscard]] std::expected<connect_request_frame, std::error_code> decode_connect_request_packet(
             cspan_uint8_t packet) noexcept;
-        [[nodiscard]] std::expected<void, std::error_code> encode_ipv6_connect_request_packet(
+        [[nodiscard]] expected_void_t encode_ipv6_connect_request_packet(
             span_uint8_t dest, const ipv6_connect_request_frame& request) noexcept;
         [[nodiscard]] std::expected<ipv6_connect_request_frame, std::error_code> decode_ipv6_connect_request_packet(
             cspan_uint8_t packet) noexcept;
-        [[nodiscard]] std::expected<void, std::error_code> encode_connect_response_packet(
-            span_uint8_t dest, const connect_response_frame& response) noexcept;
+        [[nodiscard]] expected_void_t encode_connect_response_packet(span_uint8_t dest, const connect_response_frame& response) noexcept;
         [[nodiscard]] std::expected<connect_response_frame, std::error_code> decode_connect_response_packet(
             cspan_uint8_t packet) noexcept;
-        [[nodiscard]] std::expected<void, std::error_code> encode_ipv6_connect_response_packet(
+        [[nodiscard]] expected_void_t encode_ipv6_connect_response_packet(
             span_uint8_t dest, const ipv6_connect_response_frame& response) noexcept;
         [[nodiscard]] std::expected<ipv6_connect_response_frame, std::error_code> decode_ipv6_connect_response_packet(
             cspan_uint8_t packet) noexcept;
-        [[nodiscard]] std::expected<void, std::error_code> encode_connectionstate_request_packet(
+        [[nodiscard]] expected_void_t encode_connectionstate_request_packet(
             span_uint8_t dest, const connectionstate_request_frame& request) noexcept;
         [[nodiscard]] std::expected<connectionstate_request_frame, std::error_code> decode_connectionstate_request_packet(
             cspan_uint8_t packet) noexcept;
-        [[nodiscard]] std::expected<void, std::error_code> encode_connectionstate_response_packet(
+        [[nodiscard]] expected_void_t encode_connectionstate_response_packet(
             span_uint8_t dest, const connectionstate_response_frame& response) noexcept;
         [[nodiscard]] std::expected<connectionstate_response_frame, std::error_code> decode_connectionstate_response_packet(
             cspan_uint8_t packet) noexcept;
-        [[nodiscard]] std::expected<void, std::error_code> encode_disconnect_request_packet(
+        [[nodiscard]] expected_void_t encode_disconnect_request_packet(
             span_uint8_t dest, const disconnect_request_frame& request) noexcept;
         [[nodiscard]] std::expected<disconnect_request_frame, std::error_code> decode_disconnect_request_packet(
             cspan_uint8_t packet) noexcept;
-        [[nodiscard]] std::expected<void, std::error_code> encode_disconnect_response_packet(
+        [[nodiscard]] expected_void_t encode_disconnect_response_packet(
             span_uint8_t dest, const disconnect_response_frame& response) noexcept;
         [[nodiscard]] std::expected<disconnect_response_frame, std::error_code> decode_disconnect_response_packet(
             cspan_uint8_t packet) noexcept;
     }
 }
+#endif // KMX_AIO_FEATURE_KNX

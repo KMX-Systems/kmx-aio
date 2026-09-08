@@ -35,7 +35,9 @@
 namespace kmx::aio::test::branch_edges_test
 {
     using namespace std::literals::chrono_literals;
+#if defined(KMX_AIO_FEATURE_READINESS)
     using kmx::aio::test::scoped_runner;
+#endif
     using kmx::aio::test::wait_for_flag;
 
     // logger
@@ -101,7 +103,101 @@ namespace kmx::aio::test::branch_edges_test
     // readiness executor: cancellation bookkeeping
     namespace detail
     {
+
+        /// @brief Waits out a timeout, then stops the completion executor twice from inside a task.
+        task<void> stop_completion_twice_from_task(completion::executor& exec, bool& ran) noexcept(false)
+        {
+            const auto waited = co_await exec.async_timeout(2'000'000u);
+            (void) waited;
+            exec.stop();
+            exec.stop();
+            ran = true;
+        }
+        /// @brief Occupies one scheduler worker until the release flag is set.
+        /// @param release Polled until set, so the caller decides how long the worker stays busy.
+        /// @param started Incremented once the task is running on a worker.
+        /// @param completed Incremented once the task is done.
+        void hold_worker(const std::atomic_bool& release, std::atomic_int& started, std::atomic_int& completed) noexcept
+        {
+            started.fetch_add(1, std::memory_order_acq_rel);
+            while (!release.load(std::memory_order_acquire))
+                std::this_thread::sleep_for(1ms);
+
+            completed.fetch_add(1, std::memory_order_acq_rel);
+        }
+
     } // namespace detail
+
+#if defined(KMX_AIO_FEATURE_READINESS)
+    namespace detail
+    {
+
+        /// @brief Parks on a read wait, counting the coroutines that park and the ones that finish.
+        task<void> count_wait(std::atomic_int& parked, std::atomic_int& finished, const std::shared_ptr<readiness::executor>& exec,
+                              const int fd) noexcept(false)
+        {
+            parked.fetch_add(1, std::memory_order_acq_rel);
+            const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
+            (void) event;
+            finished.fetch_add(1, std::memory_order_acq_rel);
+        }
+
+        /// @brief Parks on a read wait and records that it started and that it ended.
+        task<void> park_reader(std::atomic_bool& read_parked, std::atomic_bool& read_done, const std::shared_ptr<readiness::executor>& exec,
+                               const int fd) noexcept(false)
+        {
+            read_parked.store(true, std::memory_order_release);
+            const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
+            (void) event;
+            read_done.store(true, std::memory_order_release);
+        }
+
+        /// @brief Waits out a timeout, then stops the executor twice from a thread the executor owns.
+        task<void> stop_twice_from_task(const std::shared_ptr<readiness::executor>& exec, std::atomic_bool& ran) noexcept(false)
+        {
+            const auto waited = co_await exec->async_timeout(2'000'000u);
+            (void) waited;
+            exec->stop(); // wins the exchange, defers the join
+            exec->stop(); // running_ already false: the deferred-join path, from an owned thread
+            ran.store(true, std::memory_order_release);
+        }
+
+        /// @brief Parks on a read wait and records that it started and that it ended.
+        task<void> park_waiter(std::atomic_bool& parked, std::atomic_bool& done, const std::shared_ptr<readiness::executor>& exec,
+                               const int fd) noexcept(false)
+        {
+            parked.store(true, std::memory_order_release);
+            const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
+            (void) event;
+            done.store(true, std::memory_order_release);
+        }
+
+        /// @brief Parks on a read wait, then waits again on a descriptor whose subscription list was erased.
+        task<void> park_then_time_out(std::atomic_bool& parked, std::atomic_bool& done, const std::shared_ptr<readiness::executor>& exec,
+                                      const int fd) noexcept(false)
+        {
+            parked.store(true, std::memory_order_release);
+            const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
+            (void) event;
+            done.store(true, std::memory_order_release);
+
+            // A second wait on the same descriptor after the list was erased, so the lookup runs again
+            // against a table that no longer holds the entry.
+            const auto waited = co_await exec->async_timeout(20'000'000u);
+            (void) waited;
+        }
+
+        /// @brief Parks on a read wait, counting only the coroutines a real event woke.
+        task<void> count_event_wait(std::atomic_int& parked, std::atomic_int& finished, const std::shared_ptr<readiness::executor>& exec,
+                                    const int fd) noexcept(false)
+        {
+            parked.fetch_add(1, std::memory_order_acq_rel);
+            const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
+            if (event)
+                finished.fetch_add(1, std::memory_order_acq_rel);
+        }
+    } // namespace detail
+#endif // KMX_AIO_FEATURE_READINESS
 
 #if defined(KMX_AIO_FEATURE_READINESS)
     TEST_CASE("cancelling a descriptor nobody waits on is a no-op", "[readiness][executor][branch]")
@@ -163,24 +259,8 @@ namespace kmx::aio::test::branch_edges_test
         std::atomic_int parked {0};
         std::atomic_int finished {0};
 
-        auto first = [&parked, &finished, exec, fd = sockets.local()]() -> task<void>
-        {
-            parked.fetch_add(1, std::memory_order_acq_rel);
-            const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
-            (void) event;
-            finished.fetch_add(1, std::memory_order_acq_rel);
-        };
-
-        auto second = [&parked, &finished, exec, fd = sockets.local()]() -> task<void>
-        {
-            parked.fetch_add(1, std::memory_order_acq_rel);
-            const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
-            (void) event;
-            finished.fetch_add(1, std::memory_order_acq_rel);
-        };
-
-        exec->spawn(first());
-        exec->spawn(second());
+        exec->spawn(detail::count_wait(parked, finished, exec, sockets.local()));
+        exec->spawn(detail::count_wait(parked, finished, exec, sockets.local()));
 
         scoped_runner runner {*exec};
 
@@ -213,14 +293,7 @@ namespace kmx::aio::test::branch_edges_test
         std::atomic_bool read_parked {false};
         std::atomic_bool read_done {false};
 
-        auto reader = [&read_parked, &read_done, exec, fd = sockets.local()]() -> task<void>
-        {
-            read_parked.store(true, std::memory_order_release);
-            const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
-            (void) event;
-            read_done.store(true, std::memory_order_release);
-        };
-        exec->spawn(reader());
+        exec->spawn(detail::park_reader(read_parked, read_done, exec, sockets.local()));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(read_parked, 2s));
@@ -240,15 +313,7 @@ namespace kmx::aio::test::branch_edges_test
         auto exec = std::make_shared<readiness::executor>();
         std::atomic_bool ran {false};
 
-        auto body = [exec, &ran]() -> task<void>
-        {
-            const auto waited = co_await exec->async_timeout(2'000'000u);
-            (void) waited;
-            exec->stop(); // wins the exchange, defers the join
-            exec->stop(); // running_ already false: the deferred-join path, from an owned thread
-            ran.store(true, std::memory_order_release);
-        };
-        exec->spawn(body());
+        exec->spawn(detail::stop_twice_from_task(exec, ran));
         exec->run();
         exec->stop();
 
@@ -259,17 +324,9 @@ namespace kmx::aio::test::branch_edges_test
     TEST_CASE("a second stop from inside a completion task finds the join already taken", "[completion][executor][branch]")
     {
         completion::executor exec;
-        bool ran = false;
+        bool ran {};
 
-        auto body = [&exec, &ran]() -> task<void>
-        {
-            const auto waited = co_await exec.async_timeout(2'000'000u);
-            (void) waited;
-            exec.stop();
-            exec.stop();
-            ran = true;
-        };
-        exec.spawn(body());
+        exec.spawn(detail::stop_completion_twice_from_task(exec, ran));
         exec.run();
         exec.stop();
 
@@ -290,14 +347,7 @@ namespace kmx::aio::test::branch_edges_test
         std::atomic_bool parked {false};
         std::atomic_bool done {false};
 
-        auto body = [&parked, &done, exec, fd = sockets.local()]() -> task<void>
-        {
-            parked.store(true, std::memory_order_release);
-            const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
-            (void) event;
-            done.store(true, std::memory_order_release);
-        };
-        exec->spawn(body());
+        exec->spawn(detail::park_waiter(parked, done, exec, sockets.local()));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(parked, 2s));
@@ -332,15 +382,7 @@ namespace kmx::aio::test::branch_edges_test
         {
             scheduler sched {2u};
 
-            sched.spawn(
-                [&release, &started, &completed]()
-                {
-                    started.fetch_add(1, std::memory_order_acq_rel);
-                    while (!release.load(std::memory_order_acquire))
-                        std::this_thread::sleep_for(1ms);
-
-                    completed.fetch_add(1, std::memory_order_acq_rel);
-                });
+            sched.spawn([&release, &started, &completed]() { detail::hold_worker(release, started, completed); });
 
             for (int i = 0; i < 4; ++i)
                 sched.spawn([&completed]() { completed.fetch_add(1, std::memory_order_acq_rel); });
@@ -432,19 +474,7 @@ namespace kmx::aio::test::branch_edges_test
         std::atomic_bool parked {false};
         std::atomic_bool done {false};
 
-        auto body = [&parked, &done, exec, fd = sockets.local()]() -> task<void>
-        {
-            parked.store(true, std::memory_order_release);
-            const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
-            (void) event;
-            done.store(true, std::memory_order_release);
-
-            // A second wait on the same descriptor after the list was erased, so the lookup runs again
-            // against a table that no longer holds the entry.
-            const auto waited = co_await exec->async_timeout(20'000'000u);
-            (void) waited;
-        };
-        exec->spawn(body());
+        exec->spawn(detail::park_then_time_out(parked, done, exec, sockets.local()));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(parked, 2s));
@@ -534,16 +564,8 @@ namespace kmx::aio::test::branch_edges_test
         std::atomic_int parked {0};
         std::atomic_int finished {0};
 
-        auto waiter = [&parked, &finished, exec, fd = sockets.local()]() -> task<void>
-        {
-            parked.fetch_add(1, std::memory_order_acq_rel);
-            const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
-            if (event)
-                finished.fetch_add(1, std::memory_order_acq_rel);
-        };
-
-        exec->spawn(waiter());
-        exec->spawn(waiter());
+        exec->spawn(detail::count_event_wait(parked, finished, exec, sockets.local()));
+        exec->spawn(detail::count_event_wait(parked, finished, exec, sockets.local()));
 
         scoped_runner runner {*exec};
 

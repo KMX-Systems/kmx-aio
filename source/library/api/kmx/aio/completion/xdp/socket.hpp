@@ -2,18 +2,20 @@
 /// @brief Completion-model AF_XDP socket for raw packet processing (NFV workloads).
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <cstddef>
-    #include <cstdint>
-    #include <expected>
-    #include <memory>
-    #include <span>
-    #include <string_view>
-    #include <system_error>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_COMPLETION) && defined(KMX_AIO_FEATURE_AF_XDP)
+    #ifndef PCH
+        #include <cstddef>
+        #include <cstdint>
+        #include <expected>
+        #include <memory>
+        #include <span>
+        #include <string_view>
+        #include <system_error>
 
-    #include <kmx/aio/completion/executor.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+        #include <kmx/aio/completion/executor.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::completion::xdp
 {
@@ -37,7 +39,7 @@ namespace kmx::aio::completion::xdp
         /// @brief TX ring entry count.
         std::uint32_t tx_ring_size = 2048u;
         /// @brief Forces XDP_ZEROCOPY mode when supported.
-        bool force_zero_copy = false;
+        bool force_zero_copy {};
         /// @brief Enables XDP_USE_NEED_WAKEUP to reduce busy polling.
         bool need_wakeup = true;
     };
@@ -154,7 +156,6 @@ namespace kmx::aio::completion::xdp
         /// @brief Sends data through the fallback backend.
         [[nodiscard]] static expected_void_t send_via_fallback(state& state, cspan_byte_t data) noexcept;
 
-#if defined(KMX_AIO_FEATURE_AF_XDP)
         /// @brief Initializes the AF_XDP backend.
         [[nodiscard]] static expected_void_t initialize_af_xdp_backend(state& state) noexcept;
 
@@ -169,10 +170,10 @@ namespace kmx::aio::completion::xdp
 
         /// @brief Seeds the free-frame pool.
         static void seed_free_frames(state& state) noexcept;
-#endif
 
         /// @brief Opaque owned implementation state.
         std::unique_ptr<state> state_ {};
     };
 
 } // namespace kmx::aio::completion::xdp
+#endif // KMX_AIO_FEATURE_COMPLETION && KMX_AIO_FEATURE_AF_XDP

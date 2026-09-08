@@ -43,7 +43,7 @@ namespace kmx::aio::sample::someip::echo_client
             co_return;
         }
 
-        bool available = false;
+        bool available {};
         for (int i = 0; i < 200; ++i)
         {
             if (client_.is_service_available(cfg.service_id, cfg.instance_id))

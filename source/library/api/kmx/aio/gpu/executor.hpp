@@ -2,20 +2,22 @@
 /// @brief GPU completion-model executor using CUDA streams and events.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <atomic>
-    #include <coroutine>
-    #include <cstdint>
-    #include <deque>
-    #include <memory>
-    #include <mutex>
-    #include <stop_token>
-    #include <unordered_map>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_CUDA)
+    #ifndef PCH
+        #include <atomic>
+        #include <coroutine>
+        #include <cstdint>
+        #include <deque>
+        #include <memory>
+        #include <mutex>
+        #include <stop_token>
+        #include <unordered_map>
 
-    #include <kmx/aio/executor_base.hpp>
-    #include <kmx/aio/gpu/basic_types.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+        #include <kmx/aio/executor_base.hpp>
+        #include <kmx/aio/gpu/basic_types.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::gpu
 {
@@ -25,7 +27,7 @@ namespace kmx::aio::gpu
         std::uint32_t max_events = 256u; ///< Maximum GPU events to poll per cycle.
         std::uint32_t thread_count = 1u; ///< Number of worker threads for coroutine resumption.
         std::int16_t core_id = -1;       ///< CPU core affinity (-1 = no pinning). Range: -1 to 16000.
-        std::int16_t gpu_device = 0;     ///< GPU device index. Range: 0 to 128. Use int16_t for alignment.
+        std::int16_t gpu_device {};     ///< GPU device index. Range: 0 to 128. Use std::int16_t for alignment.
     };
 
     /// @brief Statistics for GPU operations and executor performance.
@@ -230,3 +232,4 @@ namespace kmx::aio::gpu
     };
 
 } // namespace kmx::aio::gpu
+#endif // KMX_AIO_FEATURE_CUDA

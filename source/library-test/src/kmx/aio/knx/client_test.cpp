@@ -22,7 +22,7 @@ namespace kmx::aio::test::knx::client_test
 {
     using namespace kmx::aio::knx;
 
-    std::uint32_t test_now_ms = 0u;
+    std::uint32_t test_now_ms {};
 
     [[nodiscard]] std::uint32_t test_clock_now() noexcept
     {
@@ -49,25 +49,25 @@ namespace kmx::aio::test::knx::client_test
     class loopback_transport final: public datagram_transport
     {
     public:
-        bool timeout_next_receive = false;
-        bool always_timeout = false;
-        bool ack_received = false;
-        bool heartbeat_failure = false;
-        bool connect_failure = false;
-        bool short_send = false;
-        bool wrong_peer = false;
-        bool invalid_peer_length = false;
-        bool short_peer_length = false;
-        bool empty_receive = false;
-        bool oversized_receive = false;
-        bool ipv6_peer = false;
-        bool ipv6_connect = false;
-        bool data_peer_as_control = false;
-        bool hold_receive = false;
+        bool timeout_next_receive {};
+        bool always_timeout {};
+        bool ack_received {};
+        bool heartbeat_failure {};
+        bool connect_failure {};
+        bool short_send {};
+        bool wrong_peer {};
+        bool invalid_peer_length {};
+        bool short_peer_length {};
+        bool empty_receive {};
+        bool oversized_receive {};
+        bool ipv6_peer {};
+        bool ipv6_connect {};
+        bool data_peer_as_control {};
+        bool hold_receive {};
         std::uint64_t secure_response_sequence = 1u;
-        completion::executor* wait_executor = nullptr;
+        completion::executor* wait_executor {};
         std::uint16_t advertised_data_port = 3672u;
-        std::uint32_t last_receive_deadline = 0u;
+        std::uint32_t last_receive_deadline {};
         std::error_code send_error {};
         std::error_code receive_error {};
 
@@ -108,7 +108,9 @@ namespace kmx::aio::test::knx::client_test
                         const ipv6_connect_response_frame value {
                             .channel_id = 3u,
                             .status = connect_failure ? connect_status::no_more_connections : connect_status::no_error,
-                            .data_endpoint = ipv6_hpai { ipv6_endpoint {{0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 1u}, advertised_data_port}, 0x01u },
+                            .data_endpoint = ipv6_hpai {ipv6_endpoint {{0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 1u},
+                                                                       advertised_data_port},
+                                                        0x01u},
                             .assigned_address = individual_address {1u, 1u, 10u},
                         };
                         const auto result = connection::encode_ipv6_connect_response_packet(response, value);
@@ -351,22 +353,10 @@ namespace kmx::aio::test::knx::client_test
 
             return {};
         }
-    }
 
-    TEST_CASE("knx tunnelling client completes a loopback lifecycle", "[knx][client][integration]")
-    {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
-        const auto& cemi = sample_cemi;
-        bool succeeded = false;
-
-        completion::executor executor;
-        auto run = [&]() -> task<void>
+        /// @brief Connects, sends one cEMI and disconnects, recording whether the whole lifecycle succeeded.
+        task<void> run_loopback_lifecycle(tunnelling_client& client, const connect_request_frame& request, const cspan_uint8_t cemi,
+                                          bool& succeeded, completion::executor& executor) noexcept(false)
         {
             const auto connected = co_await client.connect(request);
             if (!connected)
@@ -383,9 +373,611 @@ namespace kmx::aio::test::knx::client_test
             const auto disconnected = co_await client.disconnect();
             succeeded = disconnected.has_value();
             executor.stop();
-        };
+        }
 
-        executor.spawn(run());
+        /// @brief Connects, then sends with the first receive timed out, so the request has to be retried.
+        task<void> retry_timed_out_request(loopback_transport& transport, tunnelling_client& client, const connect_request_frame& request,
+                                           const cspan_uint8_t cemi, bool& succeeded, completion::executor& executor) noexcept(false)
+        {
+            const auto connected = co_await client.connect(request);
+            if (!connected)
+            {
+                executor.stop();
+                co_return;
+            }
+            transport.timeout_next_receive = true;
+            const auto sent = co_await client.send(cemi);
+            succeeded = sent.has_value();
+            executor.stop();
+        }
+
+        /// @brief Connects, feeds the transport an acknowledgement for another channel, then sends.
+        task<void> ignore_stale_ack(loopback_transport& transport, tunnelling_client& client, const connect_request_frame& request,
+                                    const cspan_uint8_t stale_ack, bool& succeeded, completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(request)).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            transport.enqueue(std::vector<std::uint8_t>(stale_ack.begin(), stale_ack.end()));
+            succeeded = (co_await client.send(sample_cemi)).has_value();
+            executor.stop();
+        }
+
+        /// @brief Connects, then disconnects with the first receive timed out, so the request has to be retried.
+        task<void> retry_timed_out_disconnect(loopback_transport& transport, tunnelling_client& client,
+                                              const connect_request_frame& request, bool& succeeded,
+                                              completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(request)).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            transport.timeout_next_receive = true;
+            succeeded = (co_await client.disconnect()).has_value();
+            executor.stop();
+        }
+
+        /// @brief Connects and completes one heartbeat exchange.
+        task<void> complete_heartbeat(tunnelling_client& client, const connect_request_frame& request, bool& succeeded,
+                                      completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(request)).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            succeeded = (co_await client.heartbeat()).has_value();
+            executor.stop();
+        }
+
+        /// @brief Connects, then heartbeats against a transport that refuses, and records what came back.
+        task<void> propagate_heartbeat_failure(loopback_transport& transport, tunnelling_client& client,
+                                               const connect_request_frame& request, bool& failed, bool& stayed_connected,
+                                               completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(request)).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            transport.heartbeat_failure = true;
+            const auto result = co_await client.heartbeat();
+            failed = !result.has_value() && result.error() == make_error_code(error::connection_failed);
+            stayed_connected = client.state() == session_state::connected;
+            executor.stop();
+        }
+
+        /// @brief Connects against a transport that refuses, and records the error and the resulting state.
+        task<void> propagate_connect_failure(tunnelling_client& client, const connect_request_frame& request, bool& failed,
+                                             completion::executor& executor) noexcept(false)
+        {
+            const auto result = co_await client.connect(request);
+            failed = !result.has_value();
+            CHECK(result.error() == make_error_code(error::connection_failed));
+            CHECK(client.state() == session_state::idle);
+            executor.stop();
+        }
+
+        /// @brief Connects, then heartbeats with the first receive timed out, so the request has to be retried.
+        task<void> retry_timed_out_heartbeat(loopback_transport& transport, tunnelling_client& client, const connect_request_frame& request,
+                                             bool& succeeded, completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(request)).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            transport.timeout_next_receive = true;
+            succeeded = (co_await client.heartbeat()).has_value();
+            executor.stop();
+        }
+
+        /// @brief Connects, then heartbeats three times against a refusing transport to reach the terminal state.
+        task<void> escalate_heartbeat_failures(loopback_transport& transport, tunnelling_client& client,
+                                               const connect_request_frame& request, bool& terminal,
+                                               completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(request)).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            transport.heartbeat_failure = true;
+            (void) co_await client.heartbeat();
+            (void) co_await client.heartbeat();
+            const auto result = co_await client.heartbeat();
+            terminal = !result.has_value() && result.error() == make_error_code(error::heartbeat_failed) &&
+                       client.state() == session_state::closed;
+            executor.stop();
+        }
+
+        /// @brief Calls every public operation on a shut-down client and records that each one was refused.
+        task<void> reject_after_shutdown(tunnelling_client& client, const connect_request_frame& request, const cspan_uint8_t cemi,
+                                         bool& rejected, completion::executor& executor) noexcept(false)
+        {
+            const auto send_result = co_await client.send(cemi);
+            const auto heartbeat_result = co_await client.heartbeat();
+            const auto disconnect_result = co_await client.disconnect();
+            const auto connect_result = co_await client.connect(request);
+            rejected =
+                !send_result.has_value() && !heartbeat_result.has_value() && !disconnect_result.has_value() && !connect_result.has_value();
+            executor.stop();
+        }
+
+        /// @brief Calls both receive APIs on a shut-down client and records that each one was refused.
+        task<void> reject_receive_after_shutdown(tunnelling_client& client, bool& rejected, completion::executor& executor) noexcept(false)
+        {
+            const auto datagram = co_await client.receive_datagram();
+            const auto cemi = co_await client.receive_cemi();
+            rejected = !datagram.has_value() && !cemi.has_value() && datagram.error() == make_error_code(error::shutdown) &&
+                       cemi.error() == make_error_code(error::shutdown);
+            executor.stop();
+        }
+
+        /// @brief Connects, shuts down, resets, and connects again to a transport advertising a new data port.
+        task<void> reset_and_reconnect(loopback_transport& transport, tunnelling_client& client, const connect_request_frame& request,
+                                       bool& reconnected, completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(request)).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            client.shutdown();
+            client.reset();
+            transport.advertised_data_port = 3673u;
+            reconnected = (co_await client.connect(request)).has_value() && client.state() == session_state::connected &&
+                          (co_await client.send(sample_cemi)).has_value();
+            executor.stop();
+        }
+
+        /// @brief Connects and sends, then looks through what the transport was handed for a Secure wrapper.
+        task<void> detect_secure_wrapped_send(loopback_transport& transport, tunnelling_client& client, bool& secured_send,
+                                              completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(detail::loopback_connect_request)).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+
+            if (!(co_await client.send(sample_cemi)).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+
+            for (const auto& packet: transport.sent_packets())
+            {
+                const auto header = frame::decode_communication_header(packet);
+                if (!header.has_value())
+                    continue;
+                if (header->service_type == secure::secure_service)
+                {
+                    secured_send = true;
+                    break;
+                }
+            }
+            executor.stop();
+        }
+
+        /// @brief Connects, feeds the transport a Secure-wrapped indication, and reads the cEMI back out.
+        task<void> receive_secure_wrapped_indication(secure::provider& provider, loopback_transport& transport, tunnelling_client& client,
+                                                     bool& received_secure, completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(detail::loopback_connect_request)).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+
+            std::array<std::uint8_t, sample_tunnelling_packet_size> indication_packet {};
+            const auto encoded_indication =
+                frame::encode_tunnelling_request_packet(indication_packet, client.channel_id(), 0u, sample_cemi);
+            if (!encoded_indication.has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+
+            const auto secure_packet =
+                secure::protect_packet(provider, secure::profile::data_secure, {indication_packet.data(), indication_packet.size()}, 77u);
+            if (!secure_packet.has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            transport.enqueue(*secure_packet);
+
+            const auto cemi = co_await client.receive_cemi();
+            received_secure = cemi.has_value() && (*cemi == std::vector<std::uint8_t>(sample_cemi.begin(), sample_cemi.end()));
+            executor.stop();
+        }
+
+        /// @brief Connects, then sends against a transport whose write fails, and records the error that came back.
+        task<void> preserve_send_error(loopback_transport& send_transport, tunnelling_client& send_client,
+                                       const connect_request_frame& request, const cspan_uint8_t cemi,
+                                       const std::error_code& transport_error, bool& send_preserved,
+                                       completion::executor& send_executor) noexcept(false)
+        {
+            if (!(co_await send_client.connect(request)).has_value())
+            {
+                send_executor.stop();
+                co_return;
+            }
+            send_transport.send_error = transport_error;
+            const auto result = co_await send_client.send(cemi);
+            send_preserved = !result.has_value() && result.error() == transport_error;
+            send_executor.stop();
+        }
+
+        /// @brief Connects, then heartbeats against a transport whose read fails, and records the error that came back.
+        task<void> preserve_heartbeat_error(loopback_transport& heartbeat_transport, tunnelling_client& heartbeat_client,
+                                            const connect_request_frame& request, const std::error_code& transport_error,
+                                            bool& heartbeat_preserved, completion::executor& heartbeat_executor) noexcept(false)
+        {
+            if (!(co_await heartbeat_client.connect(request)).has_value())
+            {
+                heartbeat_executor.stop();
+                co_return;
+            }
+            heartbeat_transport.receive_error = transport_error;
+            const auto result = co_await heartbeat_client.heartbeat();
+            heartbeat_preserved = !result.has_value() && result.error() == transport_error;
+            heartbeat_executor.stop();
+        }
+
+        /// @brief Connects, then disconnects against a transport whose write fails, and records the error that came back.
+        task<void> preserve_disconnect_send_error(loopback_transport& send_transport, tunnelling_client& send_client,
+                                                  const connect_request_frame& request, const std::error_code& transport_error,
+                                                  bool& send_preserved, completion::executor& send_executor) noexcept(false)
+        {
+            if (!(co_await send_client.connect(request)).has_value())
+            {
+                send_executor.stop();
+                co_return;
+            }
+            send_transport.send_error = transport_error;
+            const auto result = co_await send_client.disconnect();
+            send_preserved = !result.has_value() && result.error() == transport_error;
+            send_executor.stop();
+        }
+
+        /// @brief Connects, then disconnects against a transport whose read fails, and records the error that came back.
+        task<void> preserve_disconnect_receive_error(loopback_transport& receive_transport, tunnelling_client& receive_client,
+                                                     const connect_request_frame& request, const std::error_code& transport_error,
+                                                     bool& receive_preserved, completion::executor& receive_executor) noexcept(false)
+        {
+            if (!(co_await receive_client.connect(request)).has_value())
+            {
+                receive_executor.stop();
+                co_return;
+            }
+            receive_transport.receive_error = transport_error;
+            const auto result = co_await receive_client.disconnect();
+            receive_preserved = !result.has_value() && result.error() == transport_error;
+            receive_executor.stop();
+        }
+
+        /// @brief Connects, then disconnects against a transport that reports more bytes than it was given.
+        task<void> reject_oversized_disconnect_receive(loopback_transport& transport, tunnelling_client& client,
+                                                       const connect_request_frame& request, bool& rejected,
+                                                       completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(request)).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            transport.oversized_receive = true;
+            const auto result = co_await client.disconnect();
+            rejected = !result.has_value() && result.error() == make_error_code(error::invalid_length);
+            executor.stop();
+        }
+
+        /// @brief Connects, asks the stop source to stop, then disconnects and records the cancellation.
+        task<void> observe_disconnect_cancellation(tunnelling_client& client, const connect_request_frame& request,
+                                                   std::stop_source& source, bool& cancelled,
+                                                   completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(request)).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            source.request_stop();
+            const auto result = co_await client.disconnect();
+            cancelled = !result.has_value() && result.error() == make_error_code(error::shutdown);
+            executor.stop();
+        }
+
+        /// @brief Connects, then sends an empty payload and records that it was refused as malformed.
+        task<void> reject_empty_cemi(tunnelling_client& client, const cspan_uint8_t cemi, bool& rejected,
+                                     completion::executor& executor) noexcept(false)
+        {
+            const connect_request_frame request {
+                .control_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3671u}, 0x01u},
+                .data_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3672u}, 0x01u},
+            };
+            if (!(co_await client.connect(request)).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            const auto result = co_await client.send(cemi);
+            rejected = !result.has_value() && result.error() == make_error_code(error::malformed_frame);
+            executor.stop();
+        }
+
+        /// @brief Connects over IPv6 and sends one cEMI through the resulting session.
+        task<void> connect_and_send_over_ipv6(tunnelling_client& client, const ipv6_connect_request_frame& request, bool& succeeded,
+                                              completion::executor& executor) noexcept(false)
+        {
+            const auto connected = co_await client.connect(request);
+            const auto sent = connected ? co_await client.send(sample_cemi) : expected_void_t {std::unexpected(connected.error())};
+            succeeded = connected.has_value() && sent.has_value();
+            executor.stop();
+        }
+
+        /// @brief Connects, then feeds the transport a tunnelling datagram from the control peer.
+        task<void> reject_control_peer_tunnelling(loopback_transport& transport, tunnelling_client& client,
+                                                  const connect_request_frame& request, const cspan_uint8_t packet, bool& rejected,
+                                                  completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(request)).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
+            const auto result = co_await client.receive_datagram();
+            rejected = !result.has_value() && result.error() == make_error_code(error::connection_failed);
+            executor.stop();
+        }
+
+        /// @brief Reads one owning datagram and records whether it decoded as the expected acknowledgement.
+        task<void> receive_owning_datagram(tunnelling_client& client, bool& received_ack, completion::executor& executor) noexcept(false)
+        {
+            const auto result = co_await client.receive_datagram();
+            if (result.has_value())
+            {
+                const auto* ack = std::get_if<tunnelling_ack_frame>(&result->payload);
+                received_ack = (ack != nullptr) && (ack->channel_id == 3u) && (ack->sequence_number == 7u);
+            }
+            executor.stop();
+        }
+
+        /// @brief Connects, feeds the transport an indication, and compares the owning cEMI read back.
+        task<void> receive_owning_cemi(loopback_transport& transport, tunnelling_client& client, const cspan_uint8_t cemi,
+                                       const cspan_uint8_t packet, bool& matched, completion::executor& executor) noexcept(false)
+        {
+            const connect_request_frame connect_request {
+                .control_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3671u}, 0x01u},
+                .data_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3672u}, 0x01u},
+            };
+            if (!(co_await client.connect(connect_request)).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
+            const auto result = co_await client.receive_cemi();
+            matched = result.has_value() && (result->size() == cemi.size()) && std::equal(result->begin(), result->end(), cemi.begin());
+            executor.stop();
+        }
+
+        /// @brief Connects, feeds the transport an indication, and keeps the owning cEMI copy it returns.
+        task<void> receive_owning_cemi_copy(loopback_transport& transport, tunnelling_client& client, const cspan_uint8_t request,
+                                            std::vector<std::uint8_t>& received_payload, completion::executor& executor) noexcept(false)
+        {
+            const connect_request_frame connect_request {
+                .control_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3671u}, 0x01u},
+                .data_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3672u}, 0x01u},
+            };
+            if (!(co_await client.connect(connect_request)).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            transport.enqueue(std::vector<std::uint8_t>(request.begin(), request.end()));
+            received_payload = *(co_await client.receive_cemi());
+            executor.stop();
+        }
+
+        /// @brief Connects and feeds the transport the same indication twice, so the second is suppressed.
+        task<void> suppress_duplicate_indication(loopback_transport& transport, tunnelling_client& client, const cspan_uint8_t indication,
+                                                 bool& first_received, bool& duplicate_suppressed,
+                                                 completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(connect_request_frame {
+                      .control_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3671u}, 0x01u},
+                      .data_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3672u}, 0x01u},
+                  }))
+                     .has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            transport.enqueue(std::vector<std::uint8_t>(indication.begin(), indication.end()));
+            transport.enqueue(std::vector<std::uint8_t>(indication.begin(), indication.end()));
+            first_received = (co_await client.receive_cemi()).has_value();
+            const auto duplicate = co_await client.receive_cemi();
+            duplicate_suppressed = !duplicate.has_value() && duplicate.error() == make_error_code(error::timeout);
+            executor.stop();
+        }
+
+        /// @brief Connects and feeds the transport two indications whose sequence numbers go backwards.
+        task<void> reject_out_of_order_indication(loopback_transport& transport, tunnelling_client& client, const cspan_uint8_t first,
+                                                  const cspan_uint8_t out_of_order, bool& rejected,
+                                                  completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(connect_request_frame {
+                      .control_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3671u}, 0x01u},
+                      .data_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3672u}, 0x01u},
+                  }))
+                     .has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            transport.enqueue(std::vector<std::uint8_t>(first.begin(), first.end()));
+            transport.enqueue(std::vector<std::uint8_t>(out_of_order.begin(), out_of_order.end()));
+            if (!(co_await client.receive_cemi()).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            const auto result = co_await client.receive_cemi();
+            rejected = !result.has_value() && result.error() == make_error_code(error::sequence_error);
+            executor.stop();
+        }
+
+        /// @brief Connects and queues a control datagram ahead of the tunnelling request, which must be skipped.
+        task<void> skip_control_before_cemi(loopback_transport& transport, tunnelling_client& client, const cspan_uint8_t request,
+                                            const cspan_uint8_t ack, bool& received, completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(connect_request_frame {
+                      .control_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3671u}, 0x01u},
+                      .data_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3672u}, 0x01u},
+                  }))
+                     .has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            transport.enqueue(std::vector<std::uint8_t>(ack.begin(), ack.end()));
+            transport.enqueue(std::vector<std::uint8_t>(request.begin(), request.end()));
+            const auto result = co_await client.receive_cemi();
+            received = result.has_value();
+            executor.stop();
+        }
+
+        /// @brief Connects and queues a heartbeat response ahead of the tunnelling request.
+        task<void> process_heartbeat_before_cemi(loopback_transport& transport, tunnelling_client& client, const cspan_uint8_t request,
+                                                 bool& received, completion::executor& executor) noexcept(false)
+        {
+            const connect_request_frame connect_request {
+                .control_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3671u}, 0x01u},
+                .data_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3672u}, 0x01u},
+            };
+            if (!(co_await client.connect(connect_request)).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            std::array<std::uint8_t, 8u> heartbeat {};
+            REQUIRE(
+                connection::encode_connectionstate_response_packet(heartbeat, connectionstate_response_frame {3u, connect_status::no_error})
+                    .has_value());
+            transport.enqueue(std::vector<std::uint8_t>(heartbeat.begin(), heartbeat.end()));
+            transport.enqueue(std::vector<std::uint8_t>(request.begin(), request.end()));
+            received = (co_await client.receive_cemi()).has_value();
+            executor.stop();
+        }
+
+        /// @brief Connects and feeds the transport a tunnelling request carrying another channel id.
+        task<void> reject_cross_channel_cemi(loopback_transport& transport, tunnelling_client& client, const cspan_uint8_t request,
+                                             bool& rejected, completion::executor& executor) noexcept(false)
+        {
+            const connect_request_frame connect_request {
+                .control_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3671u}, 0x01u},
+                .data_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3672u}, 0x01u},
+            };
+            if (!(co_await client.connect(connect_request)).has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            transport.short_send = true;
+            transport.enqueue(std::vector<std::uint8_t>(request.begin(), request.end()));
+            const auto result = co_await client.receive_cemi();
+            rejected = !result.has_value() && result.error() == make_error_code(error::sequence_error);
+            executor.stop();
+        }
+
+        /// @brief Connects and feeds the transport a DISCONNECT_REQUEST, which must not surface as cEMI.
+        task<void> reject_disconnect_control_as_cemi(loopback_transport& transport, tunnelling_client& client,
+                                                     const cspan_uint8_t disconnect, bool& rejected,
+                                                     completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(connect_request_frame {
+                      .control_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3671u}, 0x01u},
+                      .data_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3672u}, 0x01u},
+                  }))
+                     .has_value())
+            {
+                executor.stop();
+                co_return;
+            }
+            transport.enqueue(std::vector<std::uint8_t>(disconnect.begin(), disconnect.end()));
+            const auto result = co_await client.receive_cemi();
+            rejected = !result.has_value() && result.error() == make_error_code(error::unsupported_service);
+            executor.stop();
+        }
+
+        /// @brief Connects and writes one DPT 1.001 group value.
+        task<void> write_typed_group_value(tunnelling_client& client, bool& succeeded, completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(detail::loopback_connect_request)))
+            {
+                executor.stop();
+                co_return;
+            }
+
+            const auto value = dpt::encode<1u>(true);
+            const auto written = co_await client.write_group_value(group_address {0x0A03u}, value.value());
+            succeeded = written.has_value();
+            executor.stop();
+        }
+
+        /// @brief Connects and issues one group-value read.
+        task<void> read_group_value(tunnelling_client& client, bool& succeeded, completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(detail::loopback_connect_request)))
+            {
+                executor.stop();
+                co_return;
+            }
+
+            succeeded = (co_await client.read_group_value(group_address {0x0A03u})).has_value();
+            executor.stop();
+        }
+
+        /// @brief Connects, feeds the transport an indication, and keeps the decoded telegram.
+        task<void> decode_received_telegram(loopback_transport& transport, tunnelling_client& client,
+                                            const std::vector<std::uint8_t>& indication, std::expected<telegram, std::error_code>& received,
+                                            completion::executor& executor) noexcept(false)
+        {
+            if (!(co_await client.connect(detail::loopback_connect_request)))
+            {
+                executor.stop();
+                co_return;
+            }
+
+            transport.enqueue(indication);
+            received = co_await client.receive_telegram();
+            executor.stop();
+        }
+    }
+
+    TEST_CASE("knx tunnelling client completes a loopback lifecycle", "[knx][client][integration]")
+    {
+        loopback_transport transport;
+        sockaddr_storage peer {};
+        tunnelling_client client { transport, peer, sizeof(peer) };
+        const connect_request_frame request {
+            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
+            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
+        };
+        const auto& cemi = sample_cemi;
+        bool succeeded {};
+
+        completion::executor executor;
+
+        executor.spawn(detail::run_loopback_lifecycle(client, request, cemi, succeeded, executor));
         executor.run();
         CHECK(succeeded);
         CHECK(client.state() == session_state::closed);
@@ -406,24 +998,11 @@ namespace kmx::aio::test::knx::client_test
             .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
         };
         const auto& cemi = sample_cemi;
-        bool succeeded = false;
+        bool succeeded {};
 
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            const auto connected = co_await client.connect(request);
-            if (!connected)
-            {
-                executor.stop();
-                co_return;
-            }
-            transport.timeout_next_receive = true;
-            const auto sent = co_await client.send(cemi);
-            succeeded = sent.has_value();
-            executor.stop();
-        };
 
-        executor.spawn(run());
+        executor.spawn(detail::retry_timed_out_request(transport, client, request, cemi, succeeded, executor));
         executor.run();
         CHECK(succeeded);
         CHECK(client.state() == session_state::connected);
@@ -441,20 +1020,9 @@ namespace kmx::aio::test::knx::client_test
         std::array<std::uint8_t, 10u> stale_ack {};
         REQUIRE(frame::encode_tunnelling_ack_packet(stale_ack, 3u, 7u).has_value());
 
-        bool succeeded = false;
+        bool succeeded {};
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            transport.enqueue(std::vector<std::uint8_t>(stale_ack.begin(), stale_ack.end()));
-            succeeded = (co_await client.send(sample_cemi)).has_value();
-            executor.stop();
-        };
-        executor.spawn(run());
+        executor.spawn(detail::ignore_stale_ack(transport, client, request, stale_ack, succeeded, executor));
         executor.run();
         CHECK(succeeded);
     }
@@ -468,22 +1036,11 @@ namespace kmx::aio::test::knx::client_test
             .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
             .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
         };
-        bool succeeded = false;
+        bool succeeded {};
 
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            transport.timeout_next_receive = true;
-            succeeded = (co_await client.disconnect()).has_value();
-            executor.stop();
-        };
 
-        executor.spawn(run());
+        executor.spawn(detail::retry_timed_out_disconnect(transport, client, request, succeeded, executor));
         executor.run();
         CHECK(succeeded);
         CHECK(client.state() == session_state::closed);
@@ -498,21 +1055,11 @@ namespace kmx::aio::test::knx::client_test
             .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
             .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
         };
-        bool succeeded = false;
+        bool succeeded {};
 
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            succeeded = (co_await client.heartbeat()).has_value();
-            executor.stop();
-        };
 
-        executor.spawn(run());
+        executor.spawn(detail::complete_heartbeat(client, request, succeeded, executor));
         executor.run();
         CHECK(succeeded);
         CHECK(client.state() == session_state::connected);
@@ -527,25 +1074,12 @@ namespace kmx::aio::test::knx::client_test
             .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
             .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
         };
-        bool failed = false;
-        bool stayed_connected = false;
+        bool failed {};
+        bool stayed_connected {};
 
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            transport.heartbeat_failure = true;
-            const auto result = co_await client.heartbeat();
-            failed = !result.has_value() && result.error() == make_error_code(error::connection_failed);
-            stayed_connected = client.state() == session_state::connected;
-            executor.stop();
-        };
 
-        executor.spawn(run());
+        executor.spawn(detail::propagate_heartbeat_failure(transport, client, request, failed, stayed_connected, executor));
         executor.run();
         CHECK(failed);
         CHECK(stayed_connected);
@@ -562,16 +1096,8 @@ namespace kmx::aio::test::knx::client_test
             .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
         };
         completion::executor executor;
-        bool failed = false;
-        auto run = [&]() -> task<void>
-        {
-            const auto result = co_await client.connect(request);
-            failed = !result.has_value();
-            CHECK(result.error() == make_error_code(error::connection_failed));
-            CHECK(client.state() == session_state::idle);
-            executor.stop();
-        };
-        executor.spawn(run());
+        bool failed {};
+        executor.spawn(detail::propagate_connect_failure(client, request, failed, executor));
         executor.run();
         CHECK(failed);
     }
@@ -585,22 +1111,11 @@ namespace kmx::aio::test::knx::client_test
             .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
             .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
         };
-        bool succeeded = false;
+        bool succeeded {};
 
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            transport.timeout_next_receive = true;
-            succeeded = (co_await client.heartbeat()).has_value();
-            executor.stop();
-        };
 
-        executor.spawn(run());
+        executor.spawn(detail::retry_timed_out_heartbeat(transport, client, request, succeeded, executor));
         executor.run();
         CHECK(succeeded);
         CHECK(client.state() == session_state::connected);
@@ -615,27 +1130,11 @@ namespace kmx::aio::test::knx::client_test
             .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
             .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
         };
-        bool terminal = false;
+        bool terminal {};
 
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            transport.heartbeat_failure = true;
-            (void) co_await client.heartbeat();
-            (void) co_await client.heartbeat();
-            const auto result = co_await client.heartbeat();
-            terminal = !result.has_value() &&
-                       result.error() == make_error_code(error::heartbeat_failed) &&
-                       client.state() == session_state::closed;
-            executor.stop();
-        };
 
-        executor.spawn(run());
+        executor.spawn(detail::escalate_heartbeat_failures(transport, client, request, terminal, executor));
         executor.run();
         CHECK(terminal);
     }
@@ -652,20 +1151,10 @@ namespace kmx::aio::test::knx::client_test
         };
 
         client.shutdown();
-        bool rejected = false;
+        bool rejected {};
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            const auto send_result = co_await client.send(cemi);
-            const auto heartbeat_result = co_await client.heartbeat();
-            const auto disconnect_result = co_await client.disconnect();
-            const auto connect_result = co_await client.connect(request);
-            rejected = !send_result.has_value() && !heartbeat_result.has_value() &&
-                       !disconnect_result.has_value() && !connect_result.has_value();
-            executor.stop();
-        };
 
-        executor.spawn(run());
+        executor.spawn(detail::reject_after_shutdown(client, request, cemi, rejected, executor));
         executor.run();
         CHECK(rejected);
     }
@@ -677,7 +1166,7 @@ namespace kmx::aio::test::knx::client_test
         tunnelling_client client { transport, peer, sizeof(peer) };
         std::stop_source source;
         source.request_stop();
-        bool cancelled = false;
+        bool cancelled {};
 
         completion::executor executor;
         auto run = [&]() -> task<void>
@@ -699,8 +1188,8 @@ namespace kmx::aio::test::knx::client_test
         completion::executor executor;
         transport.hold_receive = true;
         transport.wait_executor = &executor;
-        bool first_completed = false;
-        bool second_rejected = false;
+        bool first_completed {};
+        bool second_rejected {};
 
         auto first = [&]() -> task<void>
         {
@@ -728,17 +1217,8 @@ namespace kmx::aio::test::knx::client_test
         client.shutdown();
 
         completion::executor executor;
-        bool rejected = false;
-        auto run = [&]() -> task<void>
-        {
-            const auto datagram = co_await client.receive_datagram();
-            const auto cemi = co_await client.receive_cemi();
-            rejected = !datagram.has_value() && !cemi.has_value() &&
-                       datagram.error() == make_error_code(error::shutdown) &&
-                       cemi.error() == make_error_code(error::shutdown);
-            executor.stop();
-        };
-        executor.spawn(run());
+        bool rejected {};
+        executor.spawn(detail::reject_receive_after_shutdown(client, rejected, executor));
         executor.run();
         CHECK(rejected);
     }
@@ -752,26 +1232,11 @@ namespace kmx::aio::test::knx::client_test
             .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
             .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
         };
-        bool reconnected = false;
+        bool reconnected {};
 
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            client.shutdown();
-            client.reset();
-            transport.advertised_data_port = 3673u;
-            reconnected = (co_await client.connect(request)).has_value() &&
-                          client.state() == session_state::connected &&
-                          (co_await client.send(sample_cemi)).has_value();
-            executor.stop();
-        };
 
-        executor.spawn(run());
+        executor.spawn(detail::reset_and_reconnect(transport, client, request, reconnected, executor));
         executor.run();
         CHECK(reconnected);
         REQUIRE(transport.sent_peers().size() >= 3u);
@@ -800,7 +1265,7 @@ namespace kmx::aio::test::knx::client_test
         sockaddr_storage peer {};
         tunnelling_client client { transport, peer, 0u };
         const connect_request_frame request {};
-        bool rejected = false;
+        bool rejected {};
 
         completion::executor executor;
         auto run = [&]() -> task<void>
@@ -831,7 +1296,7 @@ namespace kmx::aio::test::knx::client_test
             },
             nullptr,
         };
-        bool rejected = false;
+        bool rejected {};
         completion::executor executor;
         auto run = [&]() -> task<void>
         {
@@ -877,37 +1342,10 @@ namespace kmx::aio::test::knx::client_test
             &provider,
         };
 
-        bool secured_send = false;
+        bool secured_send {};
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(detail::loopback_connect_request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
 
-            if (!(co_await client.send(sample_cemi)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-
-            for (const auto& packet: transport.sent_packets())
-            {
-                const auto header = frame::decode_communication_header(packet);
-                if (!header.has_value())
-                    continue;
-                if (header->service_type == secure::secure_service)
-                {
-                    secured_send = true;
-                    break;
-                }
-            }
-            executor.stop();
-        };
-
-        executor.spawn(run());
+        executor.spawn(detail::detect_secure_wrapped_send(transport, client, secured_send, executor));
         executor.run();
         CHECK(secured_send);
     }
@@ -932,44 +1370,10 @@ namespace kmx::aio::test::knx::client_test
             &provider,
         };
 
-        bool received_secure = false;
+        bool received_secure {};
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(detail::loopback_connect_request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
 
-            std::array<std::uint8_t, sample_tunnelling_packet_size> indication_packet {};
-            const auto encoded_indication = frame::encode_tunnelling_request_packet(
-                indication_packet, client.channel_id(), 0u, sample_cemi);
-            if (!encoded_indication.has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-
-            const auto secure_packet = secure::protect_packet(
-                provider,
-                secure::profile::data_secure,
-                {indication_packet.data(), indication_packet.size()},
-                77u);
-            if (!secure_packet.has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            transport.enqueue(*secure_packet);
-
-            const auto cemi = co_await client.receive_cemi();
-            received_secure = cemi.has_value() &&
-                (*cemi == std::vector<std::uint8_t>(sample_cemi.begin(), sample_cemi.end()));
-            executor.stop();
-        };
-
-        executor.spawn(run());
+        executor.spawn(detail::receive_secure_wrapped_indication(provider, transport, client, received_secure, executor));
         executor.run();
         CHECK(received_secure);
         CHECK(transport.ack_received);
@@ -982,7 +1386,7 @@ namespace kmx::aio::test::knx::client_test
         auto& ipv4 = reinterpret_cast<sockaddr_in&>(peer);
         ipv4.sin_family = AF_INET;
         tunnelling_client client { transport, peer, sizeof(sockaddr_in) - 1u };
-        bool rejected = false;
+        bool rejected {};
         completion::executor executor;
         auto run = [&]() -> task<void>
         {
@@ -1008,7 +1412,7 @@ namespace kmx::aio::test::knx::client_test
         sockaddr_storage send_peer {};
         tunnelling_client send_client { send_transport, send_peer, sizeof(send_peer) };
         completion::executor send_executor;
-        bool send_preserved = false;
+        bool send_preserved {};
         auto send_run = [&]() -> task<void>
         {
             const auto result = co_await send_client.connect(request);
@@ -1023,7 +1427,7 @@ namespace kmx::aio::test::knx::client_test
         sockaddr_storage receive_peer {};
         tunnelling_client receive_client { receive_transport, receive_peer, sizeof(receive_peer) };
         completion::executor receive_executor;
-        bool receive_preserved = false;
+        bool receive_preserved {};
         auto receive_run = [&]() -> task<void>
         {
             const auto result = co_await receive_client.receive_datagram();
@@ -1049,41 +1453,19 @@ namespace kmx::aio::test::knx::client_test
         loopback_transport send_transport;
         sockaddr_storage send_peer {};
         tunnelling_client send_client { send_transport, send_peer, sizeof(send_peer) };
-        bool send_preserved = false;
+        bool send_preserved {};
         completion::executor send_executor;
-        auto send_run = [&]() -> task<void>
-        {
-            if (!(co_await send_client.connect(request)).has_value())
-            {
-                send_executor.stop();
-                co_return;
-            }
-            send_transport.send_error = transport_error;
-            const auto result = co_await send_client.send(cemi);
-            send_preserved = !result.has_value() && result.error() == transport_error;
-            send_executor.stop();
-        };
-        send_executor.spawn(send_run());
+        send_executor.spawn(
+            detail::preserve_send_error(send_transport, send_client, request, cemi, transport_error, send_preserved, send_executor));
         send_executor.run();
 
         loopback_transport heartbeat_transport;
         sockaddr_storage heartbeat_peer {};
         tunnelling_client heartbeat_client { heartbeat_transport, heartbeat_peer, sizeof(heartbeat_peer) };
-        bool heartbeat_preserved = false;
+        bool heartbeat_preserved {};
         completion::executor heartbeat_executor;
-        auto heartbeat_run = [&]() -> task<void>
-        {
-            if (!(co_await heartbeat_client.connect(request)).has_value())
-            {
-                heartbeat_executor.stop();
-                co_return;
-            }
-            heartbeat_transport.receive_error = transport_error;
-            const auto result = co_await heartbeat_client.heartbeat();
-            heartbeat_preserved = !result.has_value() && result.error() == transport_error;
-            heartbeat_executor.stop();
-        };
-        heartbeat_executor.spawn(heartbeat_run());
+        heartbeat_executor.spawn(detail::preserve_heartbeat_error(heartbeat_transport, heartbeat_client, request, transport_error,
+                                                                  heartbeat_preserved, heartbeat_executor));
         heartbeat_executor.run();
 
         CHECK(send_preserved);
@@ -1101,41 +1483,19 @@ namespace kmx::aio::test::knx::client_test
         loopback_transport send_transport;
         sockaddr_storage send_peer {};
         tunnelling_client send_client { send_transport, send_peer, sizeof(send_peer) };
-        bool send_preserved = false;
+        bool send_preserved {};
         completion::executor send_executor;
-        auto send_run = [&]() -> task<void>
-        {
-            if (!(co_await send_client.connect(request)).has_value())
-            {
-                send_executor.stop();
-                co_return;
-            }
-            send_transport.send_error = transport_error;
-            const auto result = co_await send_client.disconnect();
-            send_preserved = !result.has_value() && result.error() == transport_error;
-            send_executor.stop();
-        };
-        send_executor.spawn(send_run());
+        send_executor.spawn(
+            detail::preserve_disconnect_send_error(send_transport, send_client, request, transport_error, send_preserved, send_executor));
         send_executor.run();
 
         loopback_transport receive_transport;
         sockaddr_storage receive_peer {};
         tunnelling_client receive_client { receive_transport, receive_peer, sizeof(receive_peer) };
-        bool receive_preserved = false;
+        bool receive_preserved {};
         completion::executor receive_executor;
-        auto receive_run = [&]() -> task<void>
-        {
-            if (!(co_await receive_client.connect(request)).has_value())
-            {
-                receive_executor.stop();
-                co_return;
-            }
-            receive_transport.receive_error = transport_error;
-            const auto result = co_await receive_client.disconnect();
-            receive_preserved = !result.has_value() && result.error() == transport_error;
-            receive_executor.stop();
-        };
-        receive_executor.spawn(receive_run());
+        receive_executor.spawn(detail::preserve_disconnect_receive_error(receive_transport, receive_client, request, transport_error,
+                                                                         receive_preserved, receive_executor));
         receive_executor.run();
 
         CHECK(send_preserved);
@@ -1151,21 +1511,9 @@ namespace kmx::aio::test::knx::client_test
             .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
             .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
         };
-        bool rejected = false;
+        bool rejected {};
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            transport.oversized_receive = true;
-            const auto result = co_await client.disconnect();
-            rejected = !result.has_value() && result.error() == make_error_code(error::invalid_length);
-            executor.stop();
-        };
-        executor.spawn(run());
+        executor.spawn(detail::reject_oversized_disconnect_receive(transport, client, request, rejected, executor));
         executor.run();
         CHECK(rejected);
     }
@@ -1180,21 +1528,10 @@ namespace kmx::aio::test::knx::client_test
             .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
         };
         std::stop_source source;
-        bool cancelled = false;
+        bool cancelled {};
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            source.request_stop();
-            const auto result = co_await client.disconnect();
-            cancelled = !result.has_value() && result.error() == make_error_code(error::shutdown);
-            executor.stop();
-        };
-        executor.spawn(std::move(run()).with_stop_token(source.get_token()));
+        executor.spawn(std::move(detail::observe_disconnect_cancellation(client, request, source, cancelled, executor))
+                           .with_stop_token(source.get_token()));
         executor.run();
         CHECK(cancelled);
     }
@@ -1209,7 +1546,7 @@ namespace kmx::aio::test::knx::client_test
             .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
             .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
         };
-        bool succeeded = false;
+        bool succeeded {};
         completion::executor executor;
         auto run = [&]() -> task<void>
         {
@@ -1240,7 +1577,7 @@ namespace kmx::aio::test::knx::client_test
             .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
             .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
         };
-        bool connected = false;
+        bool connected {};
         completion::executor executor;
         auto run = [&]() -> task<void>
         {
@@ -1265,23 +1602,8 @@ namespace kmx::aio::test::knx::client_test
         tunnelling_client client { transport, peer, sizeof(peer) };
         const std::array<std::uint8_t, 0u> cemi {};
         completion::executor executor;
-        bool rejected = false;
-        auto run = [&]() -> task<void>
-        {
-            const connect_request_frame request {
-                .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-                .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-            };
-            if (!(co_await client.connect(request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            const auto result = co_await client.send(cemi);
-            rejected = !result.has_value() && result.error() == make_error_code(error::malformed_frame);
-            executor.stop();
-        };
-        executor.spawn(run());
+        bool rejected {};
+        executor.spawn(detail::reject_empty_cemi(client, cemi, rejected, executor));
         executor.run();
         CHECK(rejected);
     }
@@ -1296,7 +1618,7 @@ namespace kmx::aio::test::knx::client_test
             .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
         };
         completion::executor executor;
-        bool rejected = false;
+        bool rejected {};
         auto run = [&]() -> task<void>
         {
             const auto result = co_await client.connect(request);
@@ -1317,7 +1639,7 @@ namespace kmx::aio::test::knx::client_test
             .control_endpoint = hpai { ipv4_endpoint {{127u, 0u, 0u, 1u}, 0u}, 0x01u },
             .data_endpoint = hpai { ipv4_endpoint {{127u, 0u, 0u, 1u}, 3672u}, 0x01u },
         };
-        bool rejected = false;
+        bool rejected {};
         completion::executor executor;
         auto run = [&]() -> task<void>
         {
@@ -1341,7 +1663,7 @@ namespace kmx::aio::test::knx::client_test
         transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
 
         completion::executor executor;
-        bool rejected = false;
+        bool rejected {};
         auto run = [&]() -> task<void>
         {
             const auto result = co_await client.receive_datagram();
@@ -1368,17 +1690,9 @@ namespace kmx::aio::test::knx::client_test
             .control_endpoint = ipv6_hpai {ipv6_endpoint {{0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 1u}, 3671u}, 0x01u},
             .data_endpoint = ipv6_hpai {ipv6_endpoint {{0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 1u}, 3672u}, 0x01u},
         };
-        bool succeeded = false;
+        bool succeeded {};
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            const auto connected = co_await client.connect(request);
-            const auto sent = connected ? co_await client.send(sample_cemi)
-                                        : expected_void_t {std::unexpected(connected.error())};
-            succeeded = connected.has_value() && sent.has_value();
-            executor.stop();
-        };
-        executor.spawn(run());
+        executor.spawn(detail::connect_and_send_over_ipv6(client, request, succeeded, executor));
         executor.run();
         CHECK(succeeded);
         REQUIRE(!transport.sent_peers().empty());
@@ -1398,7 +1712,7 @@ namespace kmx::aio::test::knx::client_test
         transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
 
         completion::executor executor;
-        bool rejected = false;
+        bool rejected {};
         auto run = [&]() -> task<void>
         {
             rejected = !(co_await client.receive_datagram()).has_value();
@@ -1421,7 +1735,7 @@ namespace kmx::aio::test::knx::client_test
         transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
 
         completion::executor executor;
-        bool rejected = false;
+        bool rejected {};
         auto run = [&]() -> task<void>
         {
             rejected = !(co_await client.receive_datagram()).has_value();
@@ -1446,7 +1760,7 @@ namespace kmx::aio::test::knx::client_test
         REQUIRE(frame::encode_tunnelling_ack_packet(packet, 3u, 7u).has_value());
         transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
 
-        bool accepted = false;
+        bool accepted {};
         completion::executor executor;
         auto run = [&]() -> task<void>
         {
@@ -1470,21 +1784,9 @@ namespace kmx::aio::test::knx::client_test
         };
         std::array<std::uint8_t, 10u> packet {};
         REQUIRE(frame::encode_tunnelling_ack_packet(packet, 3u, 7u).has_value());
-        bool rejected = false;
+        bool rejected {};
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
-            const auto result = co_await client.receive_datagram();
-            rejected = !result.has_value() && result.error() == make_error_code(error::connection_failed);
-            executor.stop();
-        };
-        executor.spawn(run());
+        executor.spawn(detail::reject_control_peer_tunnelling(transport, client, request, packet, rejected, executor));
         executor.run();
         CHECK(rejected);
     }
@@ -1500,7 +1802,7 @@ namespace kmx::aio::test::knx::client_test
         transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
 
         completion::executor executor;
-        bool rejected = false;
+        bool rejected {};
         auto run = [&]() -> task<void>
         {
             rejected = !(co_await client.receive_datagram()).has_value();
@@ -1521,7 +1823,7 @@ namespace kmx::aio::test::knx::client_test
         });
 
         completion::executor executor;
-        bool rejected = false;
+        bool rejected {};
         auto run = [&]() -> task<void>
         {
             const auto result = co_await client.receive_datagram();
@@ -1540,7 +1842,7 @@ namespace kmx::aio::test::knx::client_test
         sockaddr_storage peer {};
         tunnelling_client client { transport, peer, sizeof(peer) };
         completion::executor executor;
-        bool rejected = false;
+        bool rejected {};
         auto run = [&]() -> task<void>
         {
             const auto result = co_await client.receive_datagram();
@@ -1559,7 +1861,7 @@ namespace kmx::aio::test::knx::client_test
         sockaddr_storage peer {};
         tunnelling_client client { transport, peer, sizeof(peer) };
         completion::executor executor;
-        bool rejected = false;
+        bool rejected {};
         auto run = [&]() -> task<void>
         {
             const auto result = co_await client.receive_datagram();
@@ -1576,25 +1878,15 @@ namespace kmx::aio::test::knx::client_test
         loopback_transport transport;
         sockaddr_storage peer {};
         tunnelling_client client { transport, peer, sizeof(peer) };
-        bool received_ack = false;
+        bool received_ack {};
 
         std::array<std::uint8_t, 10u> packet {};
         REQUIRE(frame::encode_tunnelling_ack_packet(packet, 3u, 7u).has_value());
         transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
 
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            const auto result = co_await client.receive_datagram();
-            if (result.has_value())
-            {
-                const auto* ack = std::get_if<tunnelling_ack_frame>(&result->payload);
-                received_ack = (ack != nullptr) && (ack->channel_id == 3u) && (ack->sequence_number == 7u);
-            }
-            executor.stop();
-        };
 
-        executor.spawn(run());
+        executor.spawn(detail::receive_owning_datagram(client, received_ack, executor));
         executor.run();
         CHECK(received_ack);
     }
@@ -1608,28 +1900,10 @@ namespace kmx::aio::test::knx::client_test
         std::array<std::uint8_t, sample_tunnelling_packet_size> packet {};
         REQUIRE(frame::encode_tunnelling_request_packet(packet, 3u, 7u, cemi).has_value());
 
-        bool matched = false;
+        bool matched {};
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            const connect_request_frame connect_request {
-                .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-                .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-            };
-            if (!(co_await client.connect(connect_request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
-            const auto result = co_await client.receive_cemi();
-            matched = result.has_value() &&
-                      (result->size() == cemi.size()) &&
-                      std::equal(result->begin(), result->end(), cemi.begin());
-            executor.stop();
-        };
 
-        executor.spawn(run());
+        executor.spawn(detail::receive_owning_cemi(transport, client, cemi, packet, matched, executor));
         executor.run();
         CHECK(matched);
         CHECK(transport.ack_received);
@@ -1646,22 +1920,7 @@ namespace kmx::aio::test::knx::client_test
         std::vector<std::uint8_t> received_payload {};
 
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            const connect_request_frame connect_request {
-                .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-                .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-            };
-            if (!(co_await client.connect(connect_request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            transport.enqueue(std::vector<std::uint8_t>(request.begin(), request.end()));
-            received_payload = *(co_await client.receive_cemi());
-            executor.stop();
-        };
-        executor.spawn(run());
+        executor.spawn(detail::receive_owning_cemi_copy(transport, client, request, received_payload, executor));
         executor.run();
         CHECK(received_payload == std::vector<std::uint8_t>(cemi.begin(), cemi.end()));
     }
@@ -1674,27 +1933,11 @@ namespace kmx::aio::test::knx::client_test
         std::array<std::uint8_t, sample_tunnelling_packet_size> indication {};
         REQUIRE(frame::encode_tunnelling_request_packet(indication, 3u, 7u, sample_cemi).has_value());
 
-        bool first_received = false;
-        bool duplicate_suppressed = false;
+        bool first_received {};
+        bool duplicate_suppressed {};
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(connect_request_frame {
-                    .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-                    .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-                })).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            transport.enqueue(std::vector<std::uint8_t>(indication.begin(), indication.end()));
-            transport.enqueue(std::vector<std::uint8_t>(indication.begin(), indication.end()));
-            first_received = (co_await client.receive_cemi()).has_value();
-            const auto duplicate = co_await client.receive_cemi();
-            duplicate_suppressed = !duplicate.has_value() && duplicate.error() == make_error_code(error::timeout);
-            executor.stop();
-        };
-        executor.spawn(run());
+        executor.spawn(
+            detail::suppress_duplicate_indication(transport, client, indication, first_received, duplicate_suppressed, executor));
         executor.run();
         CHECK(first_received);
         CHECK(duplicate_suppressed);
@@ -1711,30 +1954,9 @@ namespace kmx::aio::test::knx::client_test
         REQUIRE(frame::encode_tunnelling_request_packet(first, 3u, 7u, sample_cemi).has_value());
         REQUIRE(frame::encode_tunnelling_request_packet(out_of_order, 3u, 9u, sample_cemi).has_value());
 
-        bool rejected = false;
+        bool rejected {};
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(connect_request_frame {
-                    .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-                    .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-                })).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            transport.enqueue(std::vector<std::uint8_t>(first.begin(), first.end()));
-            transport.enqueue(std::vector<std::uint8_t>(out_of_order.begin(), out_of_order.end()));
-            if (!(co_await client.receive_cemi()).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            const auto result = co_await client.receive_cemi();
-            rejected = !result.has_value() && result.error() == make_error_code(error::sequence_error);
-            executor.stop();
-        };
-        executor.spawn(run());
+        executor.spawn(detail::reject_out_of_order_indication(transport, client, first, out_of_order, rejected, executor));
         executor.run();
         CHECK(rejected);
     }
@@ -1749,25 +1971,9 @@ namespace kmx::aio::test::knx::client_test
         REQUIRE(frame::encode_tunnelling_request_packet(request, 3u, 7u, cemi).has_value());
         std::array<std::uint8_t, 10u> ack {};
         REQUIRE(frame::encode_tunnelling_ack_packet(ack, 3u, 7u).has_value());
-        bool received = false;
+        bool received {};
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(connect_request_frame {
-                    .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-                    .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-                })).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            transport.enqueue(std::vector<std::uint8_t>(ack.begin(), ack.end()));
-            transport.enqueue(std::vector<std::uint8_t>(request.begin(), request.end()));
-            const auto result = co_await client.receive_cemi();
-            received = result.has_value();
-            executor.stop();
-        };
-        executor.spawn(run());
+        executor.spawn(detail::skip_control_before_cemi(transport, client, request, ack, received, executor));
         executor.run();
         CHECK(received);
     }
@@ -1781,28 +1987,9 @@ namespace kmx::aio::test::knx::client_test
         const auto& cemi = sample_cemi;
         REQUIRE(frame::encode_tunnelling_request_packet(request, 3u, 7u, cemi).has_value());
 
-        bool received = false;
+        bool received {};
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            const connect_request_frame connect_request {
-                .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-                .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-            };
-            if (!(co_await client.connect(connect_request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            std::array<std::uint8_t, 8u> heartbeat {};
-            REQUIRE(connection::encode_connectionstate_response_packet(
-                heartbeat, connectionstate_response_frame { 3u, connect_status::no_error }).has_value());
-            transport.enqueue(std::vector<std::uint8_t>(heartbeat.begin(), heartbeat.end()));
-            transport.enqueue(std::vector<std::uint8_t>(request.begin(), request.end()));
-            received = (co_await client.receive_cemi()).has_value();
-            executor.stop();
-        };
-        executor.spawn(run());
+        executor.spawn(detail::process_heartbeat_before_cemi(transport, client, request, received, executor));
         executor.run();
         CHECK(received);
     }
@@ -1817,25 +2004,8 @@ namespace kmx::aio::test::knx::client_test
         REQUIRE(frame::encode_tunnelling_request_packet(request, 4u, 7u, cemi).has_value());
 
         completion::executor executor;
-        bool rejected = false;
-        auto run = [&]() -> task<void>
-        {
-            const connect_request_frame connect_request {
-                .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-                .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-            };
-            if (!(co_await client.connect(connect_request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            transport.short_send = true;
-            transport.enqueue(std::vector<std::uint8_t>(request.begin(), request.end()));
-            const auto result = co_await client.receive_cemi();
-            rejected = !result.has_value() && result.error() == make_error_code(error::sequence_error);
-            executor.stop();
-        };
-        executor.spawn(run());
+        bool rejected {};
+        executor.spawn(detail::reject_cross_channel_cemi(transport, client, request, rejected, executor));
         executor.run();
         CHECK(rejected);
     }
@@ -1849,23 +2019,8 @@ namespace kmx::aio::test::knx::client_test
             0x06u, 0x10u, 0x02u, 0x09u, 0x00u, 0x08u, 0x03u, 0x00u,
         };
         completion::executor executor;
-        bool rejected = false;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(connect_request_frame {
-                    .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-                    .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-                })).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            transport.enqueue(std::vector<std::uint8_t>(disconnect.begin(), disconnect.end()));
-            const auto result = co_await client.receive_cemi();
-            rejected = !result.has_value() && result.error() == make_error_code(error::unsupported_service);
-            executor.stop();
-        };
-        executor.spawn(run());
+        bool rejected {};
+        executor.spawn(detail::reject_disconnect_control_as_cemi(transport, client, disconnect, rejected, executor));
         executor.run();
         CHECK(rejected);
     }
@@ -1879,24 +2034,11 @@ namespace kmx::aio::test::knx::client_test
         loopback_transport transport;
         sockaddr_storage peer {};
         tunnelling_client client {transport, peer, sizeof(peer)};
-        bool succeeded = false;
+        bool succeeded {};
 
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(detail::loopback_connect_request)))
-            {
-                executor.stop();
-                co_return;
-            }
 
-            const auto value = dpt::encode<1u>(true);
-            const auto written = co_await client.write_group_value(group_address {0x0A03u}, value.value());
-            succeeded = written.has_value();
-            executor.stop();
-        };
-
-        executor.spawn(run());
+        executor.spawn(detail::write_typed_group_value(client, succeeded, executor));
         executor.run();
 
         REQUIRE(succeeded);
@@ -1915,22 +2057,11 @@ namespace kmx::aio::test::knx::client_test
         loopback_transport transport;
         sockaddr_storage peer {};
         tunnelling_client client {transport, peer, sizeof(peer)};
-        bool succeeded = false;
+        bool succeeded {};
 
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(detail::loopback_connect_request)))
-            {
-                executor.stop();
-                co_return;
-            }
 
-            succeeded = (co_await client.read_group_value(group_address {0x0A03u})).has_value();
-            executor.stop();
-        };
-
-        executor.spawn(run());
+        executor.spawn(detail::read_group_value(client, succeeded, executor));
         executor.run();
 
         REQUIRE(succeeded);
@@ -1952,20 +2083,8 @@ namespace kmx::aio::test::knx::client_test
         REQUIRE(frame::encode_tunnelling_request_packet(indication, 3u, 0u, sample_cemi_temperature).has_value());
 
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            if (!(co_await client.connect(detail::loopback_connect_request)))
-            {
-                executor.stop();
-                co_return;
-            }
 
-            transport.enqueue(indication);
-            received = co_await client.receive_telegram();
-            executor.stop();
-        };
-
-        executor.spawn(run());
+        executor.spawn(detail::decode_received_telegram(transport, client, indication, received, executor));
         executor.run();
 
         REQUIRE(received.has_value());

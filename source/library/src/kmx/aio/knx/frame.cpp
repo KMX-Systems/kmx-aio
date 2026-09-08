@@ -25,7 +25,7 @@ namespace kmx::aio::knx::frame
         return hdr;
     }
 
-    std::expected<void, std::error_code> encode_communication_header(const span_uint8_t dest,
+    expected_void_t encode_communication_header(const span_uint8_t dest,
                                                                     const std::uint16_t service_type,
                                                                     const std::uint16_t total_length,
                                                                     const std::uint8_t protocol_version) noexcept
@@ -57,10 +57,10 @@ namespace kmx::aio::knx::frame
         return decoded.value();
     }
 
-    std::expected<void, std::error_code> encode_tunnelling_request(const span_uint8_t dest,
+    expected_void_t encode_tunnelling_request(const span_uint8_t dest,
                                                                    const std::uint8_t channel_id,
                                                                    const std::uint8_t sequence_number,
-                                                                   const std::span<const std::uint8_t> cemi_bytes) noexcept
+                                                                   const cspan_uint8_t cemi_bytes) noexcept
     {
         if (channel_id == 0u)
             return std::unexpected(make_error_code(error::invalid_configuration));
@@ -131,10 +131,10 @@ namespace kmx::aio::knx::frame
         return decoded;
     }
 
-    std::expected<void, std::error_code> encode_tunnelling_request_packet(const span_uint8_t dest,
+    expected_void_t encode_tunnelling_request_packet(const span_uint8_t dest,
                                                                          const std::uint8_t channel_id,
                                                                          const std::uint8_t sequence_number,
-                                                                         const std::span<const std::uint8_t> cemi_bytes) noexcept
+                                                                         const cspan_uint8_t cemi_bytes) noexcept
     {
         const auto body_length = tunnelling_request_header_size + cemi_bytes.size();
         const auto total_length = communication_header_size + body_length;
@@ -153,7 +153,7 @@ namespace kmx::aio::knx::frame
                                          cemi_bytes);
     }
 
-    std::expected<void, std::error_code> encode_tunnelling_ack_packet(const span_uint8_t dest,
+    expected_void_t encode_tunnelling_ack_packet(const span_uint8_t dest,
                                                                       const std::uint8_t channel_id,
                                                                       const std::uint8_t sequence_number,
                                                                       const std::uint8_t status) noexcept

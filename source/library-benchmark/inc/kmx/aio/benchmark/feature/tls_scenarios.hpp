@@ -66,25 +66,28 @@ namespace kmx::aio::benchmark::feature
             bool usable {};          ///< False when openssl(1) could not produce them.
         };
 
+        /// @brief Generates the run's certificate and key, reusing whatever an earlier run left on disk.
+        /// @return The credentials, with usable false when they could not be made.
+        [[nodiscard]] inline tls_credentials make_credentials() noexcept
+        {
+            const std::filesystem::path directory {"/tmp/kmx_aio_benchmark_certs"};
+            const auto certificate = directory / "server_cert.pem";
+            const auto key = directory / "server_key.pem";
+
+            std::error_code ec;
+            std::filesystem::create_directories(directory, ec);
+            if (ec)
+                return tls_credentials {certificate.string(), key.string(), false};
+
+            const auto made = test::ensure_self_signed_pair(certificate, key, "localhost");
+            return tls_credentials {certificate.string(), key.string(), made};
+        }
+
         /// @brief Returns the run's credentials, generating them on first use.
         /// @return The credentials, with usable false when they could not be made.
         [[nodiscard]] inline const tls_credentials& shared_credentials() noexcept
         {
-            static const tls_credentials credentials = []() noexcept
-            {
-                const std::filesystem::path directory {"/tmp/kmx_aio_benchmark_certs"};
-                const auto certificate = directory / "server_cert.pem";
-                const auto key = directory / "server_key.pem";
-
-                std::error_code ec;
-                std::filesystem::create_directories(directory, ec);
-                if (ec)
-                    return tls_credentials {certificate.string(), key.string(), false};
-
-                const auto made = test::ensure_self_signed_pair(certificate, key, "localhost");
-                return tls_credentials {certificate.string(), key.string(), made};
-            }();
-
+            static const tls_credentials credentials = make_credentials();
             return credentials;
         }
 
@@ -151,6 +154,196 @@ namespace kmx::aio::benchmark::feature
                 exec.spawn([](std::shared_ptr<tls_stream_t<Backend>> s) -> task<void> { co_await s->handshake(); }(session));
             }
         }
+
+        /// @brief The connecting side of the handshake case: connect, handshake, time it, repeat.
+        /// @tparam Backend The execution model to drive.
+        /// @param exec The executor.
+        /// @param port The loopback port to connect to.
+        /// @param ctx The client context. Must outlive the run.
+        /// @param count How many handshakes to time.
+        /// @param samples One nanosecond figure appended per completed handshake.
+        /// @throws std::bad_alloc (coroutine frame and sample allocation).
+        template <typename Backend>
+        task<void> tls_handshake_client(typename Backend::executor_t& exec, const port_t port, ::SSL_CTX* const ctx,
+                                        const std::size_t count, std::vector<double>& samples) noexcept(false)
+        {
+            for (std::size_t i {}; i != count; ++i)
+            {
+                auto connected = co_await Backend::connect(exec, port);
+                if (!connected)
+                    co_return;
+
+                tls_stream_t<Backend> session {typename Backend::tcp_stream_t {exec, std::move(*connected)}, ctx};
+                session.set_connect_state();
+
+                const auto start = clock_t::now();
+                if (!co_await session.handshake())
+                    co_return;
+
+                samples.push_back(
+                    static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(clock_t::now() - start).count()));
+            }
+        }
+
+        /// @brief The accepting side of the echo case: one session, then read a block and write it back.
+        /// @tparam Backend The execution model to drive.
+        /// @param exec The executor.
+        /// @param listener The listening socket. Must outlive the run.
+        /// @param ctx The server context. Must outlive the run.
+        /// @param count How many round trips to serve.
+        /// @param size Bytes per round trip.
+        /// @param keep_alive Holds the session, which outlives this coroutine's suspensions.
+        /// @throws std::bad_alloc (coroutine frame and buffer allocation).
+        template <typename Backend>
+        task<void> tls_echo_server(typename Backend::executor_t& exec, typename Backend::tcp_listener_t& listener, ::SSL_CTX* const ctx,
+                                   const std::size_t count, const std::size_t size,
+                                   std::vector<std::shared_ptr<tls_stream_t<Backend>>>& keep_alive) noexcept(false)
+        {
+            auto accepted = co_await listener.accept();
+            if (!accepted)
+                co_return;
+
+            auto session = std::make_shared<tls_stream_t<Backend>>(typename Backend::tcp_stream_t {exec, std::move(*accepted)}, ctx);
+            keep_alive.push_back(session);
+            session->set_accept_state();
+            if (!co_await session->handshake())
+                co_return;
+
+            std::vector<char> buffer(size);
+            for (std::size_t i {}; i != count; ++i)
+            {
+                if (!co_await stream_read_exact(*session, span_char_t(buffer.data(), buffer.size())))
+                    co_return;
+
+                if (!co_await session->write_all(cspan_char_t(buffer.data(), buffer.size())))
+                    co_return;
+            }
+        }
+
+        /// @brief The connecting side of the echo case: handshake once, then time each round trip.
+        /// @tparam Backend The execution model to drive.
+        /// @param exec The executor.
+        /// @param port The loopback port to connect to.
+        /// @param ctx The client context. Must outlive the run.
+        /// @param count How many round trips to make.
+        /// @param size Bytes per round trip.
+        /// @param samples One nanosecond figure appended per round trip, or nullptr to record none.
+        /// @param completed Incremented once per completed round trip.
+        /// @param window Opened after the handshake and closed at the end, stamping the measured window.
+        /// @throws std::bad_alloc (coroutine frame, buffer and sample allocation).
+        template <typename Backend>
+        task<void> tls_echo_client(typename Backend::executor_t& exec, const port_t port, ::SSL_CTX* const ctx, const std::size_t count,
+                                   const std::size_t size, std::vector<double>* const samples, std::atomic_size_t& completed,
+                                   run_window& window) noexcept(false)
+        {
+            auto connected = co_await Backend::connect(exec, port);
+            if (!connected)
+                co_return;
+
+            tls_stream_t<Backend> session {typename Backend::tcp_stream_t {exec, std::move(*connected)}, ctx};
+            session.set_connect_state();
+            if (!co_await session.handshake())
+                co_return;
+
+            std::vector<char> buffer(size);
+
+            // Opened after the handshake: this case is about the record layer, and averaging one
+            // handshake over a few thousand round trips would quietly add it to every one of them.
+            window.open();
+
+            for (std::size_t i {}; i != count; ++i)
+            {
+                const auto start = clock_t::now();
+
+                if (!co_await session.write_all(cspan_char_t(buffer.data(), buffer.size())))
+                    break;
+
+                if (!co_await stream_read_exact(session, span_char_t(buffer.data(), buffer.size())))
+                    break;
+
+                if (samples != nullptr)
+                    samples->push_back(
+                        static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(clock_t::now() - start).count()));
+
+                completed.fetch_add(1u, std::memory_order_relaxed);
+            }
+
+            window.close(1u);
+        }
+
+        /// @brief The receiving side of the throughput case: one session, then count whole blocks.
+        /// @tparam Backend The execution model to drive.
+        /// @param exec The executor.
+        /// @param listener The listening socket. Must outlive the run.
+        /// @param ctx The server context. Must outlive the run.
+        /// @param count How many blocks to read.
+        /// @param size Bytes per block.
+        /// @param counter Incremented once per whole block read.
+        /// @param window Closed once the sink is done, stamping the measured window.
+        /// @param keep_alive Holds the session, which outlives this coroutine's suspensions.
+        /// @throws std::bad_alloc (coroutine frame and buffer allocation).
+        template <typename Backend>
+        task<void> tls_block_sink(typename Backend::executor_t& exec, typename Backend::tcp_listener_t& listener, ::SSL_CTX* const ctx,
+                                  const std::size_t count, const std::size_t size, std::atomic_size_t& counter, run_window& window,
+                                  std::vector<std::shared_ptr<tls_stream_t<Backend>>>& keep_alive) noexcept(false)
+        {
+            auto accepted = co_await listener.accept();
+            if (!accepted)
+                co_return;
+
+            auto session = std::make_shared<tls_stream_t<Backend>>(typename Backend::tcp_stream_t {exec, std::move(*accepted)}, ctx);
+            keep_alive.push_back(session);
+            session->set_accept_state();
+            if (!co_await session->handshake())
+            {
+                window.close(1u);
+                co_return;
+            }
+
+            std::vector<char> buffer(size);
+            for (std::size_t i {}; i != count; ++i)
+            {
+                if (!co_await stream_read_exact(*session, span_char_t(buffer.data(), buffer.size())))
+                    break;
+
+                counter.fetch_add(1u, std::memory_order_relaxed);
+            }
+
+            window.close(1u);
+        }
+
+        /// @brief The sending side of the throughput case: handshake once, then stream blocks one way.
+        /// @tparam Backend The execution model to drive.
+        /// @param exec The executor.
+        /// @param port The loopback port to connect to.
+        /// @param ctx The client context. Must outlive the run.
+        /// @param count How many blocks to write.
+        /// @param size Bytes per block.
+        /// @param window Opened after the handshake, so the asymmetric crypto is not spread over the blocks.
+        /// @param keep_alive Holds the session, which must outlive the blocks still in flight.
+        /// @throws std::bad_alloc (coroutine frame and buffer allocation).
+        template <typename Backend>
+        task<void> tls_block_source(typename Backend::executor_t& exec, const port_t port, ::SSL_CTX* const ctx, const std::size_t count,
+                                    const std::size_t size, run_window& window,
+                                    std::vector<std::shared_ptr<tls_stream_t<Backend>>>& keep_alive) noexcept(false)
+        {
+            auto connected = co_await Backend::connect(exec, port);
+            if (!connected)
+                co_return;
+
+            auto session = std::make_shared<tls_stream_t<Backend>>(typename Backend::tcp_stream_t {exec, std::move(*connected)}, ctx);
+            keep_alive.push_back(session);
+            session->set_connect_state();
+            if (!co_await session->handshake())
+                co_return;
+
+            const std::vector<char> buffer(size);
+
+            window.open();
+            for (std::size_t i {}; i != count; ++i)
+                if (!co_await session->write_all(cspan_char_t(buffer.data(), buffer.size())))
+                    break;
+        }
     } // namespace detail
 
     /// @brief A full TLS 1.3 handshake over a fresh loopback TCP connection, timed per handshake.
@@ -186,28 +379,8 @@ namespace kmx::aio::benchmark::feature
         std::vector<std::shared_ptr<tls_stream_t<Backend>>> server_sessions {};
         server_sessions.reserve(iterations);
 
-        const auto client_side = [](typename Backend::executor_t& e, const port_t p, ::SSL_CTX* const ctx, const std::size_t count,
-                                    std::vector<double>& out) -> task<void>
-        {
-            for (std::size_t i {}; i != count; ++i)
-            {
-                auto connected = co_await Backend::connect(e, p);
-                if (!connected)
-                    co_return;
-
-                tls_stream_t<Backend> session {typename Backend::tcp_stream_t {e, std::move(*connected)}, ctx};
-                session.set_connect_state();
-
-                const auto start = clock_t::now();
-                if (!co_await session.handshake())
-                    co_return;
-
-                out.push_back(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(clock_t::now() - start).count()));
-            }
-        };
-
         exec.spawn(detail::tls_acceptor<Backend>(exec, listener, contexts.server.get(), iterations, server_sessions));
-        exec.spawn(client_side(exec, port, contexts.client.get(), iterations, samples));
+        exec.spawn(detail::tls_handshake_client<Backend>(exec, port, contexts.client.get(), iterations, samples));
 
         {
             const watchdog guard {[&exec]() noexcept { exec.stop(); }, scenario_time_limit};
@@ -257,72 +430,8 @@ namespace kmx::aio::benchmark::feature
         detail::run_window window {};
         std::vector<std::shared_ptr<tls_stream_t<Backend>>> server_sessions {};
 
-        const auto server_side = [](typename Backend::executor_t& e, typename Backend::tcp_listener_t& l, ::SSL_CTX* const ctx,
-                                    const std::size_t count, const std::size_t size,
-                                    std::vector<std::shared_ptr<tls_stream_t<Backend>>>& keep_alive) -> task<void>
-        {
-            auto accepted = co_await l.accept();
-            if (!accepted)
-                co_return;
-
-            auto session = std::make_shared<tls_stream_t<Backend>>(typename Backend::tcp_stream_t {e, std::move(*accepted)}, ctx);
-            keep_alive.push_back(session);
-            session->set_accept_state();
-            if (!co_await session->handshake())
-                co_return;
-
-            std::vector<char> buffer(size);
-            for (std::size_t i {}; i != count; ++i)
-            {
-                if (!co_await detail::stream_read_exact(*session, span_char_t(buffer.data(), buffer.size())))
-                    co_return;
-
-                if (!co_await session->write_all(cspan_char_t(buffer.data(), buffer.size())))
-                    co_return;
-            }
-        };
-
-        const auto client_side = [](typename Backend::executor_t& e, const port_t p, ::SSL_CTX* const ctx, const std::size_t count,
-                                    const std::size_t size, std::vector<double>* const out, std::atomic_size_t& done,
-                                    detail::run_window& w) -> task<void>
-        {
-            auto connected = co_await Backend::connect(e, p);
-            if (!connected)
-                co_return;
-
-            tls_stream_t<Backend> session {typename Backend::tcp_stream_t {e, std::move(*connected)}, ctx};
-            session.set_connect_state();
-            if (!co_await session.handshake())
-                co_return;
-
-            std::vector<char> buffer(size);
-
-            // Opened after the handshake: this case is about the record layer, and averaging one
-            // handshake over a few thousand round trips would quietly add it to every one of them.
-            w.open();
-
-            for (std::size_t i {}; i != count; ++i)
-            {
-                const auto start = clock_t::now();
-
-                if (!co_await session.write_all(cspan_char_t(buffer.data(), buffer.size())))
-                    break;
-
-                if (!co_await detail::stream_read_exact(session, span_char_t(buffer.data(), buffer.size())))
-                    break;
-
-                if (out != nullptr)
-                    out->push_back(
-                        static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(clock_t::now() - start).count()));
-
-                done.fetch_add(1u, std::memory_order_relaxed);
-            }
-
-            w.close(1u);
-        };
-
-        exec.spawn(server_side(exec, listener, contexts.server.get(), rounds, payload_size, server_sessions));
-        exec.spawn(client_side(exec, port, contexts.client.get(), rounds, payload_size, &samples, completed, window));
+        exec.spawn(detail::tls_echo_server<Backend>(exec, listener, contexts.server.get(), rounds, payload_size, server_sessions));
+        exec.spawn(detail::tls_echo_client<Backend>(exec, port, contexts.client.get(), rounds, payload_size, &samples, completed, window));
 
         {
             const watchdog guard {[&exec]() noexcept { exec.stop(); }, scenario_time_limit};
@@ -371,35 +480,6 @@ namespace kmx::aio::benchmark::feature
         detail::run_window window {};
         std::vector<std::shared_ptr<tls_stream_t<Backend>>> server_sessions {};
 
-        const auto sink = [](typename Backend::executor_t& e, typename Backend::tcp_listener_t& l, ::SSL_CTX* const ctx,
-                             const std::size_t count, const std::size_t size, std::atomic_size_t& counter, detail::run_window& w,
-                             std::vector<std::shared_ptr<tls_stream_t<Backend>>>& keep_alive) -> task<void>
-        {
-            auto accepted = co_await l.accept();
-            if (!accepted)
-                co_return;
-
-            auto session = std::make_shared<tls_stream_t<Backend>>(typename Backend::tcp_stream_t {e, std::move(*accepted)}, ctx);
-            keep_alive.push_back(session);
-            session->set_accept_state();
-            if (!co_await session->handshake())
-            {
-                w.close(1u);
-                co_return;
-            }
-
-            std::vector<char> buffer(size);
-            for (std::size_t i {}; i != count; ++i)
-            {
-                if (!co_await detail::stream_read_exact(*session, span_char_t(buffer.data(), buffer.size())))
-                    break;
-
-                counter.fetch_add(1u, std::memory_order_relaxed);
-            }
-
-            w.close(1u);
-        };
-
         // The sending session outlives the coroutine that writes through it. Held in the coroutine's
         // own frame instead, it was destroyed the moment the last block was handed over - closing the
         // socket under whatever was still in flight, and costing the receiver the last several hundred
@@ -407,31 +487,10 @@ namespace kmx::aio::benchmark::feature
         // figure that was quietly wrong.
         std::vector<std::shared_ptr<tls_stream_t<Backend>>> client_sessions {};
 
-        const auto source = [](typename Backend::executor_t& e, const port_t p, ::SSL_CTX* const ctx, const std::size_t count,
-                               const std::size_t size, detail::run_window& w,
-                               std::vector<std::shared_ptr<tls_stream_t<Backend>>>& keep_alive) -> task<void>
-        {
-            auto connected = co_await Backend::connect(e, p);
-            if (!connected)
-                co_return;
-
-            auto session = std::make_shared<tls_stream_t<Backend>>(typename Backend::tcp_stream_t {e, std::move(*connected)}, ctx);
-            keep_alive.push_back(session);
-            session->set_connect_state();
-            if (!co_await session->handshake())
-                co_return;
-
-            const std::vector<char> buffer(size);
-
-            // Opened after the handshake, so the asymmetric crypto is not spread over the blocks.
-            w.open();
-            for (std::size_t i {}; i != count; ++i)
-                if (!co_await session->write_all(cspan_char_t(buffer.data(), buffer.size())))
-                    break;
-        };
-
-        exec.spawn(sink(exec, listener, contexts.server.get(), blocks, block_size, received_blocks, window, server_sessions));
-        exec.spawn(source(exec, port, contexts.client.get(), blocks, block_size, window, client_sessions));
+        exec.spawn(
+            detail::tls_block_sink<Backend>(exec, listener, contexts.server.get(), blocks, block_size, received_blocks, window,
+                                            server_sessions));
+        exec.spawn(detail::tls_block_source<Backend>(exec, port, contexts.client.get(), blocks, block_size, window, client_sessions));
 
         {
             const watchdog guard {[&exec]() noexcept { exec.stop(); }, scenario_time_limit};

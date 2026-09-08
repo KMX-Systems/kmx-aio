@@ -19,23 +19,20 @@ namespace kmx::aio::test::knx::routing_transport_test
 {
     using namespace kmx::aio::knx;
 
-    namespace
+    [[nodiscard]] static port_t reserve_udp_port()
     {
-        [[nodiscard]] port_t reserve_udp_port()
-        {
-            auto socket = file_descriptor::create_socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
-            REQUIRE(socket.has_value());
-            sockaddr_in local {};
-            local.sin_family = AF_INET;
-            local.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-            local.sin_port = htons(0u);
-            REQUIRE(socket->bind(reinterpret_cast<const sockaddr*>(&local), sizeof(local)).has_value());
+        auto socket = file_descriptor::create_socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+        REQUIRE(socket.has_value());
+        sockaddr_in local {};
+        local.sin_family = AF_INET;
+        local.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        local.sin_port = htons(0u);
+        REQUIRE(socket->bind(reinterpret_cast<const sockaddr*>(&local), sizeof(local)).has_value());
 
-            sockaddr_in bound {};
-            socklen_t length = sizeof(bound);
-            REQUIRE(::getsockname(socket->get(), reinterpret_cast<sockaddr*>(&bound), &length) == 0);
-            return ntohs(bound.sin_port);
-        }
+        sockaddr_in bound {};
+        socklen_t length = sizeof(bound);
+        REQUIRE(::getsockname(socket->get(), reinterpret_cast<sockaddr*>(&bound), &length) == 0);
+        return ntohs(bound.sin_port);
     }
 
     TEST_CASE("knx completion transport can join and leave multicast group", "[knx][routing][completion][integration]")

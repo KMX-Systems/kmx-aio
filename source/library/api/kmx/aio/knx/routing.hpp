@@ -1,20 +1,22 @@
 /// @file aio/knx/routing.hpp
 /// @brief Routing/multicast capability and indication boundary.
 #pragma once
-#ifndef PCH
-    #include <algorithm>
-    #include <array>
-    #include <cstdint>
-    #include <expected>
-    #include <span>
-    #include <system_error>
-    #include <variant>
-    #include <vector>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_KNX)
+    #ifndef PCH
+        #include <algorithm>
+        #include <array>
+        #include <cstdint>
+        #include <expected>
+        #include <span>
+        #include <system_error>
+        #include <variant>
+        #include <vector>
+    #endif
 
-#include <kmx/aio/knx/error.hpp>
-#include <kmx/aio/knx/frame.hpp>
-#include <kmx/aio/knx/transport.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/frame.hpp>
+    #include <kmx/aio/knx/transport.hpp>
 
 namespace kmx::aio::knx::routing
 {
@@ -39,46 +41,53 @@ namespace kmx::aio::knx::routing
     /// @brief Minimal routing indication envelope carried by a KNXnet/IP routing service.
     struct indication
     {
-        std::uint8_t channel_id = 0u;
-        std::span<const std::uint8_t> cemi_bytes {};
+        std::uint8_t channel_id {};
+        cspan_uint8_t cemi_bytes {};
     };
 
     struct received_indication
     {
-        std::uint8_t channel_id = 0u;
-        std::vector<std::uint8_t> cemi_bytes {};
+        std::uint8_t channel_id {};
+        byte_buffer_t cemi_bytes {};
     };
 
     struct lost_message
     {
-        std::uint16_t count = 0u;
+        std::uint16_t count {};
     };
 
     struct busy
     {
-        std::uint16_t wait_time_ms = 0u;
+        std::uint16_t wait_time_ms {};
     };
 
     using event = std::variant<received_indication, lost_message, busy>;
 
+    /// @brief A received indication, or the error explaining why none was obtained.
+    using received_indication_result_t = std::expected<received_indication, std::error_code>;
+    /// @brief Task yielding a received indication or the error that stopped the receive.
+    using received_indication_task_t = task<received_indication_result_t>;
+
+    /// @brief A routing event, or the error explaining why none was obtained.
+    using event_result_t = std::expected<event, std::error_code>;
+    /// @brief Task yielding a routing event or the error that stopped the receive.
+    using event_task_t = task<event_result_t>;
+
     struct statistics
     {
-        std::uint64_t busy_messages = 0u;
-        std::uint64_t lost_messages = 0u;
-        std::uint64_t reflected_messages = 0u;
-        std::uint32_t busy_backoff_ms = 0u;
+        std::uint64_t busy_messages {};
+        std::uint64_t lost_messages {};
+        std::uint64_t reflected_messages {};
+        std::uint32_t busy_backoff_ms {};
     };
 
-    [[nodiscard]] std::expected<void, std::error_code> encode_indication_packet(
-        span_uint8_t destination, const indication& value) noexcept;
+    [[nodiscard]] expected_void_t encode_indication_packet(span_uint8_t destination, const indication& value) noexcept;
     [[nodiscard]] std::expected<indication, std::error_code> decode_indication_packet(
         cspan_uint8_t packet) noexcept;
-    [[nodiscard]] std::expected<void, std::error_code> encode_lost_message_packet(
-        span_uint8_t destination, const lost_message& value) noexcept;
+    [[nodiscard]] expected_void_t encode_lost_message_packet(span_uint8_t destination, const lost_message& value) noexcept;
     [[nodiscard]] std::expected<lost_message, std::error_code> decode_lost_message_packet(
         cspan_uint8_t packet) noexcept;
-    [[nodiscard]] std::expected<void, std::error_code> encode_busy_packet(
-        span_uint8_t destination, const busy& value) noexcept;
+    [[nodiscard]] expected_void_t encode_busy_packet(span_uint8_t destination, const busy& value) noexcept;
     [[nodiscard]] std::expected<busy, std::error_code> decode_busy_packet(
         cspan_uint8_t packet) noexcept;
 
@@ -115,21 +124,22 @@ namespace kmx::aio::knx::routing
             const busy& value) noexcept(false);
         [[nodiscard]] task_returning_expected_void_t send_lost_message(
             const lost_message& value) noexcept(false);
-        [[nodiscard]] task<std::expected<event, std::error_code>> receive_event() noexcept(false);
-        [[nodiscard]] task<std::expected<received_indication, std::error_code>> receive_indication() noexcept(false);
+        [[nodiscard]] event_task_t receive_event() noexcept(false);
+        [[nodiscard]] received_indication_task_t receive_indication() noexcept(false);
 
     private:
-        [[nodiscard]] std::expected<socket_address, std::error_code> multicast_peer() const noexcept;
+        [[nodiscard]] expected_socket_address_t multicast_peer() const noexcept;
         [[nodiscard]] static bool valid_source_peer(const transport_peer& peer) noexcept;
         [[nodiscard]] std::uint32_t now_ms() const noexcept;
 
         datagram_transport& transport_;
         multicast_configuration configuration_ {};
-        bool started_ = false;
+        bool started_ {};
         statistics counters_ {};
-        clock_now_function clock_now_ = nullptr;
-        std::uint32_t busy_until_ms_ = 0u;
-        std::vector<std::uint8_t> last_sent_packet_ {};
+        clock_now_function clock_now_ {};
+        std::uint32_t busy_until_ms_ {};
+        byte_buffer_t last_sent_packet_ {};
         std::array<std::uint8_t, frame::max_datagram_size> receive_buffer_ {};
     };
 }
+#endif // KMX_AIO_FEATURE_KNX

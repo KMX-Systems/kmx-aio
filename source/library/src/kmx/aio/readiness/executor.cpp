@@ -2,6 +2,7 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/detail/syscalls.hpp>
 #include <kmx/aio/readiness/executor.hpp>
+#include <kmx/aio/exception.hpp>
 
 #include <kmx/aio/error_code.hpp>
 #include <kmx/aio/readiness/descriptor/timer.hpp>
@@ -61,7 +62,7 @@ namespace kmx::aio::readiness
     /// @details Set by process_events() on entry and cleared on exit, so a resumption can tell "I am
     ///          already on the core this executor owns" from "I am somewhere else" without reading
     ///          io_thread_, which shutdown moves out from under it.
-    thread_local const executor* t_current_io_executor = nullptr;
+    thread_local const executor* t_current_io_executor {};
 
     void statistics::reset() noexcept
     {
@@ -98,7 +99,7 @@ namespace kmx::aio::readiness
 
             case backend_mode::openonload_required:
                 if (!openonload_available)
-                    throw std::system_error(to_std_error_code(error_code::openonload_not_available),
+                    throw system_error(to_std_error_code(error_code::openonload_not_available),
                                             "OpenOnload backend required but runtime was not detected");
 
                 active_backend_ = active_backend::openonload;
@@ -115,7 +116,7 @@ namespace kmx::aio::readiness
 
         auto epoll_result = descriptor::epoll::create();
         if (!epoll_result)
-            throw std::system_error(epoll_result.error(), "epoll_create1 failed");
+            throw system_error(epoll_result.error(), "epoll_create1 failed");
 
         epoll_fd_ = std::move(epoll_result.value());
 
@@ -605,7 +606,7 @@ namespace kmx::aio::readiness
                 for (auto it = waiters.begin(); it != waiters.end();)
                 {
                     if ((it->deadline_ms != 0u) &&
-                        (static_cast<std::int32_t>(now_ms - it->deadline_ms) >= 0))
+                        static_cast<std::int32_t>(now_ms - it->deadline_ms) >= 0)
                     {
                         if (it->timed_out != nullptr)
                             *it->timed_out = true;

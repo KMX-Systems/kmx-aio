@@ -2,9 +2,11 @@
 /// @brief HTTP/3 settings definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <cstdint>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_HTTP3)
+    #ifndef PCH
+        #include <cstdint>
+    #endif
 
 namespace kmx::aio::http3
 {
@@ -23,3 +25,4 @@ namespace kmx::aio::http3
         bool h3_datagram {false};
     };
 } // namespace kmx::aio::http3
+#endif // KMX_AIO_FEATURE_HTTP3

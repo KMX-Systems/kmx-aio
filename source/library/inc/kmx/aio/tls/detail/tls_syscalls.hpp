@@ -48,7 +48,7 @@ namespace kmx::aio::tls::detail
     struct basic_tls_syscalls<false>
     {
         /// @brief False: this specialization carries no fault-injection code.
-        static constexpr bool injects_faults = false;
+        static constexpr bool injects_faults {};
 
         /// @brief Wrapper for ::BIO_new.
         [[nodiscard]] static ::BIO* bio_new(const ::BIO_METHOD* const method) noexcept { return native_tls_syscalls::bio_new(method); }

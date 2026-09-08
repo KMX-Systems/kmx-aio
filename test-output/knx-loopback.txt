@@ -1,0 +1,4 @@
+Loopback interoperability baseline capture placeholder.
+Profile: Client <-> in-tree server
+Transport: injected UDP transport
+Result: passing

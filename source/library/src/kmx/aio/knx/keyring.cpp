@@ -5,129 +5,127 @@
 
 namespace kmx::aio::knx::keyring
 {
-    namespace
+    [[nodiscard]] static constexpr int hex_value(const char value) noexcept
     {
-        [[nodiscard]] constexpr int hex_value(const char value) noexcept
+        if ((value >= '0') && (value <= '9'))
+            return value - '0';
+        if ((value >= 'a') && (value <= 'f'))
+            return value - 'a' + 10;
+        if ((value >= 'A') && (value <= 'F'))
+            return value - 'A' + 10;
+        return -1;
+    }
+
+    [[nodiscard]] static std::string_view attribute_value(
+        const std::string_view element, const std::string_view name) noexcept
+    {
+        std::size_t search_offset {};
+        while (true)
         {
-            if ((value >= '0') && (value <= '9'))
-                return value - '0';
-            if ((value >= 'a') && (value <= 'f'))
-                return value - 'a' + 10;
-            if ((value >= 'A') && (value <= 'F'))
-                return value - 'A' + 10;
-            return -1;
-        }
+            const auto name_offset = element.find(name, search_offset);
+            if (name_offset == std::string_view::npos)
+                return {};
 
-        [[nodiscard]] std::string_view attribute_value(
-            const std::string_view element, const std::string_view name) noexcept
-        {
-            std::size_t search_offset = 0u;
-            while (true)
-            {
-                const auto name_offset = element.find(name, search_offset);
-                if (name_offset == std::string_view::npos)
-                    return {};
+            const bool valid_prefix =
+                (name_offset == 0u) ||
+                (element[name_offset - 1u] == '<') ||
+                (element[name_offset - 1u] == ' ') ||
+                (element[name_offset - 1u] == '\t') ||
+                (element[name_offset - 1u] == '\n') ||
+                (element[name_offset - 1u] == '\r');
 
-                const bool valid_prefix =
-                    (name_offset == 0u) ||
-                    (element[name_offset - 1u] == '<') ||
-                    (element[name_offset - 1u] == ' ') ||
-                    (element[name_offset - 1u] == '\t') ||
-                    (element[name_offset - 1u] == '\n') ||
-                    (element[name_offset - 1u] == '\r');
-
-                std::size_t cursor = name_offset + name.size();
-                while (cursor < element.size() &&
-                       ((element[cursor] == ' ') || (element[cursor] == '\t') ||
-                        (element[cursor] == '\n') || (element[cursor] == '\r')))
-                    ++cursor;
-
-                const bool valid_suffix = (cursor < element.size()) && (element[cursor] == '=');
-                if (!valid_prefix || !valid_suffix)
-                {
-                    search_offset = name_offset + 1u;
-                    continue;
-                }
-
+            std::size_t cursor = name_offset + name.size();
+            while ((cursor < element.size()) &&
+                   ((element[cursor] == ' ') || (element[cursor] == '\t') ||
+                    (element[cursor] == '\n') || (element[cursor] == '\r')))
                 ++cursor;
-                while (cursor < element.size() &&
-                       ((element[cursor] == ' ') || (element[cursor] == '\t') ||
-                        (element[cursor] == '\n') || (element[cursor] == '\r')))
-                    ++cursor;
 
-                if (cursor >= element.size())
-                    return {};
-                if ((element[cursor] != '"') && (element[cursor] != '\''))
-                    return {};
-
-                const auto quote = element[cursor];
-                const auto value_start = cursor + 1u;
-                const auto value_end = element.find(quote, value_start);
-                if (value_end == std::string_view::npos)
-                    return {};
-                return element.substr(value_start, value_end - value_start);
-            }
-        }
-
-        [[nodiscard]] std::expected<std::array<std::uint8_t, key_size>, error> decode_hex_key(
-            const std::string_view key_text) noexcept
-        {
-            if (key_text.size() != key_size * 2u)
-                return std::unexpected(error::malformed_frame);
-
-            std::array<std::uint8_t, key_size> result {};
-            for (std::size_t index = 0u; index < key_size; ++index)
+            const bool valid_suffix = (cursor < element.size()) && (element[cursor] == '=');
+            if (!valid_prefix || !valid_suffix)
             {
-                const auto high = hex_value(key_text[index * 2u]);
-                const auto low = hex_value(key_text[index * 2u + 1u]);
-                if ((high < 0) || (low < 0))
-                    return std::unexpected(error::malformed_frame);
-                result[index] = static_cast<std::uint8_t>((high << 4) | low);
+                search_offset = name_offset + 1u;
+                continue;
             }
 
-            return result;
-        }
+            ++cursor;
+            while ((cursor < element.size()) &&
+                   ((element[cursor] == ' ') || (element[cursor] == '\t') ||
+                    (element[cursor] == '\n') || (element[cursor] == '\r')))
+                ++cursor;
 
-        [[nodiscard]] std::expected<std::vector<std::uint8_t>, error> decode_hex_blob(
-            const std::string_view text) noexcept
-        {
-            if (text.empty() || ((text.size() % 2u) != 0u))
-                return std::unexpected(error::malformed_frame);
+            if (cursor >= element.size())
+                return {};
+            if ((element[cursor] != '"') && (element[cursor] != '\''))
+                return {};
 
-            std::vector<std::uint8_t> result(text.size() / 2u, 0u);
-            for (std::size_t index = 0u; index < result.size(); ++index)
-            {
-                const auto high = hex_value(text[index * 2u]);
-                const auto low = hex_value(text[index * 2u + 1u]);
-                if ((high < 0) || (low < 0))
-                    return std::unexpected(error::malformed_frame);
-                result[index] = static_cast<std::uint8_t>((high << 4) | low);
-            }
-
-            return result;
+            const auto quote = element[cursor];
+            const auto value_start = cursor + 1u;
+            const auto value_end = element.find(quote, value_start);
+            if (value_end == std::string_view::npos)
+                return {};
+            return element.substr(value_start, value_end - value_start);
         }
     }
 
-    std::expected<key_record, error> parse(const std::string_view document) noexcept
+    [[nodiscard]] static key_result_t decode_hex_key(const std::string_view key_text) noexcept
+    {
+        if (key_text.size() != key_size * 2u)
+            return std::unexpected(error::malformed_frame);
+
+        key_t result {};
+        for (std::size_t index = 0u; index < key_size; ++index)
+        {
+            const auto high = hex_value(key_text[index * 2u]);
+            const auto low = hex_value(key_text[index * 2u + 1u]);
+            if ((high < 0) || (low < 0))
+                return std::unexpected(error::malformed_frame);
+            result[index] = static_cast<std::uint8_t>((high << 4) | low);
+        }
+
+        return result;
+    }
+
+    /// @brief A decoded hex blob, or the error explaining why the text was not valid hex.
+    using blob_result_t = std::expected<byte_buffer_t, error>;
+
+    [[nodiscard]] static blob_result_t decode_hex_blob(const std::string_view text) noexcept
+    {
+        if (text.empty() || ((text.size() % 2u) != 0u))
+            return std::unexpected(error::malformed_frame);
+
+        byte_buffer_t result(text.size() / 2u, 0u);
+        for (std::size_t index = 0u; index < result.size(); ++index)
+        {
+            const auto high = hex_value(text[index * 2u]);
+            const auto low = hex_value(text[index * 2u + 1u]);
+            if ((high < 0) || (low < 0))
+                return std::unexpected(error::malformed_frame);
+            result[index] = static_cast<std::uint8_t>((high << 4) | low);
+        }
+
+        return result;
+    }
+
+    key_record_result_t parse(const std::string_view document) noexcept
     {
         return parse_selected(document, {}, {}, nullptr);
     }
 
-    std::expected<key_record, error> parse_selected(
+    key_record_result_t parse_selected(
         const std::string_view document,
         const std::string_view device_id,
         const std::string_view key_id,
         decryptor* const key_decryptor) noexcept
     {
-        if (document.empty() || document.size() > max_document_size)
+        if (document.empty() || (document.size() > max_document_size))
             return std::unexpected(error::invalid_length);
         if ((document.find("<!DOCTYPE") != std::string_view::npos) ||
             (document.find("<!ENTITY") != std::string_view::npos) ||
             (document.find("<Key") == std::string_view::npos))
             return std::unexpected(error::malformed_frame);
 
-        bool matched_encrypted = false;
-        std::size_t cursor = 0u;
+        bool matched_encrypted {};
+        std::size_t cursor {};
         while (true)
         {
             const auto start = document.find("<Key", cursor);
@@ -189,7 +187,7 @@ namespace kmx::aio::knx::keyring
             return std::unexpected(error::malformed_frame);
         }
 
-        if (matched_encrypted && key_decryptor == nullptr)
+        if (matched_encrypted && (key_decryptor == nullptr))
             return std::unexpected(error::secure_unsupported);
 
         return std::unexpected(error::malformed_frame);

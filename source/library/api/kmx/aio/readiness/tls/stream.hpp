@@ -2,10 +2,12 @@
 /// @brief Readiness-model TLS stream using BoringSSL Memory BIOs over epoll.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <kmx/aio/readiness/tcp/stream.hpp>
-    #include <kmx/aio/tls/stream.hpp>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_READINESS)
+    #ifndef PCH
+        #include <kmx/aio/readiness/tcp/stream.hpp>
+        #include <kmx/aio/tls/stream.hpp>
+    #endif
 
 namespace kmx::aio::readiness::tls
 {
@@ -13,3 +15,4 @@ namespace kmx::aio::readiness::tls
     using stream = kmx::aio::tls::stream<kmx::aio::readiness::tcp::stream>;
 
 } // namespace kmx::aio::readiness::tls
+#endif // KMX_AIO_FEATURE_READINESS

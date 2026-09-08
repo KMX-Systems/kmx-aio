@@ -64,8 +64,8 @@ namespace kmx::aio::sample::someip::event_subscriber
             co_return;
         }
 
-        std::size_t received = 0;
-        for (int i = 0; i < 500 && received < expected_events_; ++i)
+        std::size_t received {};
+        for (int i = 0; (i < 500) && (received < expected_events_); ++i)
         {
             auto notification = co_await subscription_.next();
             if (!notification)

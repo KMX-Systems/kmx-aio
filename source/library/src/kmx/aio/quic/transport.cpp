@@ -229,7 +229,7 @@ namespace kmx::aio::quic
 
             ++ticks_;
 
-            int diff = 0;
+            int diff {};
             const auto has_tick = ::lsquic_engine_earliest_adv_tick(engine_, &diff);
             std::uint64_t wait_ns = max_tick_ns;
             if (has_tick != 0)
@@ -600,7 +600,7 @@ namespace kmx::aio::quic
     int basic_endpoint::cb_packets_out(void* const ctx, const ::lsquic_out_spec* const specs, const unsigned count) noexcept
     {
         auto* const self = static_cast<basic_endpoint*>(ctx);
-        unsigned sent = 0u;
+        unsigned sent {};
         for (; sent != count; ++sent)
         {
             ::msghdr msg {};

@@ -43,6 +43,25 @@ namespace kmx::aio::test::knx::discovery_test
         }
     };
 
+    namespace detail
+    {
+        /// @brief Issues one IPv6 SEARCH and records whether the typed response came back.
+        task<void> search_ipv6(datagram_transport& transport, const sockaddr_storage& peer, bool& succeeded,
+                               completion::executor& executor) noexcept(false)
+        {
+            discovery::client client {transport, peer, sizeof(sockaddr_in6)};
+            const auto result = co_await client.search(discovery::ipv6_search_request_frame {
+                .discovery_endpoint =
+                    ipv6_hpai {
+                        ipv6_endpoint {{0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 1u}, 3671u},
+                        0x01u,
+                    },
+            });
+            succeeded = result.has_value() && std::holds_alternative<discovery::ipv6_search_response_frame>(*result);
+            executor.stop();
+        }
+    } // namespace detail
+
     TEST_CASE("knx search request round-trips discovery HPAI", "[knx][discovery][integration]")
     {
         const discovery::search_request_frame request {
@@ -123,21 +142,9 @@ namespace kmx::aio::test::knx::discovery_test
         address.sin6_family = AF_INET6;
         address.sin6_port = htons(3671u);
         address.sin6_addr = in6addr_loopback;
-        bool succeeded = false;
+        bool succeeded {};
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            discovery::client client {transport, peer, sizeof(sockaddr_in6)};
-            const auto result = co_await client.search(discovery::ipv6_search_request_frame {
-                .discovery_endpoint = ipv6_hpai {
-                    ipv6_endpoint {{0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 1u}, 3671u},
-                    0x01u,
-                },
-            });
-            succeeded = result.has_value() && std::holds_alternative<discovery::ipv6_search_response_frame>(*result);
-            executor.stop();
-        };
-        executor.spawn(run());
+        executor.spawn(detail::search_ipv6(transport, peer, succeeded, executor));
         executor.run();
         CHECK(succeeded);
     }

@@ -17,7 +17,7 @@ namespace kmx::aio::sample::quic::echo_client
     using namespace kmx::aio;
     using namespace kmx::aio::completion;
 
-    namespace
+    namespace internal
     {
         inline std::atomic_uint32_t responses_received {};
         inline std::atomic_uint32_t close_after_responses {2u};
@@ -26,30 +26,30 @@ namespace kmx::aio::sample::quic::echo_client
         {
             constexpr std::uint32_t default_target = 2u;
             const char* const env = std::getenv("KMX_QUIC_ECHO_CLIENT_CLOSE_AFTER_RESPONSES");
-            if (!env || env[0] == '\0')
+            if (!env || (env[0] == '\0'))
                 return default_target;
 
             std::uint32_t parsed {};
             const char* const end = env + std::char_traits<char>::length(env);
             const auto [ptr, ec] = std::from_chars(env, end, parsed);
-            if (ec != std::errc() || ptr != end)
+            if ((ec != std::errc()) || (ptr != end))
                 return default_target;
 
             return parsed;
         }
-    }
+    } // namespace internal
 
     task<void> handle_stream(::lsquic_stream_t* stream, kmx::aio::quic::stream_payload payload)
     {
         auto data = payload.bytes();
         std::string_view response(data.data(), data.size());
-        const auto seen = responses_received.fetch_add(1u) + 1u;
+        const auto seen = internal::responses_received.fetch_add(1u) + 1u;
 
         std::cout << "[QUIC Echo Client] Response #" << seen << " on stream " << static_cast<unsigned long long>(::lsquic_stream_id(stream))
                   << ": " << response << "\n";
 
-        const auto target = close_after_responses.load();
-        if (target > 0u && seen >= target)
+        const auto target = internal::close_after_responses.load();
+        if ((target > 0u) && (seen >= target))
             ::lsquic_conn_close(::lsquic_stream_conn(stream));
 
         co_return;
@@ -57,8 +57,8 @@ namespace kmx::aio::sample::quic::echo_client
 
     task<void> async_main(executor& exec)
     {
-        responses_received.store(0u);
-        close_after_responses.store(parse_response_target_from_env());
+        internal::responses_received.store(0u);
+        internal::close_after_responses.store(internal::parse_response_target_from_env());
 
         ::SSL_CTX* ssl_ctx = ::SSL_CTX_new(TLS_client_method());
         if (!ssl_ctx)
@@ -89,7 +89,7 @@ namespace kmx::aio::sample::quic::echo_client
         };
 
         std::cout << "[QUIC Echo Client] Connecting to 127.0.0.1:" << peer_port << " with " << payloads.size() << " streams...\n";
-        std::cout << "[QUIC Echo Client] close_after_responses=" << close_after_responses.load() << "\n";
+        std::cout << "[QUIC Echo Client] close_after_responses=" << internal::close_after_responses.load() << "\n";
 
         auto res = co_await engine.connect(peer_ip, peer_port, "localhost", payloads, ssl_ctx);
         if (!res)

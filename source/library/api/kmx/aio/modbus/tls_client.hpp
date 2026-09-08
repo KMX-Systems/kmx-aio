@@ -6,6 +6,7 @@
 /// deployments compliant with IEC 62443.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
+#include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_MODBUS)
     #ifndef PCH
         #include <cstdint>

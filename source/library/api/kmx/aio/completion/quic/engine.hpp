@@ -2,7 +2,8 @@
 /// @brief Completion-model QUIC engine alias.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#if defined(KMX_AIO_FEATURE_QUIC)
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_COMPLETION) && defined(KMX_AIO_FEATURE_QUIC)
 
     #ifndef PCH
         #include <kmx/aio/completion/executor.hpp>
@@ -18,4 +19,4 @@ namespace kmx::aio::completion::quic
 
 } // namespace kmx::aio::completion::quic
 
-#endif // KMX_AIO_FEATURE_QUIC
+#endif // KMX_AIO_FEATURE_COMPLETION && KMX_AIO_FEATURE_QUIC

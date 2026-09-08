@@ -60,9 +60,7 @@ namespace kmx::aio::sample::spdk::discovery
                          "Discovered {} registered SPDK bdev(s):", available.size());
 
         for (const auto& name: available)
-        {
             kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "  - {}", name);
-        }
 
         if (requested.empty())
             return 0;
@@ -125,10 +123,8 @@ namespace kmx::aio::sample::spdk::discovery
 
         // Release hardware resources cleanly via spdk lifecycle
         if (auto fini = kmx::aio::completion::spdk::runtime::finalize(); !fini)
-        {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK finalize failed: {}",
-                             fini.error().message());
-        }
+                         fini.error().message());
 
         return 0;
     }

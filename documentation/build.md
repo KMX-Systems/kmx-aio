@@ -340,8 +340,12 @@ qbs install -f source.qbs -d ../output config:release --install-root /tmp/kmx-ai
 
 The scripts under [script/](../script/) build with the machine's default C++ compiler - whatever `c++`
 and `cc` resolve to, which on a Debian-family system is what `update-alternatives` points them at. No
-compiler version is written down anywhere in them, so moving the alternative to another compiler is the
-whole of what it takes to build with it.
+compiler version is written down in any of them, so moving the alternative to another compiler is the
+whole of what it takes to build with it. The one exception is
+[script/ci/setup-default-toolchain.sh](../script/ci/setup-default-toolchain.sh), which has to *choose* a
+compiler rather than follow one and so names the floor - GCC 16 or Clang 23; see
+[known-limitations.md](known-limitations.md). The scripts here do not check it, and a compiler below it
+fails in the source rather than at the command line.
 
 A `qbs` command cannot be pointed at a bare compiler, only at a profile, and a command that names none
 uses the machine-wide `defaultProfile` - a setting this repository does not control, which routinely
@@ -457,19 +461,45 @@ overrides that decision in either direction.
 `script/run-sanitizer-tests.sh` and `script/run-coverage.sh` drive these builds and set the runtime
 environment the resulting binaries need. See [Testing](testing.md) for both.
 
-## Exported Feature Defines
+## Feature Defines
 
-When enabled, `kmx-aio-lib` exports these compile-time defines:
+Each enabled feature defines a macro, and the public headers of that feature compile to nothing
+without it: `<kmx/aio/modbus/client.hpp>` is an empty file unless `KMX_AIO_FEATURE_MODBUS` is set.
+That is what stops an installed tree from offering declarations whose definitions were never
+compiled, and it is why the set has to be the same everywhere.
 
-- `KMX_AIO_FEATURE_OPENONLOAD=1`
-- `KMX_AIO_FEATURE_AF_XDP=1`
-- `KMX_AIO_FEATURE_SPDK=1`
-- `KMX_AIO_FEATURE_QUIC=1`
-- `KMX_AIO_FEATURE_AVB=1`
-- `KMX_AIO_FEATURE_OPC_UA=1` (only if OPC UA is enabled)
-- `KMX_AIO_FEATURE_MODBUS=1`
-- `KMX_AIO_FEATURE_SOMEIP=1`
-- `KMX_AIO_FEATURE_CUDA=1`
+The enabled set is decided once, by `feature_macros` in `source/source.qbs`, and reaches the
+compiler two ways:
+
+- The `kmx_features` module (`source/qbs/modules/kmx_features/`) puts `-D` on the command line of
+  every product that depends on it. Every library depends on it and re-exports the dependency, so
+  the samples, the benchmark and the test binary inherit the same set without repeating it.
+- `<kmx/aio/config.hpp>` is generated during `qbs resolve`, installed next to the rest of the
+  headers, and included by every feature header. It is what carries the set out to code built
+  against an installed tree with a plain `-I<install-root>/include`, where none of the qbs files
+  above are in play.
+
+The macros, each defined as `1` when its feature is on:
+
+- `KMX_AIO_FEATURE_READINESS`
+- `KMX_AIO_FEATURE_COMPLETION`
+- `KMX_AIO_FEATURE_OPENONLOAD`
+- `KMX_AIO_FEATURE_AF_XDP`
+- `KMX_AIO_FEATURE_SPDK`
+- `KMX_AIO_FEATURE_QUIC`
+- `KMX_AIO_FEATURE_HTTP2`
+- `KMX_AIO_FEATURE_HTTP3`
+- `KMX_AIO_FEATURE_AVB`
+- `KMX_AIO_FEATURE_OPC_UA`
+- `KMX_AIO_FEATURE_MODBUS`
+- `KMX_AIO_FEATURE_KNX`, `KMX_AIO_FEATURE_KNX_SECURE`, `KMX_AIO_FEATURE_KNX_KEYRING`
+- `KMX_AIO_FEATURE_SOMEIP`, and `KMX_AIO_SOMEIP_LINK_BACKEND` when it talks to a real vsomeip
+- `KMX_AIO_FEATURE_CUDA`
+
+Adding a feature means adding it to `feature_macros` in `source/source.qbs` and guarding its public
+headers on it. A product that needs the macros only has to say `Depends { name: "kmx_features" }`;
+one that forgets fails to compile with a missing `<kmx/aio/config.hpp>`, rather than quietly
+building with the feature switched off.
 
 The instrumentation gates export defines of their own, so code can tell how it was built:
 

@@ -4,6 +4,7 @@
 #pragma once
 #ifndef PCH
     #include <kmx/aio/buffer/handle.hpp>
+    #include <kmx/aio/exception.hpp>
 
     #include <array>
     #include <atomic>
@@ -167,7 +168,7 @@ namespace kmx::aio::buffer
         // then leasing would take the mutex twice and let the pool empty in between.
         auto leased = try_acquire();
         if (!leased)
-            throw std::runtime_error("buffer::pool exhausted: all " + std::to_string(Capacity) + " buffers allocated");
+            throw runtime_error("buffer::pool exhausted: all " + std::to_string(Capacity) + " buffers allocated");
 
         return std::move(*leased);
     }

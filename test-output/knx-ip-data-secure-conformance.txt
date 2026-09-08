@@ -1,0 +1,5 @@
+Filters: [knx] [secure] [conformance]
+Randomness seeded to: 2620042525
+===============================================================================
+All tests passed (21 assertions in 1 test case)
+

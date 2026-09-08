@@ -28,15 +28,7 @@ namespace kmx::aio::benchmark
         {
         public:
             explicit watchdog(std::shared_ptr<readiness::executor> exec, const std::chrono::seconds limit) noexcept(false):
-                thread_(
-                    [this, exec = std::move(exec), limit]() noexcept
-                    {
-                        if (!done_.wait_until(false, std::chrono::steady_clock::now() + limit))
-                        {
-                            expired_.store(true, std::memory_order_relaxed);
-                            exec->stop();
-                        }
-                    })
+                thread_([this, exec = std::move(exec), limit]() noexcept { watch(*exec, limit); })
             {
             }
 
@@ -49,6 +41,18 @@ namespace kmx::aio::benchmark
             [[nodiscard]] bool expired() const noexcept { return expired_.load(std::memory_order_relaxed); }
 
         private:
+            /// @brief Stops @p exec if the run has not finished by the deadline.
+            /// @param exec The executor to stop.
+            /// @param limit How long to wait before stopping it.
+            void watch(readiness::executor& exec, const std::chrono::seconds limit) noexcept
+            {
+                if (!done_.wait_until(false, std::chrono::steady_clock::now() + limit))
+                {
+                    expired_.store(true, std::memory_order_relaxed);
+                    exec.stop();
+                }
+            }
+
             /// @brief Waits until the flag is set or the deadline passes.
             struct flag
             {

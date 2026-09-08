@@ -33,7 +33,7 @@ namespace kmx::aio::modbus::detail
     template <typename StreamT>
     [[nodiscard]] task_returning_expected_void_t read_exactly(StreamT& stream, span_char_t dest) noexcept(false)
     {
-        std::size_t total = 0u;
+        std::size_t total {};
         while (total < dest.size())
         {
             const auto result = co_await stream.read(dest.subspan(total));

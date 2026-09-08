@@ -28,15 +28,17 @@
 /// @reference KNX System Specifications, Volume 3/3/7 "Application Layer", APCI codes.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <cstdint>
-    #include <expected>
-    #include <span>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_KNX)
+    #ifndef PCH
+        #include <cstdint>
+        #include <expected>
+        #include <span>
+    #endif
 
-#include <kmx/aio/basic_types.hpp>
-#include <kmx/aio/knx/address.hpp>
-#include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/knx/address.hpp>
+    #include <kmx/aio/knx/error.hpp>
 
 namespace kmx::aio::knx
 {
@@ -666,3 +668,4 @@ namespace kmx::aio::knx
         }
     }
 }
+#endif // KMX_AIO_FEATURE_KNX

@@ -1,4 +1,5 @@
 #include <kmx/aio/http2/hpack.hpp>
+#include <kmx/aio/exception.hpp>
 
 #include <cstring>
 #include <stdexcept>
@@ -20,7 +21,7 @@ namespace kmx::aio::http2
     {
         std::size_t required = encoded_size_literal(name, value);
         if (buffer.size() < required)
-            throw std::invalid_argument("Buffer too small for HPACK literal encoding");
+            throw invalid_argument("Buffer too small for HPACK literal encoding");
 
         std::size_t offset {};
 

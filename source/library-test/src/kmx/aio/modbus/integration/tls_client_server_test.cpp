@@ -32,68 +32,12 @@ namespace kmx::aio::test::modbus::integration::tls_client_server_test
     static constexpr std::uint16_t tls_test_port = 15802u;
     static constexpr std::uint8_t tls_test_unit_id = 0x01u;
 
-    // Server handler helpers (minimal — just read one register)
-    [[nodiscard]] static request_handler make_simple_holding_handler()
+    namespace detail
     {
-        return [](server_request req) -> task<std::vector<std::uint8_t>>
-        {
-            if (req.pdu.size() < 5u)
-                co_return std::vector<std::uint8_t> {0x83u, 0x03u};
-
-            const std::uint16_t count = static_cast<std::uint16_t>((static_cast<std::uint16_t>(req.pdu[3]) << 8u) | req.pdu[4]);
-
-            const std::uint8_t byte_count = static_cast<std::uint8_t>(count * 2u);
-            std::vector<std::uint8_t> pdu;
-            pdu.reserve(2u + byte_count);
-            pdu.push_back(static_cast<std::uint8_t>(function_code::read_holding_registers));
-            pdu.push_back(byte_count);
-            for (std::uint16_t i = 0u; i < count; ++i)
-            {
-                pdu.push_back(0x00u);
-                pdu.push_back(static_cast<std::uint8_t>(42u + i)); // deterministic values
-            }
-            co_return pdu;
-        };
-    }
-
-    // mTLS integration test
-    TEST_CASE("modbus tls: mTLS client and server exchange registers", "[modbus][tls][mtls][integration][slow]")
-    {
-        const scoped_temp_dir cert_dir {"kmx_modbus_certs_exchange"};
-        REQUIRE(cert_dir.valid());
-        const auto cert_set_opt = ensure_ca_signed_set(cert_dir.path(), "127.0.0.1", "modbus-client");
-        REQUIRE(cert_set_opt.has_value());
-        const auto& certs = *cert_set_opt;
-
-        auto srv = std::make_shared<tls_server>();
-        srv->set_handler(function_code::read_holding_registers, make_simple_holding_handler());
-
-        auto exec = std::make_shared<readiness::executor>();
-
-        std::atomic_bool completed = false;
-        std::optional<register_values> result;
-        std::optional<std::error_code> op_error;
-
-        const server_config srv_cfg {.bind_address = "127.0.0.1", .port = tls_test_port, .unit_id = tls_test_unit_id};
-        const tls_config srv_tls {.cert_path = certs.server_cert.string(),
-                                  .key_path = certs.server_key.string(),
-                                  .ca_cert_path = certs.ca_cert.string(),
-                                  .verify_peer = true,
-                                  .sni_hostname = ""};
-
-        auto serve = [exec, srv, srv_cfg, srv_tls]() -> task<void> { static_cast<void>(co_await srv->serve(*exec, srv_cfg, srv_tls)); };
-        exec->spawn(serve());
-
-        std::jthread server_stopper(
-            [srv, &completed]()
-            {
-                while (!completed.load(std::memory_order_acquire))
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                srv->stop();
-            });
-
-        auto exchange = [&, exec, srv, ca = certs.ca_cert.string(), ccert = certs.client_cert.string(),
-                         ckey = certs.client_key.string()]() -> task<void>
+        /// @brief Connects with a client certificate, reads three registers, and disconnects.
+        task<void> exchange_over_mtls(const std::shared_ptr<readiness::executor>& exec, std::atomic_bool& completed,
+                                      std::optional<std::error_code>& op_error, std::optional<register_values>& result,
+                                      const std::string& ca, const std::string& ccert, const std::string& ckey) noexcept(false)
         {
             static_cast<void>(co_await exec->async_timeout(5'000'000u));
 
@@ -126,8 +70,113 @@ namespace kmx::aio::test::modbus::integration::tls_client_server_test
 
             completed.store(true, std::memory_order_release);
             static_cast<void>(co_await c.disconnect());
-        };
-        exec->spawn(exchange());
+        }
+
+        /// @brief Connects presenting no client certificate, and records that no data was exchanged.
+        task<void> exchange_without_client_certificate(const std::shared_ptr<readiness::executor>& exec, std::atomic_bool& completed,
+                                                       std::optional<std::error_code>& op_error, std::optional<register_values>& values,
+                                                       const std::string& ca) noexcept(false)
+        {
+            static_cast<void>(co_await exec->async_timeout(5'000'000u));
+
+            const client_config cl_cfg {.host = "127.0.0.1", .port = tls_test_port + 1u, .unit_id = tls_test_unit_id};
+            // No cert_path / key_path — client presents no certificate
+            const tls_config cl_tls {.cert_path = "", .key_path = "", .ca_cert_path = ca, .verify_peer = true, .sni_hostname = ""};
+
+            tls_client c {cl_cfg, cl_tls, *exec};
+
+            // Asserted on the exchange, not on connect() alone. Under TLS 1.3 the client sends its
+            // Finished and considers the handshake done before the server has processed it, so a server
+            // that demands a certificate the client never sent rejects the connection only after
+            // connect() has already returned success. What has to hold either way is that no Modbus
+            // data is ever exchanged over it.
+            if (const auto r = co_await c.connect(); !r)
+                op_error = r.error();
+            else
+            {
+                if (const auto request = co_await c.read_holding_registers(0u, 1u); request)
+                    values = *request;
+                else
+                    op_error = request.error();
+
+                static_cast<void>(co_await c.disconnect());
+            }
+
+            completed.store(true, std::memory_order_release);
+        }
+    } // namespace detail
+
+    namespace detail
+    {
+        /// @brief Answers one read-holding-registers request with deterministic values.
+        /// @param req The request PDU as the server framed it.
+        /// @return The response PDU.
+        /// @throws std::bad_alloc (coroutine frame and response allocation).
+        [[nodiscard]] task<std::vector<std::uint8_t>> simple_holding_response(server_request req) noexcept(false)
+        {
+            if (req.pdu.size() < 5u)
+                co_return std::vector<std::uint8_t> {0x83u, 0x03u};
+
+            const std::uint16_t count = static_cast<std::uint16_t>((static_cast<std::uint16_t>(req.pdu[3]) << 8u) | req.pdu[4]);
+
+            const std::uint8_t byte_count = static_cast<std::uint8_t>(count * 2u);
+            std::vector<std::uint8_t> pdu;
+            pdu.reserve(2u + byte_count);
+            pdu.push_back(static_cast<std::uint8_t>(function_code::read_holding_registers));
+            pdu.push_back(byte_count);
+            for (std::uint16_t i = 0u; i < count; ++i)
+            {
+                pdu.push_back(0x00u);
+                pdu.push_back(static_cast<std::uint8_t>(42u + i)); // deterministic values
+            }
+            co_return pdu;
+        }
+    } // namespace detail
+
+    // Server handler helpers (minimal — just read one register)
+    [[nodiscard]] static request_handler make_simple_holding_handler()
+    {
+        return [](server_request req) { return detail::simple_holding_response(std::move(req)); };
+    }
+
+    // mTLS integration test
+    TEST_CASE("modbus tls: mTLS client and server exchange registers", "[modbus][tls][mtls][integration][slow]")
+    {
+        const scoped_temp_dir cert_dir {"kmx_modbus_certs_exchange"};
+        REQUIRE(cert_dir.valid());
+        const auto cert_set_opt = ensure_ca_signed_set(cert_dir.path(), "127.0.0.1", "modbus-client");
+        REQUIRE(cert_set_opt.has_value());
+        const auto& certs = *cert_set_opt;
+
+        auto srv = std::make_shared<tls_server>();
+        srv->set_handler(function_code::read_holding_registers, make_simple_holding_handler());
+
+        auto exec = std::make_shared<readiness::executor>();
+
+        std::atomic_bool completed {};
+        std::optional<register_values> result;
+        std::optional<std::error_code> op_error;
+
+        const server_config srv_cfg {.bind_address = "127.0.0.1", .port = tls_test_port, .unit_id = tls_test_unit_id};
+        const tls_config srv_tls {.cert_path = certs.server_cert.string(),
+                                  .key_path = certs.server_key.string(),
+                                  .ca_cert_path = certs.ca_cert.string(),
+                                  .verify_peer = true,
+                                  .sni_hostname = ""};
+
+        auto serve = [exec, srv, srv_cfg, srv_tls]() -> task<void> { static_cast<void>(co_await srv->serve(*exec, srv_cfg, srv_tls)); };
+        exec->spawn(serve());
+
+        std::jthread server_stopper(
+            [srv, &completed]()
+            {
+                while (!completed.load(std::memory_order_acquire))
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                srv->stop();
+            });
+
+        exec->spawn(detail::exchange_over_mtls(exec, completed, op_error, result, certs.ca_cert.string(), certs.client_cert.string(),
+                                              certs.client_key.string()));
 
         exec->run();
 
@@ -157,7 +206,7 @@ namespace kmx::aio::test::modbus::integration::tls_client_server_test
 
         auto exec = std::make_shared<readiness::executor>();
 
-        std::atomic_bool completed = false;
+        std::atomic_bool completed {};
         std::optional<register_values> values;
         std::optional<std::error_code> op_error;
 
@@ -179,36 +228,7 @@ namespace kmx::aio::test::modbus::integration::tls_client_server_test
                 srv->stop();
             });
 
-        auto exchange = [&, exec, srv, ca = certs.ca_cert.string()]() -> task<void>
-        {
-            static_cast<void>(co_await exec->async_timeout(5'000'000u));
-
-            const client_config cl_cfg {.host = "127.0.0.1", .port = tls_test_port + 1u, .unit_id = tls_test_unit_id};
-            // No cert_path / key_path — client presents no certificate
-            const tls_config cl_tls {.cert_path = "", .key_path = "", .ca_cert_path = ca, .verify_peer = true, .sni_hostname = ""};
-
-            tls_client c {cl_cfg, cl_tls, *exec};
-
-            // Asserted on the exchange, not on connect() alone. Under TLS 1.3 the client sends its
-            // Finished and considers the handshake done before the server has processed it, so a server
-            // that demands a certificate the client never sent rejects the connection only after
-            // connect() has already returned success. What has to hold either way is that no Modbus
-            // data is ever exchanged over it.
-            if (const auto r = co_await c.connect(); !r)
-                op_error = r.error();
-            else
-            {
-                if (const auto request = co_await c.read_holding_registers(0u, 1u); request)
-                    values = *request;
-                else
-                    op_error = request.error();
-
-                static_cast<void>(co_await c.disconnect());
-            }
-
-            completed.store(true, std::memory_order_release);
-        };
-        exec->spawn(exchange());
+        exec->spawn(detail::exchange_without_client_certificate(exec, completed, op_error, values, certs.ca_cert.string()));
 
         exec->run();
 

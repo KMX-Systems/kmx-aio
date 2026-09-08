@@ -1,4 +1,5 @@
 #include <kmx/aio/http2/frame.hpp>
+#include <kmx/aio/exception.hpp>
 
 #include <cstring>
 #include <stdexcept>
@@ -8,7 +9,7 @@ namespace kmx::aio::http2
     std::size_t make_goaway(span_uint8_t buffer, const std::uint32_t last_stream_id, const std::uint32_t error_code) noexcept(false)
     {
         if (buffer.size() < 17u)
-            throw std::invalid_argument("Buffer too small for GOAWAY frame");
+            throw invalid_argument("Buffer too small for GOAWAY frame");
 
         std::memset(buffer.data(), 0, 9u);
         buffer[2u] = 0x08u; // 8 bytes long

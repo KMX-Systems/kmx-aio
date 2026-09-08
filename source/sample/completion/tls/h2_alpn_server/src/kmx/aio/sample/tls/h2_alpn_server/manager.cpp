@@ -87,12 +87,12 @@ namespace kmx::aio::sample::tls::h2_alpn_server
             // Wait for 24 byte Preface + 9 byte Client Settings
             std::array<char, 33u> recv_buf {};
             auto read_res = co_await stream.read(span_char_t(recv_buf.data(), recv_buf.size()));
-            if (!read_res || *read_res < recv_buf.size())
+            if (!read_res || (*read_res < recv_buf.size()))
                 co_return;
 
             std::string_view expected_preface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
             std::string_view received(recv_buf.data(), 24);
-            if (received == expected_preface && recv_buf[24 + 3] == 4)
+            if ((received == expected_preface) && (recv_buf[24 + 3] == 4))
                 // type == SETTINGS
                 logger::log(logger::level::info, std::source_location::current(), "Server: Received valid Preface + Client SETTINGS frame");
 
@@ -108,32 +108,32 @@ namespace kmx::aio::sample::tls::h2_alpn_server
 
             // Read Client SETTINGS ACK
             auto r_ack = co_await stream.read(span_char_t(recv_buf.data(), 9u));
-            if (r_ack && *r_ack >= 9 && recv_buf[3] == 4 && recv_buf[4] == 1)
+            if (r_ack && (*r_ack >= 9) && (recv_buf[3] == 4) && (recv_buf[4] == 1))
                 // type == SETTINGS, flags == 1
                 logger::log(logger::level::info, std::source_location::current(),
                             "Server: Received Client SETTINGS ACK. Handshake Complete!");
 
             // HTTP/2 Extension: Listen for incoming GET packet and process HEADERS
             std::array<char, 9u> req_hdr {};
-            size_t total {};
+            std::size_t total {};
             while (total < req_hdr.size())
             {
                 auto r = co_await stream.read(span_char_t(req_hdr.data() + total, req_hdr.size() - total));
-                if (!r || *r == 0)
+                if (!r || (*r == 0))
                     break;
                 total += *r;
             }
 
             if ((total == req_hdr.size()) && (req_hdr[3] == 0x01))
             { // Type HEADERS
-                uint32_t payload_len =
-                    (static_cast<uint8_t>(req_hdr[0]) << 16) | (static_cast<uint8_t>(req_hdr[1]) << 8) | static_cast<uint8_t>(req_hdr[2]);
+                std::uint32_t payload_len = (static_cast<std::uint8_t>(req_hdr[0]) << 16) |
+                                            (static_cast<std::uint8_t>(req_hdr[1]) << 8) | static_cast<std::uint8_t>(req_hdr[2]);
                 std::vector<char> payload(payload_len);
                 total = {};
                 while (total < payload_len)
                 {
                     auto r = co_await stream.read(span_char_t(payload.data() + total, payload_len - total));
-                    if (!r || *r == 0)
+                    if (!r || (*r == 0))
                         break;
                     total += *r;
                 }

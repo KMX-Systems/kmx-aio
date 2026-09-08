@@ -168,10 +168,8 @@ namespace kmx::aio::avb::gptp
         {
             const auto res = co_await recv_loop();
             if (!res)
-            {
                 kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "gPTP receive loop failed: {}",
-                                 res.error().message());
-            }
+                             res.error().message());
         }
 
         // Pdelay request loop (every ~1s by default)

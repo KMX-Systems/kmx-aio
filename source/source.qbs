@@ -46,6 +46,139 @@ Project {
     property string someip_prefix: sourceDirectory + "/../output/someip/install-local"
     property bool enable_cuda: full || all || false  // GPU support (requires CUDA toolkit installed)
 
+    // Every feature macro this build defines, named once.
+    //
+    // The macros used to be assembled by a copy of this list in each of the fifteen products that
+    // needs them, and the copies had drifted: kmx-aio-http3 carried none at all, so <kmx/aio/quic/
+    // engine.hpp> compiled to nothing inside the one library that exists to sit on top of QUIC;
+    // kmx-aio-knx carried only the three KNX macros; and READINESS, COMPLETION, HTTP2 and HTTP3 were
+    // defined by the benchmark and by nothing else, so the same header meant different things in the
+    // benchmark and in the library it measures. A feature macro is only meaningful when a whole
+    // binary agrees on it - the same argument the kmx_instrumentation module makes for the sanitizer
+    // flags - so the list lives here, and reaches the compiler by two routes that both read it:
+    //
+    //   - the kmx_features module, which puts -D on the command line of every product depending on it;
+    //   - <kmx/aio/config.hpp>, generated below, which is what carries the set out to code built
+    //     against an installed tree, where none of this project's qbs files are in play.
+    readonly property stringList feature_macros: {
+        var macros = [];
+
+        if (enable_readiness)
+            macros.push("KMX_AIO_FEATURE_READINESS");
+        if (enable_completion)
+            macros.push("KMX_AIO_FEATURE_COMPLETION");
+        if (enable_openonload)
+            macros.push("KMX_AIO_FEATURE_OPENONLOAD");
+        if (enable_af_xdp)
+            macros.push("KMX_AIO_FEATURE_AF_XDP");
+        if (enable_spdk)
+            macros.push("KMX_AIO_FEATURE_SPDK");
+        if (enable_quic)
+            macros.push("KMX_AIO_FEATURE_QUIC");
+        if (enable_http2)
+            macros.push("KMX_AIO_FEATURE_HTTP2");
+        if (enable_http3)
+            macros.push("KMX_AIO_FEATURE_HTTP3");
+        if (enable_avb)
+            macros.push("KMX_AIO_FEATURE_AVB");
+        if (enable_opc_ua)
+            macros.push("KMX_AIO_FEATURE_OPC_UA");
+        if (enable_modbus)
+            macros.push("KMX_AIO_FEATURE_MODBUS");
+        if (enable_knx)
+            macros.push("KMX_AIO_FEATURE_KNX");
+        if (enable_knx_secure)
+            macros.push("KMX_AIO_FEATURE_KNX_SECURE");
+        if (enable_knx_keyring)
+            macros.push("KMX_AIO_FEATURE_KNX_KEYRING");
+        if (enable_someip)
+            macros.push("KMX_AIO_FEATURE_SOMEIP");
+        if (enable_cuda)
+            macros.push("KMX_AIO_FEATURE_CUDA");
+
+        // Not a feature of its own: it selects whether the SOME/IP code talks to a real vsomeip
+        // runtime or to the in-tree stand-in. It is here because <kmx/aio/someip/subscription.hpp>
+        // changes shape with it, which makes it part of the installed API just as much as the rest.
+        if (someip_link_backend)
+            macros.push("KMX_AIO_SOMEIP_LINK_BACKEND");
+
+        return macros;
+    }
+
+    // Writes <kmx/aio/config.hpp> - the installed record of feature_macros above - and hands back the
+    // directory to put on the include path. Done from a probe, at resolve time, rather than from a
+    // build rule: the header is included by public headers of every product, and a rule's output would
+    // have to be sequenced ahead of each of their compile steps. Written before a single source file
+    // is looked at, it needs no sequencing at all, and the compilation database picks it up too.
+    Probe {
+        id: featureConfigurationHeader
+
+        // Inputs. Qbs re-runs a probe when one of its input properties changes and reuses the cached
+        // result otherwise, so naming both of these is what makes a changed feature set - or a second
+        // build directory - regenerate the header instead of inheriting the last one.
+        property stringList macros: rootProject.feature_macros
+        property string buildRoot: rootProject.buildDirectory
+
+        // Outputs.
+        property string includeDirectory
+        property string headerPath
+
+        configure: {
+            includeDirectory = buildRoot + "/kmx-aio-config";
+
+            var directory = includeDirectory + "/kmx/aio";
+            File.makePath(directory);
+
+            var path = directory + "/config.hpp";
+            var lines = [
+                "/// @file aio/config.hpp",
+                "/// @brief The optional features this build of the library was compiled with.",
+                "/// @details Generated during \"qbs resolve\" from the project.enable_* flags in",
+                "///          source/source.qbs. Do not edit: every build overwrites it, and the flags",
+                "///          there are what it is written from.",
+                "///",
+                "///          Every public header belonging to an optional feature includes this one and",
+                "///          compiles to nothing when its feature is absent from the list below, so code",
+                "///          built against an installed tree sees exactly the API that was built into it",
+                "///          instead of declarations whose definitions were never compiled.",
+                "/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.",
+                "#pragma once",
+                "",
+            ];
+
+            if (macros.length === 0) {
+                lines.push("// This build enables no optional features.");
+            } else {
+                lines.push("// Each definition is conditional because the library's own translation units are compiled");
+                lines.push("// with -D for this same set as well (the kmx_features module). Both come from the one list");
+                lines.push("// in source/source.qbs and so cannot disagree; the guard is what keeps saying it twice from");
+                lines.push("// being a redefinition.");
+
+                for (var i = 0; i < macros.length; ++i) {
+                    lines.push("#ifndef " + macros[i]);
+                    lines.push("    #define " + macros[i] + " 1");
+                    lines.push("#endif");
+                }
+            }
+
+            var file = new TextFile(path, TextFile.WriteOnly);
+            try {
+                for (var line = 0; line < lines.length; ++line)
+                    file.writeLine(lines[line]);
+            } finally {
+                file.close();
+            }
+
+            headerPath = path;
+            found = true;
+        }
+    }
+
+    // Where the generated <kmx/aio/config.hpp> lives. Reading it through the probe's output rather
+    // than recomputing the path is deliberate: it is what makes the header exist before anything asks
+    // for the directory it is in.
+    readonly property string generated_include_dir: featureConfigurationHeader.includeDirectory
+
     // Instrumentation, applied to every product through the kmx_instrumentation module. ASan and TSan
     // are mutually exclusive; UBSan combines with either, and coverage combines with all of them.
     property bool enable_asan: false

@@ -2,6 +2,7 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/completion/tcp/listener.hpp>
 
+#include <kmx/aio/exception.hpp>
 #include <kmx/logger.hpp>
 
 namespace kmx::aio::completion::tcp
@@ -10,23 +11,23 @@ namespace kmx::aio::completion::tcp
     {
         auto sock_res = file_descriptor::create_socket(ip_family(ip), SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
         if (!sock_res)
-            throw std::system_error(sock_res.error(), "socket creation failed");
+            throw system_error(sock_res.error(), "socket creation failed");
 
         fd_ = std::move(sock_res.value());
 
         const int opt = 1;
         if (auto res = fd_.setsockopt(SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)); !res)
-            throw std::system_error(res.error(), "setsockopt SO_REUSEADDR failed");
+            throw system_error(res.error(), "setsockopt SO_REUSEADDR failed");
 
         if (auto res = fd_.setsockopt(SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)); !res)
-            throw std::system_error(res.error(), "setsockopt SO_REUSEPORT failed");
+            throw system_error(res.error(), "setsockopt SO_REUSEPORT failed");
 
         auto addr = make_socket_address(ip, port);
         if (!addr)
-            throw std::system_error(addr.error(), "make_socket_address failed");
+            throw system_error(addr.error(), "make_socket_address failed");
 
         if (auto res = fd_.bind(reinterpret_cast<sockaddr*>(&addr->storage), addr->length); !res)
-            throw std::system_error(res.error(), "bind failed");
+            throw system_error(res.error(), "bind failed");
     }
 
     expected_void_t listener::listen(const int backlog) noexcept

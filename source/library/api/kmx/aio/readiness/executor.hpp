@@ -2,23 +2,25 @@
 /// @brief Readiness-model executor using epoll for event notification.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <atomic>
-    #include <deque>
-    #include <expected>
-    #include <memory>
-    #include <mutex>
-    #include <sys/epoll.h>
-    #include <sys/socket.h>
-    #include <unordered_map>
-    #include <unordered_set>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_READINESS)
+    #ifndef PCH
+        #include <atomic>
+        #include <deque>
+        #include <expected>
+        #include <memory>
+        #include <mutex>
+        #include <sys/epoll.h>
+        #include <sys/socket.h>
+        #include <unordered_map>
+        #include <unordered_set>
 
-    #include <kmx/aio/executor_base.hpp>
-    #include <kmx/aio/readiness/basic_types.hpp>
-    #include <kmx/aio/readiness/descriptor/epoll.hpp>
-    #include <kmx/aio/scheduler.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+        #include <kmx/aio/executor_base.hpp>
+        #include <kmx/aio/readiness/basic_types.hpp>
+        #include <kmx/aio/readiness/descriptor/epoll.hpp>
+        #include <kmx/aio/scheduler.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::readiness
 {
@@ -140,7 +142,7 @@ namespace kmx::aio::readiness
                 // Lives in the awaiting coroutine's frame, so its address stays valid for as long as the
                 // subscription that points at it. Written only by the thread that cancels the wait,
                 // before the handle is resumed, and read only after that resumption.
-                bool cancelled = false;
+                bool cancelled {};
 
                 bool await_ready() const noexcept { return false; }
 
@@ -166,8 +168,8 @@ namespace kmx::aio::readiness
                 fd_t fd;
                 event_type type;
                 std::uint32_t deadline_ms;
-                bool cancelled = false;
-                bool timed_out = false;
+                bool cancelled {};
+                bool timed_out {};
 
                 bool await_ready() const noexcept { return false; }
                 bool await_suspend(coroutine_handle_t h) noexcept(false)
@@ -417,8 +419,8 @@ namespace kmx::aio::readiness
             coroutine_handle_t handle;
             /// @brief Points into the awaiter's frame; set before resuming a cancelled wait.
             bool* cancelled;
-            bool* timed_out = nullptr;
-            std::uint32_t deadline_ms = 0u;
+            bool* timed_out {};
+            std::uint32_t deadline_ms {};
         };
 
         /// @brief Waiters parked on each (descriptor, event) pair, in arrival order.
@@ -439,3 +441,4 @@ namespace kmx::aio::readiness
     };
 
 } // namespace kmx::aio::readiness
+#endif // KMX_AIO_FEATURE_READINESS

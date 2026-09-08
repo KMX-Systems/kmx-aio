@@ -18,7 +18,7 @@
 
 namespace kmx::aio::test::knx::keyring_conformance_test
 {
-    namespace
+    namespace internal
     {
         struct case_definition
         {
@@ -26,18 +26,18 @@ namespace kmx::aio::test::knx::keyring_conformance_test
             std::string keyring_file {};
             std::string device_id {};
             std::string key_id {};
-            bool use_decryptor = false;
+            bool use_decryptor {};
             std::optional<std::array<std::uint8_t, kmx::aio::knx::keyring::key_size>> expected_key {};
             std::optional<kmx::aio::knx::error> expected_error {};
         };
 
         [[nodiscard]] std::string trim(const std::string_view value)
         {
-            std::size_t begin = 0u;
+            std::size_t begin {};
             std::size_t end = value.size();
-            while (begin < end && std::isspace(static_cast<unsigned char>(value[begin])) != 0)
+            while ((begin < end) && (std::isspace(static_cast<unsigned char>(value[begin])) != 0))
                 ++begin;
-            while (end > begin && std::isspace(static_cast<unsigned char>(value[end - 1u])) != 0)
+            while ((end > begin) && (std::isspace(static_cast<unsigned char>(value[end - 1u])) != 0))
                 --end;
             return std::string(value.substr(begin, end - begin));
         }
@@ -45,7 +45,7 @@ namespace kmx::aio::test::knx::keyring_conformance_test
         [[nodiscard]] std::vector<std::string> split_tsv(const std::string_view line)
         {
             std::vector<std::string> fields {};
-            std::size_t start = 0u;
+            std::size_t start {};
             while (start <= line.size())
             {
                 const auto tab = line.find('\t', start);
@@ -150,7 +150,7 @@ namespace kmx::aio::test::knx::keyring_conformance_test
             std::string line {};
             while (std::getline(input, line))
             {
-                if (!line.empty() && line.back() == '\r')
+                if (!line.empty() && (line.back() == '\r'))
                     line.pop_back();
 
                 const auto trimmed = trim(line);
@@ -163,7 +163,7 @@ namespace kmx::aio::test::knx::keyring_conformance_test
 
                 const auto key = trim(fields[0u]);
                 const auto decoded = decode_hex(trim(fields[1u]));
-                if (key.empty() || !decoded.has_value() || decoded->size() != 1u)
+                if (key.empty() || !decoded.has_value() || (decoded->size() != 1u))
                     return std::nullopt;
 
                 masks[key] = (*decoded)[0u];
@@ -182,7 +182,7 @@ namespace kmx::aio::test::knx::keyring_conformance_test
             std::string line {};
             while (std::getline(input, line))
             {
-                if (!line.empty() && line.back() == '\r')
+                if (!line.empty() && (line.back() == '\r'))
                     line.pop_back();
 
                 const auto trimmed = trim(line);
@@ -270,7 +270,7 @@ namespace kmx::aio::test::knx::keyring_conformance_test
         private:
             std::unordered_map<std::string, std::uint8_t> masks_ {};
         };
-    }
+    } // namespace internal
 
     TEST_CASE("knx keyring conformance vectors", "[knx][keyring][conformance]")
     {
@@ -294,18 +294,18 @@ namespace kmx::aio::test::knx::keyring_conformance_test
                 ? env_passwords
                 : (conformance_dir / "passwords.tsv")};
 
-        const auto cases = parse_cases(cases_path);
-        const auto password_masks = parse_password_masks(password_path);
+        const auto cases = internal::parse_cases(cases_path);
+        const auto password_masks = internal::parse_password_masks(password_path);
         REQUIRE(cases.has_value());
         REQUIRE(password_masks.has_value());
 
-        xor_mask_decryptor decryptor {*password_masks};
+        internal::xor_mask_decryptor decryptor {*password_masks};
         for (const auto& test_case: *cases)
         {
             INFO("keyring_case=" << test_case.case_id);
 
             const auto keyring_file = conformance_dir / test_case.keyring_file;
-            const auto document = read_text_file(keyring_file);
+            const auto document = internal::read_text_file(keyring_file);
             REQUIRE(document.has_value());
 
             auto* selected_decryptor = test_case.use_decryptor

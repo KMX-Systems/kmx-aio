@@ -65,7 +65,7 @@ namespace kmx::aio::sample::quic::echo_client
                   << static_cast<unsigned long long>(::lsquic_stream_id(stream)) << ": " << response << "\n";
 
         const auto target = detail::close_after_responses.load();
-        if (target > 0u && seen >= target)
+        if ((target > 0u) && (seen >= target))
             ::lsquic_conn_close(::lsquic_stream_conn(stream));
 
         co_return;

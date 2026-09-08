@@ -2,13 +2,15 @@
 /// @brief Backend-neutral configuration and statistics types for OPC UA support.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <chrono>
-    #include <cstddef>
-    #include <cstdint>
-    #include <string>
-    #include <vector>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_OPC_UA)
+    #ifndef PCH
+        #include <chrono>
+        #include <cstddef>
+        #include <cstdint>
+        #include <string>
+        #include <vector>
+    #endif
 
 namespace kmx::aio::opc_ua
 {
@@ -140,3 +142,4 @@ namespace kmx::aio::opc_ua
     };
 
 } // namespace kmx::aio::opc_ua
+#endif // KMX_AIO_FEATURE_OPC_UA

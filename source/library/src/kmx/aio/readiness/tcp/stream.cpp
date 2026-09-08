@@ -40,7 +40,7 @@ namespace kmx::aio::readiness::tcp
                 else
                 {
                     const auto err = zc_res.error();
-                    if (err.category() == std::system_category() && would_block(err.value()))
+                    if ((err.category() == std::system_category()) && would_block(err.value()))
                     {
                         if (total != 0u)
                             co_return total;

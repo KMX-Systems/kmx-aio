@@ -2,18 +2,20 @@
 /// @brief Completion-model SPDK block device abstraction.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <cstddef>
-    #include <cstdint>
-    #include <expected>
-    #include <memory>
-    #include <span>
-    #include <string_view>
-    #include <system_error>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_COMPLETION) && defined(KMX_AIO_FEATURE_SPDK)
+    #ifndef PCH
+        #include <cstddef>
+        #include <cstdint>
+        #include <expected>
+        #include <memory>
+        #include <span>
+        #include <string_view>
+        #include <system_error>
 
-    #include <kmx/aio/completion/executor.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+        #include <kmx/aio/completion/executor.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::completion::spdk
 {
@@ -91,7 +93,6 @@ namespace kmx::aio::completion::spdk
         /// @return Success or an error code.
         [[nodiscard]] static expected_void_t initialize_fallback_storage(state& state, std::uint64_t total_bytes_u64) noexcept;
 
-#if defined(KMX_AIO_FEATURE_SPDK)
         /// @brief Initializes the SPDK backend for the device.
         /// @param state Device state being initialized.
         /// @return Success or an error code.
@@ -99,10 +100,10 @@ namespace kmx::aio::completion::spdk
         /// @brief Shuts down the SPDK backend for the device.
         /// @param state Device state being torn down.
         static void shutdown_spdk_backend(state& state) noexcept;
-#endif
 
         /// @brief Opaque implementation state owned by the device handle.
         std::unique_ptr<state> state_ {};
     };
 
 } // namespace kmx::aio::completion::spdk
+#endif // KMX_AIO_FEATURE_COMPLETION && KMX_AIO_FEATURE_SPDK

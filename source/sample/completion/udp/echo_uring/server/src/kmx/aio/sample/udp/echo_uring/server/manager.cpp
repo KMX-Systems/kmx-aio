@@ -182,7 +182,7 @@ namespace kmx::aio::sample::udp::echo_uring::server
 
     void manager::signal_handler(int signum) noexcept
     {
-        if (signum == SIGINT || signum == SIGTERM)
+        if ((signum == SIGINT) || (signum == SIGTERM))
         {
             static constexpr auto msg = std::to_array("\n[SIGNAL] Stopping UDP Uring Server executor...\n");
             [[maybe_unused]] auto res = ::write(STDERR_FILENO, msg.data(), msg.size() - 1u);

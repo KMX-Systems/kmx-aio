@@ -2,12 +2,14 @@
 /// @brief HTTP/3 frame definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <cstdint>
-    #include <string>
-    #include <system_error>
-    #include <vector>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_HTTP3)
+    #ifndef PCH
+        #include <cstdint>
+        #include <string>
+        #include <system_error>
+        #include <vector>
+    #endif
 
 /// @brief HTTP/3 core protocol definitions and utilities.
 /// @details HTTP/3 rides over QUIC and encodes frame and settings identifiers
@@ -156,3 +158,4 @@ namespace std
     {
     };
 } // namespace std
+#endif // KMX_AIO_FEATURE_HTTP3

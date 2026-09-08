@@ -155,8 +155,10 @@ namespace kmx::aio::test::knx::datagram_test
     TEST_CASE("knx datagram dispatches IPv6 CONNECT frames", "[knx][datagram][integration]")
     {
         const ipv6_connect_request_frame request {
-            .control_endpoint = ipv6_hpai {ipv6_endpoint {{0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u}, 3671u}, 0x01u},
-            .data_endpoint = ipv6_hpai {ipv6_endpoint {{15u, 14u, 13u, 12u, 11u, 10u, 9u, 8u, 7u, 6u, 5u, 4u, 3u, 2u, 1u, 0u}, 3672u}, 0x01u},
+            .control_endpoint =
+                ipv6_hpai {ipv6_endpoint {{0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u}, 3671u}, 0x01u},
+            .data_endpoint =
+                ipv6_hpai {ipv6_endpoint {{15u, 14u, 13u, 12u, 11u, 10u, 9u, 8u, 7u, 6u, 5u, 4u, 3u, 2u, 1u, 0u}, 3672u}, 0x01u},
         };
         std::array<std::uint8_t, 50u> packet {};
         REQUIRE(connection::encode_ipv6_connect_request_packet(packet, request).has_value());

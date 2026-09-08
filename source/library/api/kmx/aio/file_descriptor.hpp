@@ -90,13 +90,13 @@ namespace kmx::aio
         /// @param buffer Destination buffer for read data.
         /// @param size Maximum number of bytes to read.
         /// @return The number of bytes read or an error.
-        [[nodiscard]] expected_size_t read(void* const buffer, const size_t size) noexcept;
+        [[nodiscard]] expected_size_t read(void* const buffer, const std::size_t size) noexcept;
 
         /// @brief Wrapper for ::write
         /// @param buffer Source buffer containing bytes to write.
         /// @param size Number of bytes to write.
         /// @return The number of bytes written or an error.
-        [[nodiscard]] expected_size_t write(const void* const buffer, const size_t size) noexcept;
+        [[nodiscard]] expected_size_t write(const void* const buffer, const std::size_t size) noexcept;
 
         /// @brief Wrapper for ::bind
         /// @param addr The socket address to bind to.

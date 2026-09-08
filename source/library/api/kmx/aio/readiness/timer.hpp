@@ -2,9 +2,11 @@
 /// @brief Readiness-model timer using timerfd + epoll for coroutine-based scheduling.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <kmx/aio/readiness/descriptor/timer.hpp>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_READINESS)
+    #ifndef PCH
+        #include <kmx/aio/readiness/descriptor/timer.hpp>
+    #endif
 
 namespace kmx::aio::readiness
 {
@@ -14,3 +16,4 @@ namespace kmx::aio::readiness
     using timer = kmx::aio::readiness::descriptor::timer;
 
 } // namespace kmx::aio::readiness
+#endif // KMX_AIO_FEATURE_READINESS

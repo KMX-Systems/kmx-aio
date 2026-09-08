@@ -1,11 +1,13 @@
 /// @file aio/readiness/basic_types.hpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <cstdint>
-    #include <sys/epoll.h>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_READINESS)
+    #ifndef PCH
+        #include <cstdint>
+        #include <sys/epoll.h>
 
-#endif
+    #endif
 
 namespace kmx::aio::readiness
 {
@@ -104,3 +106,4 @@ namespace kmx::aio::readiness
         return static_cast<event_mask_t>(a) ^ static_cast<event_mask_t>(b);
     }
 }
+#endif // KMX_AIO_FEATURE_READINESS

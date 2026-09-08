@@ -2,19 +2,21 @@
 /// @brief Readiness-model V4L2 video capture using epoll for async frame notification.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <expected>
-    #include <memory>
-    #include <span>
-    #include <vector>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_READINESS)
+    #ifndef PCH
+        #include <expected>
+        #include <memory>
+        #include <span>
+        #include <vector>
 
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/error_code.hpp>
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/readiness/io_base.hpp>
-    #include <kmx/aio/readiness/v4l2/v4l2_types.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/error_code.hpp>
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/readiness/io_base.hpp>
+        #include <kmx/aio/readiness/v4l2/v4l2_types.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::readiness::v4l2
 {
@@ -188,3 +190,4 @@ namespace kmx::aio::readiness::v4l2
     };
 
 } // namespace kmx::aio::readiness::v4l2
+#endif // KMX_AIO_FEATURE_READINESS

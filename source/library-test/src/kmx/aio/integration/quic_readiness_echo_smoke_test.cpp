@@ -49,7 +49,7 @@ namespace kmx::aio::test::integration::quic_readiness_echo_smoke_test
 
         const auto now_ns = std::chrono::steady_clock::now().time_since_epoch().count();
         static constexpr int max_attempts = 3;
-        bool success = false;
+        bool success {};
         attempt_result last_attempt {};
         std::string attempt_summary;
 

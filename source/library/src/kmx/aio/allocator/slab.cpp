@@ -95,7 +95,7 @@ namespace kmx::aio::allocator
 
         const auto* const p = static_cast<const std::byte*>(ptr);
         const auto* const start = storage_.data();
-        return p >= start && p < (start + storage_.size());
+        return (p >= start) && (p < (start + storage_.size()));
     }
 
     void slab::adopt_remote_free_list() noexcept

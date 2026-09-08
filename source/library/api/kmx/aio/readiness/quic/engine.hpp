@@ -2,7 +2,8 @@
 /// @brief Readiness-model QUIC engine alias.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#if defined(KMX_AIO_FEATURE_QUIC)
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_READINESS) && defined(KMX_AIO_FEATURE_QUIC)
 
     #ifndef PCH
         #include <kmx/aio/quic/engine.hpp>
@@ -18,4 +19,4 @@ namespace kmx::aio::readiness::quic
 
 } // namespace kmx::aio::readiness::quic
 
-#endif // KMX_AIO_FEATURE_QUIC
+#endif // KMX_AIO_FEATURE_READINESS && KMX_AIO_FEATURE_QUIC

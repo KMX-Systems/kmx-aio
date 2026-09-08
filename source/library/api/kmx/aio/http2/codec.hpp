@@ -2,13 +2,15 @@
 /// @brief HTTP/2 frame builder and HPACK codec definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <kmx/aio/http2/hpack.hpp>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_HTTP2)
+    #ifndef PCH
+        #include <kmx/aio/http2/hpack.hpp>
 
-    #include <cstdint>
-    #include <span>
-    #include <string_view>
-#endif
+        #include <cstdint>
+        #include <span>
+        #include <string_view>
+    #endif
 
 namespace kmx::aio::http2
 {
@@ -46,3 +48,4 @@ namespace kmx::aio::http2
     };
 
 } // namespace kmx::aio::http2
+#endif // KMX_AIO_FEATURE_HTTP2

@@ -46,11 +46,54 @@ namespace kmx::aio::test::modbus::integration::server_shutdown_test
     static constexpr std::uint16_t shutdown_base_port = 15910u;
     static constexpr std::uint8_t shutdown_unit_id = 0x01u;
 
-    /// @brief Answers every read of holding registers with a fixed value, so a test can confirm that a
-    ///        request really was served before shutdown is examined.
-    [[nodiscard]] static request_handler make_constant_holding_handler()
+    namespace detail
     {
-        return [](server_request req) -> task<std::vector<std::uint8_t>>
+        /// @brief Waits for the listener, connects, and leaves the connection open.
+        task<void> connect_only(const std::shared_ptr<readiness::executor>& exec, const std::shared_ptr<client>& peer,
+                                std::atomic_bool& connected, std::optional<std::error_code>& connect_error) noexcept(false)
+        {
+            static_cast<void>(co_await exec->async_timeout(20'000'000u)); // 20 ms, for the listener to be up
+
+            if (const auto r = co_await peer->connect(); !r)
+                connect_error = r.error();
+
+            connected.store(true, std::memory_order_release);
+        }
+
+        /// @brief Connects, reads one register, and disconnects, so the server session must end.
+        task<void> exchange_then_disconnect(const std::shared_ptr<readiness::executor>& exec, const std::uint16_t port,
+                                            std::atomic_bool& exchanged, std::optional<register_values>& values,
+                                            std::optional<std::error_code>& op_error) noexcept(false)
+        {
+            static_cast<void>(co_await exec->async_timeout(20'000'000u));
+            client c {{.host = "127.0.0.1", .port = port, .unit_id = shutdown_unit_id}, *exec};
+
+            if (const auto r = co_await c.connect(); !r)
+            {
+                op_error = r.error();
+                exchanged.store(true, std::memory_order_release);
+                co_return;
+            }
+
+            if (const auto r = co_await c.read_holding_registers(0u, 1u); r)
+                values = *r;
+            else
+                op_error = r.error();
+
+            // The server's session task must notice this and finish. Before the fix it could not tell a
+            // closed connection from a served request, so it kept reading from a socket that was gone.
+            static_cast<void>(co_await c.disconnect());
+            exchanged.store(true, std::memory_order_release);
+        }
+    } // namespace detail
+
+    namespace detail
+    {
+        /// @brief Answers one read-holding-registers request with a single register holding 42.
+        /// @param req The request PDU as the server framed it.
+        /// @return The response PDU.
+        /// @throws std::bad_alloc (coroutine frame and response allocation).
+        [[nodiscard]] task<std::vector<std::uint8_t>> constant_holding_response(server_request req) noexcept(false)
         {
             const auto fc = static_cast<std::uint8_t>(function_code::read_holding_registers);
             if (req.pdu.size() < 5u)
@@ -58,7 +101,14 @@ namespace kmx::aio::test::modbus::integration::server_shutdown_test
                                                      static_cast<std::uint8_t>(exception_code::illegal_data_value)};
 
             co_return std::vector<std::uint8_t> {fc, 2u, 0x00u, 0x2Au}; // one register, value 42
-        };
+        }
+    } // namespace detail
+
+    /// @brief Answers every read of holding registers with a fixed value, so a test can confirm that a
+    ///        request really was served before shutdown is examined.
+    [[nodiscard]] static request_handler make_constant_holding_handler()
+    {
+        return [](server_request req) { return detail::constant_holding_response(std::move(req)); };
     }
 
     [[nodiscard]] static server_config config_for(const std::uint16_t port) noexcept
@@ -120,16 +170,7 @@ namespace kmx::aio::test::modbus::integration::server_shutdown_test
         // have to be waited for as well, and would then be measuring its own sleep rather than stop().
         auto peer = std::make_shared<client>(client_config {.host = "127.0.0.1", .port = port, .unit_id = shutdown_unit_id}, *exec);
 
-        auto connect_only = [exec, peer, &connected, &connect_error]() -> task<void>
-        {
-            static_cast<void>(co_await exec->async_timeout(20'000'000u)); // 20 ms, for the listener to be up
-
-            if (const auto r = co_await peer->connect(); !r)
-                connect_error = r.error();
-
-            connected.store(true, std::memory_order_release);
-        };
-        exec->spawn(connect_only());
+        exec->spawn(detail::connect_only(exec, peer, connected, connect_error));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(connected, 3s));
@@ -157,29 +198,7 @@ namespace kmx::aio::test::modbus::integration::server_shutdown_test
         auto serve = [exec, srv]() -> task<void> { static_cast<void>(co_await srv->serve(*exec, config_for(port))); };
         exec->spawn(serve());
 
-        auto exchange = [exec, &exchanged, &values, &op_error]() -> task<void>
-        {
-            static_cast<void>(co_await exec->async_timeout(20'000'000u));
-            client c {{.host = "127.0.0.1", .port = port, .unit_id = shutdown_unit_id}, *exec};
-
-            if (const auto r = co_await c.connect(); !r)
-            {
-                op_error = r.error();
-                exchanged.store(true, std::memory_order_release);
-                co_return;
-            }
-
-            if (const auto r = co_await c.read_holding_registers(0u, 1u); r)
-                values = *r;
-            else
-                op_error = r.error();
-
-            // The server's session task must notice this and finish. Before the fix it could not tell a
-            // closed connection from a served request, so it kept reading from a socket that was gone.
-            static_cast<void>(co_await c.disconnect());
-            exchanged.store(true, std::memory_order_release);
-        };
-        exec->spawn(exchange());
+        exec->spawn(detail::exchange_then_disconnect(exec, port, exchanged, values, op_error));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(exchanged, 5s));

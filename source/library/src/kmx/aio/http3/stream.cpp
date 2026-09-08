@@ -1,4 +1,5 @@
 #include <kmx/aio/http3/stream.hpp>
+#include <kmx/aio/exception.hpp>
 
 #include <stdexcept>
 
@@ -6,26 +7,26 @@ namespace kmx::aio::http3
 {
     [[nodiscard]] static constexpr bool is_request_stream_frame(const frame_type type) noexcept
     {
-        return type == frame_type::headers || type == frame_type::data;
+        return (type == frame_type::headers) || (type == frame_type::data);
     }
 
     void stream::on_frame(const frame_type type, const stream_state half_closed_state,
                           const stream_frame_messages& messages) noexcept(false)
     {
         if (!is_request_stream_frame(type))
-            throw std::invalid_argument(messages.unsupported_frame);
+            throw invalid_argument(messages.unsupported_frame);
 
         if (!headers_seen_)
         {
             if (type != frame_type::headers)
-                throw std::logic_error(messages.missing_headers);
+                throw logic_error(messages.missing_headers);
             headers_seen_ = true;
             state_ = stream_state::open;
             return;
         }
 
         if ((state_ == stream_state::closed) || (state_ == half_closed_state))
-            throw std::logic_error(messages.closed_side);
+            throw logic_error(messages.closed_side);
     }
 
     void stream::on_frame_sent(const frame_type type) noexcept(false)

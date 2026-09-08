@@ -74,6 +74,20 @@ namespace kmx::aio::benchmark
             const auto awaits = (depth == 0u) ? iterations : (iterations * (depth + 1u));
             return from_total(std::move(name), awaits, elapsed);
         }
+
+        /// @brief Waits for the go flag, then pops a fixed number of values off the channel.
+        /// @param queue The channel to drain.
+        /// @param go Waited on so the producer's first push is not timed against a thread still starting.
+        /// @param iterations How many values to pop.
+        static void drain_channel(channel<std::uint64_t>& queue, std::atomic_bool& go, const std::size_t iterations) noexcept
+        {
+            go.wait(false, std::memory_order_acquire);
+            for (std::size_t received {}; received != iterations;)
+            {
+                if (queue.try_pop())
+                    ++received;
+            }
+        }
     } // namespace core_detail
 
     static result bench_task_await_heap(const double scale)
@@ -132,15 +146,7 @@ namespace kmx::aio::benchmark
         channel<std::uint64_t> ch {4096u};
         std::atomic_bool go {};
 
-        std::jthread consumer {[&ch, &go, iterations]() noexcept
-                               {
-                                   go.wait(false, std::memory_order_acquire);
-                                   for (std::size_t received {}; received != iterations;)
-                                   {
-                                       if (ch.try_pop())
-                                           ++received;
-                                   }
-                               }};
+        std::jthread consumer {[&ch, &go, iterations]() noexcept { core_detail::drain_channel(ch, go, iterations); }};
 
         go.store(true, std::memory_order_release);
         go.notify_all();

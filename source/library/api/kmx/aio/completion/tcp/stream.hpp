@@ -2,12 +2,14 @@
 /// @brief Completion-model TCP stream using io_uring for async read/write.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <span>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_COMPLETION)
+    #ifndef PCH
+        #include <span>
 
-    #include <kmx/aio/completion/io_base.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+        #include <kmx/aio/completion/io_base.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::completion::tcp
 {
@@ -74,3 +76,4 @@ namespace kmx::aio::completion::tcp
     };
 
 } // namespace kmx::aio::completion::tcp
+#endif // KMX_AIO_FEATURE_COMPLETION

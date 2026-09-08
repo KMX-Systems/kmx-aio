@@ -243,7 +243,7 @@ namespace kmx::aio::test::file_descriptor_test
         std::array<char, 8> buffer {};
         ::sockaddr_in addr {};
         ::socklen_t length = sizeof(addr);
-        int optval = 0;
+        int optval {};
 
         const auto bad = std::errc::bad_file_descriptor;
         CHECK(fd.fcntl(F_GETFL, 0).error() == bad);
@@ -309,7 +309,7 @@ namespace kmx::aio::test::file_descriptor_test
         const int reuse = 1;
         REQUIRE(created->setsockopt(SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)).has_value());
 
-        int read_back = 0;
+        int read_back {};
         ::socklen_t length = sizeof(read_back);
         REQUIRE(created->getsockopt(SOL_SOCKET, SO_REUSEADDR, &read_back, &length).has_value());
         CHECK(read_back != 0);
@@ -331,7 +331,7 @@ namespace kmx::aio::test::file_descriptor_test
         auto created = file_descriptor::create_socket(AF_INET, SOCK_STREAM, 0);
         REQUIRE(created.has_value());
 
-        int value = 0;
+        int value {};
         ::socklen_t length = sizeof(value);
         const auto result = created->getsockopt(SOL_SOCKET, 0x7fff, &value, &length);
         REQUIRE_FALSE(result.has_value());

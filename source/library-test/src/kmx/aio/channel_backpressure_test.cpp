@@ -10,6 +10,38 @@
 
 namespace kmx::aio::test::channel_backpressure_test
 {
+    namespace detail
+    {
+        /// @brief Announces itself, waits for the ring to hold something, and pops one value.
+        /// @param ch The channel to pop from.
+        /// @param consumer_ready Set before the wait, so the producer knows the thread is running.
+        /// @param consumer_done Set once a value was actually popped.
+        void pop_one(channel<int>& ch, std::atomic_bool& consumer_ready, std::atomic_bool& consumer_done)
+        {
+            consumer_ready.store(true, std::memory_order_release);
+            while (ch.empty())
+                std::this_thread::yield();
+
+            auto value = ch.try_pop();
+            if (value.has_value())
+                consumer_done.store(true, std::memory_order_release);
+        }
+
+        /// @brief Waits for the throttle to engage, then pops enough to clear it.
+        /// @param ch The channel to pop from.
+        /// @param consumer_done Set once both values were popped.
+        void pop_until_throttle_clears(channel<int>& ch, std::atomic_bool& consumer_done)
+        {
+            while (ch.can_send())
+                std::this_thread::yield();
+
+            auto first = ch.try_pop();
+            auto second = ch.try_pop();
+            if (first.has_value() && second.has_value())
+                consumer_done.store(true, std::memory_order_release);
+        }
+    } // namespace detail
+
     TEST_CASE("channel occupancy tracks push/pop", "[channel][backpressure]")
     {
         kmx::aio::channel<int> ch(8u);
@@ -125,17 +157,7 @@ namespace kmx::aio::test::channel_backpressure_test
         REQUIRE_FALSE(ch.try_push(4));
 
         {
-            std::jthread consumer(
-                [&](std::stop_token)
-                {
-                    consumer_ready.store(true, std::memory_order_release);
-                    while (ch.empty())
-                        std::this_thread::yield();
-
-                    auto value = ch.try_pop();
-                    if (value.has_value())
-                        consumer_done.store(true, std::memory_order_release);
-                });
+            std::jthread consumer([&](std::stop_token) { detail::pop_one(ch, consumer_ready, consumer_done); });
 
             while (!consumer_ready.load(std::memory_order_acquire))
                 std::this_thread::yield();
@@ -160,17 +182,7 @@ namespace kmx::aio::test::channel_backpressure_test
         REQUIRE_FALSE(ch.can_send());
 
         {
-            std::jthread consumer(
-                [&](std::stop_token)
-                {
-                    while (ch.can_send())
-                        std::this_thread::yield();
-
-                    auto first = ch.try_pop();
-                    auto second = ch.try_pop();
-                    if (first.has_value() && second.has_value())
-                        consumer_done.store(true, std::memory_order_release);
-                });
+            std::jthread consumer([&](std::stop_token) { detail::pop_until_throttle_clears(ch, consumer_done); });
 
             ch.wait_until_can_send();
         }
@@ -197,17 +209,7 @@ namespace kmx::aio::test::channel_backpressure_test
             REQUIRE_FALSE(ch.try_push(4));
 
             {
-                std::jthread consumer(
-                    [&](std::stop_token)
-                    {
-                        consumer_ready.store(true, std::memory_order_release);
-                        while (ch.empty())
-                            std::this_thread::yield();
-
-                        auto value = ch.try_pop();
-                        if (value.has_value())
-                            consumer_done.store(true, std::memory_order_release);
-                    });
+                std::jthread consumer([&](std::stop_token) { detail::pop_one(ch, consumer_ready, consumer_done); });
 
                 while (!consumer_ready.load(std::memory_order_acquire))
                     std::this_thread::yield();

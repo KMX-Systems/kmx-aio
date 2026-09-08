@@ -19,13 +19,13 @@ namespace kmx::aio::test::knx::secure_conformance_test
 {
     using namespace kmx::aio::knx;
 
-    namespace
+    namespace internal
     {
         struct conformance_case
         {
             std::string case_id {};
             secure::profile selected = secure::profile::none;
-            std::uint64_t sequence = 0u;
+            std::uint64_t sequence {};
             std::vector<std::uint8_t> payload {};
             std::vector<std::uint8_t> wire {};
             std::optional<error> expected_error {};
@@ -33,11 +33,11 @@ namespace kmx::aio::test::knx::secure_conformance_test
 
         [[nodiscard]] std::string trim(const std::string_view value)
         {
-            std::size_t begin = 0u;
+            std::size_t begin {};
             std::size_t end = value.size();
-            while (begin < end && std::isspace(static_cast<unsigned char>(value[begin])) != 0)
+            while ((begin < end) && (std::isspace(static_cast<unsigned char>(value[begin])) != 0))
                 ++begin;
-            while (end > begin && std::isspace(static_cast<unsigned char>(value[end - 1u])) != 0)
+            while ((end > begin) && (std::isspace(static_cast<unsigned char>(value[end - 1u])) != 0))
                 --end;
             return std::string(value.substr(begin, end - begin));
         }
@@ -45,7 +45,7 @@ namespace kmx::aio::test::knx::secure_conformance_test
         [[nodiscard]] std::vector<std::string> split_tsv(const std::string_view line)
         {
             std::vector<std::string> fields {};
-            std::size_t start = 0u;
+            std::size_t start {};
             while (start <= line.size())
             {
                 const auto tab = line.find('\t', start);
@@ -111,7 +111,7 @@ namespace kmx::aio::test::knx::secure_conformance_test
 
             try
             {
-                std::size_t consumed = 0u;
+                std::size_t consumed {};
                 const auto parsed = std::stoull(value, &consumed, 0);
                 if (consumed != value.size())
                     return std::nullopt;
@@ -160,11 +160,11 @@ namespace kmx::aio::test::knx::secure_conformance_test
 
             std::vector<conformance_case> cases {};
             std::string line {};
-            std::size_t line_number = 0u;
+            std::size_t line_number {};
             while (std::getline(input, line))
             {
                 ++line_number;
-                if (!line.empty() && line.back() == '\r')
+                if (!line.empty() && (line.back() == '\r'))
                     line.pop_back();
 
                 const auto trimmed = trim(line);
@@ -212,7 +212,7 @@ namespace kmx::aio::test::knx::secure_conformance_test
 
             return cases;
         }
-    }
+    } // namespace internal
 
     TEST_CASE("knx secure profile conformance vectors", "[knx][secure][conformance]")
     {
@@ -225,7 +225,7 @@ namespace kmx::aio::test::knx::secure_conformance_test
         if (!std::filesystem::exists(vector_path))
             SKIP("secure conformance vector file is not present");
 
-        const auto parsed = parse_cases(vector_path);
+        const auto parsed = internal::parse_cases(vector_path);
         REQUIRE(parsed.has_value());
 
         for (const auto& test_case: *parsed)

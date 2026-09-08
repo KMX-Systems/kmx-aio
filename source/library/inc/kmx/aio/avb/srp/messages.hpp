@@ -14,7 +14,7 @@ namespace kmx::aio::avb::srp
     // MRP protocol constants
 
     /// @brief MSRP application address (AA) as per IEEE 802.1Qat Table 10-1.
-    inline constexpr std::uint8_t mrp_protocol_version = 0u;
+    inline constexpr std::uint8_t mrp_protocol_version {};
 
     /// @brief MSRP attribute types.
     enum class attr_type : std::uint8_t

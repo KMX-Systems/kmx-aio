@@ -18,19 +18,21 @@
 /// @reference KNX System Specifications, Volume 3/7/2 "Datapoint Types".
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <array>
-    #include <bit>
-    #include <compare>
-    #include <cstdint>
-    #include <expected>
-    #include <span>
-    #include <string_view>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_KNX)
+    #ifndef PCH
+        #include <array>
+        #include <bit>
+        #include <compare>
+        #include <cstdint>
+        #include <expected>
+        #include <span>
+        #include <string_view>
+    #endif
 
-#include <kmx/aio/basic_types.hpp>
-#include <kmx/aio/knx/cemi.hpp>
-#include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/knx/cemi.hpp>
+    #include <kmx/aio/knx/error.hpp>
 
 namespace kmx::aio::knx::dpt
 {
@@ -414,6 +416,19 @@ namespace kmx::aio::knx::dpt
     template <std::uint16_t Main>
     struct traits;
 
+    /// @brief The C++ value type of one datapoint main type.
+    /// @tparam Main The datapoint main type.
+    template <std::uint16_t Main>
+    using value_t = typename traits<Main>::value_t;
+
+    /// @brief A decoded datapoint value, or the reason it could not be decoded.
+    /// @tparam Main The datapoint main type.
+    template <std::uint16_t Main>
+    using decode_result_t = std::expected<value_t<Main>, error>;
+
+    /// @brief An encoded datapoint payload, or the reason it could not be encoded.
+    using encode_result_t = std::expected<payload, error>;
+
     /// @brief Main type 1 — a single bit, such as switch, bool, alarm or step.
     template <>
     struct traits<1u>
@@ -426,7 +441,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes a bit.
         /// @param value The value to encode.
         /// @return The encoded payload.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const bool value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const bool value) noexcept
         {
             return payload::compact(value ? 1u : 0u);
         }
@@ -456,7 +471,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes a controlled bit.
         /// @param value The value to encode.
         /// @return The encoded payload.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const controlled_bool value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const controlled_bool value) noexcept
         {
             return payload::compact(static_cast<std::uint8_t>((value.control ? 0x02u : 0x00u) | (value.value ? 0x01u : 0x00u)));
         }
@@ -486,7 +501,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes a step command.
         /// @param value The command to encode.
         /// @return The encoded payload, or `error::value_out_of_range` when the step code exceeds seven.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const control_step value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const control_step value) noexcept
         {
             if (value.step_code > 0x07u)
                 return std::unexpected(error::value_out_of_range);
@@ -519,7 +534,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes a character.
         /// @param value The character to encode.
         /// @return The encoded payload.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const char value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const char value) noexcept
         {
             return detail::write_unsigned<1u>(static_cast<std::uint8_t>(value));
         }
@@ -549,7 +564,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes an 8-bit unsigned number.
         /// @param value The value to encode.
         /// @return The encoded payload.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const std::uint8_t value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const std::uint8_t value) noexcept
         {
             return detail::write_unsigned<1u>(value);
         }
@@ -579,7 +594,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes an 8-bit signed number.
         /// @param value The value to encode.
         /// @return The encoded payload.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const std::int8_t value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const std::int8_t value) noexcept
         {
             return detail::write_unsigned<1u>(static_cast<std::uint8_t>(value));
         }
@@ -609,7 +624,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes a 2-octet unsigned number.
         /// @param value The value to encode.
         /// @return The encoded payload.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const std::uint16_t value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const std::uint16_t value) noexcept
         {
             return detail::write_unsigned<2u>(value);
         }
@@ -639,7 +654,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes a 2-octet signed number.
         /// @param value The value to encode.
         /// @return The encoded payload.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const std::int16_t value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const std::int16_t value) noexcept
         {
             return detail::write_unsigned<2u>(static_cast<std::uint16_t>(value));
         }
@@ -676,7 +691,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes a number in the 2-octet KNX float format.
         /// @param value The value to encode.
         /// @return The encoded payload, or `error::value_out_of_range` when the value cannot be represented.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const float value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const float value) noexcept
         {
             if (!(value >= min_value) || !(value <= max_value))
                 return std::unexpected(error::value_out_of_range);
@@ -730,7 +745,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes a time of day.
         /// @param value The time to encode.
         /// @return The encoded payload, or `error::value_out_of_range` when a field is out of range.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const time_of_day value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const time_of_day value) noexcept
         {
             if ((value.weekday > 7u) || (value.hour > 23u) || (value.minute > 59u) || (value.second > 59u))
                 return std::unexpected(error::value_out_of_range);
@@ -773,7 +788,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes a date.
         /// @param value The date to encode.
         /// @return The encoded payload, or `error::value_out_of_range` when a field is out of range.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const date value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const date value) noexcept
         {
             if ((value.day < 1u) || (value.day > 31u) || (value.month < 1u) || (value.month > 12u))
                 return std::unexpected(error::value_out_of_range);
@@ -815,7 +830,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes a 4-octet unsigned number.
         /// @param value The value to encode.
         /// @return The encoded payload.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const std::uint32_t value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const std::uint32_t value) noexcept
         {
             return detail::write_unsigned<4u>(value);
         }
@@ -841,7 +856,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes a 4-octet signed number.
         /// @param value The value to encode.
         /// @return The encoded payload.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const std::int32_t value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const std::int32_t value) noexcept
         {
             return detail::write_unsigned<4u>(static_cast<std::uint32_t>(value));
         }
@@ -871,7 +886,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes a single-precision number.
         /// @param value The value to encode.
         /// @return The encoded payload.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const float value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const float value) noexcept
         {
             return detail::write_unsigned<4u>(detail::float_to_bits(value));
         }
@@ -901,7 +916,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes a string.
         /// @param value The string to encode.
         /// @return The encoded payload.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const string_value& value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const string_value& value) noexcept
         {
             std::array<std::uint8_t, string_value::capacity> octets {};
             for (std::size_t i {}; i < string_value::capacity; ++i)
@@ -938,7 +953,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes a scene number.
         /// @param value The scene number, 0..63.
         /// @return The encoded payload, or `error::value_out_of_range` when the number exceeds 63.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const std::uint8_t value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const std::uint8_t value) noexcept
         {
             if (value > 0x3Fu)
                 return std::unexpected(error::value_out_of_range);
@@ -971,7 +986,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes a scene command.
         /// @param value The command to encode.
         /// @return The encoded payload, or `error::value_out_of_range` when the scene number exceeds 63.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const scene_control value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const scene_control value) noexcept
         {
             if (value.scene > 0x3Fu)
                 return std::unexpected(error::value_out_of_range);
@@ -1004,7 +1019,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes an enumeration value.
         /// @param value The value to encode.
         /// @return The encoded payload.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const std::uint8_t value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const std::uint8_t value) noexcept
         {
             return detail::write_unsigned<1u>(value);
         }
@@ -1034,7 +1049,7 @@ namespace kmx::aio::knx::dpt
         /// @brief Encodes a colour.
         /// @param value The colour to encode.
         /// @return The encoded payload.
-        [[nodiscard]] static constexpr std::expected<payload, error> encode(const rgb value) noexcept
+        [[nodiscard]] static constexpr encode_result_t encode(const rgb value) noexcept
         {
             const std::array<std::uint8_t, 3u> octets {value.red, value.green, value.blue};
             return payload::octets(octets);
@@ -1057,7 +1072,7 @@ namespace kmx::aio::knx::dpt
     /// @param value The value to encode.
     /// @return The encoded payload, or the reason it could not be encoded.
     template <std::uint16_t Main>
-    [[nodiscard]] constexpr std::expected<payload, error> encode(const typename traits<Main>::value_t& value) noexcept
+    [[nodiscard]] constexpr encode_result_t encode(const value_t<Main>& value) noexcept
     {
         return traits<Main>::encode(value);
     }
@@ -1067,7 +1082,7 @@ namespace kmx::aio::knx::dpt
     /// @param value The received value.
     /// @return The decoded value, or the reason it could not be decoded.
     template <std::uint16_t Main>
-    [[nodiscard]] constexpr std::expected<typename traits<Main>::value_t, error> decode(const value_view& value) noexcept
+    [[nodiscard]] constexpr decode_result_t<Main> decode(const value_view& value) noexcept
     {
         return traits<Main>::decode(value);
     }
@@ -1078,7 +1093,7 @@ namespace kmx::aio::knx::dpt
     /// @param bytes The very buffer the frame was decoded from.
     /// @return The decoded value, or the reason it could not be decoded.
     template <std::uint16_t Main>
-    [[nodiscard]] constexpr std::expected<typename traits<Main>::value_t, error> decode(const cemi_frame& frame,
+    [[nodiscard]] constexpr decode_result_t<Main> decode(const cemi_frame& frame,
                                                                                         const cspan_uint8_t bytes) noexcept
     {
         return traits<Main>::decode(make_value_view(frame, bytes));
@@ -1087,7 +1102,7 @@ namespace kmx::aio::knx::dpt
     /// @brief Encodes a percentage as DPT 5.001, which scales 0..100% onto 0..255.
     /// @param percent The percentage, 0..100.
     /// @return The encoded payload, or `error::value_out_of_range` when the percentage exceeds 100.
-    [[nodiscard]] constexpr std::expected<payload, error> encode_scaling(const double percent) noexcept
+    [[nodiscard]] constexpr encode_result_t encode_scaling(const double percent) noexcept
     {
         if (!(percent >= 0.0) || !(percent <= 100.0))
             return std::unexpected(error::value_out_of_range);
@@ -1110,7 +1125,7 @@ namespace kmx::aio::knx::dpt
     /// @brief Encodes an angle as DPT 5.003, which scales 0..360 degrees onto 0..255.
     /// @param degrees The angle, 0..360.
     /// @return The encoded payload, or `error::value_out_of_range` when the angle is outside the circle.
-    [[nodiscard]] constexpr std::expected<payload, error> encode_angle(const double degrees) noexcept
+    [[nodiscard]] constexpr encode_result_t encode_angle(const double degrees) noexcept
     {
         if (!(degrees >= 0.0) || !(degrees <= 360.0))
             return std::unexpected(error::value_out_of_range);
@@ -1130,3 +1145,4 @@ namespace kmx::aio::knx::dpt
         return (static_cast<double>(*raw) * 360.0) / 255.0;
     }
 }
+#endif // KMX_AIO_FEATURE_KNX

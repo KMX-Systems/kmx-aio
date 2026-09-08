@@ -2,12 +2,14 @@
 /// @brief HTTP/3 control stream definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <kmx/aio/http3/frame.hpp>
-    #include <kmx/aio/http3/settings.hpp>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_HTTP3)
+    #ifndef PCH
+        #include <kmx/aio/http3/frame.hpp>
+        #include <kmx/aio/http3/settings.hpp>
 
-    #include <optional>
-#endif
+        #include <optional>
+    #endif
 
 namespace kmx::aio::http3
 {
@@ -22,3 +24,4 @@ namespace kmx::aio::http3
         std::optional<goaway_frame> goaway {};
     };
 } // namespace kmx::aio::http3
+#endif // KMX_AIO_FEATURE_HTTP3

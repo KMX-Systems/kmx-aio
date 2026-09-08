@@ -24,7 +24,7 @@ namespace kmx::aio::someip::compat
         std::unordered_map<std::uint32_t, bool> requested_services;
         std::deque<event_notification> pending_events;
         std::size_t event_queue_capacity = 1024u;
-        std::uint64_t dropped_events = 0u;
+        std::uint64_t dropped_events {};
     };
 
     client_runtime::client_runtime(std::string application_name, std::string config_file_path):
@@ -257,7 +257,6 @@ namespace kmx::aio::someip::compat
         }
     }
 
-    using namespace detail;
 
     struct client_runtime::impl
     {
@@ -285,8 +284,80 @@ namespace kmx::aio::someip::compat
         std::deque<event_notification> events;
         std::unordered_set<std::uint32_t> subscribed_events;
         std::size_t event_queue_capacity = 1024u;
-        std::uint64_t dropped_events = 0u;
+        std::uint64_t dropped_events {};
+
+        /// @brief Routes one inbound vsomeip message to the event queue or to the response table.
+        void on_message(const std::shared_ptr<vsomeip::message>& message);
+        /// @brief Queues one notification, dropping the oldest entries once the queue is full.
+        void store_notification(const std::shared_ptr<vsomeip::message>& message);
+        /// @brief Files one response under its request key and wakes whoever waits for it.
+        void store_response(const std::shared_ptr<vsomeip::message>& message);
     };
+
+    void client_runtime::impl::on_message(const std::shared_ptr<vsomeip::message>& message)
+    {
+        if (message->get_message_type() == vsomeip::message_type_e::MT_NOTIFICATION)
+            store_notification(message);
+        else
+            store_response(message);
+    }
+
+    void client_runtime::impl::store_notification(const std::shared_ptr<vsomeip::message>& message)
+    {
+        const std::uint32_t event_key =
+            (static_cast<std::uint32_t>(message->get_service()) << 16u) ^ static_cast<std::uint32_t>(message->get_method());
+
+        {
+            std::lock_guard event_lock(event_mutex);
+            if (!subscribed_events.contains(event_key))
+                return;
+
+            if (event_queue_capacity == 0u)
+            {
+                ++dropped_events;
+                return;
+            }
+
+            while (events.size() >= event_queue_capacity)
+            {
+                events.pop_front();
+                ++dropped_events;
+            }
+
+            events.push_back(event_notification {
+                .service_id = message->get_service(),
+                .instance_id = message->get_instance(),
+                .event_id = message->get_method(),
+                .payload = detail::payload_to_vector(message->get_payload()),
+                .source_timestamp = std::chrono::system_clock::now(),
+            });
+        }
+
+        event_cv.notify_all();
+    }
+
+    void client_runtime::impl::store_response(const std::shared_ptr<vsomeip::message>& message)
+    {
+        const auto response_key = (static_cast<std::uint64_t>(message->get_client()) << 48u) |
+                                  (static_cast<std::uint64_t>(message->get_session()) << 32u) |
+                                  (static_cast<std::uint64_t>(message->get_service()) << 16u) |
+                                  static_cast<std::uint64_t>(message->get_method());
+
+        rpc_message response {
+            .service_id = message->get_service(),
+            .instance_id = message->get_instance(),
+            .method_id = message->get_method(),
+            .request_id = detail::make_request_id(message->get_client(), message->get_session()),
+            .payload = detail::payload_to_vector(message->get_payload()),
+        };
+
+        {
+            std::lock_guard lock(response_mutex);
+            responses[response_key] = std::move(response);
+        }
+
+        response_cv.notify_all();
+    }
 
     client_runtime::client_runtime(std::string application_name, std::string config_file_path):
         impl_(std::make_unique<impl>(std::move(application_name), std::move(config_file_path)))
@@ -321,67 +392,12 @@ namespace kmx::aio::someip::compat
             [this](const vsomeip::service_t service, const vsomeip::instance_t instance, const bool available)
             {
                 std::lock_guard lock(impl_->state_mutex);
-                impl_->availability[make_service_key(service, instance)] = available;
+                impl_->availability[detail::make_service_key(service, instance)] = available;
             });
 
         impl_->app->register_message_handler(vsomeip::ANY_SERVICE, vsomeip::ANY_INSTANCE, vsomeip::ANY_METHOD,
                                              [this](const std::shared_ptr<vsomeip::message>& message)
-                                             {
-                                                 if (message->get_message_type() == vsomeip::message_type_e::MT_NOTIFICATION)
-                                                 {
-                                                     const std::uint32_t event_key =
-                                                         (static_cast<std::uint32_t>(message->get_service()) << 16u) ^
-                                                         static_cast<std::uint32_t>(message->get_method());
-
-                                                     {
-                                                         std::lock_guard event_lock(impl_->event_mutex);
-                                                         if (!impl_->subscribed_events.contains(event_key))
-                                                             return;
-
-                                                         if (impl_->event_queue_capacity == 0u)
-                                                         {
-                                                             ++impl_->dropped_events;
-                                                             return;
-                                                         }
-
-                                                         while (impl_->events.size() >= impl_->event_queue_capacity)
-                                                         {
-                                                             impl_->events.pop_front();
-                                                             ++impl_->dropped_events;
-                                                         }
-
-                                                         impl_->events.push_back(event_notification {
-                                                             .service_id = message->get_service(),
-                                                             .instance_id = message->get_instance(),
-                                                             .event_id = message->get_method(),
-                                                             .payload = payload_to_vector(message->get_payload()),
-                                                             .source_timestamp = std::chrono::system_clock::now(),
-                                                         });
-                                                     }
-
-                                                     impl_->event_cv.notify_all();
-                                                     return;
-                                                 }
-
-                                                 const auto response_key = (static_cast<std::uint64_t>(message->get_client()) << 48u) |
-                                                                           (static_cast<std::uint64_t>(message->get_session()) << 32u) |
-                                                                           (static_cast<std::uint64_t>(message->get_service()) << 16u) |
-                                                                           static_cast<std::uint64_t>(message->get_method());
-
-                                                 rpc_message response {
-                                                     .service_id = message->get_service(),
-                                                     .instance_id = message->get_instance(),
-                                                     .method_id = message->get_method(),
-                                                     .request_id = make_request_id(message->get_client(), message->get_session()),
-                                                     .payload = payload_to_vector(message->get_payload()),
-                                                 };
-
-                                                 {
-                                                     std::lock_guard lock(impl_->response_mutex);
-                                                     impl_->responses[response_key] = std::move(response);
-                                                 }
-                                                 impl_->response_cv.notify_all();
-                                             });
+                                             { impl_->on_message(message); });
 
         impl_->started = true;
         impl_->app_thread = std::thread([this]() { impl_->app->start(); });
@@ -409,7 +425,7 @@ namespace kmx::aio::someip::compat
 
     bool client_runtime::request_service(const service_id_t service_id, const instance_id_t instance_id)
     {
-        if (!impl_->started || impl_->app == nullptr)
+        if (!impl_->started || (impl_->app == nullptr))
             return false;
 
         impl_->app->request_service(service_id, instance_id);
@@ -418,7 +434,7 @@ namespace kmx::aio::someip::compat
 
     bool client_runtime::release_service(const service_id_t service_id, const instance_id_t instance_id)
     {
-        if (!impl_->started || impl_->app == nullptr)
+        if (!impl_->started || (impl_->app == nullptr))
             return false;
 
         impl_->app->release_service(service_id, instance_id);
@@ -427,7 +443,7 @@ namespace kmx::aio::someip::compat
 
     bool client_runtime::is_service_available(const service_id_t service_id, const instance_id_t instance_id) const
     {
-        if (!impl_->started || impl_->app == nullptr)
+        if (!impl_->started || (impl_->app == nullptr))
             return false;
 
         return impl_->app->is_available(service_id, instance_id);
@@ -437,7 +453,7 @@ namespace kmx::aio::someip::compat
                                                            const method_id_t method_id, std::vector<std::uint8_t> payload,
                                                            const std::chrono::milliseconds timeout)
     {
-        if (!impl_->started || impl_->app == nullptr)
+        if (!impl_->started || (impl_->app == nullptr))
             return std::nullopt;
 
         auto request = vsomeip::runtime::get()->create_request();
@@ -445,7 +461,7 @@ namespace kmx::aio::someip::compat
         request->set_instance(instance_id);
         request->set_method(method_id);
         request->set_message_type(vsomeip::message_type_e::MT_REQUEST);
-        request->set_payload(vector_to_payload(payload));
+        request->set_payload(detail::vector_to_payload(payload));
 
         const auto response_key = (static_cast<std::uint64_t>(request->get_client()) << 48u) |
                                   (static_cast<std::uint64_t>(request->get_session()) << 32u) |
@@ -468,7 +484,7 @@ namespace kmx::aio::someip::compat
     bool client_runtime::subscribe(const service_id_t service_id, const instance_id_t instance_id, const event_group_id_t event_group_id,
                                    const std::vector<event_id_t>& event_ids, const std::size_t queue_capacity)
     {
-        if (!impl_->started || impl_->app == nullptr)
+        if (!impl_->started || (impl_->app == nullptr))
             return false;
 
         {
@@ -495,7 +511,7 @@ namespace kmx::aio::someip::compat
     bool client_runtime::unsubscribe(const service_id_t service_id, const instance_id_t instance_id, const event_group_id_t event_group_id,
                                      const std::vector<event_id_t>& event_ids)
     {
-        if (!impl_->started || impl_->app == nullptr)
+        if (!impl_->started || (impl_->app == nullptr))
             return false;
 
         for (const event_id_t event_id: event_ids)
@@ -513,7 +529,7 @@ namespace kmx::aio::someip::compat
 
     std::optional<event_notification> client_runtime::next_event(const std::chrono::milliseconds timeout)
     {
-        if (!impl_->started || impl_->app == nullptr)
+        if (!impl_->started || (impl_->app == nullptr))
             return std::nullopt;
 
         std::unique_lock lock(impl_->event_mutex);
@@ -555,7 +571,34 @@ namespace kmx::aio::someip::compat
         std::unordered_map<request_id_t, std::shared_ptr<vsomeip::message>> request_index;
 
         std::function<void()> request_handler;
+
+        /// @brief Queues one inbound request and notifies the registered handler.
+        void on_message(const std::shared_ptr<vsomeip::message>& message);
     };
+
+    void server_runtime::impl::on_message(const std::shared_ptr<vsomeip::message>& message)
+    {
+        if (message->get_message_type() != vsomeip::message_type_e::MT_REQUEST)
+            return;
+
+        const request_id_t request_id = detail::make_request_id(message->get_client(), message->get_session());
+        rpc_message request {
+            .service_id = message->get_service(),
+            .instance_id = message->get_instance(),
+            .method_id = message->get_method(),
+            .request_id = request_id,
+            .payload = detail::payload_to_vector(message->get_payload()),
+        };
+
+        {
+            std::lock_guard lock(request_mutex);
+            pending_requests.push_back(request);
+            request_index[request_id] = message;
+        }
+
+        if (request_handler)
+            request_handler();
+    }
 
     server_runtime::server_runtime(std::string application_name, std::string config_file_path):
         impl_(std::make_unique<impl>(std::move(application_name), std::move(config_file_path)))
@@ -587,29 +630,7 @@ namespace kmx::aio::someip::compat
 
         impl_->app->register_message_handler(vsomeip::ANY_SERVICE, vsomeip::ANY_INSTANCE, vsomeip::ANY_METHOD,
                                              [this](const std::shared_ptr<vsomeip::message>& message)
-                                             {
-                                                 if (message->get_message_type() != vsomeip::message_type_e::MT_REQUEST)
-                                                     return;
-
-                                                 const request_id_t request_id =
-                                                     make_request_id(message->get_client(), message->get_session());
-                                                 rpc_message request {
-                                                     .service_id = message->get_service(),
-                                                     .instance_id = message->get_instance(),
-                                                     .method_id = message->get_method(),
-                                                     .request_id = request_id,
-                                                     .payload = payload_to_vector(message->get_payload()),
-                                                 };
-
-                                                 {
-                                                     std::lock_guard lock(impl_->request_mutex);
-                                                     impl_->pending_requests.push_back(request);
-                                                     impl_->request_index[request_id] = message;
-                                                 }
-
-                                                 if (impl_->request_handler)
-                                                     impl_->request_handler();
-                                             });
+                                             { impl_->on_message(message); });
 
         impl_->started = true;
         impl_->app_thread = std::thread([this]() { impl_->app->start(); });
@@ -636,21 +657,21 @@ namespace kmx::aio::someip::compat
 
     bool server_runtime::offer_service(const service_id_t service_id, const instance_id_t instance_id)
     {
-        if (!impl_->started || impl_->app == nullptr)
+        if (!impl_->started || (impl_->app == nullptr))
             return false;
 
         impl_->app->offer_service(service_id, instance_id);
-        impl_->offered_services[make_service_key(service_id, instance_id)] = true;
+        impl_->offered_services[detail::make_service_key(service_id, instance_id)] = true;
         return true;
     }
 
     bool server_runtime::stop_offer_service(const service_id_t service_id, const instance_id_t instance_id)
     {
-        if (!impl_->started || impl_->app == nullptr)
+        if (!impl_->started || (impl_->app == nullptr))
             return false;
 
         impl_->app->stop_offer_service(service_id, instance_id);
-        impl_->offered_services.erase(make_service_key(service_id, instance_id));
+        impl_->offered_services.erase(detail::make_service_key(service_id, instance_id));
         return true;
     }
 
@@ -667,7 +688,7 @@ namespace kmx::aio::someip::compat
 
     bool server_runtime::send_response(const request_id_t request_id, std::vector<std::uint8_t> payload)
     {
-        if (!impl_->started || impl_->app == nullptr)
+        if (!impl_->started || (impl_->app == nullptr))
             return false;
 
         std::shared_ptr<vsomeip::message> request;
@@ -682,9 +703,9 @@ namespace kmx::aio::someip::compat
         }
 
         auto response = vsomeip::runtime::get()->create_response(request);
-        response->set_client(client_from_request_id(request_id));
-        response->set_session(session_from_request_id(request_id));
-        response->set_payload(vector_to_payload(payload));
+        response->set_client(detail::client_from_request_id(request_id));
+        response->set_session(detail::session_from_request_id(request_id));
+        response->set_payload(detail::vector_to_payload(payload));
         impl_->app->send(response);
         return true;
     }
@@ -692,10 +713,10 @@ namespace kmx::aio::someip::compat
     bool server_runtime::notify(const service_id_t service_id, const instance_id_t instance_id, const event_id_t event_id,
                                 std::vector<std::uint8_t> payload)
     {
-        if (!impl_->started || impl_->app == nullptr)
+        if (!impl_->started || (impl_->app == nullptr))
             return false;
 
-        impl_->app->notify(service_id, instance_id, event_id, vector_to_payload(payload));
+        impl_->app->notify(service_id, instance_id, event_id, detail::vector_to_payload(payload));
         return true;
     }
 

@@ -3,7 +3,7 @@
 
 namespace kmx::aio::knx
 {
-    std::expected<datagram, std::error_code> decode_datagram(const cspan_uint8_t packet) noexcept
+    datagram_result_t decode_datagram(const cspan_uint8_t packet) noexcept
     {
         const auto header = frame::decode_communication_header(packet);
         if (!header.has_value())
@@ -160,7 +160,7 @@ namespace kmx::aio::knx
         }
     }
 
-    std::expected<void, std::error_code> encode_datagram(const span_uint8_t packet, const datagram& value) noexcept
+    expected_void_t encode_datagram(const span_uint8_t packet, const datagram& value) noexcept
     {
         switch (value.service_type)
         {
@@ -294,7 +294,7 @@ namespace kmx::aio::knx
         }
     }
 
-    std::expected<void, std::error_code> encode_response_datagram(const span_uint8_t packet,
+    expected_void_t encode_response_datagram(const span_uint8_t packet,
                                                                   const datagram& request,
                                                                   const std::uint8_t status) noexcept
     {

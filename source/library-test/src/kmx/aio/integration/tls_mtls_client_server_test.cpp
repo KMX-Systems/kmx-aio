@@ -31,9 +31,7 @@ namespace kmx::aio::test::integration::tls_mtls_client_server_test
         const auto client_bin_opt = find_binary_under_debug(*repo_root, "sample-tls-echo-completion-client");
 
         if (!server_bin_opt || !client_bin_opt)
-        {
             SKIP("TLS echo samples not found - build with project.full:true");
-        }
 
         // If we get here, samples are available
         REQUIRE(std::filesystem::exists(server_bin_opt.value()));
@@ -82,13 +80,9 @@ namespace kmx::aio::test::integration::tls_mtls_client_server_test
         const auto client_bin_opt = find_binary_under_debug(*repo_root, "sample-tls-echo-completion-client");
 
         if (!server_bin_opt)
-        {
             SKIP("sample-tls-echo-completion-server not built");
-        }
         if (!client_bin_opt)
-        {
             SKIP("sample-tls-echo-completion-client not built");
-        }
 
         REQUIRE(std::filesystem::exists(server_bin_opt.value()));
         REQUIRE(std::filesystem::exists(client_bin_opt.value()));

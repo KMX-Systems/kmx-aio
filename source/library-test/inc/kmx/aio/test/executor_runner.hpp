@@ -19,7 +19,9 @@
     #include <utility>
 
     #include <kmx/aio/completion/executor.hpp>
-    #include <kmx/aio/readiness/executor.hpp>
+    #if defined(KMX_AIO_FEATURE_READINESS)
+        #include <kmx/aio/readiness/executor.hpp>
+    #endif
     #include <kmx/aio/task.hpp>
 #endif
 
@@ -41,6 +43,7 @@ namespace kmx::aio::test
         return true;
     }
 
+#if defined(KMX_AIO_FEATURE_READINESS)
     /// @brief Runs an executor's event loop on a separate thread for the lifetime of this object.
     class scoped_runner
     {
@@ -85,6 +88,8 @@ namespace kmx::aio::test
         // Declared last so the flag it writes is constructed first, and joined first on destruction.
         std::jthread thread_;
     };
+
+#endif // KMX_AIO_FEATURE_READINESS
 
     /// @brief Runs a completion executor's event loop on a separate thread for the lifetime of this
     ///        object, and stops it reliably on the way out.
@@ -202,7 +207,7 @@ namespace kmx::aio::test
     template <typename Executor>
     bool run_awaited_void(Executor& exec, task<void> work) noexcept(false)
     {
-        bool done = false;
+        bool done {};
         auto driver = detail::capture_awaited_void(exec, std::move(work), done);
         exec.spawn(std::move(driver));
         exec.run();

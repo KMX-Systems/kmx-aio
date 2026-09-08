@@ -1,11 +1,13 @@
 /// @file aio/completion/io_base.hpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/completion/executor.hpp>
-    #include <kmx/aio/file_descriptor.hpp>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_COMPLETION)
+    #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/completion/executor.hpp>
+        #include <kmx/aio/file_descriptor.hpp>
+    #endif
 
 namespace kmx::aio::completion
 {
@@ -47,3 +49,4 @@ namespace kmx::aio::completion
         file_descriptor fd_;
     };
 } // namespace kmx::aio::completion
+#endif // KMX_AIO_FEATURE_COMPLETION

@@ -425,34 +425,33 @@ namespace kmx::aio::benchmark
 
     void print_results(const std::vector<result>& results, const registry& reg) noexcept
     {
-        using namespace detail;
 
         std::size_t name_width = 4u;
         std::size_t note_width {};
         for (const auto& item: results)
         {
-            name_width = std::max(name_width, case_of(item.name).size() + row_indent);
+            name_width = std::max(name_width, detail::case_of(item.name).size() + detail::row_indent);
             note_width = std::max(note_width, item.note.size());
         }
 
-        note_width = std::min(note_width, note_width_cap);
+        note_width = std::min(note_width, detail::note_width_cap);
 
-        auto header = left("case", name_width);
-        add_column(header, "mean", time_width);
-        add_column(header, "min", time_width);
-        add_column(header, "p50", time_width);
-        add_column(header, "p99", time_width);
-        add_column(header, "rate", rate_width);
-        add_column(header, "ops", count_width);
+        auto header = detail::left("case", name_width);
+        detail::add_column(header, "mean", detail::time_width);
+        detail::add_column(header, "min", detail::time_width);
+        detail::add_column(header, "p50", detail::time_width);
+        detail::add_column(header, "p99", detail::time_width);
+        detail::add_column(header, "rate", detail::rate_width);
+        detail::add_column(header, "ops", detail::count_width);
 
         // The rule spans the note column as well, which the header itself only starts.
-        const auto columns_width = width_of(header);
-        const auto rule_width = (note_width == 0u) ? columns_width : (columns_width + column_gap.size() + note_width);
+        const auto columns_width = detail::width_of(header);
+        const auto rule_width = (note_width == 0u) ? columns_width : (columns_width + detail::column_gap.size() + note_width);
         if (note_width != 0u)
-            add_last_column(header, "what it means");
+            detail::add_last_column(header, "what it means");
 
         std::println("{}", header);
-        std::println("{}", run_of('-', rule_width));
+        std::println("{}", detail::run_of('-', rule_width));
 
         // Sections are collected by group rather than taken from adjacency: a paired scenario
         // registers one case in each of two groups, so registration order no longer keeps a group's
@@ -461,7 +460,7 @@ namespace kmx::aio::benchmark
         std::vector<std::string_view> groups {};
         for (const auto& item: results)
         {
-            const auto item_group = group_of(item.name);
+            const auto item_group = detail::group_of(item.name);
             if (std::find(groups.begin(), groups.end(), item_group) == groups.end())
                 groups.push_back(item_group);
         }
@@ -480,54 +479,55 @@ namespace kmx::aio::benchmark
 
             for (const auto& item: results)
             {
-                if (group_of(item.name) != group)
+                if (detail::group_of(item.name) != group)
                     continue;
 
-                auto line = run_of(' ', row_indent) + left(case_of(item.name), name_width - row_indent);
+                auto line =
+                    detail::run_of(' ', detail::row_indent) + detail::left(detail::case_of(item.name), name_width - detail::row_indent);
                 if (item.skipped)
                 {
                     // The numeric columns stay empty, so the reason lands under the note column like any other remark.
-                    add_column(line, "skipped", time_width);
-                    add_column(line, "", time_width);
-                    add_column(line, "", time_width);
-                    add_column(line, "", time_width);
-                    add_column(line, "", rate_width);
-                    add_column(line, "", count_width);
+                    detail::add_column(line, "skipped", detail::time_width);
+                    detail::add_column(line, "", detail::time_width);
+                    detail::add_column(line, "", detail::time_width);
+                    detail::add_column(line, "", detail::time_width);
+                    detail::add_column(line, "", detail::rate_width);
+                    detail::add_column(line, "", detail::count_width);
                 }
                 else
                 {
-                    add_column(line, duration_text(item.mean_ns), time_width);
+                    detail::add_column(line, detail::duration_text(item.mean_ns), detail::time_width);
                     if (item.has_distribution)
                     {
-                        add_column(line, duration_text(item.min_ns), time_width);
-                        add_column(line, duration_text(item.p50_ns), time_width);
-                        add_column(line, item.has_p99 ? duration_text(item.p99_ns) : std::string {"-"}, time_width);
+                        detail::add_column(line, detail::duration_text(item.min_ns), detail::time_width);
+                        detail::add_column(line, detail::duration_text(item.p50_ns), detail::time_width);
+                        detail::add_column(line, item.has_p99 ? detail::duration_text(item.p99_ns) : std::string {"-"}, detail::time_width);
                     }
                     else
                     {
-                        add_column(line, "-", time_width);
-                        add_column(line, "-", time_width);
-                        add_column(line, "-", time_width);
+                        detail::add_column(line, "-", detail::time_width);
+                        detail::add_column(line, "-", detail::time_width);
+                        detail::add_column(line, "-", detail::time_width);
                     }
 
-                    add_column(line, rate_text((item.mean_ns > 0.0) ? (1e9 / item.mean_ns) : 0.0), rate_width);
-                    add_column(line, count_text(item.operations), count_width);
+                    detail::add_column(line, detail::rate_text((item.mean_ns > 0.0) ? (1e9 / item.mean_ns) : 0.0), detail::rate_width);
+                    detail::add_column(line, detail::count_text(item.operations), detail::count_width);
                 }
 
-                const auto note_lines = wrapped(item.note, note_width);
+                const auto note_lines = detail::wrapped(item.note, note_width);
                 if (!note_lines.empty())
-                    add_last_column(line, note_lines.front());
+                    detail::add_last_column(line, note_lines.front());
 
                 std::println("{}", line);
 
                 // A note too long for the column carries on down it, under its own first line.
                 for (std::size_t i = 1u; i < note_lines.size(); ++i)
-                    std::println("{}{}{}", run_of(' ', columns_width), column_gap, note_lines[i]);
+                    std::println("{}{}{}", detail::run_of(' ', columns_width), detail::column_gap, note_lines[i]);
             }
         }
 
         std::println("");
-        std::println("{}", run_of('-', rule_width));
+        std::println("{}", detail::run_of('-', rule_width));
         std::println("mean, min, p50 and p99 are the cost of one operation; rate is 1 s / mean; ops is how many were measured.");
         std::println("A \"-\" means the case timed the whole loop rather than each operation, so it has no distribution to report,");
         std::println("or - under p99 alone - that it took fewer than {} samples, too few for a percentile to name anything.",
@@ -639,7 +639,6 @@ namespace kmx::aio::benchmark
 
     void print_comparison(const std::vector<result>& results, const registry& reg) noexcept
     {
-        using namespace detail;
 
         if (reg.pairs().empty())
             return;
@@ -651,13 +650,13 @@ namespace kmx::aio::benchmark
         std::size_t note_width {};
         for (const auto& pair: reg.pairs())
         {
-            const auto* readiness_side = side_of(results, pair.key, execution_model::readiness);
-            const auto* completion_side = side_of(results, pair.key, execution_model::completion);
+            const auto* readiness_side = detail::side_of(results, pair.key, execution_model::readiness);
+            const auto* completion_side = detail::side_of(results, pair.key, execution_model::completion);
             if ((readiness_side == nullptr) && (completion_side == nullptr))
                 continue;
 
             present.push_back(&pair);
-            name_width = std::max(name_width, width_of(pair.key) + row_indent);
+            name_width = std::max(name_width, detail::width_of(pair.key) + detail::row_indent);
 
             // A skipped side explains itself in the note column, so its reason has to fit there too.
             auto note = pair.description;
@@ -670,30 +669,30 @@ namespace kmx::aio::benchmark
         if (present.empty())
             return;
 
-        note_width = std::min(note_width, note_width_cap);
+        note_width = std::min(note_width, detail::note_width_cap);
 
-        auto header = left("scenario", name_width);
-        add_column(header, "epoll", time_width);
-        add_column(header, "io_uring", time_width);
-        add_column(header, "delta", delta_width);
-        add_column(header, "ops", count_width);
+        auto header = detail::left("scenario", name_width);
+        detail::add_column(header, "epoll", detail::time_width);
+        detail::add_column(header, "io_uring", detail::time_width);
+        detail::add_column(header, "delta", detail::delta_width);
+        detail::add_column(header, "ops", detail::count_width);
 
-        const auto columns_width = width_of(header);
-        const auto rule_width = (note_width == 0u) ? columns_width : (columns_width + column_gap.size() + note_width);
+        const auto columns_width = detail::width_of(header);
+        const auto rule_width = (note_width == 0u) ? columns_width : (columns_width + detail::column_gap.size() + note_width);
         if (note_width != 0u)
-            add_last_column(header, "what the scenario does");
+            detail::add_last_column(header, "what the scenario does");
 
         std::println("");
         std::println("");
         std::println("epoll against io_uring - one scenario, the same work, measured on both executors");
         std::println("");
         std::println("{}", header);
-        std::println("{}", run_of('-', rule_width));
+        std::println("{}", detail::run_of('-', rule_width));
 
         for (const auto* pair: present)
         {
-            const auto* readiness_side = side_of(results, pair->key, execution_model::readiness);
-            const auto* completion_side = side_of(results, pair->key, execution_model::completion);
+            const auto* readiness_side = detail::side_of(results, pair->key, execution_model::readiness);
+            const auto* completion_side = detail::side_of(results, pair->key, execution_model::completion);
 
             // "not run" and "skipped" are different answers and the reader needs both: the first means
             // a filter or a build gate left the side out, the second that the machine could not run it.
@@ -702,20 +701,22 @@ namespace kmx::aio::benchmark
                 if (side == nullptr)
                     return "not run";
 
-                return side->skipped ? std::string {"skipped"} : duration_text(quoted_ns(*side));
+                return side->skipped ? std::string {"skipped"} : detail::duration_text(detail::quoted_ns(*side));
             };
 
-            auto line = run_of(' ', row_indent) + left(pair->key, name_width - row_indent);
-            add_column(line, cell(readiness_side), time_width);
-            add_column(line, cell(completion_side), time_width);
+            auto line = detail::run_of(' ', detail::row_indent) + detail::left(pair->key, name_width - detail::row_indent);
+            detail::add_column(line, cell(readiness_side), detail::time_width);
+            detail::add_column(line, cell(completion_side), detail::time_width);
 
             // A delta is only meaningful with two figures in hand, and only when both quote the same
             // kind of figure - a median against a whole-loop mean would be a number with no meaning.
             const auto both_ran =
                 (readiness_side != nullptr) && (completion_side != nullptr) && !readiness_side->skipped && !completion_side->skipped;
             const auto comparable = both_ran && (readiness_side->has_distribution == completion_side->has_distribution);
-            add_column(line, comparable ? delta_text(quoted_ns(*readiness_side), quoted_ns(*completion_side)) : std::string {"-"},
-                       delta_width);
+            detail::add_column(line,
+                               comparable ? detail::delta_text(detail::quoted_ns(*readiness_side), detail::quoted_ns(*completion_side)) :
+                                            std::string {"-"},
+                               detail::delta_width);
 
             // Both sides run the same amount of work by construction, so one operation count describes
             // the row; where they disagree the smaller one is the honest figure to print.
@@ -727,7 +728,7 @@ namespace kmx::aio::benchmark
             else if (completion_side != nullptr)
                 operations = completion_side->operations;
 
-            add_column(line, (operations == 0u) ? std::string {"-"} : count_text(operations), count_width);
+            detail::add_column(line, (operations == 0u) ? std::string {"-"} : detail::count_text(operations), detail::count_width);
 
             // The scenario's own line normally, replaced by a skip reason when there is one to give -
             // why a side could not run is what the reader needs from that row, not what it would have done.
@@ -736,18 +737,18 @@ namespace kmx::aio::benchmark
                 if ((side != nullptr) && side->skipped && !side->note.empty())
                     note = side->note;
 
-            const auto note_lines = wrapped(note, note_width);
+            const auto note_lines = detail::wrapped(note, note_width);
             if (!note_lines.empty())
-                add_last_column(line, note_lines.front());
+                detail::add_last_column(line, note_lines.front());
 
             std::println("{}", line);
 
             for (std::size_t i = 1u; i < note_lines.size(); ++i)
-                std::println("{}{}{}", run_of(' ', columns_width), column_gap, note_lines[i]);
+                std::println("{}{}{}", detail::run_of(' ', columns_width), detail::column_gap, note_lines[i]);
         }
 
         std::println("");
-        std::println("{}", run_of('-', rule_width));
+        std::println("{}", detail::run_of('-', rule_width));
         std::println("Each figure is the cost of one operation: the median where the case sampled every operation, the mean");
         std::println("where it timed a whole loop. delta is how the io_uring figure differs from the epoll one, so a negative");
         std::println("delta means io_uring was the faster of the two. The same figures appear in the table above, with their");
@@ -757,7 +758,6 @@ namespace kmx::aio::benchmark
 
     void print_json(const std::vector<result>& results, std::FILE* const out) noexcept
     {
-        using namespace detail;
 
         std::println(out, "{{");
         std::println(out, "  \"results\": [");
@@ -765,9 +765,9 @@ namespace kmx::aio::benchmark
         {
             const auto& item = results[i];
             std::string line = "    {";
-            line += std::format("\"name\": \"{}\"", json_escaped(item.name));
-            line += std::format(", \"pair\": \"{}\"", json_escaped(item.pair_key));
-            line += std::format(", \"model\": \"{}\"", model_name(item.model));
+            line += std::format("\"name\": \"{}\"", detail::json_escaped(item.name));
+            line += std::format(", \"pair\": \"{}\"", detail::json_escaped(item.pair_key));
+            line += std::format(", \"model\": \"{}\"", detail::model_name(item.model));
             line += std::format(", \"skipped\": {}", item.skipped ? "true" : "false");
             line += std::format(", \"operations\": {}", item.operations);
             line += std::format(", \"mean_ns\": {:.3f}", item.mean_ns);
@@ -779,7 +779,7 @@ namespace kmx::aio::benchmark
                     line += std::format(", \"p99_ns\": {:.3f}", item.p99_ns);
             }
 
-            line += std::format(", \"note\": \"{}\"", json_escaped(item.note));
+            line += std::format(", \"note\": \"{}\"", detail::json_escaped(item.note));
             line += '}';
             if ((i + 1u) != results.size())
                 line += ',';

@@ -11,7 +11,7 @@
 
 namespace kmx::aio::test::buffer::pool_test::detail
 {
-    inline int unstable_buffer_ctor_calls = 0;
+    inline int unstable_buffer_ctor_calls {};
 
     struct unstable_buffer
     {
@@ -22,6 +22,35 @@ namespace kmx::aio::test::buffer::pool_test::detail
                 throw std::runtime_error("constructor failed");
         }
     };
+
+    /// @brief Acquires and releases a hundred buffers, checking each one keeps the value written to it.
+    /// @param pool The pool to hammer.
+    /// @param errors Incremented once if the pool ran out.
+    /// @param value_mismatches Incremented for every handle that did not read back what was written.
+    /// @param id Distinguishes this worker's values from the other workers'.
+    inline void hammer_pool(kmx::aio::buffer::pool<int, 50u>& pool, std::atomic<int>& errors, std::atomic<int>& value_mismatches,
+                            const int id)
+    {
+        try
+        {
+            for (int i = 0; i < 100; ++i)
+            {
+                auto handle = pool.acquire();
+                *handle = id * 1000 + i;
+
+                // Simulate some work
+                std::this_thread::yield();
+
+                if (*handle != id * 1000 + i)
+                    value_mismatches.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+        catch (const std::exception&)
+        {
+            // Expected when pool exhausted
+            errors.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
 } // namespace kmx::aio::test::buffer::pool_test::detail
 
 namespace kmx::aio::test::buffer::pool_test
@@ -157,7 +186,7 @@ namespace kmx::aio::test::buffer::pool_test
         {
             std::string name;
             std::vector<int> data;
-            int count = 0;
+            int count {};
 
             complex_buffer() noexcept: count(0) {}
         };
@@ -208,8 +237,8 @@ namespace kmx::aio::test::buffer::pool_test
     {
         struct point
         {
-            int x = 0;
-            int y = 0;
+            int x {};
+            int y {};
         };
 
         kmx::aio::buffer::pool<point, 5> pool;
@@ -278,9 +307,7 @@ namespace kmx::aio::test::buffer::pool_test
 
             // All buffers in use
             for (const auto& h: handles)
-            {
                 REQUIRE(h->size() == 1024u);
-            }
         } // All handles destroyed → buffers returned
 
         REQUIRE(pool.is_empty());
@@ -308,9 +335,7 @@ namespace kmx::aio::test::buffer::pool_test
 
             // Allocate 50 buffers
             for (int i = 0; i < 50; ++i)
-            {
                 handles.push_back(pool.acquire());
-            }
 
             REQUIRE(pool.allocated() == 50u);
             REQUIRE(pool.available() == 50u);
@@ -339,43 +364,18 @@ namespace kmx::aio::test::buffer::pool_test
     TEST_CASE("buffer::pool thread-safe concurrent acquire/release", "[buffer_pool][thread-safety]")
     {
         kmx::aio::buffer::pool<int, 50u> pool;
-        std::atomic<int> errors = 0;
-        std::atomic<int> value_mismatches = 0;
+        std::atomic<int> errors {};
+        std::atomic<int> value_mismatches {};
 
-        auto worker = [&](int id)
-        {
-            try
-            {
-                for (int i = 0; i < 100; ++i)
-                {
-                    auto handle = pool.acquire();
-                    *handle = id * 1000 + i;
-
-                    // Simulate some work
-                    std::this_thread::yield();
-
-                    if (*handle != id * 1000 + i)
-                        value_mismatches.fetch_add(1, std::memory_order_relaxed);
-                }
-            }
-            catch (const std::exception&)
-            {
-                // Expected when pool exhausted
-                errors.fetch_add(1, std::memory_order_relaxed);
-            }
-        };
+        auto worker = [&](int id) { detail::hammer_pool(pool, errors, value_mismatches, id); };
 
         // Spawn multiple threads
         std::vector<std::thread> threads;
         for (int i = 0; i < 5; ++i)
-        {
             threads.emplace_back(worker, i);
-        }
 
         for (auto& t: threads)
-        {
             t.join();
-        }
 
         // Pool should be empty after all threads complete
         REQUIRE(pool.is_empty());

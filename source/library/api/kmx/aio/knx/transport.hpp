@@ -1,16 +1,18 @@
 /// @file aio/knx/transport.hpp
 /// @brief Executor-neutral UDP transport contract for KNXnet/IP sessions.
 #pragma once
-#ifndef PCH
-    #include <array>
-    #include <cstddef>
-    #include <cstdint>
-    #include <span>
-    #include <sys/socket.h>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_KNX)
+    #ifndef PCH
+        #include <array>
+        #include <cstddef>
+        #include <cstdint>
+        #include <span>
+        #include <sys/socket.h>
+    #endif
 
-#include <kmx/aio/basic_types.hpp>
-#include <kmx/aio/task.hpp>
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/task.hpp>
 
 namespace kmx::aio::knx
 {
@@ -25,7 +27,7 @@ namespace kmx::aio::knx
     {
         std::array<std::uint8_t, 4u> group {224u, 0u, 23u, 12u};
         std::uint16_t port = 3671u;
-        std::uint32_t interface_index = 0u;
+        std::uint32_t interface_index {};
     };
 
     /// @brief Socket-independent asynchronous UDP contract used by the KNX session layer.
@@ -51,16 +53,15 @@ namespace kmx::aio::knx
             co_return co_await receive(buffer, peer);
         }
 
-        [[nodiscard]] virtual expected_void_t join_multicast_group(
-            const multicast_group_configuration&) noexcept
+        [[nodiscard]] virtual expected_void_t join_multicast_group(const multicast_group_configuration&) noexcept
         {
             return std::unexpected(std::make_error_code(std::errc::operation_not_supported));
         }
 
-        [[nodiscard]] virtual expected_void_t leave_multicast_group(
-            const multicast_group_configuration&) noexcept
+        [[nodiscard]] virtual expected_void_t leave_multicast_group(const multicast_group_configuration&) noexcept
         {
             return std::unexpected(std::make_error_code(std::errc::operation_not_supported));
         }
     };
 }
+#endif // KMX_AIO_FEATURE_KNX

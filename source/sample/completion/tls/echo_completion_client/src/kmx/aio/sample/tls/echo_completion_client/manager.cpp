@@ -21,6 +21,21 @@ namespace kmx::aio::sample::tls::echo_completion_client
             ::SSL_CTX_free(ssl_ctx_);
     }
 
+    void manager::shut_down() noexcept
+    {
+        if (ui_thread_.joinable())
+        {
+            ui_thread_.request_stop();
+            ui_thread_.join();
+        }
+
+        if (ssl_ctx_)
+        {
+            ::SSL_CTX_free(ssl_ctx_);
+            ssl_ctx_ = nullptr;
+        }
+    }
+
     bool manager::run() noexcept(false)
     {
         const auto start_time = std::chrono::high_resolution_clock::now();
@@ -44,21 +59,6 @@ namespace kmx::aio::sample::tls::echo_completion_client
             logger::log(logger::level::error, std::source_location::current(), "Failed to create SSL_CTX");
             return false;
         }
-
-        const auto cleanup = [this]() noexcept
-        {
-            if (ui_thread_.joinable())
-            {
-                ui_thread_.request_stop();
-                ui_thread_.join();
-            }
-
-            if (ssl_ctx_)
-            {
-                ::SSL_CTX_free(ssl_ctx_);
-                ssl_ctx_ = nullptr;
-            }
-        };
 
         try
         {
@@ -93,12 +93,12 @@ namespace kmx::aio::sample::tls::echo_completion_client
                         metrics_.successes.load(mem_order), failures);
 
             const bool ok = failures == 0u;
-            cleanup();
+            shut_down();
             return ok;
         }
         catch (...)
         {
-            cleanup();
+            shut_down();
             throw;
         }
     }
@@ -171,9 +171,7 @@ namespace kmx::aio::sample::tls::echo_completion_client
 
             auto stream_ptr = std::make_shared<kmx::aio::completion::tls::stream>(std::move(*stream_result));
             if (stats)
-            {
                 stats->rx_active.store(true, mem_order);
-            }
 
             stream_ptr->set_connect_state();
             if (auto hs = co_await stream_ptr->handshake(); !hs)
@@ -346,9 +344,7 @@ namespace kmx::aio::sample::tls::echo_completion_client
                 for (const auto& [worker_id, stats]: connections_)
                 {
                     if (!stats)
-                    {
                         continue;
-                    }
                     snapshot.push_back(snapshot_entry {
                         .worker_id = worker_id,
                         .tx = stats->bytes_sent.load(mem_order),

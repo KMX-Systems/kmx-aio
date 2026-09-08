@@ -183,7 +183,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
 
             std::array<char, 9u> recv_buf {};
             auto r_res = co_await stream_ptr->read(span_char_t(recv_buf.data(), recv_buf.size()));
-            if (!r_res || *r_res < recv_buf.size() || recv_buf[3] != 4 || recv_buf[4] != 0)
+            if (!r_res || (*r_res < recv_buf.size()) || (recv_buf[3] != 4) || (recv_buf[4] != 0))
             {
                 metrics_.failures.fetch_add(1u, mem_order);
                 metrics_.errors.fetch_add(1u, mem_order);
@@ -200,7 +200,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
             }
 
             r_res = co_await stream_ptr->read(span_char_t(recv_buf.data(), recv_buf.size()));
-            if (!r_res || *r_res < recv_buf.size() || recv_buf[3] != 4 || recv_buf[4] != 1)
+            if (!r_res || (*r_res < recv_buf.size()) || (recv_buf[3] != 4) || (recv_buf[4] != 1))
             {
                 metrics_.failures.fetch_add(1u, mem_order);
                 metrics_.errors.fetch_add(1u, mem_order);
@@ -217,11 +217,11 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
             }
 
             std::array<char, 10u> resp_hdr {};
-            std::size_t total = 0u;
+            std::size_t total {};
             while (total < resp_hdr.size())
             {
                 auto r = co_await stream_ptr->read(span_char_t(resp_hdr.data() + total, resp_hdr.size() - total));
-                if (!r || *r == 0u)
+                if (!r || (*r == 0u))
                     break;
                 total += *r;
             }
@@ -231,12 +231,12 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
             while (total < data_hdr.size())
             {
                 auto r = co_await stream_ptr->read(span_char_t(data_hdr.data() + total, data_hdr.size() - total));
-                if (!r || *r == 0u)
+                if (!r || (*r == 0u))
                     break;
                 total += *r;
             }
 
-            if (total == data_hdr.size() && data_hdr[3] == 0x00)
+            if ((total == data_hdr.size()) && (data_hdr[3] == 0x00))
             {
                 const auto data_len = (static_cast<std::uint32_t>(static_cast<std::uint8_t>(data_hdr[0])) << 16u) |
                                       (static_cast<std::uint32_t>(static_cast<std::uint8_t>(data_hdr[1])) << 8u) |
@@ -247,7 +247,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
                 while (total < data_len)
                 {
                     auto r = co_await stream_ptr->read(span_char_t(data_payload.data() + total, data_len - total));
-                    if (!r || *r == 0u)
+                    if (!r || (*r == 0u))
                         break;
                     total += *r;
                 }

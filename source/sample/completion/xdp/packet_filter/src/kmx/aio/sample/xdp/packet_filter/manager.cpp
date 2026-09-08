@@ -21,10 +21,8 @@ namespace kmx::aio::sample::xdp::packet_filter
 
         const auto iface_path = std::filesystem::path("/sys/class/net") / interface_name;
         if (!std::filesystem::exists(iface_path))
-        {
             kmx::logger::log(kmx::logger::level::info, std::source_location::current(),
-                             "Hint: interface '{}' is not present under /sys/class/net", interface_name);
-        }
+                         "Hint: interface '{}' is not present under /sys/class/net", interface_name);
 
         kmx::logger::log(kmx::logger::level::info, std::source_location::current(),
                          "Hint: if XDP program attach is blocked, check driver/offload support and kernel logs via 'dmesg | tail -n 50'");

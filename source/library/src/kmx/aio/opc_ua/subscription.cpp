@@ -12,14 +12,11 @@
 
 namespace kmx::aio::opc_ua
 {
-    namespace
+    [[nodiscard]] static bool is_valid(const subscription_config& config) noexcept
     {
-        [[nodiscard]] bool is_valid(const subscription_config& config) noexcept
-        {
-            return config.publishing_interval_ms > 0.0 && config.lifetime_count > 0u && config.max_keepalive_count > 0u &&
-                   config.max_keepalive_count <= config.lifetime_count && config.max_notifications_per_publish > 0u &&
-                   config.notification_queue_capacity >= 2u;
-        }
+        return (config.publishing_interval_ms > 0.0) && (config.lifetime_count > 0u) && (config.max_keepalive_count > 0u) &&
+               (config.max_keepalive_count <= config.lifetime_count) && (config.max_notifications_per_publish > 0u) &&
+               (config.notification_queue_capacity >= 2u);
     }
 
     struct subscription::impl
@@ -28,9 +25,9 @@ namespace kmx::aio::opc_ua
 
         subscription_config config;
         channel<notification> notifications;
-        client* bound_client = nullptr;
-        bool opened = false;
-        std::uint64_t heartbeat_sequence = 0u;
+        client* bound_client {};
+        bool opened {};
+        std::uint64_t heartbeat_sequence {};
         std::chrono::steady_clock::time_point next_heartbeat_due {};
     };
 

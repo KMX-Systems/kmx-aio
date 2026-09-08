@@ -54,7 +54,7 @@ namespace kmx::aio::test::integration::readiness_core_pinning_test
                 runner_done.store(true, std::memory_order_release);
             });
 
-        bool confirmed = false;
+        bool confirmed {};
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
         for (int attempt = 0; attempt < 100; ++attempt)
         {

@@ -2,6 +2,7 @@
 /// @brief Asynchronous Modbus TCP client facade.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
+#include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_MODBUS)
     #ifndef PCH
         #include <cstdint>

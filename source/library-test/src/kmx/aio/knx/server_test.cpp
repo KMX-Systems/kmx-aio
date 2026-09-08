@@ -13,7 +13,7 @@
 namespace kmx::aio::test::knx::server_test
 {
     using namespace kmx::aio::knx;
-    std::uint32_t server_now_ms = 0u;
+    std::uint32_t server_now_ms {};
 
     [[nodiscard]] std::uint32_t server_clock_now() noexcept
     {
@@ -23,10 +23,10 @@ namespace kmx::aio::test::knx::server_test
     class server_transport final: public datagram_transport
     {
     public:
-        bool ipv6_peer = false;
+        bool ipv6_peer {};
         std::uint16_t receive_port = 40000u;
         std::uint32_t receive_address = 0x7F000001u;
-        std::uint32_t timeout_receives = 0u;
+        std::uint32_t timeout_receives {};
         std::deque<std::vector<std::uint8_t>> incoming {};
         std::vector<std::vector<std::uint8_t>> outgoing {};
         std::vector<sockaddr_storage> outgoing_peers {};
@@ -81,6 +81,39 @@ namespace kmx::aio::test::knx::server_test
         }
     };
 
+    namespace detail
+    {
+        /// @brief Serves one CONNECT_REQUEST and records the channel the server handed out.
+        task<void> serve_connect(generic_server& server, bool& connected, std::uint8_t& channel_id,
+                                 completion::executor& executor) noexcept(false)
+        {
+            const auto result = co_await server.serve_once();
+            connected = result.has_value() && result->cemi_bytes.empty();
+            channel_id = result ? result->channel_id : 0u;
+            executor.stop();
+        }
+
+        /// @brief Serves one TUNNELLING_REQUEST and records whether the expected cEMI arrived.
+        task<void> serve_tunnelling(generic_server& server, const std::uint8_t channel_id, bool& received,
+                                    completion::executor& tunnel_executor) noexcept(false)
+        {
+            const auto result = co_await server.serve_once();
+            received = result.has_value() && result->channel_id == channel_id &&
+                       result->cemi_bytes == std::vector<std::uint8_t>(sample_cemi.begin(), sample_cemi.end());
+            tunnel_executor.stop();
+        }
+
+        /// @brief Asks the stop source to stop, then serves and records the cancellation.
+        task<void> serve_until_cancelled(generic_server& server, std::stop_source& stop_source, bool& cancelled,
+                                         completion::executor& executor) noexcept(false)
+        {
+            stop_source.request_stop();
+            const auto result = co_await server.serve();
+            cancelled = !result.has_value() && result.error() == make_error_code(error::shutdown);
+            executor.stop();
+        }
+    } // namespace detail
+
     TEST_CASE("knx server allocates channel and handles tunnelling lifecycle", "[knx][server][integration]")
     {
         server_transport transport;
@@ -94,17 +127,10 @@ namespace kmx::aio::test::knx::server_test
         REQUIRE(connection::encode_connect_request_packet(connect_packet, connect).has_value());
         transport.incoming.push_back(connect_packet);
 
-        bool connected = false;
-        std::uint8_t channel_id = 0u;
+        bool connected {};
+        std::uint8_t channel_id {};
         completion::executor executor;
-        auto connect_task = [&]() -> task<void>
-        {
-            const auto result = co_await server.serve_once();
-            connected = result.has_value() && result->cemi_bytes.empty();
-            channel_id = result ? result->channel_id : 0u;
-            executor.stop();
-        };
-        executor.spawn(connect_task());
+        executor.spawn(detail::serve_connect(server, connected, channel_id, executor));
         executor.run();
 
         REQUIRE(connected);
@@ -123,16 +149,9 @@ namespace kmx::aio::test::knx::server_test
         REQUIRE(frame::encode_tunnelling_request_packet(request, channel_id, 0u, sample_cemi).has_value());
         transport.incoming.push_back(request);
 
-        bool received = false;
+        bool received {};
         completion::executor tunnel_executor;
-        auto tunnel_task = [&]() -> task<void>
-        {
-            const auto result = co_await server.serve_once();
-            received = result.has_value() && result->channel_id == channel_id &&
-                       result->cemi_bytes == std::vector<std::uint8_t>(sample_cemi.begin(), sample_cemi.end());
-            tunnel_executor.stop();
-        };
-        tunnel_executor.spawn(tunnel_task());
+        tunnel_executor.spawn(detail::serve_tunnelling(server, channel_id, received, tunnel_executor));
         tunnel_executor.run();
         CHECK(received);
         REQUIRE(transport.outgoing.size() == 1u);
@@ -161,7 +180,7 @@ namespace kmx::aio::test::knx::server_test
         std::vector<std::uint8_t> out_of_order(6u + 4u + sample_cemi.size());
         REQUIRE(frame::encode_tunnelling_request_packet(out_of_order, channel_id, 9u, sample_cemi).has_value());
         transport.incoming.push_back(out_of_order);
-        bool rejected = false;
+        bool rejected {};
         completion::executor order_executor;
         auto order_task = [&]() -> task<void>
         {
@@ -190,7 +209,7 @@ namespace kmx::aio::test::knx::server_test
         transport.incoming.push_back(packet);
 
         completion::executor first_executor;
-        bool first_connected = false;
+        bool first_connected {};
         auto first = [&]() -> task<void>
         {
             first_connected = (co_await server.serve_once()).has_value();
@@ -202,7 +221,7 @@ namespace kmx::aio::test::knx::server_test
 
         transport.incoming.push_back(packet);
         completion::executor second_executor;
-        bool exhausted = false;
+        bool exhausted {};
         auto second = [&]() -> task<void>
         {
             const auto result = co_await server.serve_once();
@@ -231,7 +250,7 @@ namespace kmx::aio::test::knx::server_test
         REQUIRE(connection::encode_ipv6_connect_request_packet(packet, connect).has_value());
         transport.incoming.push_back(packet);
 
-        bool accepted = false;
+        bool accepted {};
         completion::executor executor;
         auto run = [&]() -> task<void>
         {
@@ -312,7 +331,7 @@ namespace kmx::aio::test::knx::server_test
         server_now_ms = 151u;
         transport.incoming.push_back(packet);
         completion::executor second_executor;
-        bool accepted = false;
+        bool accepted {};
         auto second = [&]() -> task<void>
         {
             accepted = (co_await server.serve_once()).has_value();
@@ -331,16 +350,10 @@ namespace kmx::aio::test::knx::server_test
         transport.timeout_receives = 1u;
         generic_server server {transport};
         std::stop_source stop_source;
-        bool cancelled = false;
+        bool cancelled {};
         completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            stop_source.request_stop();
-            const auto result = co_await server.serve();
-            cancelled = !result.has_value() && result.error() == make_error_code(error::shutdown);
-            executor.stop();
-        };
-        executor.spawn(std::move(run()).with_stop_token(stop_source.get_token()));
+        executor.spawn(std::move(detail::serve_until_cancelled(server, stop_source, cancelled, executor))
+                           .with_stop_token(stop_source.get_token()));
         executor.run();
         CHECK(cancelled);
     }
@@ -363,7 +376,7 @@ namespace kmx::aio::test::knx::server_test
         transport.incoming.push_back(packet);
 
         completion::executor connect_executor;
-        std::uint8_t channel_id = 0u;
+        std::uint8_t channel_id {};
         auto connect_run = [&]() -> task<void>
         {
             const auto result = co_await server.serve_once();
@@ -376,7 +389,7 @@ namespace kmx::aio::test::knx::server_test
 
         server_now_ms = 140u;
         completion::executor send_executor;
-        bool sent = false;
+        bool sent {};
         auto send_run = [&]() -> task<void>
         {
             sent = (co_await server.send(channel_id, sample_cemi)).has_value();
@@ -407,7 +420,7 @@ namespace kmx::aio::test::knx::server_test
         REQUIRE(connection::encode_connect_request_packet(packet, connect).has_value());
         transport.incoming.push_back(packet);
 
-        bool accepted = false;
+        bool accepted {};
         completion::executor executor;
         auto run = [&]() -> task<void>
         {
@@ -433,7 +446,7 @@ namespace kmx::aio::test::knx::server_test
         packet[7u] = 0x02u;
         transport.incoming.push_back(packet);
 
-        bool rejected = false;
+        bool rejected {};
         completion::executor executor;
         auto run = [&]() -> task<void>
         {

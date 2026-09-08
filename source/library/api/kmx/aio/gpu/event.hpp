@@ -2,10 +2,12 @@
 /// @brief GPU event awaiter for coroutine suspension on GPU completion.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <kmx/aio/gpu/basic_types.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_CUDA)
+    #ifndef PCH
+        #include <kmx/aio/gpu/basic_types.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::gpu
 {
@@ -79,3 +81,4 @@ namespace kmx::aio::gpu
     };
 
 } // namespace kmx::aio::gpu
+#endif // KMX_AIO_FEATURE_CUDA

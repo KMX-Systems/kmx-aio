@@ -64,7 +64,7 @@ namespace kmx::aio
         return ret;
     }
 
-    expected_size_t file_descriptor::read(void* const buffer, const size_t size) noexcept
+    expected_size_t file_descriptor::read(void* const buffer, const std::size_t size) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));
@@ -76,7 +76,7 @@ namespace kmx::aio
         return static_cast<std::size_t>(ret);
     }
 
-    expected_size_t file_descriptor::write(const void* buffer, const size_t size) noexcept
+    expected_size_t file_descriptor::write(const void* buffer, const std::size_t size) noexcept
     {
         if (!is_valid())
             return std::unexpected(error_from_errno(EBADF));

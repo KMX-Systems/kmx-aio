@@ -38,18 +38,10 @@ namespace kmx::aio::test::completion::executor_api_test
 {
     using namespace kmx::aio::completion;
 
-    // statistics
-    TEST_CASE("reset_stats clears every counter", "[completion][executor][statistics]")
+    namespace detail
     {
-        pipe_pair pipes;
-        REQUIRE(pipes.valid());
-
-        executor exec;
-        auto state = std::make_shared<size_outcome>();
-
-        // Any real operation moves the submission and completion counters off zero, so the reset below
-        // has something to clear.
-        auto body = [&exec, state, fd = pipes.write_end()]() -> task<void>
+        /// @brief Writes one payload so the submission and completion counters leave zero.
+        task<void> write_for_stats(executor& exec, const std::shared_ptr<size_outcome>& state, const int fd) noexcept(false)
         {
             const std::string payload {"stats"};
             const auto result = co_await exec.async_write(fd, cspan_char_t(payload.data(), payload.size()));
@@ -61,8 +53,247 @@ namespace kmx::aio::test::completion::executor_api_test
             }
 
             exec.stop();
-        };
-        exec.spawn(body());
+        }
+
+        /// @brief Writes a payload into the pipe and reads it back, recording both outcomes.
+        task<void> write_then_read_pipe(executor& exec, const std::shared_ptr<size_outcome>& written,
+                                        const std::shared_ptr<size_outcome>& read, const std::span<char> buffer,
+                                        const pipe_pair& pipes) noexcept(false)
+        {
+            const std::string payload {"kmx-aio"};
+            const auto w = co_await exec.async_write(pipes.write_end(), cspan_char_t(payload.data(), payload.size()));
+            written->completed = true;
+            if (w)
+            {
+                written->ok = true;
+                written->value = *w;
+            }
+            else
+                written->error = w.error();
+
+            const auto r = co_await exec.async_read(pipes.read_end(), std::span<char>(buffer.data(), buffer.size()));
+            read->completed = true;
+            if (r)
+            {
+                read->ok = true;
+                read->value = *r;
+            }
+            else
+                read->error = r.error();
+
+            exec.stop();
+        }
+
+        /// @brief Reads from a pipe whose write end is closed, so the read reports end of stream.
+        task<void> read_end_of_stream(executor& exec, const std::shared_ptr<size_outcome>& state, const std::span<char> buffer,
+                                      const int fd) noexcept(false)
+        {
+            const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
+            state->completed = true;
+            if (r)
+            {
+                state->ok = true;
+                state->value = *r;
+            }
+            else
+                state->error = r.error();
+
+            exec.stop();
+        }
+
+        /// @brief Reads from a descriptor that was never open, and records the error.
+        task<void> read_bad_descriptor(executor& exec, const std::shared_ptr<size_outcome>& state,
+                                       const std::span<char> buffer) noexcept(false)
+        {
+            const auto r = co_await exec.async_read(-1, std::span<char>(buffer.data(), buffer.size()));
+            state->completed = true;
+            if (r)
+                state->ok = true;
+            else
+                state->error = r.error();
+
+            exec.stop();
+        }
+
+        /// @brief Writes to a descriptor that was never open, and records the error.
+        task<void> write_bad_descriptor(executor& exec, const std::shared_ptr<size_outcome>& state) noexcept(false)
+        {
+            const std::string payload {"x"};
+            const auto w = co_await exec.async_write(-1, cspan_char_t(payload.data(), payload.size()));
+            state->completed = true;
+            if (w)
+                state->ok = true;
+            else
+                state->error = w.error();
+
+            exec.stop();
+        }
+
+        /// @brief Writes and reads through the registered buffer, recording both outcomes.
+        task<void> write_then_read_fixed(executor& exec, const std::shared_ptr<size_outcome>& written,
+                                         const std::shared_ptr<size_outcome>& read, const std::span<char> storage,
+                                         const pipe_pair& pipes) noexcept(false)
+        {
+            const std::string payload {"fixed"};
+            std::memcpy(storage.data(), payload.data(), payload.size());
+
+            const auto w = co_await exec.async_write_fixed(pipes.write_end(), cspan_char_t(storage.data(), payload.size()), 0u, 0);
+            written->completed = true;
+            if (w)
+            {
+                written->ok = true;
+                written->value = *w;
+            }
+            else
+                written->error = w.error();
+
+            const auto r = co_await exec.async_read_fixed(pipes.read_end(), std::span<char>(storage.data(), storage.size()), 0u, 0);
+            read->completed = true;
+            if (r)
+            {
+                read->ok = true;
+                read->value = *r;
+            }
+            else
+                read->error = r.error();
+
+            exec.stop();
+        }
+
+        /// @brief Reads with a buffer index nothing was registered under, and records the error.
+        task<void> read_fixed_unknown_index(executor& exec, const std::shared_ptr<size_outcome>& state, const std::span<char> storage,
+                                            const int fd) noexcept(false)
+        {
+            const auto r = co_await exec.async_read_fixed(fd, std::span<char>(storage.data(), storage.size()), 0u, 7);
+            state->completed = true;
+            if (r)
+                state->ok = true;
+            else
+                state->error = r.error();
+
+            exec.stop();
+        }
+
+        /// @brief Accepts one loopback connection and records the descriptor it produced.
+        task<void> accept_loopback(executor& exec, const std::shared_ptr<fd_outcome>& accepted, ::sockaddr_storage& peer,
+                                   ::socklen_t& peer_len, const int fd) noexcept(false)
+        {
+            const auto a = co_await exec.async_accept(fd, peer, peer_len);
+            accepted->completed = true;
+            if (a)
+            {
+                accepted->ok = true;
+                accepted->value = *a;
+            }
+            else
+                accepted->error = a.error();
+        }
+
+        /// @brief Connects to the bound loopback address and records the outcome.
+        task<void> connect_loopback(executor& exec, const std::shared_ptr<void_outcome>& connected, const ::sockaddr_in& bound,
+                                    const int fd) noexcept(false)
+        {
+            const auto c = co_await exec.async_connect(fd, reinterpret_cast<const ::sockaddr*>(&bound), sizeof(bound));
+            connected->completed = true;
+            if (c)
+                connected->ok = true;
+            else
+                connected->error = c.error();
+
+            exec.stop();
+        }
+
+        /// @brief Accepts on a descriptor that is not a listening socket, and records the error.
+        task<void> accept_non_listening(executor& exec, const std::shared_ptr<fd_outcome>& state, ::sockaddr_storage& peer,
+                                        ::socklen_t& peer_len, const int fd) noexcept(false)
+        {
+            const auto a = co_await exec.async_accept(fd, peer, peer_len);
+            state->completed = true;
+            if (a)
+                state->ok = true;
+            else
+                state->error = a.error();
+
+            exec.stop();
+        }
+
+        /// @brief Connects to a port nothing is listening on, and records the error.
+        task<void> connect_refused_port(executor& exec, const std::shared_ptr<void_outcome>& state,
+                                        const expected_socket_address_t& address, const int fd) noexcept(false)
+        {
+            const auto c = co_await exec.async_connect(fd, reinterpret_cast<const ::sockaddr*>(&address->storage), address->length);
+            state->completed = true;
+            if (c)
+                state->ok = true;
+            else
+                state->error = c.error();
+
+            exec.stop();
+        }
+
+        /// @brief Cancels a user_data nothing in the ring carries, and records whatever came back.
+        task<void> cancel_unknown_user_data(executor& exec, const std::shared_ptr<void_outcome>& state) noexcept(false)
+        {
+            const auto c = co_await exec.async_cancel(0xdeadbeefu);
+            state->completed = true;
+            if (c)
+                state->ok = true;
+            else
+                state->error = c.error();
+
+            exec.stop();
+        }
+
+        /// @brief Parks the loop on a read nothing will satisfy, so the I/O thread can be asked about.
+        task<void> park_on_read(executor& exec, std::atomic_bool& started, const std::span<char> buffer, const int fd) noexcept(false)
+        {
+            started.store(true, std::memory_order_release);
+            const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
+            (void) r;
+            exec.stop();
+        }
+
+        /// @brief Suspends on a read only the shutdown cancellation can end, and records what it reported.
+        task<void> read_until_cancelled(executor& exec, const std::shared_ptr<size_outcome>& state, std::atomic_bool& submitted,
+                                        const std::span<char> buffer, const int fd) noexcept(false)
+        {
+            submitted.store(true, std::memory_order_release);
+
+            // Nothing is ever written to the pipe, so only the shutdown cancellation ends this read.
+            const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
+            state->completed = true;
+            if (r)
+            {
+                state->ok = true;
+                state->value = *r;
+            }
+            else
+                state->error = r.error();
+        }
+
+        /// @brief Suspends on a poll only the shutdown cancellation can end.
+        task<void> poll_until_cancelled(executor& exec, std::atomic_bool& submitted, std::atomic_bool& finished,
+                                        const int fd) noexcept(false)
+        {
+            submitted.store(true, std::memory_order_release);
+            const auto r = co_await exec.async_poll(fd, POLLIN);
+            (void) r;
+            finished.store(true, std::memory_order_release);
+        }
+    } // namespace detail
+
+    // statistics
+    TEST_CASE("reset_stats clears every counter", "[completion][executor][statistics]")
+    {
+        pipe_pair pipes;
+        REQUIRE(pipes.valid());
+
+        executor exec;
+        auto state = std::make_shared<size_outcome>();
+
+        // Any real operation moves the submission and completion counters off zero, so the reset below
+        // has something to clear.
+        exec.spawn(detail::write_for_stats(exec, state, pipes.write_end()));
         exec.run();
 
         REQUIRE(state->completed);
@@ -111,32 +342,7 @@ namespace kmx::aio::test::completion::executor_api_test
         auto read = std::make_shared<size_outcome>();
         std::array<char, 32> buffer {};
 
-        auto body = [&exec, written, read, &buffer, &pipes]() -> task<void>
-        {
-            const std::string payload {"kmx-aio"};
-            const auto w = co_await exec.async_write(pipes.write_end(), cspan_char_t(payload.data(), payload.size()));
-            written->completed = true;
-            if (w)
-            {
-                written->ok = true;
-                written->value = *w;
-            }
-            else
-                written->error = w.error();
-
-            const auto r = co_await exec.async_read(pipes.read_end(), std::span<char>(buffer.data(), buffer.size()));
-            read->completed = true;
-            if (r)
-            {
-                read->ok = true;
-                read->value = *r;
-            }
-            else
-                read->error = r.error();
-
-            exec.stop();
-        };
-        exec.spawn(body());
+        exec.spawn(detail::write_then_read_pipe(exec, written, read, buffer, pipes));
         exec.run();
 
         REQUIRE(written->ok);
@@ -156,21 +362,7 @@ namespace kmx::aio::test::completion::executor_api_test
         auto state = std::make_shared<size_outcome>();
         std::array<char, 8> buffer {};
 
-        auto body = [&exec, state, &buffer, fd = pipes.read_end()]() -> task<void>
-        {
-            const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
-            state->completed = true;
-            if (r)
-            {
-                state->ok = true;
-                state->value = *r;
-            }
-            else
-                state->error = r.error();
-
-            exec.stop();
-        };
-        exec.spawn(body());
+        exec.spawn(detail::read_end_of_stream(exec, state, buffer, pipes.read_end()));
         exec.run();
 
         REQUIRE(state->ok);
@@ -183,18 +375,7 @@ namespace kmx::aio::test::completion::executor_api_test
         auto state = std::make_shared<size_outcome>();
         std::array<char, 8> buffer {};
 
-        auto body = [&exec, state, &buffer]() -> task<void>
-        {
-            const auto r = co_await exec.async_read(-1, std::span<char>(buffer.data(), buffer.size()));
-            state->completed = true;
-            if (r)
-                state->ok = true;
-            else
-                state->error = r.error();
-
-            exec.stop();
-        };
-        exec.spawn(body());
+        exec.spawn(detail::read_bad_descriptor(exec, state, buffer));
         exec.run();
 
         REQUIRE(state->completed);
@@ -207,19 +388,7 @@ namespace kmx::aio::test::completion::executor_api_test
         executor exec;
         auto state = std::make_shared<size_outcome>();
 
-        auto body = [&exec, state]() -> task<void>
-        {
-            const std::string payload {"x"};
-            const auto w = co_await exec.async_write(-1, cspan_char_t(payload.data(), payload.size()));
-            state->completed = true;
-            if (w)
-                state->ok = true;
-            else
-                state->error = w.error();
-
-            exec.stop();
-        };
-        exec.spawn(body());
+        exec.spawn(detail::write_bad_descriptor(exec, state));
         exec.run();
 
         REQUIRE(state->completed);
@@ -267,34 +436,7 @@ namespace kmx::aio::test::completion::executor_api_test
         auto written = std::make_shared<size_outcome>();
         auto read = std::make_shared<size_outcome>();
 
-        auto body = [&exec, written, read, &storage, &pipes]() -> task<void>
-        {
-            const std::string payload {"fixed"};
-            std::memcpy(storage.data(), payload.data(), payload.size());
-
-            const auto w = co_await exec.async_write_fixed(pipes.write_end(), cspan_char_t(storage.data(), payload.size()), 0u, 0);
-            written->completed = true;
-            if (w)
-            {
-                written->ok = true;
-                written->value = *w;
-            }
-            else
-                written->error = w.error();
-
-            const auto r = co_await exec.async_read_fixed(pipes.read_end(), std::span<char>(storage.data(), storage.size()), 0u, 0);
-            read->completed = true;
-            if (r)
-            {
-                read->ok = true;
-                read->value = *r;
-            }
-            else
-                read->error = r.error();
-
-            exec.stop();
-        };
-        exec.spawn(body());
+        exec.spawn(detail::write_then_read_fixed(exec, written, read, storage, pipes));
         exec.run();
 
         REQUIRE(written->ok);
@@ -317,18 +459,7 @@ namespace kmx::aio::test::completion::executor_api_test
         REQUIRE(exec.register_buffers(std::span<const ::iovec>(&iov, 1u)).has_value());
 
         auto state = std::make_shared<size_outcome>();
-        auto body = [&exec, state, &storage, fd = pipes.read_end()]() -> task<void>
-        {
-            const auto r = co_await exec.async_read_fixed(fd, std::span<char>(storage.data(), storage.size()), 0u, 7);
-            state->completed = true;
-            if (r)
-                state->ok = true;
-            else
-                state->error = r.error();
-
-            exec.stop();
-        };
-        exec.spawn(body());
+        exec.spawn(detail::read_fixed_unknown_index(exec, state, storage, pipes.read_end()));
         exec.run();
 
         REQUIRE(state->completed);
@@ -364,33 +495,9 @@ namespace kmx::aio::test::completion::executor_api_test
         ::socklen_t peer_len = sizeof(peer);
 
         // The accept is spawned first so it is already in the ring when the connect arrives.
-        auto accept_body = [&exec, accepted, &peer, &peer_len, fd = listener->get()]() -> task<void>
-        {
-            const auto a = co_await exec.async_accept(fd, peer, peer_len);
-            accepted->completed = true;
-            if (a)
-            {
-                accepted->ok = true;
-                accepted->value = *a;
-            }
-            else
-                accepted->error = a.error();
-        };
 
-        auto connect_body = [&exec, connected, &bound, fd = client->get()]() -> task<void>
-        {
-            const auto c = co_await exec.async_connect(fd, reinterpret_cast<const ::sockaddr*>(&bound), sizeof(bound));
-            connected->completed = true;
-            if (c)
-                connected->ok = true;
-            else
-                connected->error = c.error();
-
-            exec.stop();
-        };
-
-        exec.spawn(accept_body());
-        exec.spawn(connect_body());
+        exec.spawn(detail::accept_loopback(exec, accepted, peer, peer_len, listener->get()));
+        exec.spawn(detail::connect_loopback(exec, connected, bound, client->get()));
         exec.run();
 
         REQUIRE(connected->completed);
@@ -414,18 +521,7 @@ namespace kmx::aio::test::completion::executor_api_test
         ::sockaddr_storage peer {};
         ::socklen_t peer_len = sizeof(peer);
 
-        auto body = [&exec, state, &peer, &peer_len, fd = pipes.read_end()]() -> task<void>
-        {
-            const auto a = co_await exec.async_accept(fd, peer, peer_len);
-            state->completed = true;
-            if (a)
-                state->ok = true;
-            else
-                state->error = a.error();
-
-            exec.stop();
-        };
-        exec.spawn(body());
+        exec.spawn(detail::accept_non_listening(exec, state, peer, peer_len, pipes.read_end()));
         exec.run();
 
         REQUIRE(state->completed);
@@ -457,18 +553,7 @@ namespace kmx::aio::test::completion::executor_api_test
         executor exec;
         auto state = std::make_shared<void_outcome>();
 
-        auto body = [&exec, state, &address, fd = client->get()]() -> task<void>
-        {
-            const auto c = co_await exec.async_connect(fd, reinterpret_cast<const ::sockaddr*>(&address->storage), address->length);
-            state->completed = true;
-            if (c)
-                state->ok = true;
-            else
-                state->error = c.error();
-
-            exec.stop();
-        };
-        exec.spawn(body());
+        exec.spawn(detail::connect_refused_port(exec, state, address, client->get()));
         exec.run();
 
         REQUIRE(state->completed);
@@ -486,18 +571,7 @@ namespace kmx::aio::test::completion::executor_api_test
         executor exec;
         auto state = std::make_shared<void_outcome>();
 
-        auto body = [&exec, state]() -> task<void>
-        {
-            const auto c = co_await exec.async_cancel(0xdeadbeefu);
-            state->completed = true;
-            if (c)
-                state->ok = true;
-            else
-                state->error = c.error();
-
-            exec.stop();
-        };
-        exec.spawn(body());
+        exec.spawn(detail::cancel_unknown_user_data(exec, state));
         exec.run();
 
         REQUIRE(state->completed);
@@ -534,7 +608,7 @@ namespace kmx::aio::test::completion::executor_api_test
         CHECK(&first == &second);
 
         // The instance is thread_local, so another thread must see a different executor.
-        const executor* other = nullptr;
+        const executor* other {};
         std::thread worker([&other]() { other = &executor::get_default(); });
         worker.join();
 
@@ -586,14 +660,7 @@ namespace kmx::aio::test::completion::executor_api_test
 
         std::array<char, 8> buffer {};
         std::atomic_bool started {false};
-        auto body = [&exec, &started, &buffer, fd = pipes.read_end()]() -> task<void>
-        {
-            started.store(true, std::memory_order_release);
-            const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
-            (void) r;
-            exec.stop();
-        };
-        exec.spawn(body());
+        exec.spawn(detail::park_on_read(exec, started, buffer, pipes.read_end()));
 
         kmx::aio::test::scoped_completion_runner runner {exec};
 
@@ -670,22 +737,7 @@ namespace kmx::aio::test::completion::executor_api_test
         std::atomic_bool submitted {false};
         std::array<char, 8> buffer {};
 
-        auto body = [&exec, state, &submitted, &buffer, fd = pipes.read_end()]() -> task<void>
-        {
-            submitted.store(true, std::memory_order_release);
-
-            // Nothing is ever written to the pipe, so only the shutdown cancellation ends this read.
-            const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
-            state->completed = true;
-            if (r)
-            {
-                state->ok = true;
-                state->value = *r;
-            }
-            else
-                state->error = r.error();
-        };
-        exec.spawn(body());
+        exec.spawn(detail::read_until_cancelled(exec, state, submitted, buffer, pipes.read_end()));
 
         kmx::aio::test::scoped_completion_runner runner {exec};
 
@@ -717,14 +769,7 @@ namespace kmx::aio::test::completion::executor_api_test
         std::atomic_bool submitted {false};
         std::atomic_bool finished {false};
 
-        auto body = [&exec, &submitted, &finished, fd = pipes.read_end()]() -> task<void>
-        {
-            submitted.store(true, std::memory_order_release);
-            const auto r = co_await exec.async_poll(fd, POLLIN);
-            (void) r;
-            finished.store(true, std::memory_order_release);
-        };
-        exec.spawn(body());
+        exec.spawn(detail::poll_until_cancelled(exec, submitted, finished, pipes.read_end()));
 
         kmx::aio::test::scoped_completion_runner runner {exec};
 

@@ -40,6 +40,23 @@ namespace kmx::aio::test::readiness::executor_cancellation_test
     using kmx::aio::test::wait_for_flag;
 
     // 1. unregister_fd() must resume what is waiting on the descriptor
+    namespace detail
+    {
+        /// @brief Parks on a read wait and records that it started, what it reported, and that it ended.
+        /// @param outcome Where the three flags are written.
+        /// @param exec The executor to park on.
+        /// @param fd The descriptor to wait for.
+        /// @return A task the caller spawns.
+        /// @throws std::bad_alloc (coroutine frame allocation).
+        task<void> park_and_record(wait_outcome& outcome, const std::shared_ptr<executor>& exec, const int fd) noexcept(false)
+        {
+            outcome.parked.store(true, std::memory_order_release);
+            const bool fired = co_await exec->wait_io(fd, event_type::read);
+            outcome.fired.store(fired, std::memory_order_release);
+            outcome.completed.store(true, std::memory_order_release);
+        }
+    } // namespace detail
+
     TEST_CASE("readiness executor: unregister_fd resumes a parked wait", "[readiness][executor][cancellation]")
     {
         socket_pair sockets;
@@ -49,14 +66,7 @@ namespace kmx::aio::test::readiness::executor_cancellation_test
         REQUIRE(exec->register_fd(sockets.local()).has_value());
 
         wait_outcome outcome;
-        auto body = [&outcome, exec, fd = sockets.local()]() -> task<void>
-        {
-            outcome.parked.store(true, std::memory_order_release);
-            const bool fired = co_await exec->wait_io(fd, event_type::read);
-            outcome.fired.store(fired, std::memory_order_release);
-            outcome.completed.store(true, std::memory_order_release);
-        };
-        exec->spawn(body());
+        exec->spawn(detail::park_and_record(outcome, exec, sockets.local()));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(outcome.parked, 2s));
@@ -80,14 +90,7 @@ namespace kmx::aio::test::readiness::executor_cancellation_test
         REQUIRE(exec->register_fd(sockets.local()).has_value());
 
         wait_outcome outcome;
-        auto body = [&outcome, exec, fd = sockets.local()]() -> task<void>
-        {
-            outcome.parked.store(true, std::memory_order_release);
-            const bool fired = co_await exec->wait_io(fd, event_type::read);
-            outcome.fired.store(fired, std::memory_order_release);
-            outcome.completed.store(true, std::memory_order_release);
-        };
-        exec->spawn(body());
+        exec->spawn(detail::park_and_record(outcome, exec, sockets.local()));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(outcome.parked, 2s));
@@ -114,14 +117,7 @@ namespace kmx::aio::test::readiness::executor_cancellation_test
         exec->cancel_io(sockets.local());
 
         wait_outcome outcome;
-        auto body = [&outcome, exec, fd = sockets.local()]() -> task<void>
-        {
-            outcome.parked.store(true, std::memory_order_release);
-            const bool fired = co_await exec->wait_io(fd, event_type::read);
-            outcome.fired.store(fired, std::memory_order_release);
-            outcome.completed.store(true, std::memory_order_release);
-        };
-        exec->spawn(body());
+        exec->spawn(detail::park_and_record(outcome, exec, sockets.local()));
 
         // Asserted on the task rather than on run() draining: this wait never suspends, so the task can
         // finish before run() is even entered - and run() samples the outstanding work on entry, so a
@@ -150,14 +146,7 @@ namespace kmx::aio::test::readiness::executor_cancellation_test
         REQUIRE(exec->register_fd(sockets.local()).has_value());
 
         wait_outcome outcome;
-        auto body = [&outcome, exec, fd = sockets.local()]() -> task<void>
-        {
-            outcome.parked.store(true, std::memory_order_release);
-            const bool fired = co_await exec->wait_io(fd, event_type::read);
-            outcome.fired.store(fired, std::memory_order_release);
-            outcome.completed.store(true, std::memory_order_release);
-        };
-        exec->spawn(body());
+        exec->spawn(detail::park_and_record(outcome, exec, sockets.local()));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(outcome.parked, 2s));

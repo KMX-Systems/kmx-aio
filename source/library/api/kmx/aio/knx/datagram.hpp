@@ -1,18 +1,21 @@
 /// @file aio/knx/datagram.hpp
 /// @brief Typed dispatch for supported KNXnet/IP datagrams.
 #pragma once
-#ifndef PCH
-    #include <expected>
-    #include <system_error>
-    #include <variant>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_KNX)
+    #ifndef PCH
+        #include <expected>
+        #include <system_error>
+        #include <variant>
+    #endif
 
-#include <kmx/aio/basic_types.hpp>
-#include <kmx/aio/knx/connection.hpp>
-#include <kmx/aio/knx/discovery.hpp>
-#include <kmx/aio/knx/frame.hpp>
-#include <kmx/aio/knx/routing.hpp>
-#include <kmx/aio/knx/secure.hpp>
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/aio/knx/connection.hpp>
+    #include <kmx/aio/knx/discovery.hpp>
+    #include <kmx/aio/knx/frame.hpp>
+    #include <kmx/aio/knx/routing.hpp>
+    #include <kmx/aio/knx/secure.hpp>
 
 namespace kmx::aio::knx
 {
@@ -40,13 +43,18 @@ namespace kmx::aio::knx
 
     struct datagram
     {
-        std::uint16_t service_type = 0u;
+        std::uint16_t service_type {};
         datagram_payload payload;
     };
 
-    [[nodiscard]] std::expected<datagram, std::error_code> decode_datagram(cspan_uint8_t packet) noexcept;
-    [[nodiscard]] std::expected<void, std::error_code> encode_datagram(
-        span_uint8_t packet, const datagram& value) noexcept;
-    [[nodiscard]] std::expected<void, std::error_code> encode_response_datagram(
+    /// @brief A decoded datagram, or the error explaining why the octets could not be decoded.
+    using datagram_result_t = std::expected<datagram, std::error_code>;
+    /// @brief Task yielding a decoded datagram or the error that stopped the receive.
+    using datagram_task_t = task<datagram_result_t>;
+
+    [[nodiscard]] datagram_result_t decode_datagram(cspan_uint8_t packet) noexcept;
+    [[nodiscard]] expected_void_t encode_datagram(span_uint8_t packet, const datagram& value) noexcept;
+    [[nodiscard]] expected_void_t encode_response_datagram(
         span_uint8_t packet, const datagram& request, std::uint8_t status = 0u) noexcept;
 }
+#endif // KMX_AIO_FEATURE_KNX

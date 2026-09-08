@@ -53,6 +53,17 @@ namespace kmx::aio::benchmark
                 if (errno != EINTR)
                     return;
         }
+        /// @brief The far side of the blocking round trip: read one byte, write one back.
+        /// @param fd The peer's end of the socket pair.
+        /// @param iterations How many round trips to answer.
+        static void answer_pings(const int fd, const std::size_t iterations) noexcept
+        {
+            for (std::size_t i {}; i != iterations; ++i)
+            {
+                drain(fd);
+                ping(fd);
+            }
+        }
     } // namespace baseline_detail
 
     static result bench_epoll_rtt(const double scale)
@@ -169,14 +180,7 @@ namespace kmx::aio::benchmark
             return skipped("baseline/socketpair_rtt (2 threads, blocking)", "socketpair failed");
 
         const int peer_fd = pair.fd[1];
-        std::jthread peer {[peer_fd, iterations]() noexcept
-                           {
-                               for (std::size_t i {}; i != iterations; ++i)
-                               {
-                                   baseline_detail::drain(peer_fd);
-                                   baseline_detail::ping(peer_fd);
-                               }
-                           }};
+        std::jthread peer {[peer_fd, iterations]() noexcept { baseline_detail::answer_pings(peer_fd, iterations); }};
 
         std::vector<double> samples {};
         samples.reserve(iterations);

@@ -2,10 +2,12 @@
 /// @brief GPU stream wrapper for CUDA stream operations.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <kmx/aio/gpu/basic_types.hpp>
-    #include <kmx/aio/gpu/event.hpp>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_CUDA)
+    #ifndef PCH
+        #include <kmx/aio/gpu/basic_types.hpp>
+        #include <kmx/aio/gpu/event.hpp>
+    #endif
 
 namespace kmx::aio::gpu
 {
@@ -54,3 +56,4 @@ namespace kmx::aio::gpu
     };
 
 } // namespace kmx::aio::gpu
+#endif // KMX_AIO_FEATURE_CUDA

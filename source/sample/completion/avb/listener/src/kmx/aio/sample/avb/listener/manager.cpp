@@ -155,7 +155,7 @@ namespace kmx::aio::sample::avb::listener
             metrics_.jitter_abs_sum_ns.fetch_add(abs_jitter, mem_order);
 
             auto cur_max = metrics_.jitter_abs_max_ns.load(mem_order);
-            while (abs_jitter > cur_max && !metrics_.jitter_abs_max_ns.compare_exchange_weak(cur_max, abs_jitter, mem_order))
+            while ((abs_jitter > cur_max) && !metrics_.jitter_abs_max_ns.compare_exchange_weak(cur_max, abs_jitter, mem_order))
             {
             }
         }

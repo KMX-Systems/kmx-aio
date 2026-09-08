@@ -8,7 +8,7 @@ namespace kmx::aio::avb
 {
     avb_timestamp_t timestamp_from_index(const std::array<::timespec, 3u>& ts, const std::size_t index) noexcept
     {
-        if (index >= ts.size() || ts[index].tv_sec <= 0)
+        if ((index >= ts.size()) || (ts[index].tv_sec <= 0))
             return 0;
 
         return static_cast<avb_timestamp_t>(ts[index].tv_sec) * 1'000'000'000ULL + static_cast<avb_timestamp_t>(ts[index].tv_nsec);
@@ -16,7 +16,7 @@ namespace kmx::aio::avb
 
     avb_timestamp_t extract_timestamp_from_ancillary(::msghdr& msg) noexcept
     {
-        avb_timestamp_t hw_ts = 0;
+        avb_timestamp_t hw_ts {};
         for (::cmsghdr* cmsg = CMSG_FIRSTHDR(&msg); cmsg != nullptr; cmsg = CMSG_NXTHDR(&msg, cmsg))
         {
             if ((cmsg->cmsg_level == SOL_SOCKET) && (cmsg->cmsg_type == SO_TIMESTAMPING))

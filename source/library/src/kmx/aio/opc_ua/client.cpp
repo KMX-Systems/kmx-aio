@@ -13,7 +13,7 @@
 
 namespace kmx::aio::opc_ua
 {
-    namespace
+    namespace client_internal
     {
         enum class lifecycle_state
         {
@@ -179,7 +179,7 @@ namespace kmx::aio::opc_ua
                 return;
 
             auto* request = static_cast<read_request_state*>(user_data);
-            if (request->id != request_id || request->outcome.has_value())
+            if ((request->id != request_id) || request->outcome.has_value())
                 return;
 
             if (status != UA_STATUSCODE_GOOD)
@@ -201,7 +201,7 @@ namespace kmx::aio::opc_ua
                 return;
 
             auto* request = static_cast<write_request_state*>(user_data);
-            if (request->id != request_id || request->outcome.has_value())
+            if ((request->id != request_id) || request->outcome.has_value())
                 return;
 
             if (status != UA_STATUSCODE_GOOD)
@@ -220,7 +220,7 @@ namespace kmx::aio::opc_ua
                 return;
 
             auto* request = static_cast<call_request_state*>(user_data);
-            if (request->id != request_id || request->outcome.has_value())
+            if ((request->id != request_id) || request->outcome.has_value())
                 return;
 
             if (status != UA_STATUSCODE_GOOD)
@@ -243,27 +243,27 @@ namespace kmx::aio::opc_ua
                 .output_arguments = std::move(outputs),
             });
         }
-    }
+    } // namespace client_internal
 
     struct client::impl
     {
         explicit impl(client_config cfg) noexcept: config(std::move(cfg)) {}
 
         client_config config;
-        UA_Client* native_client = nullptr;
-        lifecycle_state state = lifecycle_state::idle;
-        bool delete_after_disconnect = false;
+        UA_Client* native_client {};
+        client_internal::lifecycle_state state = client_internal::lifecycle_state::idle;
+        bool delete_after_disconnect {};
         statistics stats;
         std::uint64_t next_request_id = 1u;
-        std::unordered_map<std::uint64_t, std::shared_ptr<read_request_state>> pending_read_requests;
-        std::unordered_map<std::uint64_t, std::shared_ptr<write_request_state>> pending_write_requests;
-        std::unordered_map<std::uint64_t, std::shared_ptr<call_request_state>> pending_call_requests;
+        std::unordered_map<std::uint64_t, std::shared_ptr<client_internal::read_request_state>> pending_read_requests;
+        std::unordered_map<std::uint64_t, std::shared_ptr<client_internal::write_request_state>> pending_write_requests;
+        std::unordered_map<std::uint64_t, std::shared_ptr<client_internal::call_request_state>> pending_call_requests;
 
         void fail_all_pending_requests(const std::error_code error_code, std::vector<coroutine_handle_t>& continuations)
         {
-            fail_pending_requests(pending_read_requests, error_code, continuations);
-            fail_pending_requests(pending_write_requests, error_code, continuations);
-            fail_pending_requests(pending_call_requests, error_code, continuations);
+            client_internal::fail_pending_requests(pending_read_requests, error_code, continuations);
+            client_internal::fail_pending_requests(pending_write_requests, error_code, continuations);
+            client_internal::fail_pending_requests(pending_call_requests, error_code, continuations);
         }
 
         ~impl() noexcept
@@ -289,7 +289,8 @@ namespace kmx::aio::opc_ua
         if (impl_->native_client != nullptr)
             co_return std::unexpected(make_error_code(error::invalid_configuration));
 
-        if (impl_->config.mode != security_mode::none && (impl_->config.certificate_path.empty() || impl_->config.private_key_path.empty()))
+        if ((impl_->config.mode != security_mode::none) &&
+            (impl_->config.certificate_path.empty() || impl_->config.private_key_path.empty()))
             co_return std::unexpected(make_error_code(error::invalid_configuration));
 
         ++impl_->stats.connect_attempts;
@@ -303,12 +304,12 @@ namespace kmx::aio::opc_ua
         {
             UA_Client_delete(impl_->native_client);
             impl_->native_client = nullptr;
-            impl_->state = lifecycle_state::idle;
+            impl_->state = client_internal::lifecycle_state::idle;
             impl_->delete_after_disconnect = false;
-            co_return std::unexpected(map_status_to_error(status, status_context::connect));
+            co_return std::unexpected(client_internal::map_status_to_error(status, client_internal::status_context::connect));
         }
 
-        impl_->state = lifecycle_state::connecting;
+        impl_->state = client_internal::lifecycle_state::connecting;
         impl_->delete_after_disconnect = false;
         co_return expected_void_t {};
     }
@@ -322,13 +323,13 @@ namespace kmx::aio::opc_ua
 
         const UA_StatusCode status = UA_Client_disconnect(impl_->native_client);
         if (status != UA_STATUSCODE_GOOD)
-            co_return std::unexpected(map_status_to_error(status, status_context::runtime));
+            co_return std::unexpected(client_internal::map_status_to_error(status, client_internal::status_context::runtime));
 
         const std::error_code disconnected_error = make_error_code(error::disconnected);
         impl_->fail_all_pending_requests(disconnected_error, continuations);
-        resume_pending_continuations(continuations);
+        client_internal::resume_pending_continuations(continuations);
 
-        impl_->state = lifecycle_state::disconnecting;
+        impl_->state = client_internal::lifecycle_state::disconnecting;
         impl_->delete_after_disconnect = true;
         co_return expected_void_t {};
     }
@@ -345,7 +346,7 @@ namespace kmx::aio::opc_ua
 
         const UA_StatusCode status = UA_Client_run_iterate(impl_->native_client, static_cast<UA_UInt32>(timeout.count()));
         if (status != UA_STATUSCODE_GOOD)
-            co_return std::unexpected(map_status_to_error(status, status_context::runtime));
+            co_return std::unexpected(client_internal::map_status_to_error(status, client_internal::status_context::runtime));
 
         UA_SecureChannelState channel_state = UA_SECURECHANNELSTATE_CLOSED;
         UA_SessionState session_state = UA_SESSIONSTATE_CLOSED;
@@ -354,42 +355,44 @@ namespace kmx::aio::opc_ua
 
         if (connect_status != UA_STATUSCODE_GOOD)
         {
-            const status_context context = impl_->state == lifecycle_state::connecting ? status_context::connect : status_context::runtime;
-            const std::error_code mapped = map_status_to_error(connect_status, context);
+            const client_internal::status_context context = impl_->state == client_internal::lifecycle_state::connecting ?
+                                                                client_internal::status_context::connect :
+                                                                client_internal::status_context::runtime;
+            const std::error_code mapped = client_internal::map_status_to_error(connect_status, context);
             impl_->fail_all_pending_requests(mapped, continuations);
-            if (is_closed(channel_state, session_state))
-                finalize_disconnect(impl_->native_client, impl_->state, impl_->delete_after_disconnect);
+            if (client_internal::is_closed(channel_state, session_state))
+                client_internal::finalize_disconnect(impl_->native_client, impl_->state, impl_->delete_after_disconnect);
             else
-                impl_->state = lifecycle_state::idle;
-            resume_pending_continuations(continuations);
+                impl_->state = client_internal::lifecycle_state::idle;
+            client_internal::resume_pending_continuations(continuations);
             co_return std::unexpected(mapped);
         }
 
-        if (is_connected(channel_state, session_state) && impl_->state != lifecycle_state::connected)
+        if (client_internal::is_connected(channel_state, session_state) && (impl_->state != client_internal::lifecycle_state::connected))
         {
-            impl_->state = lifecycle_state::connected;
+            impl_->state = client_internal::lifecycle_state::connected;
             ++impl_->stats.successful_connects;
         }
 
-        if (impl_->delete_after_disconnect && is_closed(channel_state, session_state))
+        if (impl_->delete_after_disconnect && client_internal::is_closed(channel_state, session_state))
         {
             const std::error_code disconnected_error = make_error_code(error::disconnected);
             impl_->fail_all_pending_requests(disconnected_error, continuations);
-            finalize_disconnect(impl_->native_client, impl_->state, impl_->delete_after_disconnect);
-            resume_pending_continuations(continuations);
+            client_internal::finalize_disconnect(impl_->native_client, impl_->state, impl_->delete_after_disconnect);
+            client_internal::resume_pending_continuations(continuations);
             co_return false;
         }
 
-        if (!is_connected(channel_state, session_state) && impl_->state == lifecycle_state::connected)
+        if (!client_internal::is_connected(channel_state, session_state) && (impl_->state == client_internal::lifecycle_state::connected))
         {
             const std::error_code disconnected_error = make_error_code(error::disconnected);
             impl_->fail_all_pending_requests(disconnected_error, continuations);
-            impl_->state = lifecycle_state::idle;
-            resume_pending_continuations(continuations);
+            impl_->state = client_internal::lifecycle_state::idle;
+            client_internal::resume_pending_continuations(continuations);
             co_return std::unexpected(disconnected_error);
         }
 
-        resume_pending_continuations(continuations);
+        client_internal::resume_pending_continuations(continuations);
 
         co_return !impl_->delete_after_disconnect;
     }
@@ -399,26 +402,28 @@ namespace kmx::aio::opc_ua
         if (node_id.empty())
             co_return std::unexpected(make_error_code(error::invalid_configuration));
 
-        if (const std::error_code session_error = service_session_error(impl_->native_client, impl_->state); session_error)
+        if (const std::error_code session_error = client_internal::service_session_error(impl_->native_client, impl_->state); session_error)
             co_return std::unexpected(session_error);
 
         ++impl_->stats.read_requests;
 
         const std::uint64_t request_id = impl_->next_request_id++;
-        auto request = std::make_shared<read_request_state>();
+        auto request = std::make_shared<client_internal::read_request_state>();
         request->id = request_id;
         request->node_id = std::move(node_id);
         impl_->pending_read_requests.emplace(request_id, request);
 
-        const UA_StatusCode submit_status = KMX_UA_Client_sendAsyncReadRequest(
-            impl_->native_client, request->node_id.c_str(), static_cast<UA_UInt32>(request_id), &on_read_request_complete, request.get());
+        const UA_StatusCode submit_status =
+            KMX_UA_Client_sendAsyncReadRequest(impl_->native_client, request->node_id.c_str(), static_cast<UA_UInt32>(request_id),
+                                               &client_internal::on_read_request_complete, request.get());
         if (submit_status != UA_STATUSCODE_GOOD)
         {
             impl_->pending_read_requests.erase(request_id);
-            co_return std::unexpected(map_status_to_error(submit_status, status_context::runtime));
+            co_return std::unexpected(client_internal::map_status_to_error(submit_status, client_internal::status_context::runtime));
         }
 
-        co_return co_await await_request_outcome<read_result>(*this, impl_->pending_read_requests, request_id, std::move(request));
+        co_return co_await client_internal::await_request_outcome<read_result>(*this, impl_->pending_read_requests, request_id,
+                                                                               std::move(request));
     }
 
     task_returning_expected_void_t client::write_node(std::string node_id, std::string value) noexcept(false)
@@ -426,28 +431,29 @@ namespace kmx::aio::opc_ua
         if (node_id.empty() || value.empty())
             co_return std::unexpected(make_error_code(error::invalid_configuration));
 
-        if (const std::error_code session_error = service_session_error(impl_->native_client, impl_->state); session_error)
+        if (const std::error_code session_error = client_internal::service_session_error(impl_->native_client, impl_->state); session_error)
             co_return std::unexpected(session_error);
 
         ++impl_->stats.write_requests;
 
         const std::uint64_t request_id = impl_->next_request_id++;
-        auto request = std::make_shared<write_request_state>();
+        auto request = std::make_shared<client_internal::write_request_state>();
         request->id = request_id;
         request->node_id = std::move(node_id);
         request->value = std::move(value);
         impl_->pending_write_requests.emplace(request_id, request);
 
-        const UA_StatusCode submit_status =
-            KMX_UA_Client_sendAsyncWriteRequest(impl_->native_client, request->node_id.c_str(), request->value.c_str(),
-                                                static_cast<UA_UInt32>(request_id), &on_write_request_complete, request.get());
+        const UA_StatusCode submit_status = KMX_UA_Client_sendAsyncWriteRequest(impl_->native_client, request->node_id.c_str(),
+                                                                                request->value.c_str(), static_cast<UA_UInt32>(request_id),
+                                                                                &client_internal::on_write_request_complete, request.get());
         if (submit_status != UA_STATUSCODE_GOOD)
         {
             impl_->pending_write_requests.erase(request_id);
-            co_return std::unexpected(map_status_to_error(submit_status, status_context::runtime));
+            co_return std::unexpected(client_internal::map_status_to_error(submit_status, client_internal::status_context::runtime));
         }
 
-        co_return co_await await_request_outcome<void>(*this, impl_->pending_write_requests, request_id, std::move(request));
+        co_return co_await client_internal::await_request_outcome<void>(*this, impl_->pending_write_requests, request_id,
+                                                                        std::move(request));
     }
 
     task<std::expected<method_call_result, std::error_code>> client::call_method(std::string object_node_id, std::string method_node_id,
@@ -456,13 +462,13 @@ namespace kmx::aio::opc_ua
         if (object_node_id.empty() || method_node_id.empty())
             co_return std::unexpected(make_error_code(error::invalid_configuration));
 
-        if (const std::error_code session_error = service_session_error(impl_->native_client, impl_->state); session_error)
+        if (const std::error_code session_error = client_internal::service_session_error(impl_->native_client, impl_->state); session_error)
             co_return std::unexpected(session_error);
 
         ++impl_->stats.call_requests;
 
         const std::uint64_t request_id = impl_->next_request_id++;
-        auto request = std::make_shared<call_request_state>();
+        auto request = std::make_shared<client_internal::call_request_state>();
         request->id = request_id;
         request->object_node_id = std::move(object_node_id);
         request->method_node_id = std::move(method_node_id);
@@ -477,14 +483,15 @@ namespace kmx::aio::opc_ua
         const UA_StatusCode submit_status = KMX_UA_Client_sendAsyncCallRequest(
             impl_->native_client, request->object_node_id.c_str(), request->method_node_id.c_str(),
             input_argument_ptrs.empty() ? nullptr : input_argument_ptrs.data(), static_cast<UA_UInt32>(input_argument_ptrs.size()),
-            static_cast<UA_UInt32>(request_id), &on_call_request_complete, request.get());
+            static_cast<UA_UInt32>(request_id), &client_internal::on_call_request_complete, request.get());
         if (submit_status != UA_STATUSCODE_GOOD)
         {
             impl_->pending_call_requests.erase(request_id);
-            co_return std::unexpected(map_status_to_error(submit_status, status_context::runtime));
+            co_return std::unexpected(client_internal::map_status_to_error(submit_status, client_internal::status_context::runtime));
         }
 
-        co_return co_await await_request_outcome<method_call_result>(*this, impl_->pending_call_requests, request_id, std::move(request));
+        co_return co_await client_internal::await_request_outcome<method_call_result>(*this, impl_->pending_call_requests, request_id,
+                                                                                      std::move(request));
     }
 
     bool client::has_active_session() const noexcept

@@ -84,9 +84,9 @@ namespace kmx::aio::test::completion::udp::endpoint_test
 
         std::array<std::byte, 32u> recv_buffer {};
         sockaddr_storage peer_addr {};
-        socklen_t peer_addr_len = 0u;
+        socklen_t peer_addr_len {};
         ip_address_t peer_ip = ipv4::make_address(ipv4::any);
-        port_t peer_port = 0u;
+        port_t peer_port {};
 
         const auto recv_res = co_await recv_endpoint->recv(span_byte_t(recv_buffer), peer_addr, peer_addr_len, peer_ip, peer_port);
         if (!recv_res)

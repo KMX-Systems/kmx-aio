@@ -2,19 +2,21 @@
 /// @brief Public API for a raw Ethernet socket with hardware timestamping (AVB/TSN).
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <expected>
-    #include <memory>
-    #include <optional>
-    #include <span>
-    #include <string_view>
-    #include <system_error>
-    #include <utility>
-    #include <vector>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_AVB)
+    #ifndef PCH
+        #include <expected>
+        #include <memory>
+        #include <optional>
+        #include <span>
+        #include <string_view>
+        #include <system_error>
+        #include <utility>
+        #include <vector>
 
-    #include <kmx/aio/avb/avb_types.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+        #include <kmx/aio/avb/avb_types.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::avb
 {
@@ -89,3 +91,4 @@ namespace kmx::aio::avb
 // Pillar-specific aliases are defined in their respective headers:
 //   kmx/aio/completion/avb/eth_socket.hpp
 //   kmx/aio/readiness/avb/eth_socket.hpp
+#endif // KMX_AIO_FEATURE_AVB

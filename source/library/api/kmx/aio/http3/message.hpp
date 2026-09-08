@@ -2,12 +2,14 @@
 /// @brief HTTP/3 message definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <cstdint>
-    #include <string>
-    #include <utility>
-    #include <vector>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_HTTP3)
+    #ifndef PCH
+        #include <cstdint>
+        #include <string>
+        #include <utility>
+        #include <vector>
+    #endif
 
 namespace kmx::aio::http3
 {
@@ -58,3 +60,4 @@ namespace kmx::aio::http3
         std::string body {};
     };
 } // namespace kmx::aio::http3
+#endif // KMX_AIO_FEATURE_HTTP3

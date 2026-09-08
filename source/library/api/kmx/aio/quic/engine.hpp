@@ -2,6 +2,7 @@
 /// @brief Generic QUIC engine template consolidated for all I/O models.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
+#include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_QUIC)
 
     #ifndef PCH

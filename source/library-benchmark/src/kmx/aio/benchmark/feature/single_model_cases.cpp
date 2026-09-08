@@ -50,6 +50,95 @@ namespace kmx::aio::benchmark
 
         /// @brief How many registers each request asks for.
         constexpr std::uint16_t register_count = 10u;
+
+        /// @brief Answers one read-holding-registers request with a well-formed response PDU.
+        /// @details Function code, byte count, then two bytes per register - the response the client's
+        ///          decoder expects. The values are not the point; a handler that computed something
+        ///          would be measured along with the request path.
+        /// @return The response PDU.
+        /// @throws std::bad_alloc (coroutine frame and payload allocation).
+        [[nodiscard]] task<std::vector<std::uint8_t>> read_registers_response(modbus::server_request) noexcept(false)
+        {
+            constexpr auto byte_count = static_cast<std::uint8_t>(register_count * 2u);
+            std::vector<std::uint8_t> payload {};
+            payload.reserve(2u + byte_count);
+            payload.push_back(static_cast<std::uint8_t>(modbus::function_code::read_holding_registers));
+            payload.push_back(byte_count);
+            payload.resize(2u + byte_count);
+            co_return payload;
+        }
+
+        /// @brief Serves the loopback port, recording whether the bind succeeded.
+        /// @details serve() reports a failed bind by throwing rather than by returning the error, and an
+        ///          exception leaving a spawned task is propagated to the top level and ends the run.
+        ///          Caught here so a port that happens to be busy skips this one case instead of
+        ///          stopping the suite.
+        /// @param server The server to drive.
+        /// @param exec The executor to serve on.
+        /// @param port The loopback port to bind.
+        /// @param served Set to whether the server came up.
+        /// @throws std::bad_alloc (coroutine frame allocation).
+        task<void> serve_side(modbus::server& server, readiness::executor& exec, const std::uint16_t port,
+                              std::atomic_bool& served) noexcept(false)
+        {
+            try
+            {
+                const auto result = co_await server.serve(exec, modbus::server_config {.bind_address = "127.0.0.1", .port = port});
+                served.store(result.has_value(), std::memory_order_release);
+            }
+            catch (...)
+            {
+                served.store(false, std::memory_order_release);
+            }
+        }
+
+        /// @brief Connects, then times one request and its response per iteration.
+        /// @param exec The executor to connect on.
+        /// @param count How many requests to time.
+        /// @param port The loopback port to connect to.
+        /// @param samples One nanosecond figure appended per completed request.
+        /// @throws std::bad_alloc (coroutine frame and sample allocation).
+        task<void> client_side(readiness::executor& exec, const std::size_t count, const std::uint16_t port,
+                               std::vector<double>& samples) noexcept(false)
+        {
+            modbus::client client {modbus::client_config {.host = "127.0.0.1", .port = port}, exec};
+
+            // Both sides are spawned onto one executor and the client can reach connect() before the
+            // server has finished binding, which is a race in the benchmark rather than anything the
+            // library does wrong. Retried rather than slept through, so the case starts as soon as the
+            // listener is up instead of always paying a fixed delay.
+            bool connected {};
+            for (int attempt = 0; (attempt != 50) && !connected; ++attempt)
+            {
+                if (co_await client.connect())
+                {
+                    connected = true;
+                    break;
+                }
+
+                static_cast<void>(co_await exec.async_timeout(2'000'000u));
+            }
+
+            if (!connected)
+            {
+                exec.stop();
+                co_return;
+            }
+
+            for (std::size_t i {}; i != count; ++i)
+            {
+                const auto start = clock_t::now();
+                const auto values = co_await client.read_holding_registers(0u, register_count);
+                if (!values)
+                    break;
+
+                samples.push_back(
+                    static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(clock_t::now() - start).count()));
+            }
+
+            static_cast<void>(co_await client.disconnect());
+            exec.stop();
+        }
     } // namespace modbus_detail
 
     /// @brief One Modbus/TCP read-holding-registers request and its response, over loopback.
@@ -67,84 +156,15 @@ namespace kmx::aio::benchmark
         const auto port = modbus_detail::next_port();
 
         modbus::server server {};
-        server.set_handler(modbus::function_code::read_holding_registers,
-                           [](modbus::server_request) -> task<std::vector<std::uint8_t>>
-                           {
-                               // Function code, byte count, then two bytes per register - the response PDU
-                               // the client's decoder expects. The values are not the point; a handler
-                               // that computed something would be measured along with the request path.
-                               constexpr auto byte_count = static_cast<std::uint8_t>(modbus_detail::register_count * 2u);
-                               std::vector<std::uint8_t> payload {};
-                               payload.reserve(2u + byte_count);
-                               payload.push_back(static_cast<std::uint8_t>(modbus::function_code::read_holding_registers));
-                               payload.push_back(byte_count);
-                               payload.resize(2u + byte_count);
-                               co_return payload;
-                           });
+        server.set_handler(modbus::function_code::read_holding_registers, [](modbus::server_request request)
+                           { return modbus_detail::read_registers_response(std::move(request)); });
 
         std::vector<double> samples {};
         samples.reserve(iterations);
         std::atomic_bool served {};
 
-        // serve() reports a failed bind by throwing rather than by returning the error, and an
-        // exception leaving a spawned task is propagated to the top level and ends the run. Caught
-        // here so a port that happens to be busy skips this one case instead of stopping the suite.
-        const auto serve_side = [](modbus::server& s, readiness::executor& e, const std::uint16_t p, std::atomic_bool& flag) -> task<void>
-        {
-            try
-            {
-                const auto result = co_await s.serve(e, modbus::server_config {.bind_address = "127.0.0.1", .port = p});
-                flag.store(result.has_value(), std::memory_order_release);
-            }
-            catch (...)
-            {
-                flag.store(false, std::memory_order_release);
-            }
-        };
-
-        const auto client_side = [](readiness::executor& e, const std::size_t count, const std::uint16_t p,
-                                    std::vector<double>& out) -> task<void>
-        {
-            modbus::client client {modbus::client_config {.host = "127.0.0.1", .port = p}, e};
-
-            // Both sides are spawned onto one executor and the client can reach connect() before the
-            // server has finished binding, which is a race in the benchmark rather than anything the
-            // library does wrong. Retried rather than slept through, so the case starts as soon as the
-            // listener is up instead of always paying a fixed delay.
-            bool connected = false;
-            for (int attempt = 0; (attempt != 50) && !connected; ++attempt)
-            {
-                if (co_await client.connect())
-                {
-                    connected = true;
-                    break;
-                }
-
-                static_cast<void>(co_await e.async_timeout(2'000'000u));
-            }
-
-            if (!connected)
-            {
-                e.stop();
-                co_return;
-            }
-
-            for (std::size_t i {}; i != count; ++i)
-            {
-                const auto start = clock_t::now();
-                const auto values = co_await client.read_holding_registers(0u, modbus_detail::register_count);
-                if (!values)
-                    break;
-
-                out.push_back(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(clock_t::now() - start).count()));
-            }
-
-            static_cast<void>(co_await client.disconnect());
-            e.stop();
-        };
-
-        exec->spawn(serve_side(server, *exec, port, served));
-        exec->spawn(client_side(*exec, iterations, port, samples));
+        exec->spawn(modbus_detail::serve_side(server, *exec, port, served));
+        exec->spawn(modbus_detail::client_side(*exec, iterations, port, samples));
 
         {
             const feature::watchdog guard {[&exec]() noexcept { exec->stop(); }, feature::scenario_time_limit};
@@ -162,6 +182,22 @@ namespace kmx::aio::benchmark
 #endif
 
 #if defined(KMX_AIO_FEATURE_CUDA)
+
+    /// @brief Records an event on an empty stream and suspends until it fires, timing each one.
+    /// @param stream The stream to record on.
+    /// @param count How many events to time.
+    /// @param samples One nanosecond figure appended per completed event.
+    /// @throws std::bad_alloc (coroutine frame and sample allocation).
+    static task<void> gpu_event_body(gpu::stream& stream, const std::size_t count, std::vector<double>& samples) noexcept(false)
+    {
+        for (std::size_t i {}; i != count; ++i)
+        {
+            const auto start = clock_t::now();
+            auto event = stream.create_event();
+            co_await event;
+            samples.push_back(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(clock_t::now() - start).count()));
+        }
+    }
 
     /// @brief Recording a CUDA event on an empty stream and suspending until it fires.
     /// @details The GPU executor's whole purpose in one figure: what it costs to hand a coroutine to
@@ -181,23 +217,11 @@ namespace kmx::aio::benchmark
             auto exec = std::make_shared<gpu::executor>();
             gpu::stream stream {};
 
-            const auto body = [](gpu::stream& s, const std::size_t count, std::vector<double>& out) -> task<void>
-            {
-                for (std::size_t i {}; i != count; ++i)
-                {
-                    const auto start = clock_t::now();
-                    auto event = s.create_event();
-                    co_await event;
-                    out.push_back(
-                        static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(clock_t::now() - start).count()));
-                }
-            };
-
             // spawn() and not run(). With no run() loop active the GPU executor drives the task to
             // completion inline on the calling thread, so spawn() returns only once the work is done -
             // and calling run() afterwards would hang, because run() clears the stop flag on entry and
             // would then wait for a stop that has already been asked for.
-            exec->spawn(body(stream, iterations, samples));
+            exec->spawn(gpu_event_body(stream, iterations, samples));
         }
         catch (const std::exception& error)
         {

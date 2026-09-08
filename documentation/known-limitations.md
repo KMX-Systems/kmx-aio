@@ -47,13 +47,18 @@ The library aims for API parity between execution models where architecturally f
 
 - Linux-only library design.
 - io_uring is best on kernel 5.10+.
-- Toolchains in use: no version is named anywhere. The local scripts build with the machine's default
-  C++ compiler, whatever `c++` resolves to (`script/qbs-profile.sh`), and `script/gcc_full_build.sh` /
-  `script/clang_full_build.sh` ask for the default GCC or Clang instead. CI installs the newest GCC its
-  runner image offers and makes that the default (`script/ci/setup-default-toolchain.sh`), because a
-  stock image's default is not new enough: Ubuntu 24.04 ships GCC 13.3, which does not recognise
-  `-std=c++26` at all. The library is written against C++26 features that older releases of either
-  compiler do not implement, so a default compiler that predates them will not build the tree.
+- Toolchains in use: **GCC 16 or Clang 23 at the least**. The library is written against C++26 features
+  that earlier releases of either compiler do not implement, so anything older will not build the tree -
+  Ubuntu 24.04's stock GCC 13.3 does not even recognise `-std=c++26`. Those two numbers are named in one
+  place, `script/ci/setup-default-toolchain.sh`, and nowhere else: the local scripts build with the
+  machine's default C++ compiler, whatever `c++` resolves to (`script/qbs-profile.sh`), and
+  `script/gcc_full_build.sh` / `script/clang_full_build.sh` ask for the default GCC or Clang instead,
+  none of them checking the version. CI has to choose a compiler rather than follow one, and no runner
+  image ships either release: Ubuntu 24.04's lists stop at GCC 14 and Clang 20, so CI adds
+  `ppa:ubuntu-toolchain-r/test` for GCC, falling back to `apt.llvm.org` for Clang, and makes what it
+  installs the default. GCC is preferred there because Ubuntu's GCC is what makes CI catch the
+  `--as-needed` link failures described in [build.md](build.md) - the compilers usually installed
+  alongside this project do not pass that flag, and those failures cannot be reproduced locally at all.
 - Clang builds against libstdc++ cannot use a run-time width or precision in a `std::format` spec
   (`"{:.{}f}"`, `"{:-<{}}"`). The consteval format-string check calls libstdc++'s `__check_dynamic_spec`,
   which that library declares and never defines: GCC folds the call away, Clang evaluates it and rejects

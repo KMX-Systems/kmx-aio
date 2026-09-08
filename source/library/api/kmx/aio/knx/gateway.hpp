@@ -1,14 +1,16 @@
 /// @file aio/knx/gateway.hpp
 /// @brief Composition wrapper for a KNX tunnelling server and routing client.
 #pragma once
-#ifndef PCH
-    #include <expected>
-    #include <system_error>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_KNX)
+    #ifndef PCH
+        #include <expected>
+        #include <system_error>
+    #endif
 
-#include <kmx/aio/task.hpp>
-#include <kmx/aio/knx/routing.hpp>
-#include <kmx/aio/knx/server.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/aio/knx/routing.hpp>
+    #include <kmx/aio/knx/server.hpp>
 
 namespace kmx::aio::knx
 {
@@ -20,24 +22,11 @@ namespace kmx::aio::knx
                 routing::multicast_configuration routing = {}) noexcept:
             server_(transport, server), router_(transport, routing) {}
 
-        [[nodiscard]] expected_void_t start() noexcept
-        {
-            const auto reset_result = server_.reset();
-            if (!reset_result.has_value())
-                return reset_result;
-            return router_.start();
-        }
-        [[nodiscard]] expected_void_t stop() noexcept
-        {
-            const auto server_result = server_.shutdown();
-            const auto router_result = router_.stop();
-            if (!server_result.has_value())
-                return server_result;
-            return router_result;
-        }
+        [[nodiscard]] expected_void_t start() noexcept;
+        [[nodiscard]] expected_void_t stop() noexcept;
 
         [[nodiscard]] expected_void_t shutdown() noexcept { return stop(); }
-        [[nodiscard]] task<std::expected<server_event, std::error_code>> serve_once() noexcept(false)
+        [[nodiscard]] server_event_task_t serve_once() noexcept(false)
         {
             co_return co_await server_.serve_once();
         }
@@ -54,3 +43,4 @@ namespace kmx::aio::knx
         routing::client router_;
     };
 }
+#endif // KMX_AIO_FEATURE_KNX

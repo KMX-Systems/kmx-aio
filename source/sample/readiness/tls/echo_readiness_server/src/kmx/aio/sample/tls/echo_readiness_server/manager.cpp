@@ -177,7 +177,7 @@ namespace kmx::aio::sample::tls::echo_readiness_server
 
     void manager::signal_handler(int signum) noexcept
     {
-        if (signum == SIGINT || signum == SIGTERM)
+        if ((signum == SIGINT) || (signum == SIGTERM))
         {
             ::write(STDERR_FILENO, "[SIGNAL] Stopping TLS executor\n", 31);
             auto* exec = g_executor_ptr.load(std::memory_order_acquire);

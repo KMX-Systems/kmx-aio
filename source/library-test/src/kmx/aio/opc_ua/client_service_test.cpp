@@ -55,7 +55,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
 #if defined(KMX_AIO_FEATURE_OPC_UA)
         struct compat_call_capture_state
         {
-            bool done = false;
+            bool done {};
             UA_StatusCode status = UA_STATUSCODE_BADINTERNALERROR;
             std::vector<std::string> output_arguments;
         };
@@ -80,8 +80,8 @@ namespace kmx::aio::test::opc_ua::client_service_test
 
         UA_StatusCode typed_method_callback(UA_Server* /*server*/, const UA_NodeId* /*session_id*/, void* /*session_context*/,
                                             const UA_NodeId* /*method_id*/, void* /*method_context*/, const UA_NodeId* /*object_id*/,
-                                            void* /*object_context*/, const size_t /*input_size*/, const UA_Variant* /*input*/,
-                                            const size_t output_size, UA_Variant* output)
+                                            void* /*object_context*/, const std::size_t /*input_size*/, const UA_Variant* /*input*/,
+                                            const std::size_t output_size, UA_Variant* output)
         {
             if ((output == nullptr) || (output_size < 4u))
                 return UA_STATUSCODE_BADINTERNALERROR;
@@ -109,8 +109,8 @@ namespace kmx::aio::test::opc_ua::client_service_test
         UA_StatusCode unsupported_output_method_callback(UA_Server* /*server*/, const UA_NodeId* /*session_id*/, void* /*session_context*/,
                                                          const UA_NodeId* /*method_id*/, void* /*method_context*/,
                                                          const UA_NodeId* /*object_id*/, void* /*object_context*/,
-                                                         const size_t /*input_size*/, const UA_Variant* /*input*/, const size_t output_size,
-                                                         UA_Variant* output)
+                                                         const std::size_t /*input_size*/, const UA_Variant* /*input*/,
+                                                         const std::size_t output_size, UA_Variant* output)
         {
             if ((output == nullptr) || (output_size < 1u))
                 return UA_STATUSCODE_BADINTERNALERROR;
@@ -119,7 +119,38 @@ namespace kmx::aio::test::opc_ua::client_service_test
             return UA_Variant_setScalarCopy(&output[0], &out_node_id, &UA_TYPES[UA_TYPES_NODEID]);
         }
 
+        /// @brief Stops the test server on an executor of its own, failing the test if it refuses.
+        /// @param s The server to stop.
+        void stop_test_server(server& s)
+        {
+            completion::executor exec;
+            const auto state = run_awaited(exec, s.stop());
+            REQUIRE(state.has_value());
+            REQUIRE(state->has_value());
+        }
+
+        /// @brief Disconnects and destroys the native client and server, in that order.
+        /// @param native_server Cleared once the server is gone.
+        /// @param native_client Cleared once the client is gone.
+        void release_native(UA_Server*& native_server, UA_Client*& native_client)
+        {
+            if (native_client != nullptr)
+            {
+                static_cast<void>(UA_Client_disconnect(native_client));
+                UA_Client_delete(native_client);
+                native_client = nullptr;
+            }
+
+            if (native_server != nullptr)
+            {
+                static_cast<void>(UA_Server_run_shutdown(native_server));
+                UA_Server_delete(native_server);
+                native_server = nullptr;
+            }
+        }
+
 #endif
+
     } // namespace detail
 
 #if defined(KMX_AIO_FEATURE_OPC_UA)
@@ -141,14 +172,8 @@ namespace kmx::aio::test::opc_ua::client_service_test
             REQUIRE(state->has_value());
         }
 
-        bool connected = false;
-        const auto stop_server = [&s]()
-        {
-            completion::executor exec;
-            const auto state = run_awaited(exec, s.stop());
-            REQUIRE(state.has_value());
-            REQUIRE(state->has_value());
-        };
+        bool connected {};
+        const auto stop_server = [&s]() { detail::stop_test_server(s); };
 
         for (int attempt = 0; attempt < 50; ++attempt)
         {
@@ -213,22 +238,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
         UA_Client* native_client = UA_Client_new();
         REQUIRE(native_client != nullptr);
 
-        const auto cleanup = [&native_server, &native_client]()
-        {
-            if (native_client != nullptr)
-            {
-                static_cast<void>(UA_Client_disconnect(native_client));
-                UA_Client_delete(native_client);
-                native_client = nullptr;
-            }
-
-            if (native_server != nullptr)
-            {
-                static_cast<void>(UA_Server_run_shutdown(native_server));
-                UA_Server_delete(native_server);
-                native_server = nullptr;
-            }
-        };
+        const auto cleanup = [&native_server, &native_client]() { detail::release_native(native_server, native_client); };
 
         const UA_StatusCode server_cfg_status = UA_ServerConfig_setDefault(UA_Server_getConfig(native_server));
         REQUIRE(server_cfg_status == UA_STATUSCODE_GOOD);
@@ -270,7 +280,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
         const UA_StatusCode connect_status = UA_Client_connectAsync(native_client, "opc.tcp://127.0.0.1:4840");
         REQUIRE(connect_status == UA_STATUSCODE_GOOD);
 
-        bool activated = false;
+        bool activated {};
         for (int i = 0; i < 100; ++i)
         {
             static_cast<void>(UA_Server_run_iterate(native_server, false));
@@ -294,7 +304,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
             native_client, "ns=0;i=85", "ns=1;s=CompatTypedMethod", nullptr, 0u, 1u, &detail::compat_call_capture_callback, &capture);
         REQUIRE(submit_status == UA_STATUSCODE_GOOD);
 
-        for (int i = 0; i < 100 && !capture.done; ++i)
+        for (int i = 0; (i < 100) && !capture.done; ++i)
         {
             static_cast<void>(UA_Server_run_iterate(native_server, false));
             const UA_StatusCode iterate_status = UA_Client_run_iterate(native_client, 0u);
@@ -324,22 +334,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
         UA_Client* native_client = UA_Client_new();
         REQUIRE(native_client != nullptr);
 
-        const auto cleanup = [&native_server, &native_client]()
-        {
-            if (native_client != nullptr)
-            {
-                static_cast<void>(UA_Client_disconnect(native_client));
-                UA_Client_delete(native_client);
-                native_client = nullptr;
-            }
-
-            if (native_server != nullptr)
-            {
-                static_cast<void>(UA_Server_run_shutdown(native_server));
-                UA_Server_delete(native_server);
-                native_server = nullptr;
-            }
-        };
+        const auto cleanup = [&native_server, &native_client]() { detail::release_native(native_server, native_client); };
 
         const UA_StatusCode server_cfg_status = UA_ServerConfig_setDefault(UA_Server_getConfig(native_server));
         REQUIRE(server_cfg_status == UA_STATUSCODE_GOOD);
@@ -369,7 +364,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
         const UA_StatusCode connect_status = UA_Client_connectAsync(native_client, "opc.tcp://127.0.0.1:4840");
         REQUIRE(connect_status == UA_STATUSCODE_GOOD);
 
-        bool activated = false;
+        bool activated {};
         for (int i = 0; i < 100; ++i)
         {
             static_cast<void>(UA_Server_run_iterate(native_server, false));
@@ -394,7 +389,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
                                                &detail::compat_call_capture_callback, &capture);
         REQUIRE(submit_status == UA_STATUSCODE_GOOD);
 
-        for (int i = 0; i < 100 && !capture.done; ++i)
+        for (int i = 0; (i < 100) && !capture.done; ++i)
         {
             static_cast<void>(UA_Server_run_iterate(native_server, false));
             const UA_StatusCode iterate_status = UA_Client_run_iterate(native_client, 0u);

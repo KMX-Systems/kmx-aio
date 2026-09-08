@@ -36,6 +36,28 @@ namespace kmx::aio::test::avb::eth_socket_epoll_registration_test
     // Helpers
     // -----------------------------------------------------------------------
 
+    namespace detail
+    {
+        /// @brief Opens the socket on the loopback interface and records what came back.
+        /// @param sock The socket to open.
+        /// @param open_ok Set when the open succeeded.
+        /// @param open_err Set to the error when it did not.
+        /// @param exec The executor whose loop to stop once the open has returned.
+        /// @return A task the caller spawns.
+        /// @throws std::bad_alloc (coroutine frame allocation).
+        kmx::aio::task<void> open_socket(kmx::aio::avb::generic_eth_socket<kmx::aio::readiness::executor>& sock, bool& open_ok,
+                                         std::error_code& open_err,
+                                         const std::shared_ptr<kmx::aio::readiness::executor>& exec) noexcept(false)
+        {
+            auto res = co_await sock.open("lo", ETH_P_ALL);
+            if (res)
+                open_ok = true;
+            else
+                open_err = res.error();
+            exec->stop();
+        }
+    } // namespace detail
+
     /// Returns the ifindex of "lo", or -1 on failure.
     [[nodiscard]] static int lo_ifindex() noexcept
     {
@@ -68,19 +90,10 @@ namespace kmx::aio::test::avb::eth_socket_epoll_registration_test
 
         kmx::aio::avb::generic_eth_socket<kmx::aio::readiness::executor> sock(*exec);
 
-        bool open_ok = false;
+        bool open_ok {};
         std::error_code open_err {};
 
-        exec->spawn(
-            [&]() -> kmx::aio::task<void>
-            {
-                auto res = co_await sock.open("lo", ETH_P_ALL);
-                if (res)
-                    open_ok = true;
-                else
-                    open_err = res.error();
-                exec->stop();
-            }());
+        exec->spawn(detail::open_socket(sock, open_ok, open_err, exec));
 
         exec->run();
 
@@ -103,6 +116,7 @@ namespace kmx::aio::test::avb::eth_socket_epoll_registration_test
         std::optional<std::size_t> bytes {};
         std::error_code error {};
     };
+
 
     /// Sends a minimal raw Ethernet frame to the loopback interface so the
     /// AF_PACKET socket can receive it in the same process.
@@ -127,6 +141,46 @@ namespace kmx::aio::test::avb::eth_socket_epoll_registration_test
         return (sent > 0);
     }
 
+    namespace detail
+    {
+        /// @brief Opens the socket, injects one loopback frame, and receives it back.
+        /// @param exec The executor whose loop to stop once the exchange has finished.
+        /// @param sock The socket to open and receive on.
+        /// @param result Where the byte count or the error is recorded.
+        /// @param ifidx The loopback interface index the frame is injected on.
+        /// @return A task the caller spawns.
+        /// @throws std::bad_alloc (coroutine frame allocation).
+        kmx::aio::task<void> open_then_recv(const std::shared_ptr<kmx::aio::readiness::executor>& exec,
+                                            const std::shared_ptr<kmx::aio::avb::generic_eth_socket<kmx::aio::readiness::executor>>& sock,
+                                            const std::shared_ptr<recv_result>& result, const int ifidx) noexcept(false)
+        {
+            auto open_res = co_await sock->open("lo", ETH_P_ALL);
+            if (!open_res)
+            {
+                result->error = open_res.error();
+                exec->stop();
+                co_return;
+            }
+
+            // The frame is injected from a background thread so the recv() below has data to consume
+            // without a second coroutine.
+            std::jthread sender([ifidx] { static_cast<void>(send_loopback_frame(ifidx)); });
+
+            // This is the path that hung before the fix: without register_fd the coroutine parks here
+            // forever.
+            auto recv_res = co_await sock->recv();
+            if (recv_res)
+            {
+                result->completed = true;
+                result->bytes = recv_res->first.size();
+            }
+            else
+                result->error = recv_res.error();
+
+            exec->stop();
+        }
+    } // namespace detail
+
     TEST_CASE("avb readiness eth_socket::recv completes after open (epoll fd registered)", "[avb][readiness][epoll][regression][io]")
     {
         if (!has_cap_net_raw())
@@ -142,35 +196,7 @@ namespace kmx::aio::test::avb::eth_socket_epoll_registration_test
 
         auto result = std::make_shared<recv_result>();
 
-        exec->spawn(
-            [exec, sock, result, ifidx]() -> kmx::aio::task<void>
-            {
-                // 1. Open the socket.
-                auto open_res = co_await sock->open("lo", ETH_P_ALL);
-                if (!open_res)
-                {
-                    result->error = open_res.error();
-                    exec->stop();
-                    co_return;
-                }
-
-                // 2. Schedule a loopback frame injection from a background thread so
-                //    the recv() below has data to consume without a second coroutine.
-                std::jthread sender([ifidx] { static_cast<void>(send_loopback_frame(ifidx)); });
-
-                // 3. co_await recv() — this is the path that hung before the fix.
-                //    If register_fd was not called, the coroutine would park here forever.
-                auto recv_res = co_await sock->recv();
-                if (recv_res)
-                {
-                    result->completed = true;
-                    result->bytes = recv_res->first.size();
-                }
-                else
-                    result->error = recv_res.error();
-
-                exec->stop();
-            }());
+        exec->spawn(detail::open_then_recv(exec, sock, result, ifidx));
 
         // Run with a wall-clock safety net. If the test hangs, it will time out
         // in the test runner rather than blocking the suite indefinitely.

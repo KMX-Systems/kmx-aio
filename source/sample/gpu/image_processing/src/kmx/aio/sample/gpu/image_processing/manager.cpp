@@ -28,7 +28,7 @@ namespace kmx::aio::sample::gpu::image_processing
             kmx::aio::gpu::stream gpu_stream;
 
 #if defined(KMX_AIO_FEATURE_CUDA)
-            std::uint8_t* device_frame = nullptr;
+            std::uint8_t* device_frame {};
             const auto device_size = host_frame.size();
 
             if (::cudaMalloc(reinterpret_cast<void**>(&device_frame), device_size) != cudaSuccess)

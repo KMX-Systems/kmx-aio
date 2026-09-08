@@ -1,6 +1,7 @@
 /// @file aio/readiness/tcp/listener.cpp
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/readiness/tcp/listener.hpp>
+#include <kmx/aio/exception.hpp>
 
 #include <kmx/aio/error_code.hpp>
 
@@ -14,20 +15,20 @@ namespace kmx::aio::readiness::tcp
     {
         auto sock_res = file_descriptor::create_socket(ip_family(ip), SOCK_STREAM, 0);
         if (!sock_res)
-            throw std::system_error(sock_res.error());
+            throw system_error(sock_res.error());
 
         fd_ = std::move(sock_res.value());
 
         const int opt = 1;
         if (auto res = fd_.setsockopt(SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)); !res)
-            throw std::system_error(res.error());
+            throw system_error(res.error());
 
         auto addr = make_socket_address(ip, port);
         if (!addr)
-            throw std::system_error(addr.error());
+            throw system_error(addr.error());
 
         if (auto res = fd_.bind(reinterpret_cast<sockaddr*>(&addr->storage), addr->length); !res)
-            throw std::system_error(res.error(), "bind failed");
+            throw system_error(res.error(), "bind failed");
     }
 
     expected_void_t listener::listen(const int backlog) noexcept

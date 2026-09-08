@@ -19,12 +19,27 @@ namespace kmx::aio::benchmark
     /// @param argv Argument values.
     /// @return Process exit status.
     /// @throws std::bad_alloc if the case list cannot be built.
+    /// @brief Runs one case and stamps it with where it sits in a pairing.
+    /// @details The case function measures and does not need to know it is being compared, so the
+    ///          pairing is attached here rather than by the case itself.
+    /// @param item The case to run.
+    /// @param scale How much work the case should do.
+    /// @return The measured result, with its pairing recorded.
+    /// @throws std::bad_alloc if the case cannot allocate.
+    static result measure(const case_entry& item, const double scale) noexcept(false)
+    {
+        auto out = item.run(scale);
+        out.pair_key = item.pair_key;
+        out.model = item.model;
+        return out;
+    }
+
     static int main(const int argc, char** const argv) noexcept(false)
     {
         std::string_view filter {};
         double scale = 1.0;
         std::size_t repeats = 3u;
-        bool as_json = false;
+        bool as_json {};
         std::string_view output_path {};
 
         for (int i = 1; i < argc; ++i)
@@ -115,17 +130,6 @@ namespace kmx::aio::benchmark
                 units[static_cast<std::size_t>(existing - unit_keys.begin())].push_back(i);
         }
 
-        const auto measure = [scale](const case_entry& item) noexcept(false)
-        {
-            auto out = item.run(scale);
-
-            // The case function measures and does not need to know it is being compared, so where it
-            // sits in a pairing is attached here rather than by the case itself.
-            out.pair_key = item.pair_key;
-            out.model = item.model;
-            return out;
-        };
-
         // Indexed by position in `selected`, so the report comes out in registration order however the
         // units were scheduled.
         std::vector<result> results(selected.size());
@@ -135,12 +139,12 @@ namespace kmx::aio::benchmark
             // Every case is run several times and the fastest run is kept: a slower one only ever
             // means the machine was doing something else as well, which is not what is being measured.
             for (const auto index: unit)
-                results[index] = measure(*selected[index]);
+                results[index] = measure(*selected[index], scale);
 
             for (std::size_t r = 1u; r < repeats; ++r)
                 for (const auto index: unit)
                 {
-                    auto next = measure(*selected[index]);
+                    auto next = measure(*selected[index], scale);
                     if (!next.skipped && (next.mean_ns < results[index].mean_ns))
                         results[index] = std::move(next);
                 }

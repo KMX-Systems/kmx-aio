@@ -6,7 +6,7 @@
 #include <array>
 #include <span>
 
-namespace
+namespace internal
 {
     class fixture_decryptor final: public kmx::aio::knx::keyring::decryptor
     {
@@ -25,7 +25,7 @@ namespace
             return decrypted;
         }
     };
-}
+} // namespace internal
 
 namespace kmx::aio::test::knx::keyring_test
 {
@@ -65,7 +65,7 @@ namespace kmx::aio::test::knx::keyring_test
 
     TEST_CASE("knx keyring decrypts encrypted records through injected decryptor", "[knx][keyring][unit]")
     {
-        fixture_decryptor decrypter {};
+        internal::fixture_decryptor decrypter {};
 
         const auto record = kmx::aio::knx::keyring::parse_selected(
             R"(<Key device-id="interface-secure" key-id="ops" password-id="ops" encrypted-key="aab988ffeeddcc332211005766554433" />)",

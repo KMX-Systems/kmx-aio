@@ -51,7 +51,7 @@ namespace kmx::aio::ipv4
             const char* const start = p;
             const auto [ptr, ec] = std::from_chars(p, end, val);
 
-            if (ec != std::errc {} || ptr == start || val > 255u)
+            if ((ec != std::errc {}) || (ptr == start) || (val > 255u))
                 return false;
 
             buf[i] = static_cast<std::uint8_t>(val);
@@ -59,7 +59,7 @@ namespace kmx::aio::ipv4
 
             if (i < 3u)
             {
-                if (p >= end || *p != '.')
+                if ((p >= end) || (*p != '.'))
                     return false;
                 ++p;
             }
@@ -123,7 +123,7 @@ namespace kmx::aio::ipv6
 
             if (i < 7u)
             {
-                if (p >= end || *p != ':')
+                if ((p >= end) || (*p != ':'))
                     return false;
                 ++p;
             }

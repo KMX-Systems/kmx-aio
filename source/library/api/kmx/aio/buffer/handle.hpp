@@ -3,6 +3,7 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <kmx/aio/exception.hpp>
     #include <cstddef>
     #include <stdexcept>
     #include <utility>
@@ -144,7 +145,7 @@ namespace kmx::aio::buffer
         void validate_or_throw() const noexcept(false)
         {
             if (!valid())
-                throw std::logic_error("buffer::handle: invalid or moved-from handle");
+                throw logic_error("buffer::handle: invalid or moved-from handle");
         }
 
         /// @brief Private constructor used by pool::acquire().

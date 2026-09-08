@@ -54,7 +54,7 @@ namespace kmx::aio::completion::detail
     struct basic_uring_syscalls<false>
     {
         /// @brief False: this specialization carries no fault-injection code.
-        static constexpr bool injects_faults = false;
+        static constexpr bool injects_faults {};
 
         /// @brief Wrapper for ::io_uring_queue_init.
         [[nodiscard]] static int queue_init(const unsigned entries, ::io_uring* const ring, const unsigned flags) noexcept

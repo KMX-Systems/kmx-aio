@@ -119,7 +119,7 @@ int main(const int argc, char* argv[]) noexcept
     try
     {
         kmx::aio::sample::gpu::image_processing::config cfg {};
-        bool help_requested = false;
+        bool help_requested {};
         if (!kmx::aio::sample::gpu::image_processing::detail::parse_args(argc, argv, cfg, help_requested))
             return help_requested ? 0 : 1;
 

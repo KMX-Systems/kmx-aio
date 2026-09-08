@@ -2,17 +2,19 @@
 /// @brief Backend-neutral async SOME/IP client facade.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <chrono>
-    #include <cstdint>
-    #include <expected>
-    #include <memory>
-    #include <system_error>
-    #include <vector>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_SOMEIP)
+    #ifndef PCH
+        #include <chrono>
+        #include <cstdint>
+        #include <expected>
+        #include <memory>
+        #include <system_error>
+        #include <vector>
 
-    #include <kmx/aio/someip/types.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+        #include <kmx/aio/someip/types.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::someip
 {
@@ -92,7 +94,7 @@ namespace kmx::aio::someip
         /// @note @c statistics::dropped_events is synchronised from the backend on each call.
         [[nodiscard]] const statistics& get_stats() const noexcept;
 
-#if !defined(KMX_AIO_HAS_VSOMEIP_HEADER)
+    #if !defined(KMX_AIO_HAS_VSOMEIP_HEADER)
         /// @brief Test-only: marks a service/instance as available without network interaction.
         /// @warning Available only in stub builds (no real vsomeip headers).
         void __kmx_test_inject_service_available(service_id_t service_id, instance_id_t instance_id) noexcept;
@@ -101,7 +103,7 @@ namespace kmx::aio::someip
         /// @param status  Zero for success; non-zero causes @c error::request_failed.
         /// @warning Available only in stub builds (no real vsomeip headers).
         void __kmx_test_set_next_call_status(std::uint32_t status) noexcept;
-#endif
+    #endif
 
     private:
         struct impl;
@@ -110,3 +112,4 @@ namespace kmx::aio::someip
     };
 
 } // namespace kmx::aio::someip
+#endif // KMX_AIO_FEATURE_SOMEIP

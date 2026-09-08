@@ -15,12 +15,33 @@ namespace kmx::aio::someip
         explicit impl(subscription_config cfg) noexcept: config(std::move(cfg)) {}
 
         subscription_config config;
-        client* bound_client = nullptr;
-        bool opened = false;
+        client* bound_client {};
+        bool opened {};
         std::deque<event_notification> queue;
         std::optional<compat::client_runtime> runtime;
-        std::uint64_t local_dropped_events = 0u;
+        std::uint64_t local_dropped_events {};
+
+        /// @brief Appends one notification, dropping the oldest entries once the queue is full.
+        void enqueue(event_notification&& notification);
     };
+
+    void subscription::impl::enqueue(event_notification&& notification)
+    {
+        const std::size_t queue_capacity = config.notification_queue_capacity;
+        if (queue_capacity == 0u)
+        {
+            ++local_dropped_events;
+            return;
+        }
+
+        while (queue.size() >= queue_capacity)
+        {
+            queue.pop_front();
+            ++local_dropped_events;
+        }
+
+        queue.push_back(std::move(notification));
+    }
 
     subscription::subscription(subscription_config config) noexcept: impl_(std::make_unique<impl>(std::move(config)))
     {
@@ -102,29 +123,11 @@ namespace kmx::aio::someip
             if (!impl_->runtime.has_value())
                 co_return std::unexpected(make_error_code(error::timed_out));
 
-            const auto enqueue_notification = [this](event_notification&& notification)
-            {
-                const std::size_t queue_capacity = impl_->config.notification_queue_capacity;
-                if (queue_capacity == 0u)
-                {
-                    ++impl_->local_dropped_events;
-                    return;
-                }
-
-                while (impl_->queue.size() >= queue_capacity)
-                {
-                    impl_->queue.pop_front();
-                    ++impl_->local_dropped_events;
-                }
-
-                impl_->queue.push_back(std::move(notification));
-            };
-
             auto next_event = impl_->runtime->next_event(impl_->config.iterate_timeout);
             if (!next_event.has_value())
                 co_return std::unexpected(make_error_code(error::timed_out));
 
-            enqueue_notification(std::move(next_event.value()));
+            impl_->enqueue(std::move(next_event.value()));
 
             while (true)
             {
@@ -132,7 +135,7 @@ namespace kmx::aio::someip
                 if (!extra_event.has_value())
                     break;
 
-                enqueue_notification(std::move(extra_event.value()));
+                impl_->enqueue(std::move(extra_event.value()));
             }
 
             if (impl_->queue.empty())

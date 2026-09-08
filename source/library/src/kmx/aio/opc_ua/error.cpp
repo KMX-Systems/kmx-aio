@@ -5,7 +5,7 @@
 
 namespace kmx::aio::opc_ua
 {
-    namespace
+    namespace error_internal
     {
         class opc_ua_error_category final: public std::error_category
         {
@@ -45,11 +45,11 @@ namespace kmx::aio::opc_ua
         };
 
         const opc_ua_error_category opc_ua_error_category_instance {};
-    }
+    } // namespace error_internal
 
     const std::error_category& error_category() noexcept
     {
-        return opc_ua_error_category_instance;
+        return error_internal::opc_ua_error_category_instance;
     }
 
     std::error_code make_error_code(const error code) noexcept

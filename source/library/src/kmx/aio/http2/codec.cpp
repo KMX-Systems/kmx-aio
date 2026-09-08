@@ -1,4 +1,5 @@
 #include <kmx/aio/http2/codec.hpp>
+#include <kmx/aio/exception.hpp>
 #include <kmx/aio/http2/frame.hpp>
 
 #include <cstring>
@@ -10,7 +11,7 @@ namespace kmx::aio::http2
     std::size_t frame_builder::make_settings(span_uint8_t buffer) noexcept(false)
     {
         if (buffer.size() < 9u)
-            throw std::invalid_argument("Buffer too small for SETTINGS frame");
+            throw invalid_argument("Buffer too small for SETTINGS frame");
 
         std::memset(buffer.data(), 0, 9u);
         buffer[3u] = static_cast<std::uint8_t>(frame_type::settings);
@@ -29,10 +30,10 @@ namespace kmx::aio::http2
     {
         std::size_t hpack_len = hpack_encoder::encoded_size(headers);
         if (hpack_len > 0xFFFFFFu)
-            throw std::runtime_error("Header block too large");
+            throw runtime_error("Header block too large");
 
         if (buffer.size() < 9u + hpack_len)
-            throw std::invalid_argument("Buffer too small for HEADERS frame");
+            throw invalid_argument("Buffer too small for HEADERS frame");
 
         // Write Frame Header
         const std::uint32_t len = static_cast<std::uint32_t>(hpack_len);
@@ -60,10 +61,10 @@ namespace kmx::aio::http2
                                          std::string_view data) noexcept(false)
     {
         if (data.size() > 0xFFFFFFu)
-            throw std::runtime_error("Data block too large");
+            throw runtime_error("Data block too large");
 
         if (buffer.size() < 9u + data.size())
-            throw std::invalid_argument("Buffer too small for DATA frame");
+            throw invalid_argument("Buffer too small for DATA frame");
 
         const std::uint32_t len = static_cast<std::uint32_t>(data.size());
         buffer[0u] = (len >> 16u) & 0xFFu;

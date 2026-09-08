@@ -15,6 +15,7 @@ CppApplication {
     Depends { name: "kmx-aio-spdk"; condition: project.enable_spdk }
     Depends { name: "kmx-aio-avb"; condition: project.enable_avb }
     Depends { name: "kmx_instrumentation" }
+    Depends { name: "kmx_features" }
 
     name: "kmx-aio-benchmark"
     consoleApplication: true
@@ -29,36 +30,6 @@ CppApplication {
     // The same gate set the test binary uses, so a case file can be written against exactly the
     // feature macros the rest of the tree is written against. A feature that is off leaves its cases
     // compiled out, and the pairing they belong to reports the missing side rather than disappearing.
-    cpp.defines: {
-        var defs = ["NDEBUG"];
-        if (project.enable_readiness)
-            defs.push("KMX_AIO_FEATURE_READINESS=1");
-        if (project.enable_completion)
-            defs.push("KMX_AIO_FEATURE_COMPLETION=1");
-        if (project.enable_openonload)
-            defs.push("KMX_AIO_FEATURE_OPENONLOAD=1");
-        if (project.enable_af_xdp)
-            defs.push("KMX_AIO_FEATURE_AF_XDP=1");
-        if (project.enable_spdk)
-            defs.push("KMX_AIO_FEATURE_SPDK=1");
-        if (project.enable_quic)
-            defs.push("KMX_AIO_FEATURE_QUIC=1");
-        if (project.enable_http2)
-            defs.push("KMX_AIO_FEATURE_HTTP2=1");
-        if (project.enable_http3)
-            defs.push("KMX_AIO_FEATURE_HTTP3=1");
-        if (project.enable_avb)
-            defs.push("KMX_AIO_FEATURE_AVB=1");
-        if (project.enable_opc_ua)
-            defs.push("KMX_AIO_FEATURE_OPC_UA=1");
-        if (project.enable_modbus)
-            defs.push("KMX_AIO_FEATURE_MODBUS=1");
-        if (project.enable_someip)
-            defs.push("KMX_AIO_FEATURE_SOMEIP=1");
-        if (project.enable_cuda)
-            defs.push("KMX_AIO_FEATURE_CUDA=1");
-        return defs;
-    }
 
     // ../library-test/inc is here for the test tree's self-contained helpers - the certificate pair a
     // TLS scenario needs, and the machine probes a scenario skips itself on. Copying them into the

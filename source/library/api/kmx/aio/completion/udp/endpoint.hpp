@@ -2,16 +2,18 @@
 /// @brief Completion-model UDP endpoint using io_uring-based async I/O.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <cstdint>
-    #include <cstddef>
-    #include <expected>
-    #include <span>
-    #include <sys/socket.h>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_COMPLETION)
+    #ifndef PCH
+        #include <cstdint>
+        #include <cstddef>
+        #include <expected>
+        #include <span>
+        #include <sys/socket.h>
 
-    #include <kmx/aio/completion/udp/socket.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+        #include <kmx/aio/completion/udp/socket.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::completion::udp
 {
@@ -84,3 +86,4 @@ namespace kmx::aio::completion::udp
         socket socket_;
     };
 } // namespace kmx::aio::completion::udp
+#endif // KMX_AIO_FEATURE_COMPLETION

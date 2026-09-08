@@ -2,21 +2,23 @@
 /// @brief Completion-model executor using io_uring for asynchronous I/O.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <atomic>
-    #include <cstdint>
-    #include <expected>
-    #include <liburing.h>
-    #include <memory>
-    #include <mutex>
-    #include <span>
-    #include <stop_token>
-    #include <system_error>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_COMPLETION)
+    #ifndef PCH
+        #include <atomic>
+        #include <cstdint>
+        #include <expected>
+        #include <liburing.h>
+        #include <memory>
+        #include <mutex>
+        #include <span>
+        #include <stop_token>
+        #include <system_error>
 
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/executor_base.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/executor_base.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::completion
 {
@@ -342,3 +344,4 @@ namespace kmx::aio::completion
     };
 
 } // namespace kmx::aio::completion
+#endif // KMX_AIO_FEATURE_COMPLETION

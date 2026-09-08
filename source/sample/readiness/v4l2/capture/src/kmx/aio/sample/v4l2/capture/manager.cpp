@@ -71,7 +71,7 @@ namespace kmx::aio::sample::v4l2::capture
 
         while (true)
         {
-            if (config_.max_frames > 0u && metrics_.frames_captured.load(mem_order) >= config_.max_frames)
+            if ((config_.max_frames > 0u) && (metrics_.frames_captured.load(mem_order) >= config_.max_frames))
             {
                 kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "Reached max_frames limit ({}). Stopping.",
                                  config_.max_frames);
@@ -102,10 +102,8 @@ namespace kmx::aio::sample::v4l2::capture
 
             // Progress log every 30 frames (~1 second at 30 fps).
             if (const auto n = metrics_.frames_captured.load(mem_order); (n > 0u) && ((n % 30u) == 0u))
-            {
                 kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "Frame #{} | seq={} | ts={}ns | {} bytes", n,
-                                 meta.sequence, meta.timestamp_ns, meta.bytes_used);
-            }
+                             meta.sequence, meta.timestamp_ns, meta.bytes_used);
 
             // `frame` destructs here → VIDIOC_QBUF re-enqueues the buffer automatically.
         }

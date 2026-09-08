@@ -21,7 +21,7 @@ namespace kmx::aio::allocator::detail
     /// @note A plain pointer, so reaching it costs a thread-local load and nothing else - no
     ///       initialization guard, no destructor, and so nothing that could run before or after
     ///       another thread-local whose own teardown frees a coroutine frame.
-    thread_local thread_state* t_thread_state = nullptr;
+    thread_local thread_state* t_thread_state {};
 
     /// @brief Creates and registers this thread's block.
     /// @return The new block, which lives for the rest of the process.

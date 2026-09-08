@@ -76,7 +76,7 @@ namespace kmx::aio::sample::someip::diagnostics
             kmx::logger::log(kmx::logger::level::warn, std::source_location::current(),
                              "SOME/IP diagnostics call_method: {} (expected without a real server)", call_result.error().message());
 
-        std::size_t received = 0;
+        std::size_t received {};
         for (int i = 0; i < 30; ++i)
         {
             auto event = co_await subscription_.next();

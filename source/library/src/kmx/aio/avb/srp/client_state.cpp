@@ -9,7 +9,7 @@
 
 namespace kmx::aio::avb::srp
 {
-    namespace
+    namespace internal
     {
         /// @brief Copies a packed PDU into a byte buffer sized to the PDU.
         /// @param pdu The PDU to serialise.
@@ -20,7 +20,7 @@ namespace kmx::aio::avb::srp
             const auto bytes = std::as_bytes(std::span {&pdu, 1});
             return {bytes.begin(), bytes.end()};
         }
-    }
+    } // namespace internal
 
     // Encode helpers
 
@@ -37,7 +37,7 @@ namespace kmx::aio::avb::srp
         pdu.msg_header.attribute_list_length = ::htons(attr_list_len);
         pdu.vec_header.leave_all_and_num_values = ::htons(1u); // NumValues=1, LeaveAll=0
 
-        return to_bytes(pdu);
+        return internal::to_bytes(pdu);
     }
 
     std::vector<std::byte> primary_client::build_listener_ready(const stream_descriptor& desc) noexcept
@@ -57,7 +57,7 @@ namespace kmx::aio::avb::srp
         const auto decl = static_cast<std::uint8_t>(listener_decl::ready);
         pdu.three_packed_events = static_cast<std::uint8_t>((decl << 5u) | (decl << 2u) | (decl >> 1u));
 
-        return to_bytes(pdu);
+        return internal::to_bytes(pdu);
     }
 
     std::vector<std::byte> primary_client::build_domain() noexcept
@@ -76,7 +76,7 @@ namespace kmx::aio::avb::srp
         msg_header.attribute_list_length = ::htons(attr_list_len);
         pdu.vec_header.leave_all_and_num_values = ::htons(1u);
 
-        return to_bytes(pdu);
+        return internal::to_bytes(pdu);
     }
 
     // Frame dispatch
@@ -117,7 +117,7 @@ namespace kmx::aio::avb::srp
         desc.accumulated_latency = ::ntohl(attr->accumulated_latency);
 
         // Notify any pending subscribe() waiters
-        if (auto waiter = pending_subs_.find(desc.stream_id); waiter != pending_subs_.end() && !waiter->second.resolved.has_value())
+        if (auto waiter = pending_subs_.find(desc.stream_id); (waiter != pending_subs_.end()) && !waiter->second.resolved.has_value())
             waiter->second.resolved = desc;
     }
 }

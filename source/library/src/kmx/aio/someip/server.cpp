@@ -8,13 +8,10 @@
 
 namespace kmx::aio::someip
 {
-    namespace
+    [[nodiscard]] static std::uint32_t service_key(const service_id_t service_id, const instance_id_t instance_id) noexcept
     {
-        [[nodiscard]] std::uint32_t service_key(const service_id_t service_id, const instance_id_t instance_id) noexcept
-        {
-            return (static_cast<std::uint32_t>(service_id) << 16u) | static_cast<std::uint32_t>(instance_id);
-        }
-    } // anonymous namespace
+        return (static_cast<std::uint32_t>(service_id) << 16u) | static_cast<std::uint32_t>(instance_id);
+    }
 
     struct server::impl
     {
@@ -23,7 +20,7 @@ namespace kmx::aio::someip
         server_config config;
         compat::server_runtime runtime;
         statistics stats;
-        bool started = false;
+        bool started {};
         std::unordered_set<std::uint32_t> offered_services;
     };
 

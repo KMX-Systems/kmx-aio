@@ -44,10 +44,10 @@ namespace kmx::aio::sample::someip::echo_server
                          static_cast<std::uint32_t>(cfg.instance_id));
         std::cout << "SOMEIP_ECHO_SERVER_START" << std::endl;
 
-        bool replied = false;
+        bool replied {};
         constexpr auto loop_wait = std::chrono::milliseconds(10);
 
-        for (int i = 0; i < 800 && !replied; ++i)
+        for (int i = 0; (i < 800) && !replied; ++i)
         {
             auto request = co_await server_.next_request();
             if (!request)

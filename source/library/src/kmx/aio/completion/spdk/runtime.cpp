@@ -29,9 +29,9 @@ namespace kmx::aio::completion::spdk::runtime
     struct runtime_state
     {
         std::mutex mutex {};
-        bool env_initialized = false;
-        bool subsystem_initialized = false;
-        spdk_thread* app_thread = nullptr;
+        bool env_initialized {};
+        bool subsystem_initialized {};
+        spdk_thread* app_thread {};
     };
 
     runtime_state& get_runtime() noexcept
@@ -183,7 +183,7 @@ namespace kmx::aio::completion::spdk::runtime
         for (spdk_bdev* bdev = spdk_bdev_first(); bdev != nullptr; bdev = spdk_bdev_next(bdev))
         {
             const char* name = spdk_bdev_get_name(bdev);
-            if (name && name[0] != '\0')
+            if (name && (name[0] != '\0'))
                 names.emplace_back(name);
         }
 

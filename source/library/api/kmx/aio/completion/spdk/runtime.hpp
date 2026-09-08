@@ -2,14 +2,16 @@
 /// @brief SPDK runtime initialization and bdev enumeration helpers.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <expected>
-    #include <string>
-    #include <system_error>
-    #include <vector>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_COMPLETION) && defined(KMX_AIO_FEATURE_SPDK)
+    #ifndef PCH
+        #include <expected>
+        #include <string>
+        #include <system_error>
+        #include <vector>
 
-    #include <kmx/aio/basic_types.hpp>
-#endif
+        #include <kmx/aio/basic_types.hpp>
+    #endif
 
 namespace kmx::aio::completion::spdk::runtime
 {
@@ -26,3 +28,4 @@ namespace kmx::aio::completion::spdk::runtime
     [[nodiscard]] std::expected<std::vector<std::string>, std::error_code> enumerate_bdevs() noexcept;
 
 } // namespace kmx::aio::completion::spdk::runtime
+#endif // KMX_AIO_FEATURE_COMPLETION && KMX_AIO_FEATURE_SPDK

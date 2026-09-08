@@ -256,7 +256,7 @@ namespace kmx::aio::completion::v4l2
     void capture::unmap_buffers(mmap_buffers& buffers) noexcept
     {
         for (auto& buf: buffers)
-            if (buf.ptr && buf.ptr != MAP_FAILED)
+            if (buf.ptr && (buf.ptr != MAP_FAILED))
                 ::munmap(buf.ptr, buf.length);
 
         buffers.clear();

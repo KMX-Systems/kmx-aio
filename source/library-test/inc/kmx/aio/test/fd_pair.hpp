@@ -60,7 +60,7 @@ namespace kmx::aio::test
 
     private:
         int fds_[2] {-1, -1};
-        bool valid_ = false;
+        bool valid_ {};
     };
 
     /// @brief A pipe whose ends are closed on destruction, individually closable before then.
@@ -117,7 +117,7 @@ namespace kmx::aio::test
 
     private:
         int fds_[2] {-1, -1};
-        bool valid_ = false;
+        bool valid_ {};
     };
 
     /// @brief Binds @p fd to a loopback port the kernel picks, and reports which one.

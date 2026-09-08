@@ -2,12 +2,14 @@
 /// @brief Readiness-model TCP listener using epoll-based async accept.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/readiness/io_base.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_READINESS)
+    #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/readiness/io_base.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::readiness::tcp
 {
@@ -39,3 +41,4 @@ namespace kmx::aio::readiness::tcp
     };
 
 } // namespace kmx::aio::readiness::tcp
+#endif // KMX_AIO_FEATURE_READINESS

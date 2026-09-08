@@ -21,7 +21,7 @@ namespace kmx::aio::sample::spdk::minimal
     std::uint64_t read_nr_hugepages()
     {
         std::ifstream in("/proc/sys/vm/nr_hugepages");
-        std::uint64_t value = 0u;
+        std::uint64_t value {};
         in >> value;
         return value;
     }
@@ -102,9 +102,7 @@ namespace kmx::aio::sample::spdk::minimal
             kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "SPDK minimal sample completed successfully");
         }
         else
-        {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK round-trip mismatch");
-        }
 
         exec.stop();
     }

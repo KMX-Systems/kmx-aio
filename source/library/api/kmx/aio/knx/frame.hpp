@@ -1,20 +1,22 @@
 /// @file aio/knx/frame.hpp
 /// @brief Primitive KNXnet/IP frame and cEMI decode helpers.
 #pragma once
-#ifndef PCH
-    #include <algorithm>
-    #include <array>
-    #include <cstdint>
-    #include <expected>
-    #include <span>
-    #include <system_error>
-    #include <vector>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_KNX)
+    #ifndef PCH
+        #include <algorithm>
+        #include <array>
+        #include <cstdint>
+        #include <expected>
+        #include <span>
+        #include <system_error>
+        #include <vector>
+    #endif
 
-#include <kmx/aio/basic_types.hpp>
-#include <kmx/aio/knx/cemi.hpp>
-#include <kmx/aio/knx/contract.hpp>
-#include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/knx/cemi.hpp>
+    #include <kmx/aio/knx/contract.hpp>
+    #include <kmx/aio/knx/error.hpp>
 
 namespace kmx::aio::knx
 {
@@ -24,15 +26,15 @@ namespace kmx::aio::knx
         /// @brief The protocol version; only `0x10` is defined.
         std::uint8_t protocol_version = 0x10u;
         /// @brief The service type identifier.
-        std::uint16_t service_type = 0u;
+        std::uint16_t service_type {};
         /// @brief The datagram length including this header.
-        std::uint16_t total_length = 0u;
+        std::uint16_t total_length {};
     };
 
     struct cemi_bytes_storage
     {
         std::array<std::uint8_t, cemi::max_l_data_size> bytes {};
-        std::uint16_t size = 0u;
+        std::uint16_t size {};
 
         [[nodiscard]] constexpr bool empty() const noexcept { return size == 0u; }
         [[nodiscard]] constexpr std::size_t length() const noexcept { return size; }
@@ -41,27 +43,27 @@ namespace kmx::aio::knx
         [[nodiscard]] constexpr cspan_uint8_t span() const noexcept { return {bytes.data(), size}; }
 
         [[nodiscard]] friend bool operator==(const cemi_bytes_storage& lhs,
-                                             const std::vector<std::uint8_t>& rhs) noexcept
+                                             const byte_buffer_t& rhs) noexcept
         {
-            return lhs.span().size() == rhs.size() &&
+            return (lhs.span().size() == rhs.size()) &&
                    std::equal(lhs.span().begin(), lhs.span().end(), rhs.begin());
         }
     };
 
     struct tunnelling_request_frame
     {
-        std::uint8_t channel_id = 0u;
-        std::uint8_t sequence_number = 0u;
-        std::uint16_t message_length = 0u;
+        std::uint8_t channel_id {};
+        std::uint8_t sequence_number {};
+        std::uint16_t message_length {};
         cemi_frame cemi {};
         cemi_bytes_storage cemi_bytes {};
     };
 
     struct tunnelling_ack_frame
     {
-        std::uint8_t channel_id = 0u;
-        std::uint8_t sequence_number = 0u;
-        std::uint8_t status = 0u;
+        std::uint8_t channel_id {};
+        std::uint8_t sequence_number {};
+        std::uint8_t status {};
     };
 
     namespace frame
@@ -82,26 +84,24 @@ namespace kmx::aio::knx
         inline constexpr std::size_t tunnelling_ack_size = 4u;
 
         [[nodiscard]] std::expected<communication_header, std::error_code> decode_communication_header(cspan_uint8_t buf) noexcept;
-        [[nodiscard]] std::expected<void, std::error_code> encode_communication_header(span_uint8_t dest,
+        [[nodiscard]] expected_void_t encode_communication_header(span_uint8_t dest,
                                                                                      std::uint16_t service_type,
                                                                                      std::uint16_t total_length,
                                                                                      std::uint8_t protocol_version = 0x10u) noexcept;
         [[nodiscard]] std::expected<cemi_frame, std::error_code> decode_cemi(cspan_uint8_t buf) noexcept;
-        [[nodiscard]] std::expected<void, std::error_code> encode_tunnelling_request(span_uint8_t dest,
+        [[nodiscard]] expected_void_t encode_tunnelling_request(span_uint8_t dest,
                                                                                      std::uint8_t channel_id,
                                                                                      std::uint8_t sequence_number,
-                                                                                     std::span<const std::uint8_t> cemi_bytes) noexcept;
+                                                                                     cspan_uint8_t cemi_bytes) noexcept;
         [[nodiscard]] std::expected<tunnelling_request_frame, std::error_code> decode_tunnelling_request(cspan_uint8_t buf) noexcept;
         [[nodiscard]] std::expected<tunnelling_ack_frame, std::error_code> decode_tunnelling_ack(cspan_uint8_t buf) noexcept;
-        [[nodiscard]] std::expected<void, std::error_code> encode_tunnelling_request_packet(span_uint8_t dest,
-                                                                                           std::uint8_t channel_id,
-                                                                                           std::uint8_t sequence_number,
-                                                                                           std::span<const std::uint8_t> cemi_bytes) noexcept;
-        [[nodiscard]] std::expected<void, std::error_code> encode_tunnelling_ack_packet(span_uint8_t dest,
-                                                   std::uint8_t channel_id,
-                                                   std::uint8_t sequence_number,
-                                                   std::uint8_t status = 0u) noexcept;
+        [[nodiscard]] expected_void_t encode_tunnelling_request_packet(
+            span_uint8_t dest, std::uint8_t channel_id, std::uint8_t sequence_number, cspan_uint8_t cemi_bytes) noexcept;
+        [[nodiscard]] expected_void_t encode_tunnelling_ack_packet(span_uint8_t dest, std::uint8_t channel_id,
+                                                                                        std::uint8_t sequence_number,
+                                                                                        std::uint8_t status = 0u) noexcept;
         [[nodiscard]] std::expected<tunnelling_request_frame, std::error_code> decode_tunnelling_request_packet(cspan_uint8_t buf) noexcept;
         [[nodiscard]] std::expected<tunnelling_ack_frame, std::error_code> decode_tunnelling_ack_packet(cspan_uint8_t buf) noexcept;
     }
 }
+#endif // KMX_AIO_FEATURE_KNX

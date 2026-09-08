@@ -81,7 +81,7 @@ namespace kmx::aio::sample::avb::talker::detail
             return parse_status::error;
         }
 
-        if (parsed < min_period_us || parsed > max_period_us)
+        if ((parsed < min_period_us) || (parsed > max_period_us))
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
                              "Out-of-range --period-us value '{}' (expected 1..1000000)", value);
@@ -102,7 +102,7 @@ namespace kmx::aio::sample::avb::talker::detail
             return parse_status::error;
         }
 
-        if (parsed < min_sync_timeout_s || parsed > max_sync_timeout_s)
+        if ((parsed < min_sync_timeout_s) || (parsed > max_sync_timeout_s))
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(),
                              "Out-of-range --sync-timeout-s value '{}' (expected 1..300)", value);
@@ -154,7 +154,7 @@ namespace kmx::aio::sample::avb::talker::detail
                 continue;
             }
 
-            if (i + 1 >= argc || !argv[i + 1])
+            if ((i + 1 >= argc) || !argv[i + 1])
             {
                 kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "Missing value for argument '{}'", arg);
                 return parse_status::error;

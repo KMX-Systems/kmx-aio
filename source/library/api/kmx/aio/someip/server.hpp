@@ -2,15 +2,17 @@
 /// @brief Backend-neutral async SOME/IP server facade.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <chrono>
-    #include <expected>
-    #include <memory>
-    #include <system_error>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_SOMEIP)
+    #ifndef PCH
+        #include <chrono>
+        #include <expected>
+        #include <memory>
+        #include <system_error>
 
-    #include <kmx/aio/someip/types.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+        #include <kmx/aio/someip/types.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::someip
 {
@@ -98,3 +100,4 @@ namespace kmx::aio::someip
     };
 
 } // namespace kmx::aio::someip
+#endif // KMX_AIO_FEATURE_SOMEIP

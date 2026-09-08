@@ -1,4 +1,5 @@
 #include <kmx/aio/http3/codec.hpp>
+#include <kmx/aio/exception.hpp>
 #include <kmx/aio/http3/qpack.hpp>
 
 #include "varint.hpp"
@@ -357,7 +358,7 @@ namespace kmx::aio::http3::demo
     {
         [[nodiscard]] std::string_view pseudo_to_header_name(const std::string_view pseudo_name) noexcept
         {
-            if (pseudo_name.empty() || pseudo_name.front() != ':')
+            if (pseudo_name.empty() || (pseudo_name.front() != ':'))
                 return pseudo_name;
 
             const char* const p = pseudo_name.data();
@@ -440,7 +441,7 @@ namespace kmx::aio::http3::demo
             return false;
         }
 
-        [[nodiscard]] inline constexpr bool is_ascii_space(const char ch) noexcept
+        [[nodiscard]] constexpr bool is_ascii_space(const char ch) noexcept
         {
             switch (ch)
             {
@@ -505,11 +506,11 @@ namespace kmx::aio::http3::demo
     std::string message_builder::make_request_payload(const request_head& request, std::string_view body) noexcept(false)
     {
         if (request.method.empty())
-            throw std::invalid_argument("HTTP/3 demo request requires a method");
+            throw invalid_argument("HTTP/3 demo request requires a method");
         if (request.target.empty())
-            throw std::invalid_argument("HTTP/3 demo request requires a target");
+            throw invalid_argument("HTTP/3 demo request requires a target");
         if (request.authority.empty())
-            throw std::invalid_argument("HTTP/3 demo request requires an authority");
+            throw invalid_argument("HTTP/3 demo request requires an authority");
 
         std::size_t total_size = 96u + request.method.size() + request.target.size() + request.authority.size() + body.size();
         for (const auto& [name, value]: request.headers)
@@ -601,7 +602,7 @@ namespace kmx::aio::http3::demo
         std::string_view request_line = head_and_body->first.substr(0u, request_line_end);
         const std::size_t first_space = request_line.find(' ');
         const std::size_t second_space = request_line.rfind(' ');
-        if (first_space == std::string_view::npos || second_space == std::string_view::npos || first_space == second_space)
+        if ((first_space == std::string_view::npos) || (second_space == std::string_view::npos) || (first_space == second_space))
             return std::unexpected(::kmx::aio::http3::detail::message_parse_error());
 
         message.head.method = std::string(request_line.substr(0u, first_space));
@@ -656,7 +657,7 @@ namespace kmx::aio::http3::demo
                                                  status_line.substr(first_space + 1u, second_space - first_space - 1u);
         std::uint32_t parsed_status {};
         const auto [ptr, ec] = std::from_chars(status_text.data(), status_text.data() + status_text.size(), parsed_status);
-        if (ec != std::errc {} || ptr != status_text.data() + status_text.size() || parsed_status > 65535u)
+        if ((ec != std::errc {}) || (ptr != status_text.data() + status_text.size()) || (parsed_status > 65535u))
             return std::unexpected(::kmx::aio::http3::detail::message_parse_error());
         message.head.status = static_cast<std::uint16_t>(parsed_status);
 
@@ -730,7 +731,7 @@ namespace kmx::aio::http3::demo
             return std::unexpected(frames.error());
 
         request_message message {};
-        bool have_headers = false;
+        bool have_headers {};
         for (const auto& frame: *frames)
         {
             if (frame.type == frame_type::headers)
@@ -777,7 +778,7 @@ namespace kmx::aio::http3::demo
             return std::unexpected(frames.error());
 
         response_message message {};
-        bool have_headers = false;
+        bool have_headers {};
         for (const auto& frame: *frames)
         {
             if (frame.type == frame_type::headers)
@@ -791,7 +792,7 @@ namespace kmx::aio::http3::demo
                     {
                         std::uint32_t parsed_status {};
                         const auto [ptr, ec] = std::from_chars(value.data(), value.data() + value.size(), parsed_status);
-                        if (ec != std::errc {} || ptr != value.data() + value.size() || parsed_status > 65535u)
+                        if ((ec != std::errc {}) || (ptr != value.data() + value.size()) || (parsed_status > 65535u))
                             return std::unexpected(::kmx::aio::http3::detail::message_parse_error());
                         message.head.status = static_cast<std::uint16_t>(parsed_status);
                     }

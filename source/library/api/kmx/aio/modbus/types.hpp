@@ -2,12 +2,14 @@
 /// @brief Modbus Application Protocol types, configuration, and data primitives.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <chrono>
-    #include <cstdint>
-    #include <string>
-    #include <vector>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_MODBUS)
+    #ifndef PCH
+        #include <chrono>
+        #include <cstdint>
+        #include <string>
+        #include <vector>
+    #endif
 
 namespace kmx::aio::modbus
 {
@@ -64,11 +66,11 @@ namespace kmx::aio::modbus
     struct mbap_header
     {
         /// @brief Transaction identifier — echoed in response.
-        std::uint16_t transaction_id = 0u;
+        std::uint16_t transaction_id {};
         /// @brief Protocol identifier — always 0x0000 for Modbus.
-        std::uint16_t protocol_id = 0u;
+        std::uint16_t protocol_id {};
         /// @brief Byte count of unit_id + PDU that follows.
-        std::uint16_t length = 0u;
+        std::uint16_t length {};
         /// @brief Unit identifier (slave device address).
         std::uint8_t unit_id = 1u;
     };
@@ -122,3 +124,4 @@ namespace kmx::aio::modbus
     };
 
 } // namespace kmx::aio::modbus
+#endif // KMX_AIO_FEATURE_MODBUS

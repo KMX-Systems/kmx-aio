@@ -113,7 +113,7 @@ namespace kmx::aio::detail
     struct basic_syscalls<false>
     {
         /// @brief False: this specialization carries no fault-injection code.
-        static constexpr bool injects_faults = false;
+        static constexpr bool injects_faults {};
 
         /// @brief Wrapper for ::epoll_create1.
         [[nodiscard]] static int epoll_create1(const int flags) noexcept { return native_syscalls::epoll_create1(flags); }

@@ -24,7 +24,7 @@ namespace kmx::aio::completion::spdk
     struct io_completion
     {
         std::atomic_bool done {false};
-        bool success = false;
+        bool success {};
     };
 
     void on_bdev_io_complete(spdk_bdev_io* bdev_io, const bool success, void* cb_arg) noexcept
@@ -79,13 +79,13 @@ namespace kmx::aio::completion::spdk
         std::mutex mutex {};
 
 #if defined(KMX_AIO_FEATURE_SPDK)
-        bool spdk_backend_enabled = false;
-        spdk_thread* io_thread = nullptr;
-        spdk_bdev_desc* bdev_desc = nullptr;
-        spdk_bdev* bdev = nullptr;
-        spdk_io_channel* io_channel = nullptr;
-        std::uint32_t actual_block_size = 0u;
-        std::uint64_t actual_block_count = 0u;
+        bool spdk_backend_enabled {};
+        spdk_thread* io_thread {};
+        spdk_bdev_desc* bdev_desc {};
+        spdk_bdev* bdev {};
+        spdk_io_channel* io_channel {};
+        std::uint32_t actual_block_size {};
+        std::uint64_t actual_block_count {};
 #endif
 
         std::vector<std::byte> storage {};
@@ -96,7 +96,7 @@ namespace kmx::aio::completion::spdk
     std::expected<std::uint64_t, std::error_code> device::validate_create_config([[maybe_unused]] const executor& exec,
                                                                                  const device_config& config) noexcept
     {
-        if (config.bdev_name.empty() || config.block_size == 0u || config.block_count == 0u)
+        if (config.bdev_name.empty() || (config.block_size == 0u) || (config.block_count == 0u))
             return std::unexpected(to_std_error_code(error_code::invalid_argument));
 
         constexpr auto max_u64 = std::numeric_limits<std::uint64_t>::max();
@@ -150,7 +150,7 @@ namespace kmx::aio::completion::spdk
 
         const std::string bdev_name {state.config.bdev_name};
         const int open_rc = spdk_bdev_open_ext(bdev_name.c_str(), true, on_bdev_event, &state, &state.bdev_desc);
-        if (open_rc != 0 || !state.bdev_desc)
+        if ((open_rc != 0) || !state.bdev_desc)
         {
             shutdown_spdk_backend(state);
             return std::unexpected(to_std_error_code(error_code::spdk_probe_failed));
@@ -165,7 +165,7 @@ namespace kmx::aio::completion::spdk
 
         state.actual_block_size = spdk_bdev_get_block_size(state.bdev);
         state.actual_block_count = spdk_bdev_get_num_blocks(state.bdev);
-        if (state.actual_block_size == 0u || state.actual_block_count == 0u)
+        if ((state.actual_block_size == 0u) || (state.actual_block_count == 0u))
         {
             shutdown_spdk_backend(state);
             return std::unexpected(to_std_error_code(error_code::spdk_probe_failed));
@@ -261,7 +261,7 @@ namespace kmx::aio::completion::spdk
             spdk_set_thread(state_->io_thread);
 
             const std::uint64_t num_blocks = static_cast<std::uint64_t>(out.size() / block_size);
-            if (lba > state_->actual_block_count || num_blocks > (state_->actual_block_count - lba))
+            if ((lba > state_->actual_block_count) || (num_blocks > (state_->actual_block_count - lba)))
                 co_return std::unexpected(to_std_error_code(error_code::invalid_argument));
 
             const auto op_result = submit_and_wait(state_->io_thread,
@@ -309,7 +309,7 @@ namespace kmx::aio::completion::spdk
             spdk_set_thread(state_->io_thread);
 
             const std::uint64_t num_blocks = static_cast<std::uint64_t>(in.size() / block_size);
-            if (lba > state_->actual_block_count || num_blocks > (state_->actual_block_count - lba))
+            if ((lba > state_->actual_block_count) || (num_blocks > (state_->actual_block_count - lba)))
                 co_return std::unexpected(to_std_error_code(error_code::invalid_argument));
 
             const auto op_result =

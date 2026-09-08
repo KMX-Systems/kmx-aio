@@ -5,42 +5,38 @@
 
 namespace kmx::aio::knx::routing
 {
-    namespace
+    [[nodiscard]] static std::expected<std::uint16_t, std::error_code> decode_control_value(
+        const cspan_uint8_t packet, const std::uint16_t service) noexcept
     {
-        [[nodiscard]] std::expected<std::uint16_t, std::error_code> decode_control_value(
-            const cspan_uint8_t packet, const std::uint16_t service) noexcept
-        {
-            const auto header = frame::decode_communication_header(packet);
-            if (!header.has_value())
-                return std::unexpected(header.error());
-            if (header->service_type != service)
-                return std::unexpected(make_error_code(error::unsupported_service));
-            if ((header->total_length != packet.size()) ||
-                (packet.size() != frame::communication_header_size + control_body_size))
-                return std::unexpected(make_error_code(error::malformed_frame));
-            return static_cast<std::uint16_t>(
-                (static_cast<std::uint16_t>(packet[frame::communication_header_size]) << 8u) |
-                static_cast<std::uint16_t>(packet[frame::communication_header_size + 1u]));
-        }
-
-        [[nodiscard]] std::expected<void, std::error_code> encode_control_value(
-            const span_uint8_t destination, const std::uint16_t service, const std::uint16_t value) noexcept
-        {
-            const auto total_length = frame::communication_header_size + control_body_size;
-            if (destination.size() < total_length)
-                return std::unexpected(make_error_code(error::invalid_length));
-            const auto header = frame::encode_communication_header(
-                destination, service, static_cast<std::uint16_t>(total_length));
-            if (!header.has_value())
-                return std::unexpected(header.error());
-            destination[frame::communication_header_size] = static_cast<std::uint8_t>(value >> 8u);
-            destination[frame::communication_header_size + 1u] = static_cast<std::uint8_t>(value & 0xFFu);
-            return {};
-        }
+        const auto header = frame::decode_communication_header(packet);
+        if (!header.has_value())
+            return std::unexpected(header.error());
+        if (header->service_type != service)
+            return std::unexpected(make_error_code(error::unsupported_service));
+        if ((header->total_length != packet.size()) ||
+            (packet.size() != frame::communication_header_size + control_body_size))
+            return std::unexpected(make_error_code(error::malformed_frame));
+        return static_cast<std::uint16_t>(
+            (static_cast<std::uint16_t>(packet[frame::communication_header_size]) << 8u) |
+            static_cast<std::uint16_t>(packet[frame::communication_header_size + 1u]));
     }
 
-    std::expected<void, std::error_code> encode_indication_packet(
-        const span_uint8_t destination, const indication& value) noexcept
+    [[nodiscard]] static expected_void_t encode_control_value(
+        const span_uint8_t destination, const std::uint16_t service, const std::uint16_t value) noexcept
+    {
+        const auto total_length = frame::communication_header_size + control_body_size;
+        if (destination.size() < total_length)
+            return std::unexpected(make_error_code(error::invalid_length));
+        const auto header = frame::encode_communication_header(
+            destination, service, static_cast<std::uint16_t>(total_length));
+        if (!header.has_value())
+            return std::unexpected(header.error());
+        destination[frame::communication_header_size] = static_cast<std::uint8_t>(value >> 8u);
+        destination[frame::communication_header_size + 1u] = static_cast<std::uint8_t>(value & 0xFFu);
+        return {};
+    }
+
+    expected_void_t encode_indication_packet(const span_uint8_t destination, const indication& value) noexcept
     {
         if ((value.channel_id == 0u) || value.cemi_bytes.empty())
             return std::unexpected(make_error_code(error::invalid_configuration));
@@ -78,8 +74,7 @@ namespace kmx::aio::knx::routing
         return indication {packet[6u], packet.subspan(frame::communication_header_size + indication_header_size)};
     }
 
-    std::expected<void, std::error_code> encode_lost_message_packet(
-        const span_uint8_t destination, const lost_message& value) noexcept
+    expected_void_t encode_lost_message_packet(const span_uint8_t destination, const lost_message& value) noexcept
     {
         return encode_control_value(destination, lost_message_service, value.count);
     }
@@ -93,8 +88,7 @@ namespace kmx::aio::knx::routing
         return lost_message {*value};
     }
 
-    std::expected<void, std::error_code> encode_busy_packet(
-        const span_uint8_t destination, const busy& value) noexcept
+    expected_void_t encode_busy_packet(const span_uint8_t destination, const busy& value) noexcept
     {
         return encode_control_value(destination, busy_service, value.wait_time_ms);
     }
@@ -108,7 +102,7 @@ namespace kmx::aio::knx::routing
         return busy {*value};
     }
 
-    std::expected<socket_address, std::error_code> client::multicast_peer() const noexcept
+    expected_socket_address_t client::multicast_peer() const noexcept
     {
         const auto group = ipv4::address_t {
             configuration_.group.data(),
@@ -270,7 +264,7 @@ namespace kmx::aio::knx::routing
         co_return expected_void_t {};
     }
 
-    task<std::expected<event, std::error_code>> client::receive_event() noexcept(false)
+    event_task_t client::receive_event() noexcept(false)
     {
         if (!started_)
             co_return std::unexpected(make_error_code(error::invalid_configuration));
@@ -310,7 +304,7 @@ namespace kmx::aio::knx::routing
                     co_return std::unexpected(decoded.error());
                 co_return event {received_indication {
                     .channel_id = decoded->channel_id,
-                    .cemi_bytes = std::vector<std::uint8_t>(decoded->cemi_bytes.begin(), decoded->cemi_bytes.end()),
+                    .cemi_bytes = byte_buffer_t(decoded->cemi_bytes.begin(), decoded->cemi_bytes.end()),
                 }};
             }
             case busy_service:
@@ -335,7 +329,7 @@ namespace kmx::aio::knx::routing
         }
     }
 
-    task<std::expected<received_indication, std::error_code>> client::receive_indication() noexcept(false)
+    received_indication_task_t client::receive_indication() noexcept(false)
     {
         for (;;)
         {

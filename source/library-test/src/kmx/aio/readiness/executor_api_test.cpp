@@ -36,6 +36,119 @@ namespace kmx::aio::test::readiness::executor_api_test
     using kmx::aio::test::scoped_runner;
     using kmx::aio::test::wait_for_flag;
 
+    namespace detail
+    {
+        /// @brief Sends one datagram and receives it back, recording both outcomes.
+        task<void> send_then_receive_datagram(atomic_outcome& sent, atomic_outcome& received, std::string& payload,
+                                              const std::span<char> buffer, const std::shared_ptr<executor>& exec,
+                                              const socket_pair& sockets) noexcept(false)
+        {
+            ::iovec out_iov {payload.data(), payload.size()};
+            ::msghdr out {};
+            out.msg_iov = &out_iov;
+            out.msg_iovlen = 1u;
+
+            const auto s = co_await exec->async_sendmsg(sockets.peer(), &out);
+            sent.completed.store(true, std::memory_order_release);
+            if (s)
+            {
+                sent.ok.store(true, std::memory_order_release);
+                sent.value.store(*s, std::memory_order_release);
+            }
+            else
+                sent.error = s.error();
+
+            ::iovec in_iov {buffer.data(), buffer.size()};
+            ::msghdr in {};
+            in.msg_iov = &in_iov;
+            in.msg_iovlen = 1u;
+
+            const auto r = co_await exec->async_recvmsg(sockets.local(), &in);
+            received.completed.store(true, std::memory_order_release);
+            if (r)
+            {
+                received.ok.store(true, std::memory_order_release);
+                received.value.store(*r, std::memory_order_release);
+            }
+            else
+                received.error = r.error();
+        }
+
+        /// @brief Receives on an empty socket, so the coroutine parks until the peer writes.
+        task<void> park_until_peer_writes(atomic_outcome& received, std::atomic_bool& started, const std::span<char> buffer,
+                                          const std::shared_ptr<executor>& exec, const int fd) noexcept(false)
+        {
+            ::iovec iov {buffer.data(), buffer.size()};
+            ::msghdr msg {};
+            msg.msg_iov = &iov;
+            msg.msg_iovlen = 1u;
+
+            started.store(true, std::memory_order_release);
+            const auto r = co_await exec->async_recvmsg(fd, &msg);
+            if (r)
+            {
+                received.ok.store(true, std::memory_order_release);
+                received.value.store(*r, std::memory_order_release);
+            }
+            else
+                received.error = r.error();
+
+            received.completed.store(true, std::memory_order_release);
+        }
+
+        /// @brief Sends on a descriptor that was never open, and records the error.
+        task<void> send_bad_descriptor(atomic_outcome& sent, std::string& payload, const std::shared_ptr<executor>& exec) noexcept(false)
+        {
+            ::iovec iov {payload.data(), payload.size()};
+            ::msghdr msg {};
+            msg.msg_iov = &iov;
+            msg.msg_iovlen = 1u;
+
+            const auto s = co_await exec->async_sendmsg(-1, &msg);
+            if (s)
+                sent.ok.store(true, std::memory_order_release);
+            else
+                sent.error = s.error();
+
+            sent.completed.store(true, std::memory_order_release);
+        }
+
+        /// @brief Waits out one timeout, stamping the clock either side of it.
+        task<void> wait_timeout(atomic_outcome& waited, std::chrono::steady_clock::time_point& start,
+                                std::chrono::steady_clock::time_point& end, const std::shared_ptr<executor>& exec) noexcept(false)
+        {
+            start = std::chrono::steady_clock::now();
+            const auto t = co_await exec->async_timeout(30'000'000u); // 30ms
+            end = std::chrono::steady_clock::now();
+            if (t)
+                waited.ok.store(true, std::memory_order_release);
+            else
+                waited.error = t.error();
+
+            waited.completed.store(true, std::memory_order_release);
+        }
+
+        /// @brief Parks on the first descriptor and records whether the wait fired or was cancelled.
+        task<void> park_first_descriptor(std::atomic_bool& first_parked, std::atomic_bool& first_done, std::atomic_bool& first_fired,
+                                         const std::shared_ptr<executor>& exec, const int fd) noexcept(false)
+        {
+            first_parked.store(true, std::memory_order_release);
+            const bool fired = co_await exec->wait_io(fd, event_type::read);
+            first_fired.store(fired, std::memory_order_release);
+            first_done.store(true, std::memory_order_release);
+        }
+
+        /// @brief Parks on the second descriptor and records whether the wait fired or was cancelled.
+        task<void> park_second_descriptor(std::atomic_bool& second_parked, std::atomic_bool& second_done, std::atomic_bool& second_fired,
+                                          const std::shared_ptr<executor>& exec, const int fd) noexcept(false)
+        {
+            second_parked.store(true, std::memory_order_release);
+            const bool fired = co_await exec->wait_io(fd, event_type::read);
+            second_fired.store(fired, std::memory_order_release);
+            second_done.store(true, std::memory_order_release);
+        }
+    } // namespace detail
+
     // statistics
     TEST_CASE("statistics::reset zeroes every counter", "[readiness][executor][statistics]")
     {
@@ -150,7 +263,7 @@ namespace kmx::aio::test::readiness::executor_api_test
         private:
             const char* name_;
             std::string previous_ {};
-            bool had_previous_ = false;
+            bool had_previous_ {};
         };
 
         /// @brief True when the library was built with the OpenOnload detection compiled in.
@@ -291,39 +404,7 @@ namespace kmx::aio::test::readiness::executor_api_test
         std::string payload {"readiness"};
         std::array<char, 64> buffer {};
 
-        auto body = [&sent, &received, &payload, &buffer, exec, &sockets]() -> task<void>
-        {
-            ::iovec out_iov {payload.data(), payload.size()};
-            ::msghdr out {};
-            out.msg_iov = &out_iov;
-            out.msg_iovlen = 1u;
-
-            const auto s = co_await exec->async_sendmsg(sockets.peer(), &out);
-            sent.completed.store(true, std::memory_order_release);
-            if (s)
-            {
-                sent.ok.store(true, std::memory_order_release);
-                sent.value.store(*s, std::memory_order_release);
-            }
-            else
-                sent.error = s.error();
-
-            ::iovec in_iov {buffer.data(), buffer.size()};
-            ::msghdr in {};
-            in.msg_iov = &in_iov;
-            in.msg_iovlen = 1u;
-
-            const auto r = co_await exec->async_recvmsg(sockets.local(), &in);
-            received.completed.store(true, std::memory_order_release);
-            if (r)
-            {
-                received.ok.store(true, std::memory_order_release);
-                received.value.store(*r, std::memory_order_release);
-            }
-            else
-                received.error = r.error();
-        };
-        exec->spawn(body());
+        exec->spawn(detail::send_then_receive_datagram(sent, received, payload, buffer, exec, sockets));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(received.completed, 5s));
@@ -349,26 +430,7 @@ namespace kmx::aio::test::readiness::executor_api_test
         std::atomic_bool started {false};
         std::array<char, 64> buffer {};
 
-        auto body = [&received, &started, &buffer, exec, fd = sockets.local()]() -> task<void>
-        {
-            ::iovec iov {buffer.data(), buffer.size()};
-            ::msghdr msg {};
-            msg.msg_iov = &iov;
-            msg.msg_iovlen = 1u;
-
-            started.store(true, std::memory_order_release);
-            const auto r = co_await exec->async_recvmsg(fd, &msg);
-            if (r)
-            {
-                received.ok.store(true, std::memory_order_release);
-                received.value.store(*r, std::memory_order_release);
-            }
-            else
-                received.error = r.error();
-
-            received.completed.store(true, std::memory_order_release);
-        };
-        exec->spawn(body());
+        exec->spawn(detail::park_until_peer_writes(received, started, buffer, exec, sockets.local()));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(started, 2s));
@@ -389,22 +451,7 @@ namespace kmx::aio::test::readiness::executor_api_test
         atomic_outcome sent;
         std::string payload {"x"};
 
-        auto body = [&sent, &payload, exec]() -> task<void>
-        {
-            ::iovec iov {payload.data(), payload.size()};
-            ::msghdr msg {};
-            msg.msg_iov = &iov;
-            msg.msg_iovlen = 1u;
-
-            const auto s = co_await exec->async_sendmsg(-1, &msg);
-            if (s)
-                sent.ok.store(true, std::memory_order_release);
-            else
-                sent.error = s.error();
-
-            sent.completed.store(true, std::memory_order_release);
-        };
-        exec->spawn(body());
+        exec->spawn(detail::send_bad_descriptor(sent, payload, exec));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(sent.completed, 5s));
@@ -420,19 +467,7 @@ namespace kmx::aio::test::readiness::executor_api_test
         std::chrono::steady_clock::time_point start {};
         std::chrono::steady_clock::time_point end {};
 
-        auto body = [&waited, &start, &end, exec]() -> task<void>
-        {
-            start = std::chrono::steady_clock::now();
-            const auto t = co_await exec->async_timeout(30'000'000u); // 30ms
-            end = std::chrono::steady_clock::now();
-            if (t)
-                waited.ok.store(true, std::memory_order_release);
-            else
-                waited.error = t.error();
-
-            waited.completed.store(true, std::memory_order_release);
-        };
-        exec->spawn(body());
+        exec->spawn(detail::wait_timeout(waited, start, end, exec));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(waited.completed, 5s));
@@ -596,24 +631,8 @@ namespace kmx::aio::test::readiness::executor_api_test
         std::atomic_bool first_fired {false};
         std::atomic_bool second_fired {false};
 
-        auto first_body = [&first_parked, &first_done, &first_fired, exec, fd = first.local()]() -> task<void>
-        {
-            first_parked.store(true, std::memory_order_release);
-            const bool fired = co_await exec->wait_io(fd, event_type::read);
-            first_fired.store(fired, std::memory_order_release);
-            first_done.store(true, std::memory_order_release);
-        };
-
-        auto second_body = [&second_parked, &second_done, &second_fired, exec, fd = second.local()]() -> task<void>
-        {
-            second_parked.store(true, std::memory_order_release);
-            const bool fired = co_await exec->wait_io(fd, event_type::read);
-            second_fired.store(fired, std::memory_order_release);
-            second_done.store(true, std::memory_order_release);
-        };
-
-        exec->spawn(first_body());
-        exec->spawn(second_body());
+        exec->spawn(detail::park_first_descriptor(first_parked, first_done, first_fired, exec, first.local()));
+        exec->spawn(detail::park_second_descriptor(second_parked, second_done, second_fired, exec, second.local()));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(first_parked, 2s));
@@ -669,6 +688,72 @@ namespace kmx::aio::test::readiness::executor_api_test
         std::atomic_bool done {false};
     };
 
+    namespace detail
+    {
+        /// @brief Parks on a read and records which thread started the task and which resumed it.
+        task<void> record_wake_up(wake_up_record& record, const std::shared_ptr<executor>& exec, const int fd) noexcept(false)
+        {
+            record.started_on.store(std::this_thread::get_id(), std::memory_order_release);
+            record.parked.store(true, std::memory_order_release);
+            const bool fired = co_await exec->wait_io(fd, event_type::read);
+            CHECK(fired);
+            record.resumed_on.store(std::this_thread::get_id(), std::memory_order_release);
+            record.done.store(true, std::memory_order_release);
+        }
+
+        /// @brief Reads one byte, parking on the executor whenever the descriptor is not ready.
+        task<bool> read_one(executor& e, const int fd) noexcept(false)
+        {
+            char byte {};
+            while (true)
+            {
+                const auto n = ::read(fd, &byte, 1u);
+                if (n == 1)
+                    co_return true;
+
+                if ((n == 0) || ((errno != EAGAIN) && (errno != EWOULDBLOCK) && (errno != EINTR)))
+                    co_return false;
+
+                if ((errno != EINTR) && !co_await e.wait_io(fd, event_type::read))
+                    co_return false;
+            }
+        }
+
+        /// @brief Reads a byte and writes one back, a fixed number of times.
+        task<void> echo_exchange(std::atomic_int& echoed, const std::shared_ptr<executor>& exec, const int fd,
+                                 const int exchanges) noexcept(false)
+        {
+            for (int i = 0; i < exchanges; ++i)
+            {
+                if (!co_await read_one(*exec, fd))
+                    co_return;
+
+                const char byte = 'r';
+                if (::write(fd, &byte, 1u) != 1)
+                    co_return;
+
+                echoed.fetch_add(1, std::memory_order_acq_rel);
+            }
+        }
+
+        /// @brief Writes a byte and waits for the echo, a fixed number of times.
+        task<void> client_exchange(std::atomic_bool& client_done, const std::shared_ptr<executor>& exec, const int fd,
+                                   const int exchanges) noexcept(false)
+        {
+            for (int i = 0; i < exchanges; ++i)
+            {
+                const char byte = 'q';
+                if (::write(fd, &byte, 1u) != 1)
+                    co_return;
+
+                if (!co_await read_one(*exec, fd))
+                    co_return;
+            }
+
+            client_done.store(true, std::memory_order_release);
+        }
+    } // namespace detail
+
     TEST_CASE("the default executor resumes a wait on a scheduler worker", "[readiness][executor][resumption]")
     {
         // The default, and the reference point for the inline case below: with a single worker, the
@@ -681,16 +766,7 @@ namespace kmx::aio::test::readiness::executor_api_test
         REQUIRE(exec->register_fd(sockets.local()).has_value());
 
         wake_up_record record;
-        auto body = [&record, exec, fd = sockets.local()]() -> task<void>
-        {
-            record.started_on.store(std::this_thread::get_id(), std::memory_order_release);
-            record.parked.store(true, std::memory_order_release);
-            const bool fired = co_await exec->wait_io(fd, event_type::read);
-            CHECK(fired);
-            record.resumed_on.store(std::this_thread::get_id(), std::memory_order_release);
-            record.done.store(true, std::memory_order_release);
-        };
-        exec->spawn(body());
+        exec->spawn(detail::record_wake_up(record, exec, sockets.local()));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(record.parked, 2s));
@@ -717,16 +793,7 @@ namespace kmx::aio::test::readiness::executor_api_test
         REQUIRE(exec->register_fd(sockets.local()).has_value());
 
         wake_up_record record;
-        auto body = [&record, exec, fd = sockets.local()]() -> task<void>
-        {
-            record.started_on.store(std::this_thread::get_id(), std::memory_order_release);
-            record.parked.store(true, std::memory_order_release);
-            const bool fired = co_await exec->wait_io(fd, event_type::read);
-            CHECK(fired);
-            record.resumed_on.store(std::this_thread::get_id(), std::memory_order_release);
-            record.done.store(true, std::memory_order_release);
-        };
-        exec->spawn(body());
+        exec->spawn(detail::record_wake_up(record, exec, sockets.local()));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(record.parked, 2s));
@@ -791,55 +858,8 @@ namespace kmx::aio::test::readiness::executor_api_test
         std::atomic_int echoed {0};
         std::atomic_bool client_done {false};
 
-        const auto read_one = [](executor& e, const int fd) -> task<bool>
-        {
-            char byte {};
-            while (true)
-            {
-                const auto n = ::read(fd, &byte, 1u);
-                if (n == 1)
-                    co_return true;
-
-                if ((n == 0) || ((errno != EAGAIN) && (errno != EWOULDBLOCK) && (errno != EINTR)))
-                    co_return false;
-
-                if ((errno != EINTR) && !co_await e.wait_io(fd, event_type::read))
-                    co_return false;
-            }
-        };
-
-        auto echo_body = [&echoed, &read_one, exec, fd = sockets.peer()]() -> task<void>
-        {
-            for (int i = 0; i < exchanges; ++i)
-            {
-                if (!co_await read_one(*exec, fd))
-                    co_return;
-
-                const char byte = 'r';
-                if (::write(fd, &byte, 1u) != 1)
-                    co_return;
-
-                echoed.fetch_add(1, std::memory_order_acq_rel);
-            }
-        };
-
-        auto client_body = [&client_done, &read_one, exec, fd = sockets.local()]() -> task<void>
-        {
-            for (int i = 0; i < exchanges; ++i)
-            {
-                const char byte = 'q';
-                if (::write(fd, &byte, 1u) != 1)
-                    co_return;
-
-                if (!co_await read_one(*exec, fd))
-                    co_return;
-            }
-
-            client_done.store(true, std::memory_order_release);
-        };
-
-        exec->spawn(echo_body());
-        exec->spawn(client_body());
+        exec->spawn(detail::echo_exchange(echoed, exec, sockets.peer(), exchanges));
+        exec->spawn(detail::client_exchange(client_done, exec, sockets.local(), exchanges));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(client_done, 10s));

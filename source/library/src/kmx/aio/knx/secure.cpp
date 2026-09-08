@@ -5,40 +5,36 @@
 
 namespace kmx::aio::knx::secure
 {
-    namespace
+    [[nodiscard]] static constexpr bool supported_profile(const profile value) noexcept
     {
-        [[nodiscard]] constexpr bool supported_profile(const profile value) noexcept
-        {
-            return (value == profile::ip_secure) || (value == profile::data_secure);
-        }
-
-        [[nodiscard]] constexpr std::uint64_t decode_u64_be(const cspan_uint8_t value) noexcept
-        {
-            return (static_cast<std::uint64_t>(value[0u]) << 56u) |
-                   (static_cast<std::uint64_t>(value[1u]) << 48u) |
-                   (static_cast<std::uint64_t>(value[2u]) << 40u) |
-                   (static_cast<std::uint64_t>(value[3u]) << 32u) |
-                   (static_cast<std::uint64_t>(value[4u]) << 24u) |
-                   (static_cast<std::uint64_t>(value[5u]) << 16u) |
-                   (static_cast<std::uint64_t>(value[6u]) << 8u) |
-                   static_cast<std::uint64_t>(value[7u]);
-        }
-
-        constexpr void encode_u64_be(const span_uint8_t destination, const std::uint64_t value) noexcept
-        {
-            destination[0u] = static_cast<std::uint8_t>((value >> 56u) & 0xFFu);
-            destination[1u] = static_cast<std::uint8_t>((value >> 48u) & 0xFFu);
-            destination[2u] = static_cast<std::uint8_t>((value >> 40u) & 0xFFu);
-            destination[3u] = static_cast<std::uint8_t>((value >> 32u) & 0xFFu);
-            destination[4u] = static_cast<std::uint8_t>((value >> 24u) & 0xFFu);
-            destination[5u] = static_cast<std::uint8_t>((value >> 16u) & 0xFFu);
-            destination[6u] = static_cast<std::uint8_t>((value >> 8u) & 0xFFu);
-            destination[7u] = static_cast<std::uint8_t>(value & 0xFFu);
-        }
+        return (value == profile::ip_secure) || (value == profile::data_secure);
     }
 
-    std::expected<void, std::error_code> encode_secure_packet(
-        const span_uint8_t destination, const packet& value) noexcept
+    [[nodiscard]] static constexpr std::uint64_t decode_u64_be(const cspan_uint8_t value) noexcept
+    {
+        return (static_cast<std::uint64_t>(value[0u]) << 56u) |
+               (static_cast<std::uint64_t>(value[1u]) << 48u) |
+               (static_cast<std::uint64_t>(value[2u]) << 40u) |
+               (static_cast<std::uint64_t>(value[3u]) << 32u) |
+               (static_cast<std::uint64_t>(value[4u]) << 24u) |
+               (static_cast<std::uint64_t>(value[5u]) << 16u) |
+               (static_cast<std::uint64_t>(value[6u]) << 8u) |
+               static_cast<std::uint64_t>(value[7u]);
+    }
+
+    static constexpr void encode_u64_be(const span_uint8_t destination, const std::uint64_t value) noexcept
+    {
+        destination[0u] = static_cast<std::uint8_t>((value >> 56u) & 0xFFu);
+        destination[1u] = static_cast<std::uint8_t>((value >> 48u) & 0xFFu);
+        destination[2u] = static_cast<std::uint8_t>((value >> 40u) & 0xFFu);
+        destination[3u] = static_cast<std::uint8_t>((value >> 32u) & 0xFFu);
+        destination[4u] = static_cast<std::uint8_t>((value >> 24u) & 0xFFu);
+        destination[5u] = static_cast<std::uint8_t>((value >> 16u) & 0xFFu);
+        destination[6u] = static_cast<std::uint8_t>((value >> 8u) & 0xFFu);
+        destination[7u] = static_cast<std::uint8_t>(value & 0xFFu);
+    }
+
+    expected_void_t encode_secure_packet(const span_uint8_t destination, const packet& value) noexcept
     {
         if (!supported_profile(value.selected))
             return std::unexpected(make_error_code(error::invalid_configuration));
@@ -98,15 +94,15 @@ namespace kmx::aio::knx::secure
         packet decoded {
             .selected = selected,
             .sequence = sequence,
-            .payload = std::vector<std::uint8_t>(packet_bytes.begin() + body_offset, packet_bytes.end()),
+            .payload = byte_buffer_t(packet_bytes.begin() + body_offset, packet_bytes.end()),
         };
         return decoded;
     }
 
-    std::expected<std::vector<std::uint8_t>, std::error_code> protect_packet(
+    expected_byte_buffer_t protect_packet(
         provider& crypto,
         const profile selected,
-        const std::span<const std::uint8_t> payload,
+        const cspan_uint8_t payload,
         const std::uint64_t sequence) noexcept
     {
         if (!supported_profile(selected))
@@ -121,8 +117,7 @@ namespace kmx::aio::knx::secure
             .sequence = sequence,
             .payload = std::move(*protected_payload),
         };
-        std::vector<std::uint8_t> encoded(
-            frame::communication_header_size + secure_packet_header_size + wrapped.payload.size(), 0u);
+        byte_buffer_t encoded(frame::communication_header_size + secure_packet_header_size + wrapped.payload.size(), 0u);
         const auto result = encode_secure_packet(encoded, wrapped);
         if (!result.has_value())
             return std::unexpected(result.error());
@@ -130,7 +125,7 @@ namespace kmx::aio::knx::secure
         return encoded;
     }
 
-    std::expected<std::vector<std::uint8_t>, std::error_code> unprotect_packet(
+    expected_byte_buffer_t unprotect_packet(
         provider& crypto,
         const profile expected_profile,
         const cspan_uint8_t packet_bytes,

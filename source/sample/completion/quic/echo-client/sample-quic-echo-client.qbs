@@ -14,8 +14,6 @@ CppApplication {
         "../../../../library/inc_dep",
     ].concat(project.quic_include_paths)
 
-    cpp.defines: ["KMX_AIO_FEATURE_QUIC=1"]
-
     Depends { name: "kmx-aio-completion" }
     Depends { name: "kmx-aio-quic"; condition: project.enable_quic }
 

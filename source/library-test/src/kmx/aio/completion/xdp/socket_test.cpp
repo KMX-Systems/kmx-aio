@@ -17,7 +17,7 @@ namespace kmx::aio::test::completion::xdp::socket_test
 
     struct xdp_roundtrip_state
     {
-        bool ok = false;
+        bool ok {};
         std::error_code create_error {};
         std::error_code send_overflow_error {};
         std::error_code recv_empty_error {};
@@ -174,7 +174,7 @@ namespace kmx::aio::test::completion::xdp::socket_test
         exec.spawn(run_roundtrip(exec, state));
         exec.run();
 
-        REQUIRE((state->ok || state->create_error.value() != 0));
-        REQUIRE((state->ok || state->create_error.value() != 0));
+        REQUIRE((state->ok || (state->create_error.value() != 0)));
+        REQUIRE((state->ok || (state->create_error.value() != 0)));
     }
 } // namespace kmx::aio::test::completion::xdp::socket_test

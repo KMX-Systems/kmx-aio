@@ -93,7 +93,7 @@ namespace kmx::aio::test::modbus
 
     private:
         std::deque<std::vector<std::uint8_t>> read_queue_;
-        std::size_t read_offset_ = 0u;
+        std::size_t read_offset_ {};
         std::vector<std::uint8_t> written_;
     };
 

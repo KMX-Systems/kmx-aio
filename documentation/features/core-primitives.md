@@ -16,7 +16,10 @@ The library is built around a small set of core async primitives, all of them in
 | `kmx::aio::async_mutex` | `<kmx/aio/async_mutex.hpp>` | A mutex acquired with `co_await`, holdable across a suspension |
 | `kmx::aio::error_code` | `<kmx/aio/error_code.hpp>` | Error propagation with `std::expected` |
 
-`<kmx/aio/aio.hpp>` includes the whole public API in one go.
+`<kmx/aio/aio.hpp>` includes the whole public API in one go - every header of both I/O models and
+of every protocol, security and hardware family. It carries no feature guards of its own: each
+header it names is guarded at its own top and expands to nothing when its feature is off, so the
+umbrella follows the build it is compiled in. See [Feature Defines](../build.md#feature-defines).
 
 The allocator, buffer and channel headers were split out of the former `allocator.hpp`, `buffer.hpp`,
 `buffer_pool.hpp` and a single monolithic `channel.hpp`; those spellings no longer exist. The syscall

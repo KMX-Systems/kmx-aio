@@ -10,6 +10,7 @@
 ///       this provides what a protocol layer actually needs: a stream you can read from and write to, in
 ///       order, with backpressure, and which suspends rather than drops.
 #pragma once
+#include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_QUIC)
 
     #ifndef PCH
@@ -353,7 +354,10 @@ namespace kmx::aio::quic
         {
             basic_endpoint& self;
 
-            [[nodiscard]] bool await_ready() const noexcept { return static_cast<bool>(self.opened_) || static_cast<bool>(self.failure_); }
+            [[nodiscard]] bool await_ready() const noexcept
+            {
+                return static_cast<bool>(self.opened_) || static_cast<bool>(self.failure_);
+            }
 
             void await_suspend(const coroutine_handle_t handle) const noexcept { self.opener_ = handle; }
             void await_resume() const noexcept {}

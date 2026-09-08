@@ -68,14 +68,14 @@ namespace kmx::aio::completion::xdp
         bool af_xdp_backend_enabled {};
 
 #if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
-        xsk_socket* xsk = nullptr;
-        xsk_umem* umem = nullptr;
+        xsk_socket* xsk {};
+        xsk_umem* umem {};
         xsk_ring_cons rx {};
         xsk_ring_prod tx {};
         xsk_ring_prod fill {};
         xsk_ring_cons comp {};
         std::unique_ptr<void, decltype(&std::free)> umem_area {nullptr, &std::free};
-        std::uint64_t umem_size = 0u;
+        std::uint64_t umem_size {};
         std::deque<std::uint64_t> free_frame_addrs {};
         std::unordered_set<std::uint64_t> rx_inflight {};
 #endif
@@ -227,7 +227,7 @@ namespace kmx::aio::completion::xdp
     expected_void_t socket::allocate_umem(state& state) noexcept
     {
         void* umem_raw {};
-        if (::posix_memalign(&umem_raw, 4096u, static_cast<std::size_t>(state.umem_size)) != 0 || !umem_raw)
+        if ((::posix_memalign(&umem_raw, 4096u, static_cast<std::size_t>(state.umem_size)) != 0) || !umem_raw)
             return std::unexpected(to_std_error_code(error_code::xdp_umem_registration_failed));
 
         state.umem_area.reset(umem_raw);
@@ -428,9 +428,7 @@ namespace kmx::aio::completion::xdp
 #if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
         std::unique_lock lock(st.mutex);
         if (st.af_xdp_backend_enabled)
-        {
             co_return send_via_af_xdp_backend(st, data);
-        }
 
         co_return send_via_fallback(st, data);
 #endif

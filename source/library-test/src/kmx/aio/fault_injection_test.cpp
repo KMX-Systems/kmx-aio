@@ -78,6 +78,50 @@ namespace kmx::aio::test::fault_injection_test
 
             return false;
         }
+
+        /// @brief Reads with the next io_uring_submit made to fail, and records what came back.
+        task<void> read_with_refused_submission(completion::executor& exec, bool& completed, bool& ok, std::error_code& error,
+                                                const std::span<char> buffer, const int fd) noexcept(false)
+        {
+            const scoped_fault fault {syscall_id::io_uring_submit, EAGAIN, 1u};
+            const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
+            completed = true;
+            if (r)
+                ok = true;
+            else
+                error = r.error();
+
+            exec.stop();
+        }
+
+        /// @brief Reads while the completion wait is interrupted, and records that it still finished.
+        task<void> read_until_interrupted(completion::executor& exec, std::atomic_bool& submitted, std::atomic_bool& finished,
+                                          const std::span<char> buffer, const int fd) noexcept(false)
+        {
+            submitted.store(true, std::memory_order_release);
+            const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
+            (void) r;
+            finished.store(true, std::memory_order_release);
+        }
+
+        /// @brief Reads once on an executor whose core pin was refused, then ends the loop.
+        task<void> read_then_stop(completion::executor& exec, bool& completed, const std::span<char> buffer, const int fd) noexcept(false)
+        {
+            const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
+            (void) r;
+            completed = true;
+            exec.stop();
+        }
+
+        /// @brief Parks on a read wait and records that it started, what it saw, and that it ended.
+        task<void> park_and_record(std::atomic_bool& parked, std::atomic_bool& fired, std::atomic_bool& done,
+                                   const std::shared_ptr<readiness::executor>& exec, const int fd) noexcept(false)
+        {
+            parked.store(true, std::memory_order_release);
+            const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
+            fired.store(event, std::memory_order_release);
+            done.store(true, std::memory_order_release);
+        }
     } // namespace detail
 
     // the seam itself
@@ -173,14 +217,7 @@ namespace kmx::aio::test::fault_injection_test
         std::atomic_bool fired {false};
         std::atomic_bool done {false};
 
-        auto body = [&parked, &fired, &done, exec, fd = sockets.local()]() -> task<void>
-        {
-            parked.store(true, std::memory_order_release);
-            const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
-            fired.store(event, std::memory_order_release);
-            done.store(true, std::memory_order_release);
-        };
-        exec->spawn(body());
+        exec->spawn(detail::park_and_record(parked, fired, done, exec, sockets.local()));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(parked, 2s));
@@ -274,24 +311,12 @@ namespace kmx::aio::test::fault_injection_test
         REQUIRE(::pipe(fds) == 0);
 
         completion::executor exec;
-        bool completed = false;
-        bool ok = false;
+        bool completed {};
+        bool ok {};
         std::error_code error {};
         std::array<char, 8> buffer {};
 
-        auto body = [&exec, &completed, &ok, &error, &buffer, fd = fds[0]]() -> task<void>
-        {
-            const scoped_fault fault {syscall_id::io_uring_submit, EAGAIN, 1u};
-            const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
-            completed = true;
-            if (r)
-                ok = true;
-            else
-                error = r.error();
-
-            exec.stop();
-        };
-        exec.spawn(body());
+        exec.spawn(detail::read_with_refused_submission(exec, completed, ok, error, buffer, fds[0]));
         exec.run();
 
         CHECK(completed);
@@ -355,14 +380,7 @@ namespace kmx::aio::test::fault_injection_test
         std::atomic_bool finished {false};
         std::array<char, 8> buffer {};
 
-        auto body = [&exec, &submitted, &finished, &buffer, fd = fds[0]]() -> task<void>
-        {
-            submitted.store(true, std::memory_order_release);
-            const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
-            (void) r;
-            finished.store(true, std::memory_order_release);
-        };
-        exec.spawn(body());
+        exec.spawn(detail::read_until_interrupted(exec, submitted, finished, buffer, fds[0]));
 
         kmx::aio::test::scoped_completion_runner runner {exec};
         REQUIRE(wait_for_flag(submitted, 2s));
@@ -401,17 +419,10 @@ namespace kmx::aio::test::fault_injection_test
         const scoped_fault fault {syscall_id::pthread_setaffinity_np, EINVAL, 1u};
 
         completion::executor exec {config};
-        bool completed = false;
+        bool completed {};
         std::array<char, 8> buffer {};
 
-        auto body = [&exec, &completed, &buffer, fd = fds[0]]() -> task<void>
-        {
-            const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
-            (void) r;
-            completed = true;
-            exec.stop();
-        };
-        exec.spawn(body());
+        exec.spawn(detail::read_then_stop(exec, completed, buffer, fds[0]));
 
         kmx::aio::test::scoped_completion_runner runner {exec};
         std::this_thread::sleep_for(50ms);
@@ -443,14 +454,7 @@ namespace kmx::aio::test::fault_injection_test
         std::atomic_bool fired {false};
         std::atomic_bool done {false};
 
-        auto body = [&parked, &fired, &done, exec, fd = sockets.local()]() -> task<void>
-        {
-            parked.store(true, std::memory_order_release);
-            const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
-            fired.store(event, std::memory_order_release);
-            done.store(true, std::memory_order_release);
-        };
-        exec->spawn(body());
+        exec->spawn(detail::park_and_record(parked, fired, done, exec, sockets.local()));
 
         scoped_runner runner {*exec};
         REQUIRE(wait_for_flag(parked, 2s));

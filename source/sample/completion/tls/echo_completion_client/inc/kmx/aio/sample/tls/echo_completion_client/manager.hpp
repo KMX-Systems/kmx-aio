@@ -106,6 +106,9 @@ namespace kmx::aio::sample::tls::echo_completion_client
         /// @brief Print test summary
         void print_summary(const std::chrono::milliseconds elapsed) const;
 
+        /// @brief Stops the UI thread and releases the SSL context
+        void shut_down() noexcept;
+
         config config_;
         std::unique_ptr<completion::executor> executor_;
         metric_data metrics_;

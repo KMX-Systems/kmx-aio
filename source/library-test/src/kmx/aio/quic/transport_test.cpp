@@ -216,6 +216,18 @@ namespace kmx::aio::test::quic::transport_test
 
             exec.stop();
         }
+
+        /// @brief Advances an xorshift64 generator and reduces it into [0, @p bound).
+        /// @param rng The generator's state, advanced in place.
+        /// @param bound The exclusive upper bound; must not be zero.
+        /// @return The next value.
+        [[nodiscard]] std::size_t next_bounded(std::uint64_t& rng, const std::size_t bound) noexcept
+        {
+            rng ^= rng << 13u;
+            rng ^= rng >> 7u;
+            rng ^= rng << 17u;
+            return static_cast<std::size_t>(rng % bound);
+        }
     } // namespace detail
 
     TEST_CASE("quic transport endpoint serves successive connections", "[quic][transport][integration]")
@@ -337,15 +349,9 @@ namespace kmx::aio::test::quic::transport_test
 
             // Fixed seed: a failure has to be reproducible, and nothing here should depend on the run.
             std::uint64_t rng = 0x2545f4914f6cdd1dull;
-            const auto next = [&rng](const std::size_t bound) noexcept
-            {
-                rng ^= rng << 13u;
-                rng ^= rng >> 7u;
-                rng ^= rng << 17u;
-                return static_cast<std::size_t>(rng % bound);
-            };
+            const auto next = [&rng](const std::size_t bound) noexcept { return detail::next_bounded(rng, bound); };
 
-            std::size_t counter = 0u;
+            std::size_t counter {};
             bool sizes_matched = true;
             bool contents_matched = true;
 

@@ -30,9 +30,7 @@ namespace kmx::aio::sample::udp::echo::server
         std::signal(SIGTERM, signal_handler);
 
         for (std::uint32_t i {}; i < config_.listener_workers; ++i)
-        {
             executor_->spawn(listener(i));
-        }
 
         logger::log(logger::level::info, std::source_location::current(), "Server running. Press Ctrl+C to stop.");
         executor_->run();

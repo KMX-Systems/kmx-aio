@@ -2,6 +2,7 @@
 /// @brief Common settings for QUIC engines.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
+#include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_QUIC)
 
 namespace kmx::aio::quic
@@ -18,4 +19,4 @@ namespace kmx::aio::quic
     };
 } // namespace kmx::aio::quic
 
-#endif
+#endif // KMX_AIO_FEATURE_QUIC

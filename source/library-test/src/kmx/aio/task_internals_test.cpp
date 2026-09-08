@@ -70,66 +70,99 @@ namespace kmx::aio::test::task_internals_test
             exec.spawn(body(exec));
             exec.run();
         }
-    } // namespace detail
 
-    TEST_CASE("a throwing expected<size_t> task reports through its own promise", "[core][task][exception]")
-    {
-        bool caught = false;
-        auto body = [&caught](completion::executor& exec) -> task<void>
+        /// @brief Awaits the throwing expected<size_t> task and records that its exception surfaced.
+        /// @param caught Set when the task's exception reached this coroutine.
+        /// @param exec The executor whose loop to stop once the task has been awaited.
+        /// @return A task the caller spawns.
+        /// @throws std::bad_alloc (coroutine frame allocation).
+        task<void> catch_from_size_task(bool& caught, completion::executor& exec) noexcept(false)
         {
             try
             {
-                const auto result = co_await detail::throwing_size_task();
+                const auto result = co_await throwing_size_task();
                 (void) result;
             }
-            catch (const detail::task_error&)
+            catch (const task_error&)
             {
                 caught = true;
             }
 
             exec.stop();
-        };
+        }
+
+        /// @brief Awaits the throwing expected<int> task and records that its exception surfaced.
+        /// @param caught Set when the task's exception reached this coroutine.
+        /// @param exec The executor whose loop to stop once the task has been awaited.
+        /// @return A task the caller spawns.
+        /// @throws std::bad_alloc (coroutine frame allocation).
+        task<void> catch_from_int_task(bool& caught, completion::executor& exec) noexcept(false)
+        {
+            try
+            {
+                const auto result = co_await throwing_int_result_task();
+                (void) result;
+            }
+            catch (const task_error&)
+            {
+                caught = true;
+            }
+
+            exec.stop();
+        }
+
+        /// @brief Awaits the throwing expected<void> task and records that its exception surfaced.
+        /// @param caught Set when the task's exception reached this coroutine.
+        /// @param exec The executor whose loop to stop once the task has been awaited.
+        /// @return A task the caller spawns.
+        /// @throws std::bad_alloc (coroutine frame allocation).
+        task<void> catch_from_void_task(bool& caught, completion::executor& exec) noexcept(false)
+        {
+            try
+            {
+                static_cast<void>(co_await throwing_void_result_task());
+            }
+            catch (const task_error&)
+            {
+                caught = true;
+            }
+
+            exec.stop();
+        }
+
+        /// @brief Suspends forever, so destroying the task is what requests its internal cancellation.
+        /// @param observed Set from the stop callback, and to whether a stop was already requested.
+        /// @return A task the caller destroys rather than runs.
+        /// @throws std::bad_alloc (coroutine frame allocation).
+        task<void> observe_internal_cancellation(bool& observed) noexcept(false)
+        {
+            const auto token = co_await get_stop_token;
+            std::stop_callback callback(token, [&observed] { observed = true; });
+            observed = token.stop_requested();
+            co_await std::suspend_always {};
+        }
+    } // namespace detail
+
+    TEST_CASE("a throwing expected<size_t> task reports through its own promise", "[core][task][exception]")
+    {
+        bool caught {};
+        auto body = [&caught](completion::executor& exec) { return detail::catch_from_size_task(caught, exec); };
         detail::run_one(body);
         CHECK(caught);
     }
 
     TEST_CASE("a throwing expected<int> task reports through its own promise", "[core][task][exception]")
     {
-        bool caught = false;
-        auto body = [&caught](completion::executor& exec) -> task<void>
-        {
-            try
-            {
-                const auto result = co_await detail::throwing_int_result_task();
-                (void) result;
-            }
-            catch (const detail::task_error&)
-            {
-                caught = true;
-            }
-
-            exec.stop();
-        };
+        bool caught {};
+        auto body = [&caught](completion::executor& exec) { return detail::catch_from_int_task(caught, exec); };
         detail::run_one(body);
         CHECK(caught);
     }
 
     TEST_CASE("a throwing expected<void> task reports through its own promise", "[core][task][exception]")
     {
-        bool caught = false;
-        auto body = [&caught](completion::executor& exec) -> task<void>
-        {
-            try
-            {
-                static_cast<void>(co_await detail::throwing_void_result_task());
-            }
-            catch (const detail::task_error&)
-            {
-                caught = true;
-            }
-
-            exec.stop();
-        };
+        bool caught {};
+        auto body = [&caught](completion::executor& exec) { return detail::catch_from_void_task(caught, exec); };
         detail::run_one(body);
         CHECK(caught);
     }
@@ -138,7 +171,7 @@ namespace kmx::aio::test::task_internals_test
     {
         // return_value and await_suspend are per-instantiation too: a task<int> awaited from a task<int>
         // promise is a different await_suspend than the task<void> case the rest of the suite uses.
-        int observed = 0;
+        int observed {};
         auto body = [&observed](completion::executor& exec) -> task<void>
         {
             observed = co_await detail::awaits_int_task(41);
@@ -152,7 +185,7 @@ namespace kmx::aio::test::task_internals_test
     {
         // await_transform forwards anything that is not the stop-token tag; nothing else in the suite
         // hands a task an awaitable that is not another task.
-        bool resumed = false;
+        bool resumed {};
         auto body = [&resumed](completion::executor& exec) -> task<void>
         {
             co_await std::suspend_never {};
@@ -165,7 +198,7 @@ namespace kmx::aio::test::task_internals_test
 
     TEST_CASE("a task exposes lifecycle and internal cancellation", "[core][task][stop_token]")
     {
-        bool stop_requested = false;
+        bool stop_requested {};
         auto body = [&stop_requested](completion::executor& exec) -> task<void>
         {
             const auto token = co_await get_stop_token;
@@ -207,17 +240,9 @@ namespace kmx::aio::test::task_internals_test
 
     TEST_CASE("destroying an owned task requests internal cancellation", "[core][task][stop_token]")
     {
-        bool observed = false;
+        bool observed {};
         {
-            auto body = [&observed]() -> task<void>
-            {
-                const auto token = co_await get_stop_token;
-                std::stop_callback callback(token, [&observed] { observed = true; });
-                observed = token.stop_requested();
-                co_await std::suspend_always {};
-            };
-
-            auto abandoned = body();
+            auto abandoned = detail::observe_internal_cancellation(observed);
             CHECK(abandoned.valid());
             CHECK(!abandoned.done());
         }
@@ -230,8 +255,8 @@ namespace kmx::aio::test::task_internals_test
         // await_suspend copies the awaiting coroutine's token into a sub-task that has none of its own,
         // which is what makes cancelling an outer task reach everything it is waiting on.
         std::stop_source source;
-        bool token_possible = false;
-        bool token_requested = false;
+        bool token_possible {};
+        bool token_requested {};
 
         auto inner = [&token_possible, &token_requested]() -> task<void>
         {
@@ -266,7 +291,7 @@ namespace kmx::aio::test::task_internals_test
         // The other side of that branch: a task already given a token is not handed the parent's.
         std::stop_source outer;
         std::stop_source narrow;
-        bool requested = false;
+        bool requested {};
 
         auto inner = [&requested]() -> task<void>
         {

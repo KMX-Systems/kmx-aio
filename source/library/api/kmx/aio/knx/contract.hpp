@@ -10,13 +10,15 @@
 /// `KMX_AIO_CONTRACTS_ENABLED` to `1` or `0` to force them on or off regardless.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#include <source_location>
-#ifndef PCH
-    #include <cstdio>
-    #include <cstdlib>
-    #include <exception>
-    #include <string_view>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_KNX)
+    #include <source_location>
+    #ifndef PCH
+        #include <cstdio>
+        #include <cstdlib>
+        #include <exception>
+        #include <string_view>
+    #endif
 
 namespace kmx::aio::knx
 {
@@ -71,38 +73,39 @@ namespace kmx::aio::knx
     }
 }
 
-// Whether the checks are compiled in at all. They restate invariants the code has already established, so
-// a release build has nothing to gain from them.
-//
-// The C++26 contracts syntax is deliberately not detected here. `__cpp_contracts` has named two entirely
-// different, mutually incompatible designs over the years - the withdrawn `[[expects: c]]` attribute and
-// the current `pre(c)` / `contract_assert(c)` - so a compiler that defines it says nothing about which one
-// it will accept, and guessing wrong does not degrade gracefully: it stops the build. A translation unit
-// that wants the native facility can define KMX_AIO_EXPECTS and KMX_AIO_ENSURES itself before this header.
-#if !defined(KMX_AIO_CONTRACTS_ENABLED)
-    #if defined(NDEBUG)
-        #define KMX_AIO_CONTRACTS_ENABLED 0
-    #else
-        #define KMX_AIO_CONTRACTS_ENABLED 1
+    // Whether the checks are compiled in at all. They restate invariants the code has already established, so
+    // a release build has nothing to gain from them.
+    //
+    // The C++26 contracts syntax is deliberately not detected here. `__cpp_contracts` has named two entirely
+    // different, mutually incompatible designs over the years - the withdrawn `[[expects: c]]` attribute and
+    // the current `pre(c)` / `contract_assert(c)` - so a compiler that defines it says nothing about which one
+    // it will accept, and guessing wrong does not degrade gracefully: it stops the build. A translation unit
+    // that wants the native facility can define KMX_AIO_EXPECTS and KMX_AIO_ENSURES itself before this header.
+    #if !defined(KMX_AIO_CONTRACTS_ENABLED)
+        #if defined(NDEBUG)
+            #define KMX_AIO_CONTRACTS_ENABLED 0
+        #else
+            #define KMX_AIO_CONTRACTS_ENABLED 1
+        #endif
     #endif
-#endif
 
-#if KMX_AIO_CONTRACTS_ENABLED
+    #if KMX_AIO_CONTRACTS_ENABLED
     /// @brief Asserts a precondition of the enclosing function.
-    #if !defined(KMX_AIO_EXPECTS)
-        #define KMX_AIO_EXPECTS(condition) ::kmx::aio::knx::check_contract((condition), #condition)
-    #endif
+        #if !defined(KMX_AIO_EXPECTS)
+            #define KMX_AIO_EXPECTS(condition) ::kmx::aio::knx::check_contract((condition), #condition)
+        #endif
     /// @brief Asserts a postcondition of the enclosing function.
-    #if !defined(KMX_AIO_ENSURES)
-        #define KMX_AIO_ENSURES(condition) ::kmx::aio::knx::check_contract((condition), #condition)
-    #endif
-#else
+        #if !defined(KMX_AIO_ENSURES)
+            #define KMX_AIO_ENSURES(condition) ::kmx::aio::knx::check_contract((condition), #condition)
+        #endif
+    #else
     /// @brief Asserts a precondition of the enclosing function; compiled out in this build.
-    #if !defined(KMX_AIO_EXPECTS)
-        #define KMX_AIO_EXPECTS(condition) static_cast<void>(0)
-    #endif
+        #if !defined(KMX_AIO_EXPECTS)
+            #define KMX_AIO_EXPECTS(condition) static_cast<void>(0)
+        #endif
     /// @brief Asserts a postcondition of the enclosing function; compiled out in this build.
-    #if !defined(KMX_AIO_ENSURES)
-        #define KMX_AIO_ENSURES(condition) static_cast<void>(0)
+        #if !defined(KMX_AIO_ENSURES)
+            #define KMX_AIO_ENSURES(condition) static_cast<void>(0)
+        #endif
     #endif
-#endif
+#endif // KMX_AIO_FEATURE_KNX

@@ -33,7 +33,7 @@ namespace kmx::aio::modbus
         tls_config tls_config_;
         std::optional<readiness::tls::stream> stream_;
         ::SSL_CTX* ssl_ctx_ {};
-        std::uint16_t next_tid_ = 0u;
+        std::uint16_t next_tid_ {};
 
         explicit impl(client_config config, tls_config tls, readiness::executor& exec) noexcept:
             exec_(exec),

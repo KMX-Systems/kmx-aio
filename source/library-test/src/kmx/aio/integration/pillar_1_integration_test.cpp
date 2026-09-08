@@ -34,7 +34,7 @@ namespace kmx::aio::test::integration::pillar_1_integration_test
     [[nodiscard]] static task<void> run_spdk_cycle(completion::executor& exec, std::shared_ptr<test_state> state)
     {
         const auto init_res = completion::spdk::runtime::initialize();
-        if (!init_res && init_res.error() != std::make_error_code(std::errc::function_not_supported))
+        if (!init_res && (init_res.error() != std::make_error_code(std::errc::function_not_supported)))
         {
             state->spdk_error = init_res.error();
             exec.stop();
@@ -51,7 +51,7 @@ namespace kmx::aio::test::integration::pillar_1_integration_test
 
         // Clean teardown integration test
         const auto fini = completion::spdk::runtime::finalize();
-        if (!fini && fini.error() != std::make_error_code(std::errc::function_not_supported))
+        if (!fini && (fini.error() != std::make_error_code(std::errc::function_not_supported)))
             state->spdk_error = fini.error();
 
         exec.stop();

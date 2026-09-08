@@ -2,10 +2,12 @@
 /// @brief HTTP/3 ALPN definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <array>
-    #include <string_view>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_HTTP3)
+    #ifndef PCH
+        #include <array>
+        #include <string_view>
+    #endif
 
 namespace kmx::aio::http3::alpn
 {
@@ -14,3 +16,4 @@ namespace kmx::aio::http3::alpn
     /// @brief Wire-format ALPN value for `id` in TLS negotiation.
     inline constexpr std::array<unsigned char, 11u> wire {10u, 'k', 'm', 'x', '-', 'a', 'i', 'o', '-', 'h', '3'};
 } // namespace kmx::aio::http3::alpn
+#endif // KMX_AIO_FEATURE_HTTP3

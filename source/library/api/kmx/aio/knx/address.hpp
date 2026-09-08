@@ -11,17 +11,19 @@
 /// @reference KNX System Specifications, Volume 3/5/1 "Resources", address encoding.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <compare>
-    #include <cstdint>
-    #include <expected>
-    #include <functional>
-    #include <string>
-    #include <string_view>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_KNX)
+    #ifndef PCH
+        #include <compare>
+        #include <cstdint>
+        #include <expected>
+        #include <functional>
+        #include <string>
+        #include <string_view>
+    #endif
 
-#include <kmx/aio/basic_types.hpp>
-#include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/knx/error.hpp>
 
 namespace kmx::aio::knx
 {
@@ -207,12 +209,7 @@ namespace kmx::aio::knx
         }
 
         /// @brief Returns the textual form `area.line.device`.
-        [[nodiscard]] std::string to_string() const noexcept(false)
-        {
-            char text[detail::max_address_text_size] {};
-            const auto size = format(text);
-            return std::string {text, size.value_or(0u)};
-        }
+        [[nodiscard]] std::string to_string() const noexcept(false);
 
         /// @brief Compares two addresses by wire value.
         [[nodiscard]] constexpr auto operator<=>(const individual_address&) const noexcept = default;
@@ -358,12 +355,7 @@ namespace kmx::aio::knx
 
         /// @brief Returns the textual form in the requested style.
         /// @param style The style to write in.
-        [[nodiscard]] std::string to_string(const group_address_style style = group_address_style::three_level) const noexcept(false)
-        {
-            char text[detail::max_address_text_size] {};
-            const auto size = format(text, style);
-            return std::string {text, size.value_or(0u)};
-        }
+        [[nodiscard]] std::string to_string(const group_address_style style = group_address_style::three_level) const noexcept(false);
 
         /// @brief Compares two addresses by wire value.
         [[nodiscard]] constexpr auto operator<=>(const group_address&) const noexcept = default;
@@ -383,9 +375,9 @@ namespace std
         /// @brief Hashes the address by its wire value.
         /// @param value The address to hash.
         /// @return The hash of the wire value.
-        [[nodiscard]] size_t operator()(const kmx::aio::knx::individual_address value) const noexcept
+        [[nodiscard]] std::size_t operator()(const kmx::aio::knx::individual_address value) const noexcept
         {
-            return hash<uint16_t> {}(value.value());
+            return hash<std::uint16_t> {}(value.value());
         }
     };
 
@@ -396,9 +388,10 @@ namespace std
         /// @brief Hashes the address by its wire value.
         /// @param value The address to hash.
         /// @return The hash of the wire value.
-        [[nodiscard]] size_t operator()(const kmx::aio::knx::group_address value) const noexcept
+        [[nodiscard]] std::size_t operator()(const kmx::aio::knx::group_address value) const noexcept
         {
-            return hash<uint16_t> {}(value.value());
+            return hash<std::uint16_t> {}(value.value());
         }
     };
 }
+#endif // KMX_AIO_FEATURE_KNX

@@ -173,9 +173,7 @@ namespace kmx::aio::sample::tls::echo_readiness_client
 
             auto stream_ptr = std::make_shared<kmx::aio::readiness::tls::stream>(std::move(*stream_result));
             if (stats)
-            {
                 stats->rx_active.store(true, mem_order);
-            }
 
             stream_ptr->set_connect_state();
             if (auto hs = co_await stream_ptr->handshake(); !hs)
@@ -312,16 +310,12 @@ namespace kmx::aio::sample::tls::echo_readiness_client
     void manager::update_closed_state(const std::shared_ptr<connection_stats>& stats)
     {
         if (!stats)
-        {
             return;
-        }
 
         const auto rx_active = stats->rx_active.load(mem_order);
         const auto tx_active = stats->tx_active.load(mem_order);
         if (!rx_active && !tx_active)
-        {
             stats->closed.store(true, mem_order);
-        }
     }
 
     void manager::ui_loop(std::stop_token stop_token) const

@@ -12,6 +12,7 @@
     #include <sys/socket.h>
     #include <system_error>
     #include <variant>
+    #include <vector>
 
     #include <kmx/aio/ipv4.hpp>
     #include <kmx/aio/ipv6.hpp>
@@ -47,6 +48,11 @@ namespace kmx::aio
     using expected_size_t = std::expected<std::size_t, std::error_code>;
     /// @brief Result of an operation yielding nothing, or an error code.
     using expected_void_t = std::expected<void, std::error_code>;
+
+    /// @brief Owned, resizable buffer of bytes.
+    using byte_buffer_t = std::vector<std::uint8_t>;
+    /// @brief Result of an operation yielding an owned byte buffer, or an error code.
+    using expected_byte_buffer_t = std::expected<byte_buffer_t, std::error_code>;
 
     /// @brief Creates a non-owning IP address view from IPv4 storage.
     /// @param ip The owned IPv4 bytes.

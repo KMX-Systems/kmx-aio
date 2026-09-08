@@ -29,7 +29,7 @@ namespace kmx::aio::modbus
         readiness::executor& exec_;
         client_config config_;
         std::optional<readiness::tcp::stream> stream_;
-        std::uint16_t next_tid_ = 0u;
+        std::uint16_t next_tid_ {};
 
         explicit impl(client_config config, readiness::executor& exec) noexcept: exec_(exec), config_(std::move(config)) {}
 

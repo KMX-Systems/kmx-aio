@@ -2,6 +2,7 @@
 /// @brief Asynchronous Modbus TCP server facade.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
+#include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_MODBUS)
     #ifndef PCH
         #include <cstdint>
@@ -26,7 +27,7 @@ namespace kmx::aio::modbus
     struct server_request
     {
         /// @brief Unit identifier from the request MBAP header.
-        std::uint8_t unit_id = 0u;
+        std::uint8_t unit_id {};
         /// @brief Raw PDU bytes beginning with the function code byte.
         std::vector<std::uint8_t> pdu;
     };

@@ -108,10 +108,10 @@ namespace kmx::aio::sample::tls::h2_alpn_client
 
             std::array<char, 9u> recv_buf {};
             auto r_res = co_await stream_ptr->read(span_char_t(recv_buf.data(), recv_buf.size()));
-            if (!r_res || *r_res < recv_buf.size())
+            if (!r_res || (*r_res < recv_buf.size()))
                 co_return;
 
-            if (recv_buf[3] == 4 && recv_buf[4] == 0)
+            if ((recv_buf[3] == 4) && (recv_buf[4] == 0))
                 logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Received Server SETTINGS", worker_id);
 
             static constexpr std::array<char, 9u> ack_frame {0, 0, 0, 4, 1, 0, 0, 0, 0};
@@ -121,7 +121,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
             logger::log(logger::level::info, std::source_location::current(), "Client [{}]: Sent SETTINGS ACK", worker_id);
 
             r_res = co_await stream_ptr->read(span_char_t(recv_buf.data(), recv_buf.size()));
-            if (r_res && *r_res >= recv_buf.size() && recv_buf[3] == 4 && recv_buf[4] == 1)
+            if (r_res && (*r_res >= recv_buf.size()) && (recv_buf[3] == 4) && (recv_buf[4] == 1))
                 logger::log(logger::level::info, std::source_location::current(),
                             "Client [{}]: Received Server SETTINGS ACK. Handshake Complete!", worker_id);
 

@@ -2,17 +2,19 @@
 /// @brief Backend-neutral async OPC UA client facade.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <chrono>
-    #include <cstdint>
-    #include <expected>
-    #include <memory>
-    #include <system_error>
-    #include <vector>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_OPC_UA)
+    #ifndef PCH
+        #include <chrono>
+        #include <cstdint>
+        #include <expected>
+        #include <memory>
+        #include <system_error>
+        #include <vector>
 
-    #include <kmx/aio/opc_ua/types.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+        #include <kmx/aio/opc_ua/types.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::opc_ua
 {
@@ -78,14 +80,14 @@ namespace kmx::aio::opc_ua
         /// @return Reference to cumulative statistics snapshot.
         [[nodiscard]] const statistics& get_stats() const noexcept;
 
-#if !defined(KMX_AIO_FEATURE_OPC_UA)
+    #if !defined(KMX_AIO_FEATURE_OPC_UA)
         /// @brief Test-only hook to inject one-shot status codes for next shim requests.
         /// @param read_status Status returned for next read callback.
         /// @param write_status Status returned for next write callback.
         /// @param call_status Status returned for next call callback.
         void __kmx_test_set_next_request_statuses(std::uint32_t read_status, std::uint32_t write_status,
                                                   std::uint32_t call_status) noexcept;
-#endif
+    #endif
 
     private:
         struct impl;
@@ -94,3 +96,4 @@ namespace kmx::aio::opc_ua
     };
 
 } // namespace kmx::aio::opc_ua
+#endif // KMX_AIO_FEATURE_OPC_UA

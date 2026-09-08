@@ -73,28 +73,31 @@ namespace kmx::aio::test::tls::duplex_test
 
         /// @brief Generates a self-signed certificate under /tmp, reusing one already there.
         /// @return The paths, with usable set to false when openssl(1) could not produce them.
+        /// @brief Generates the self-signed certificate under /tmp, reusing one already there.
+        /// @return The paths, with usable set to false when openssl(1) could not produce them.
+        [[nodiscard]] server_credentials make_credentials()
+        {
+            const std::filesystem::path directory {"/tmp/kmx_tls_duplex_certs"};
+            const auto certificate = (directory / "server_cert.pem").string();
+            const auto key = (directory / "server_key.pem").string();
+
+            if (std::filesystem::exists(certificate) && std::filesystem::exists(key))
+                return server_credentials {certificate, key, true};
+
+            std::error_code ec;
+            std::filesystem::create_directories(directory, ec);
+            if (ec)
+                return server_credentials {certificate, key, false};
+
+            const auto command = "openssl req -x509 -newkey rsa:2048 -keyout " + key + " -out " + certificate +
+                                 " -days 30 -nodes -subj '/CN=localhost' >/dev/null 2>&1";
+
+            return server_credentials {certificate, key, std::system(command.c_str()) == 0};
+        }
+
         [[nodiscard]] const server_credentials& shared_credentials()
         {
-            static const server_credentials credentials = []
-            {
-                const std::filesystem::path directory {"/tmp/kmx_tls_duplex_certs"};
-                const auto certificate = (directory / "server_cert.pem").string();
-                const auto key = (directory / "server_key.pem").string();
-
-                if (std::filesystem::exists(certificate) && std::filesystem::exists(key))
-                    return server_credentials {certificate, key, true};
-
-                std::error_code ec;
-                std::filesystem::create_directories(directory, ec);
-                if (ec)
-                    return server_credentials {certificate, key, false};
-
-                const auto command = "openssl req -x509 -newkey rsa:2048 -keyout " + key + " -out " + certificate +
-                                     " -days 30 -nodes -subj '/CN=localhost' >/dev/null 2>&1";
-
-                return server_credentials {certificate, key, std::system(command.c_str()) == 0};
-            }();
-
+            static const server_credentials credentials = make_credentials();
             return credentials;
         }
 

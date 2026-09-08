@@ -4,6 +4,7 @@ StaticLibrary {
     Depends { name: "cpp" }
     Depends { name: "kmx-aio-core" }
     Depends { name: "kmx_instrumentation" }
+    Depends { name: "kmx_features" }
 
     name: "kmx-aio-http3"
     condition: project.enable_http3 && project.enable_quic
@@ -24,6 +25,7 @@ StaticLibrary {
         Depends { name: "cpp" }
         Depends { name: "kmx-aio-core" }
         Depends { name: "kmx_instrumentation" }
+        Depends { name: "kmx_features" }
         cpp.includePaths: [ product.sourceDirectory + "/../api" ]
     }
 }

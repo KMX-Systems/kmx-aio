@@ -216,11 +216,11 @@ namespace kmx::aio::test::modbus::client_unit_test
         encode_mbap(req_adu, req_tid, static_cast<std::uint16_t>(req_pdu->size()), unit_id);
         std::ranges::copy(*req_pdu, req_adu.begin() + static_cast<std::ptrdiff_t>(mbap_size));
 
-        bool got_tid_error = false;
+        bool got_tid_error {};
         auto run_exchange = [&, exec]() -> task<void>
         {
             auto r = co_await kmx::aio::modbus::detail::exchange(ms, req_adu, req_tid, unit_id);
-            if (!r && r.error() == make_error_code(error::unexpected_transaction_id))
+            if (!r && (r.error() == make_error_code(error::unexpected_transaction_id)))
                 got_tid_error = true;
         };
         exec->spawn(run_exchange());
@@ -247,11 +247,11 @@ namespace kmx::aio::test::modbus::client_unit_test
         encode_mbap(req_adu, tid, static_cast<std::uint16_t>(req_pdu->size()), req_unit_id);
         std::ranges::copy(*req_pdu, req_adu.begin() + static_cast<std::ptrdiff_t>(mbap_size));
 
-        bool got_unit_error = false;
+        bool got_unit_error {};
         auto run_exchange = [&, exec]() -> task<void>
         {
             auto r = co_await kmx::aio::modbus::detail::exchange(ms, req_adu, tid, req_unit_id);
-            if (!r && r.error() == make_error_code(error::invalid_unit_id))
+            if (!r && (r.error() == make_error_code(error::invalid_unit_id)))
                 got_unit_error = true;
         };
         exec->spawn(run_exchange());
@@ -272,11 +272,11 @@ namespace kmx::aio::test::modbus::client_unit_test
         encode_mbap(req_adu, 1u, static_cast<std::uint16_t>(req_pdu->size()), 1u);
         std::ranges::copy(*req_pdu, req_adu.begin() + static_cast<std::ptrdiff_t>(mbap_size));
 
-        bool got_disconnect = false;
+        bool got_disconnect {};
         auto run_exchange = [&, exec]() -> task<void>
         {
             auto r = co_await kmx::aio::modbus::detail::exchange(ms, req_adu, 1u, 1u);
-            if (!r && r.error() == make_error_code(error::disconnected))
+            if (!r && (r.error() == make_error_code(error::disconnected)))
                 got_disconnect = true;
         };
         exec->spawn(run_exchange());

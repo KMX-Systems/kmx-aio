@@ -8,23 +8,20 @@
 
 namespace kmx::aio::quic::detail
 {
-    namespace
+    static int lsquic_log_to_stderr(void* /*logger_ctx*/, const char* buf, const std::size_t len) noexcept
     {
-        int lsquic_log_to_stderr(void* /*logger_ctx*/, const char* buf, const std::size_t len) noexcept
-        {
-            return static_cast<int>(std::fwrite(buf, 1u, len, stderr));
-        }
+        return static_cast<int>(std::fwrite(buf, 1u, len, stderr));
     }
 
     void maybe_enable_lsquic_debug_logging() noexcept
     {
-        static bool initialized = false;
+        static bool initialized {};
         if (initialized)
             return;
         initialized = true;
 
         const char* const level = std::getenv("KMX_AIO_QUIC_DEBUG_LOG");
-        if (!level || level[0] == '\0')
+        if (!level || (level[0] == '\0'))
             return;
 
         static const ::lsquic_logger_if logger_if {.log_buf = lsquic_log_to_stderr};
@@ -39,16 +36,16 @@ namespace kmx::aio::quic::detail
         static constexpr long max_tick_ns = 100'000'000L;    // 100 ms
 
         const char* const env = std::getenv("KMX_AIO_QUIC_READINESS_WATCHDOG_NS");
-        if (!env || env[0] == '\0')
+        if (!env || (env[0] == '\0'))
             return default_tick_ns;
 
         std::uint64_t parsed {};
         const char* const end = env + std::char_traits<char>::length(env);
         const auto [ptr, ec] = std::from_chars(env, end, parsed);
-        if (ec != std::errc() || ptr != end)
+        if ((ec != std::errc()) || (ptr != end))
             return default_tick_ns;
 
-        if (parsed < static_cast<std::uint64_t>(min_tick_ns) || parsed > static_cast<std::uint64_t>(max_tick_ns))
+        if ((parsed < static_cast<std::uint64_t>(min_tick_ns)) || (parsed > static_cast<std::uint64_t>(max_tick_ns)))
             return default_tick_ns;
 
         return static_cast<long>(parsed);
@@ -147,6 +144,13 @@ namespace kmx::aio::quic::detail
         }
 
         return static_cast<int>(sent);
+    }
+
+    bool read_park_list::park(::lsquic_stream* const stream)
+    {
+        const bool first_of_episode = streams_.empty();
+        streams_.insert(stream);
+        return first_of_episode;
     }
 } // namespace kmx::aio::quic::detail
 
@@ -251,9 +255,7 @@ namespace kmx::aio::quic
         if (is_local_stream)
         {
             if (self->client_payload_streams_pending_ > 0u)
-            {
                 --self->client_payload_streams_pending_;
-            }
             else if (self->post_handshake_streams_pending_ > 0u)
             {
                 --self->post_handshake_streams_pending_;
@@ -586,8 +588,8 @@ namespace kmx::aio::quic
         return {};
     }
 
-    auto primary_base_impl::receive_once(packet_buffer_t& packet_buf, ::msghdr& msg,
-                                         const ::sockaddr_storage& peer_addr) -> std::expected<bool, std::error_code>
+    auto primary_base_impl::receive_once(packet_buffer_t& packet_buf, ::msghdr& msg, const ::sockaddr_storage& peer_addr)
+        -> std::expected<bool, std::error_code>
     {
         const ssize_t recv_n = ::recvmsg(socket_fd_, &msg, MSG_DONTWAIT);
         if (recv_n < 0)

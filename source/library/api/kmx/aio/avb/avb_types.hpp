@@ -2,11 +2,13 @@
 /// @brief AVB-specific types shared across the AVB pillar.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <array>
-    #include <cstdint>
-    #include <kmx/aio/mac.hpp>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_AVB)
+    #ifndef PCH
+        #include <array>
+        #include <cstdint>
+        #include <kmx/aio/mac.hpp>
+    #endif
 
 namespace kmx::aio::avb
 {
@@ -57,3 +59,4 @@ namespace kmx::aio::avb
         inline constexpr mac_address_t srp {0x01u, 0x80u, 0xC2u, 0x00u, 0x00u, 0x21u};
     }
 }
+#endif // KMX_AIO_FEATURE_AVB

@@ -177,29 +177,7 @@ namespace kmx::aio::avb::srp
 
         /// @brief Re-sends every talker and listener declaration twice a second.
         /// @return An error code once a sleep or send fails; never returns on success.
-        task_returning_expected_void_t talker_loop() noexcept(false)
-        {
-            while (true)
-            {
-                const auto sleep = co_await sleep_for(std::chrono::milliseconds(500));
-                if (!sleep)
-                    co_return std::unexpected(sleep.error());
-
-                for (const auto& [id, desc]: talker_streams_)
-                {
-                    auto s = co_await send_talker_advertise(desc);
-                    if (!s)
-                        co_return std::unexpected(s.error());
-                }
-
-                for (const auto& [id, desc]: listener_streams_)
-                {
-                    auto s = co_await send_listener_ready(desc);
-                    if (!s)
-                        co_return std::unexpected(s.error());
-                }
-            }
-        }
+        task_returning_expected_void_t talker_loop() noexcept(false);
 
         /// @brief Detachable wrapper around `talker_loop` that logs a terminal failure.
         task<void> talker_loop_task() noexcept(false)
@@ -210,4 +188,29 @@ namespace kmx::aio::avb::srp
                                  res.error().message());
         }
     };
+
+    template <typename Executor>
+    task_returning_expected_void_t generic_client<Executor>::state::talker_loop() noexcept(false)
+    {
+        while (true)
+        {
+            const auto sleep = co_await sleep_for(std::chrono::milliseconds(500));
+            if (!sleep)
+                co_return std::unexpected(sleep.error());
+
+            for (const auto& [id, desc]: talker_streams_)
+            {
+                auto s = co_await send_talker_advertise(desc);
+                if (!s)
+                    co_return std::unexpected(s.error());
+            }
+
+            for (const auto& [id, desc]: listener_streams_)
+            {
+                auto s = co_await send_listener_ready(desc);
+                if (!s)
+                    co_return std::unexpected(s.error());
+            }
+        }
+    }
 }

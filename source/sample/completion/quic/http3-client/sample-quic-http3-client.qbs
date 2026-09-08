@@ -14,9 +14,6 @@ CppApplication {
         "../../../../library/inc_dep",
     ].concat(project.quic_include_paths)
 
-    // Enable QUIC feature gate locally if needed, but the library should have it
-    cpp.defines: ["KMX_AIO_FEATURE_QUIC=1"]
-
     Depends { name: "kmx-aio-completion" }
     Depends { name: "kmx-aio-quic"; condition: project.enable_quic }
     Depends { name: "kmx-aio-http3" }

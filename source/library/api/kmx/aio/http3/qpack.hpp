@@ -2,15 +2,17 @@
 /// @brief HTTP/3 QPACK definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/http3/message.hpp>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_HTTP3)
+    #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/http3/message.hpp>
 
-    #include <expected>
-    #include <optional>
-    #include <system_error>
-    #include <vector>
-#endif
+        #include <expected>
+        #include <optional>
+        #include <system_error>
+        #include <vector>
+    #endif
 
 namespace kmx::aio::http3::qpack
 {
@@ -54,3 +56,4 @@ namespace kmx::aio::http3::qpack
         static std::expected<header_list, std::error_code> decode(cspan_uint8_t payload) noexcept;
     };
 } // namespace kmx::aio::http3::qpack
+#endif // KMX_AIO_FEATURE_HTTP3

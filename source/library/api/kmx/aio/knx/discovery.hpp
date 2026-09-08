@@ -1,18 +1,20 @@
 /// @file aio/knx/discovery.hpp
 /// @brief KNXnet/IP discovery frame helpers.
 #pragma once
-#ifndef PCH
-#include <array>
-    #include <cstdint>
-    #include <expected>
-    #include <system_error>
-#include <variant>
-    #include <vector>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_KNX)
+    #ifndef PCH
+    #include <array>
+        #include <cstdint>
+        #include <expected>
+        #include <system_error>
+    #include <variant>
+        #include <vector>
+    #endif
 
-#include <kmx/aio/basic_types.hpp>
-#include <kmx/aio/knx/connection.hpp>
-#include <kmx/aio/knx/transport.hpp>
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/knx/connection.hpp>
+    #include <kmx/aio/knx/transport.hpp>
 
 namespace kmx::aio::knx::discovery
 {
@@ -36,23 +38,28 @@ namespace kmx::aio::knx::discovery
     struct search_response_frame
     {
         hpai control_endpoint {};
-        std::vector<std::uint8_t> device_info_blocks {};
+        byte_buffer_t device_info_blocks {};
     };
 
     struct ipv6_search_response_frame
     {
         ipv6_hpai control_endpoint {};
-        std::vector<std::uint8_t> device_info_blocks {};
+        byte_buffer_t device_info_blocks {};
     };
 
     struct description_request_frame {};
 
     struct description_response_frame
     {
-        std::vector<std::uint8_t> device_info_blocks {};
+        byte_buffer_t device_info_blocks {};
     };
 
     using search_response = std::variant<search_response_frame, ipv6_search_response_frame>;
+
+    /// @brief A search response, or the error explaining why none was obtained.
+    using search_result_t = std::expected<search_response, std::error_code>;
+    /// @brief Task yielding a search response or the error that stopped the search.
+    using search_task_t = task<search_result_t>;
 
     class client final
     {
@@ -60,14 +67,11 @@ namespace kmx::aio::knx::discovery
         client(datagram_transport& transport, const sockaddr_storage& peer, ::socklen_t peer_length) noexcept:
             transport_(transport), peer_(peer), peer_length_(peer_length) {}
 
-        [[nodiscard]] task<std::expected<search_response, std::error_code>> search(
-            const search_request_frame& request) noexcept(false);
-        [[nodiscard]] task<std::expected<search_response, std::error_code>> search(
-            const ipv6_search_request_frame& request) noexcept(false);
+        [[nodiscard]] search_task_t search(const search_request_frame& request) noexcept(false);
+        [[nodiscard]] search_task_t search(const ipv6_search_request_frame& request) noexcept(false);
 
     private:
-        [[nodiscard]] task<std::expected<search_response, std::error_code>> search_packet(
-            cspan_uint8_t packet) noexcept(false);
+        [[nodiscard]] search_task_t search_packet(cspan_uint8_t packet) noexcept(false);
         [[nodiscard]] bool peer_matches(const transport_peer& peer) const noexcept;
 
         datagram_transport& transport_;
@@ -76,28 +80,25 @@ namespace kmx::aio::knx::discovery
         std::array<std::uint8_t, frame::max_datagram_size> buffer_ {};
     };
 
-    [[nodiscard]] std::expected<void, std::error_code> encode_search_request_packet(
-        span_uint8_t dest, const search_request_frame& request) noexcept;
+    [[nodiscard]] expected_void_t encode_search_request_packet(span_uint8_t dest, const search_request_frame& request) noexcept;
     [[nodiscard]] std::expected<search_request_frame, std::error_code> decode_search_request_packet(
         cspan_uint8_t packet) noexcept;
-    [[nodiscard]] std::expected<void, std::error_code> encode_ipv6_search_request_packet(
-        span_uint8_t dest, const ipv6_search_request_frame& request) noexcept;
+    [[nodiscard]] expected_void_t encode_ipv6_search_request_packet(span_uint8_t dest, const ipv6_search_request_frame& request) noexcept;
     [[nodiscard]] std::expected<ipv6_search_request_frame, std::error_code> decode_ipv6_search_request_packet(
         cspan_uint8_t packet) noexcept;
-    [[nodiscard]] std::expected<void, std::error_code> encode_search_response_packet(
-        span_uint8_t dest, const search_response_frame& response) noexcept;
+    [[nodiscard]] expected_void_t encode_search_response_packet(span_uint8_t dest, const search_response_frame& response) noexcept;
     [[nodiscard]] std::expected<search_response_frame, std::error_code> decode_search_response_packet(
         cspan_uint8_t packet) noexcept;
-    [[nodiscard]] std::expected<void, std::error_code> encode_ipv6_search_response_packet(
+    [[nodiscard]] expected_void_t encode_ipv6_search_response_packet(
         span_uint8_t dest, const ipv6_search_response_frame& response) noexcept;
     [[nodiscard]] std::expected<ipv6_search_response_frame, std::error_code> decode_ipv6_search_response_packet(
         cspan_uint8_t packet) noexcept;
-    [[nodiscard]] std::expected<void, std::error_code> encode_description_request_packet(
-        span_uint8_t dest) noexcept;
+    [[nodiscard]] expected_void_t encode_description_request_packet(span_uint8_t dest) noexcept;
     [[nodiscard]] std::expected<description_request_frame, std::error_code> decode_description_request_packet(
         cspan_uint8_t packet) noexcept;
-    [[nodiscard]] std::expected<void, std::error_code> encode_description_response_packet(
+    [[nodiscard]] expected_void_t encode_description_response_packet(
         span_uint8_t dest, const description_response_frame& response) noexcept;
     [[nodiscard]] std::expected<description_response_frame, std::error_code> decode_description_response_packet(
         cspan_uint8_t packet) noexcept;
 }
+#endif // KMX_AIO_FEATURE_KNX

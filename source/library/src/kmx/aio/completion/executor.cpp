@@ -5,6 +5,7 @@
 #include <kmx/aio/detail/syscalls.hpp>
 
 #include <kmx/aio/allocator/slab.hpp>
+#include <kmx/aio/exception.hpp>
 #include <kmx/logger.hpp>
 
 #include <algorithm>
@@ -22,7 +23,7 @@ namespace kmx::aio::completion
     /// @brief The executor whose event loop is running on this thread, if any.
     /// @details Lets submit() tell "the loop will flush this in a moment" from "nobody here is going to
     ///          wait, so it has to go now".
-    thread_local const executor* t_current_loop_executor = nullptr;
+    thread_local const executor* t_current_loop_executor {};
 
     void statistics::reset() noexcept
     {
@@ -46,7 +47,7 @@ namespace kmx::aio::completion
         const int ret = detail::uring_syscalls::queue_init(config.ring_entries, &ring_, 0u);
 
         if (ret < 0)
-            throw std::system_error(-ret, std::generic_category(), "io_uring_queue_init failed");
+            throw system_error(-ret, std::generic_category(), "io_uring_queue_init failed");
     }
 
     executor::~executor() noexcept
@@ -590,7 +591,7 @@ namespace kmx::aio::completion
         // suspended coroutines resume with an error and unwind normally), then
         // keep draining completions until active_work_ reaches zero, bounded by
         // a timeout to avoid hanging shutdown forever on a stuck operation.
-        bool cancel_issued = false;
+        bool cancel_issued {};
         std::chrono::steady_clock::time_point drain_deadline {};
 
         while (!st.stop_requested() || (active_work_.load(mem_order) > 0u))

@@ -2,60 +2,63 @@
 
 namespace kmx::aio
 {
+    /// @brief Copies one IP address view alternative into its owned counterpart.
+    template <typename ip_t>
+    static ip_address_owned_t own_address_bytes(const ip_t& bytes) noexcept
+    {
+        if constexpr (std::is_same_v<ip_t, ipv4::address_t>)
+        {
+            ipv4::address_owned_t ip4 {};
+            std::memcpy(ip4.data(), bytes.data(), ip4.size());
+            return ip4;
+        }
+
+        ipv6::address_owned_t ip6 {};
+        std::memcpy(ip6.data(), bytes.data(), ip6.size());
+        return ip6;
+    }
+
     ip_address_owned_t to_owned_ip_address(const ip_address_t ip) noexcept
     {
-        return std::visit(
-            [](const auto& bytes) noexcept -> ip_address_owned_t
-            {
-                using ip_t = std::decay_t<decltype(bytes)>;
-                if constexpr (std::is_same_v<ip_t, ipv4::address_t>)
-                {
-                    ipv4::address_owned_t ip4 {};
-                    std::memcpy(ip4.data(), bytes.data(), ip4.size());
-                    return ip4;
-                }
+        return std::visit([](const auto& bytes) noexcept { return own_address_bytes(bytes); }, ip);
+    }
 
-                ipv6::address_owned_t ip6 {};
-                std::memcpy(ip6.data(), bytes.data(), ip6.size());
-                return ip6;
-            },
-            ip);
+    /// @brief Makes a non-owning view over one owned IP address alternative.
+    template <typename ip_t>
+    static ip_address_t view_address_bytes(const ip_t& bytes) noexcept
+    {
+        if constexpr (std::is_same_v<ip_t, ipv4::address_owned_t>)
+            return ipv4::address_t {bytes};
+        else
+            return ipv6::address_t {bytes};
     }
 
     ip_address_t to_ip_address_view(const ip_address_owned_t& ip) noexcept
     {
-        return std::visit(
-            [](const auto& bytes) noexcept -> ip_address_t
-            {
-                using ip_t = std::decay_t<decltype(bytes)>;
-                if constexpr (std::is_same_v<ip_t, ipv4::address_owned_t>)
-                    return ipv4::address_t {bytes};
-                else
-                    return ipv6::address_t {bytes};
-            },
-            ip);
+        return std::visit([](const auto& bytes) noexcept { return view_address_bytes(bytes); }, ip);
+    }
+
+    /// @brief Formats one IP address view alternative into a caller-supplied text buffer.
+    template <typename ip_t>
+    static bool print_address_bytes(const ip_t& bytes, std::array<char, INET6_ADDRSTRLEN>& buffer) noexcept
+    {
+        if constexpr (std::is_same_v<ip_t, ipv4::address_t>)
+        {
+            in_addr addr {};
+            std::memcpy(&addr, bytes.data(), bytes.size());
+            return ::inet_ntop(AF_INET, &addr, buffer.data(), buffer.size()) != nullptr;
+        }
+
+        in6_addr addr {};
+        std::memcpy(&addr, bytes.data(), bytes.size());
+        return ::inet_ntop(AF_INET6, &addr, buffer.data(), buffer.size()) != nullptr;
     }
 
     std::string ip_to_string(const ip_address_t ip) noexcept
     {
         std::array<char, INET6_ADDRSTRLEN> buffer {};
 
-        const bool ok = std::visit(
-            [&buffer](const auto& bytes) noexcept
-            {
-                using ip_t = std::decay_t<decltype(bytes)>;
-                if constexpr (std::is_same_v<ip_t, ipv4::address_t>)
-                {
-                    in_addr addr {};
-                    std::memcpy(&addr, bytes.data(), bytes.size());
-                    return ::inet_ntop(AF_INET, &addr, buffer.data(), buffer.size()) != nullptr;
-                }
-
-                in6_addr addr {};
-                std::memcpy(&addr, bytes.data(), bytes.size());
-                return ::inet_ntop(AF_INET6, &addr, buffer.data(), buffer.size()) != nullptr;
-            },
-            ip);
+        const bool ok = std::visit([&buffer](const auto& bytes) noexcept { return print_address_bytes(bytes, buffer); }, ip);
 
         // LCOV_EXCL_BR_LINE: inet_ntop fails only on an unknown family or a buffer too small, and the
         // visitor above passes AF_INET or AF_INET6 with an INET6_ADDRSTRLEN buffer. The empty string
@@ -63,32 +66,33 @@ namespace kmx::aio
         return ok ? std::string(buffer.data()) : std::string {}; // LCOV_EXCL_BR_LINE
     }
 
+    /// @brief Writes one IP address view alternative and a port into a socket address.
+    template <typename ip_t>
+    static void store_address_bytes(const ip_t& bytes, const port_t port, socket_address& result) noexcept
+    {
+        if constexpr (std::is_same_v<ip_t, ipv4::address_t>)
+        {
+            auto* const addr = reinterpret_cast<::sockaddr_in*>(&result.storage);
+            addr->sin_family = AF_INET;
+            addr->sin_port = ::htons(port);
+            std::memcpy(&addr->sin_addr, bytes.data(), bytes.size());
+            result.length = sizeof(::sockaddr_in);
+        }
+        else
+        {
+            auto* const addr = reinterpret_cast<sockaddr_in6*>(&result.storage);
+            addr->sin6_family = AF_INET6;
+            addr->sin6_port = ::htons(port);
+            std::memcpy(&addr->sin6_addr, bytes.data(), bytes.size());
+            result.length = sizeof(sockaddr_in6);
+        }
+    }
+
     expected_socket_address_t make_socket_address(const ip_address_t ip, const port_t port) noexcept
     {
         socket_address result {};
 
-        std::visit(
-            [&result, port](const auto& bytes) noexcept
-            {
-                using ip_t = std::decay_t<decltype(bytes)>;
-                if constexpr (std::is_same_v<ip_t, ipv4::address_t>)
-                {
-                    auto* const addr = reinterpret_cast<::sockaddr_in*>(&result.storage);
-                    addr->sin_family = AF_INET;
-                    addr->sin_port = ::htons(port);
-                    std::memcpy(&addr->sin_addr, bytes.data(), bytes.size());
-                    result.length = sizeof(::sockaddr_in);
-                }
-                else
-                {
-                    auto* const addr = reinterpret_cast<sockaddr_in6*>(&result.storage);
-                    addr->sin6_family = AF_INET6;
-                    addr->sin6_port = ::htons(port);
-                    std::memcpy(&addr->sin6_addr, bytes.data(), bytes.size());
-                    result.length = sizeof(sockaddr_in6);
-                }
-            },
-            ip);
+        std::visit([&result, port](const auto& bytes) noexcept { store_address_bytes(bytes, port, result); }, ip);
 
         return result;
     }

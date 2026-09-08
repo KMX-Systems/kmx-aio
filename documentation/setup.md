@@ -17,6 +17,26 @@ sudo apt update
 sudo apt install -y liburing-dev build-essential pkg-config git python3
 ```
 
+`build-essential` brings the distribution's own GCC, which is **not** new enough on its own: the library
+needs **GCC 16 or Clang 23** at the least, and Ubuntu 24.04 stops at GCC 14 and Clang 20 (its default,
+GCC 13.3, does not recognise `-std=c++26` at all). Add one of the upstream sources for a compiler that
+can build the tree, the same two `script/ci/setup-default-toolchain.sh` uses:
+
+```bash
+sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test    # GCC
+sudo apt update && sudo apt install -y gcc-16 g++-16
+
+curl -fsSL https://apt.llvm.org/llvm.sh | sudo bash -s 23 # or Clang
+```
+
+Then point the default at it, which is the whole of what the build scripts follow - see
+[build.md](build.md):
+
+```bash
+sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++-16 100
+sudo update-alternatives --install /usr/bin/cc  cc  /usr/bin/gcc-16 100
+```
+
 ## Optional Accelerator Dependencies (Ubuntu/Debian)
 
 Recommended:

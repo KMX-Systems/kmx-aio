@@ -2,15 +2,17 @@
 /// @brief Readiness-model UDP socket using epoll-based async I/O.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <expected>
-    #include <sys/socket.h>
-    #include <system_error>
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_READINESS)
+    #ifndef PCH
+        #include <expected>
+        #include <sys/socket.h>
+        #include <system_error>
 
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/readiness/io_base.hpp>
-    #include <kmx/aio/task.hpp>
-#endif
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/readiness/io_base.hpp>
+        #include <kmx/aio/task.hpp>
+    #endif
 
 namespace kmx::aio::readiness::udp
 {
@@ -58,5 +60,6 @@ namespace kmx::aio::readiness::udp
     };
 } // namespace kmx::aio::readiness::udp
 
-#ifndef PCH
-#endif
+    #ifndef PCH
+    #endif
+#endif // KMX_AIO_FEATURE_READINESS

@@ -4,6 +4,7 @@
 #include <kmx/aio/allocator/slab.hpp>
 #include <kmx/aio/gpu/event.hpp>
 #include <kmx/aio/gpu/executor.hpp>
+#include <kmx/aio/exception.hpp>
 #include <kmx/aio/gpu/stream.hpp>
 
 #include <algorithm>
@@ -21,10 +22,10 @@
 
 namespace kmx::aio::gpu
 {
-    namespace
+    namespace internal
     {
-        thread_local executor* tls_current_gpu_executor = nullptr;
-    }
+        thread_local executor* tls_current_gpu_executor {};
+    } // namespace internal
 
 /// CUDA Error Category (Conditional)
 #if defined(KMX_AIO_FEATURE_CUDA)
@@ -152,7 +153,7 @@ namespace kmx::aio::gpu
             CPU_SET(static_cast<int>(config_.core_id), &cpuset);
             const auto ret = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
             if (ret != 0)
-                throw std::system_error(ret, std::generic_category(), "Failed to pin executor to core " + std::to_string(config_.core_id));
+                throw system_error(ret, std::generic_category(), "Failed to pin executor to core " + std::to_string(config_.core_id));
 #endif
         }
 
@@ -209,19 +210,15 @@ namespace kmx::aio::gpu
         // Set the active GPU device for this executor.
         const auto ret_set = ::cudaSetDevice(static_cast<int>(config_.gpu_device));
         if (ret_set != cudaSuccess)
-        {
-            throw std::system_error(static_cast<int>(ret_set), cuda_category(),
-                                    "cudaSetDevice failed for device " + std::to_string(config_.gpu_device));
-        }
+            throw system_error(static_cast<int>(ret_set), cuda_category(),
+                                "cudaSetDevice failed for device " + std::to_string(config_.gpu_device));
 
         // Verify device is usable by querying basic properties.
         int device = -1;
         const auto ret_get = ::cudaGetDevice(&device);
-        if (ret_get != cudaSuccess || device != static_cast<int>(config_.gpu_device))
-        {
-            throw std::system_error(static_cast<int>(ret_get), cuda_category(),
-                                    "GPU device " + std::to_string(config_.gpu_device) + " verification failed");
-        }
+        if ((ret_get != cudaSuccess) || (device != static_cast<int>(config_.gpu_device)))
+            throw system_error(static_cast<int>(ret_get), cuda_category(),
+                                "GPU device " + std::to_string(config_.gpu_device) + " verification failed");
     }
 #else
     void executor::set_gpu_device() noexcept(false)
@@ -232,15 +229,15 @@ namespace kmx::aio::gpu
 
     void executor::resume_on_executor(const coroutine_handle_t handle) noexcept
     {
-        auto* const previous = tls_current_gpu_executor;
-        tls_current_gpu_executor = this;
+        auto* const previous = internal::tls_current_gpu_executor;
+        internal::tls_current_gpu_executor = this;
         handle.resume();
-        tls_current_gpu_executor = previous;
+        internal::tls_current_gpu_executor = previous;
     }
 
     bool executor::poll_events() noexcept
     {
-        bool work_done = false;
+        bool work_done {};
 
         // 1. Drain and resume pending tasks from spawn() queue.
         std::deque<coroutine_handle_t> pending;
@@ -277,12 +274,12 @@ namespace kmx::aio::gpu
         //    event's address. The new registration is a fresh entry made after this one is gone, rather
         //    than something a later erase would silently delete.
         std::vector<coroutine_handle_t> ready_handles;
-        bool retired_any = false;
+        bool retired_any {};
         {
             const std::lock_guard lock(queue_mutex_);
             for (auto it = waiting_events_.begin(); it != waiting_events_.end();)
             {
-                bool ready = false;
+                bool ready {};
 
                 // Try to query event status (non-blocking).
                 try
@@ -292,7 +289,7 @@ namespace kmx::aio::gpu
                     if (ret == cudaSuccess)
                         ready = true;
                     else if (ret != cudaErrorNotReady)
-                        throw std::system_error(static_cast<int>(ret), cuda_category(), "cudaEventQuery failed");
+                        throw system_error(static_cast<int>(ret), cuda_category(), "cudaEventQuery failed");
 #else
                     ready = true;
 #endif
@@ -381,9 +378,7 @@ namespace kmx::aio::gpu
         ::cudaStream_t s = nullptr;
         const auto ret = ::cudaStreamCreate(&s);
         if (ret != cudaSuccess)
-        {
-            throw std::system_error(static_cast<int>(ret), cuda_category(), "cudaStreamCreate failed");
-        }
+            throw system_error(static_cast<int>(ret), cuda_category(), "cudaStreamCreate failed");
         handle_ = s;
 #else
         handle_ = reinterpret_cast<void*>(0xDEADBEEF); // Mock handle (distinctive pattern)
@@ -414,11 +409,11 @@ namespace kmx::aio::gpu
     {
 #if defined(KMX_AIO_FEATURE_CUDA)
         if (handle_ == nullptr)
-            throw std::system_error(static_cast<int>(std::errc::invalid_argument), std::generic_category(), "stream handle is null");
+            throw system_error(static_cast<int>(std::errc::invalid_argument), std::generic_category(), "stream handle is null");
 
         const auto ret = ::cudaStreamSynchronize(static_cast<::cudaStream_t>(handle_));
         if (ret != cudaSuccess)
-            throw std::system_error(static_cast<int>(ret), cuda_category(), "cudaStreamSynchronize failed");
+            throw system_error(static_cast<int>(ret), cuda_category(), "cudaStreamSynchronize failed");
 #endif
     }
 
@@ -427,14 +422,10 @@ namespace kmx::aio::gpu
         event e;
 #if defined(KMX_AIO_FEATURE_CUDA)
         if (handle_ == nullptr)
-        {
-            throw std::system_error(static_cast<int>(std::errc::invalid_argument), std::generic_category(), "stream handle is null");
-        }
+            throw system_error(static_cast<int>(std::errc::invalid_argument), std::generic_category(), "stream handle is null");
         const auto ret_record = ::cudaEventRecord(static_cast<::cudaEvent_t>(e.handle_), static_cast<::cudaStream_t>(handle_));
         if (ret_record != cudaSuccess)
-        {
-            throw std::system_error(static_cast<int>(ret_record), cuda_category(), "cudaEventRecord failed");
-        }
+            throw system_error(static_cast<int>(ret_record), cuda_category(), "cudaEventRecord failed");
 #else
         e.handle_ = reinterpret_cast<void*>(0xCAFEBABE); // Mock handle (distinctive pattern)
 #endif
@@ -462,9 +453,7 @@ namespace kmx::aio::gpu
         ::cudaEvent_t e = nullptr;
         const auto ret = ::cudaEventCreate(&e);
         if (ret != cudaSuccess)
-        {
-            throw std::system_error(static_cast<int>(ret), std::generic_category(), "cudaEventCreate failed");
-        }
+            throw system_error(static_cast<int>(ret), std::generic_category(), "cudaEventCreate failed");
         handle_ = e;
 #else
         handle_ = reinterpret_cast<void*>(1); // Mock handle
@@ -500,7 +489,7 @@ namespace kmx::aio::gpu
     {
 #if defined(KMX_AIO_FEATURE_CUDA)
         if (handle_ == nullptr)
-            throw std::system_error(static_cast<int>(std::errc::invalid_argument), std::generic_category(), "event handle is null");
+            throw system_error(static_cast<int>(std::errc::invalid_argument), std::generic_category(), "event handle is null");
 
         const auto ret = ::cudaEventQuery(static_cast<::cudaEvent_t>(handle_));
         if (ret == cudaSuccess)
@@ -508,7 +497,7 @@ namespace kmx::aio::gpu
         if (ret == cudaErrorNotReady)
             return false;
 
-        throw std::system_error(static_cast<int>(ret), cuda_category(), "cudaEventQuery failed");
+        throw system_error(static_cast<int>(ret), cuda_category(), "cudaEventQuery failed");
 #else
         return true; // Mock: always ready
 #endif
@@ -527,7 +516,7 @@ namespace kmx::aio::gpu
 
     void event::awaiter::await_suspend(coroutine_handle_t h) noexcept
     {
-        auto* const exec = tls_current_gpu_executor;
+        auto* const exec = internal::tls_current_gpu_executor;
         if (exec == nullptr)
         {
 #if defined(KMX_AIO_FEATURE_CUDA)

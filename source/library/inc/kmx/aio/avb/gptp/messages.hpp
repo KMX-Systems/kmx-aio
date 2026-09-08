@@ -59,28 +59,12 @@ namespace kmx::aio::avb::gptp
 
         /// @brief Convert to nanoseconds since epoch (host byte order).
         /// @return The timestamp expressed as nanoseconds since the PTP epoch.
-        [[nodiscard]] avb_timestamp_t to_ns() const noexcept
-        {
-            std::uint64_t sec = 0;
-            for (int i = 0; i < 6; ++i)
-                sec = (sec << 8u) | seconds_msb[static_cast<std::size_t>(i)];
-            return sec * 1'000'000'000ULL + ::ntohl(nanoseconds);
-        }
+        [[nodiscard]] avb_timestamp_t to_ns() const noexcept;
 
         /// @brief Builds a wire timestamp from nanoseconds since epoch.
         /// @param ns Nanoseconds since the PTP epoch, in host byte order.
         /// @return The equivalent wire-encoded timestamp.
-        static timestamp_t from_ns(avb_timestamp_t ns) noexcept
-        {
-            const std::uint64_t sec = ns / 1'000'000'000ULL;
-            const std::uint32_t nsec = static_cast<std::uint32_t>(ns % 1'000'000'000ULL);
-            timestamp_t ts {};
-            for (int i = 5; i >= 0; --i)
-                ts.seconds_msb[static_cast<std::size_t>(i)] = static_cast<std::uint8_t>(sec >> (8 * (5 - i)));
-
-            ts.nanoseconds = ::htonl(nsec);
-            return ts;
-        }
+        static timestamp_t from_ns(avb_timestamp_t ns) noexcept;
     };
 
 #pragma pack(push, 1)
@@ -192,19 +176,6 @@ namespace kmx::aio::avb::gptp
     /// @brief Compute port identity from a local MAC address (EUI-64 insertion).
     /// @param mac The interface MAC address to derive the identity from.
     /// @return The derived clock identity, with the U/L bit flipped and `FF:FE` inserted.
-    inline clock_identity_t mac_to_clock_id(const mac_address_t& mac) noexcept
-    {
-        clock_identity_t id {};
-        // Insert 0xFF 0xFE in the middle per IEEE EUI-64
-        id.id[0u] = mac[0u] ^ 0x02u; // flip U/L bit
-        id.id[1u] = mac[1u];
-        id.id[2u] = mac[2u];
-        id.id[3u] = 0xFFu;
-        id.id[4u] = 0xFEu;
-        id.id[5u] = mac[3u];
-        id.id[6u] = mac[4u];
-        id.id[7u] = mac[5u];
-        return id;
-    }
+    clock_identity_t mac_to_clock_id(const mac_address_t& mac) noexcept;
 
 } // namespace kmx::aio::avb::gptp

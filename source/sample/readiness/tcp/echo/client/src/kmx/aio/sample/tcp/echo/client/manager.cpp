@@ -295,16 +295,12 @@ namespace kmx::aio::sample::tcp::echo::client
     void manager::update_closed_state(const std::shared_ptr<connection_stats>& stats)
     {
         if (!stats)
-        {
             return;
-        }
 
         const auto rx_active = stats->rx_active.load(mem_order);
         const auto tx_active = stats->tx_active.load(mem_order);
         if (!rx_active && !tx_active)
-        {
             stats->closed.store(true, mem_order);
-        }
     }
 
     void manager::ui_loop(std::stop_token stop_token) const
@@ -331,9 +327,7 @@ namespace kmx::aio::sample::tcp::echo::client
                 for (const auto& [worker_id, stats]: connections_)
                 {
                     if (!stats)
-                    {
                         continue;
-                    }
                     snapshot.push_back(snapshot_entry {
                         .worker_id = worker_id,
                         .tx = stats->bytes_sent.load(mem_order),
@@ -361,30 +355,20 @@ namespace kmx::aio::sample::tcp::echo::client
             std::cout << "────────────────────────────────────────────────────────────────────────\n";
 
             if (snapshot.empty())
-            {
                 std::cout << "(no active connections)\n";
-            }
             else
             {
                 for (const auto& entry: snapshot)
                 {
                     std::string_view state = "-";
                     if (entry.closed)
-                    {
                         state = "C";
-                    }
                     else if (entry.tx_active && entry.rx_active)
-                    {
                         state = "TX+RX";
-                    }
                     else if (entry.tx_active)
-                    {
                         state = "TX";
-                    }
                     else if (entry.rx_active)
-                    {
                         state = "RX";
-                    }
 
                     std::cout << std::format("Connection {:07}: TX {:>10} | RX {:>10} | EC {:05} | {}\n", entry.worker_id,
                                              common::format_bytes(entry.tx), common::format_bytes(entry.rx), entry.errors, state);

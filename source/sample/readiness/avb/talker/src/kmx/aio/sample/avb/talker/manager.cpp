@@ -130,7 +130,7 @@ namespace kmx::aio::sample::avb::talker
         }
 
         std::vector<std::byte> payload(config_.payload_bytes, std::byte {0});
-        std::uint8_t seq = 0u;
+        std::uint8_t seq {};
 
         for (std::uint64_t i = 0u; i < config_.max_frames; ++i)
         {
@@ -148,13 +148,9 @@ namespace kmx::aio::sample::avb::talker
 
             const auto send_res = co_await sock.send(config_.dest_mac, cspan_byte_t(*frame_res), presentation_ns);
             if (!send_res)
-            {
                 metrics_.errors.fetch_add(1u, mem_order);
-            }
             else
-            {
                 metrics_.frames_sent.fetch_add(1u, mem_order);
-            }
 
             const auto wait_ns =
                 static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(config_.frame_period).count());
