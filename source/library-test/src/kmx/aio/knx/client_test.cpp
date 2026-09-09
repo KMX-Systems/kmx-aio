@@ -403,6 +403,28 @@ namespace kmx::aio::test::knx::client_test
             .data_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3672u}, 0x01u},
         };
 
+        /// @brief The transport, peer, client and executor a loopback client test starts from.
+        /// @details Catch2 builds one of these per test case, so each case still gets the fresh transport
+        ///          and unconnected client that the hand-written prologue gave it.
+        /// @note Only for tests that leave the peer as it is. The client copies the peer at construction,
+        ///       so a test that configures one - a family, a port, a truncated length - has to build its
+        ///       own client after writing it, and those cases keep the prologue on purpose.
+        struct loopback_client_fixture
+        {
+            loopback_transport transport;
+            sockaddr_storage peer {};
+            tunnelling_client client {transport, peer, sizeof(peer)};
+            completion::executor executor;
+
+            /// @brief Spawns @p work and runs the loop until the work stops it.
+            /// @param work The task to drive; it is responsible for calling executor.stop().
+            void spawn_and_run(task<void> work) noexcept(false)
+            {
+                executor.spawn(std::move(work));
+                executor.run();
+            }
+        };
+
         /// @brief Returns the cEMI octets of the last TUNNELLING_REQUEST a transport was handed.
         /// @param transport The transport to inspect.
         /// @return The cEMI octets, empty when no tunnelling request was sent.
@@ -1027,22 +1049,12 @@ namespace kmx::aio::test::knx::client_test
         }
     }
 
-    TEST_CASE("knx tunnelling client completes a loopback lifecycle", "[knx][client][integration]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client completes a loopback lifecycle", "[knx][client][integration]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
         const auto& cemi = sample_cemi;
         bool succeeded {};
 
-        completion::executor executor;
-
-        executor.spawn(detail::run_loopback_lifecycle(client, request, cemi, succeeded, executor));
-        executor.run();
+        spawn_and_run(detail::run_loopback_lifecycle(client, detail::loopback_connect_request, cemi, succeeded, executor));
         CHECK(succeeded);
         CHECK(client.state() == session_state::closed);
         REQUIRE(transport.sent_peers().size() >= 3u);
@@ -1052,204 +1064,111 @@ namespace kmx::aio::test::knx::client_test
         CHECK(ntohs(tunnelling_destination.sin_port) == 3672u);
     }
 
-    TEST_CASE("knx tunnelling client retries a timed-out request", "[knx][client][integration]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client retries a timed-out request", "[knx][client][integration]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
         const auto& cemi = sample_cemi;
         bool succeeded {};
 
-        completion::executor executor;
-
-        executor.spawn(detail::retry_timed_out_request(transport, client, request, cemi, succeeded, executor));
-        executor.run();
+        spawn_and_run(detail::retry_timed_out_request(transport, client, detail::loopback_connect_request, cemi, succeeded, executor));
         CHECK(succeeded);
         CHECK(client.state() == session_state::connected);
     }
 
-    TEST_CASE("knx tunnelling client ignores a stale tunnelling acknowledgement", "[knx][client][integration]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client ignores a stale tunnelling acknowledgement",
+                     "[knx][client][integration]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
         std::array<std::uint8_t, 10u> stale_ack {};
         REQUIRE(frame::encode_tunnelling_ack_packet(stale_ack, 3u, 7u).has_value());
 
         bool succeeded {};
-        completion::executor executor;
-        executor.spawn(detail::ignore_stale_ack(transport, client, request, stale_ack, succeeded, executor));
-        executor.run();
+        spawn_and_run(detail::ignore_stale_ack(transport, client, detail::loopback_connect_request, stale_ack, succeeded, executor));
         CHECK(succeeded);
     }
 
-    TEST_CASE("knx tunnelling client retries a timed-out disconnect", "[knx][client][integration]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client retries a timed-out disconnect", "[knx][client][integration]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
         bool succeeded {};
 
-        completion::executor executor;
-
-        executor.spawn(detail::retry_timed_out_disconnect(transport, client, request, succeeded, executor));
-        executor.run();
+        spawn_and_run(detail::retry_timed_out_disconnect(transport, client, detail::loopback_connect_request, succeeded, executor));
         CHECK(succeeded);
         CHECK(client.state() == session_state::closed);
     }
 
-    TEST_CASE("knx tunnelling client completes a heartbeat", "[knx][client][integration]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client completes a heartbeat", "[knx][client][integration]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
         bool succeeded {};
 
-        completion::executor executor;
-
-        executor.spawn(detail::complete_heartbeat(client, request, succeeded, executor));
-        executor.run();
+        spawn_and_run(detail::complete_heartbeat(client, detail::loopback_connect_request, succeeded, executor));
         CHECK(succeeded);
         CHECK(client.state() == session_state::connected);
     }
 
-    TEST_CASE("knx tunnelling client propagates heartbeat failure", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client propagates heartbeat failure", "[knx][client][unit]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
         bool failed {};
         bool stayed_connected {};
 
-        completion::executor executor;
-
-        executor.spawn(detail::propagate_heartbeat_failure(transport, client, request, failed, stayed_connected, executor));
-        executor.run();
+        spawn_and_run(
+            detail::propagate_heartbeat_failure(transport, client, detail::loopback_connect_request, failed, stayed_connected, executor));
         CHECK(failed);
         CHECK(stayed_connected);
     }
 
-    TEST_CASE("knx tunnelling client propagates connect failure", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client propagates connect failure", "[knx][client][unit]")
     {
-        loopback_transport transport;
         transport.connect_failure = true;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
-        completion::executor executor;
         bool failed {};
-        executor.spawn(detail::propagate_connect_failure(client, request, failed, executor));
-        executor.run();
+        spawn_and_run(detail::propagate_connect_failure(client, detail::loopback_connect_request, failed, executor));
         CHECK(failed);
     }
 
-    TEST_CASE("knx tunnelling client retries a timed-out heartbeat", "[knx][client][integration]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client retries a timed-out heartbeat", "[knx][client][integration]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
         bool succeeded {};
 
-        completion::executor executor;
-
-        executor.spawn(detail::retry_timed_out_heartbeat(transport, client, request, succeeded, executor));
-        executor.run();
+        spawn_and_run(detail::retry_timed_out_heartbeat(transport, client, detail::loopback_connect_request, succeeded, executor));
         CHECK(succeeded);
         CHECK(client.state() == session_state::connected);
     }
 
-    TEST_CASE("knx tunnelling client escalates repeated heartbeat failures", "[knx][client][integration]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client escalates repeated heartbeat failures",
+                     "[knx][client][integration]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
         bool terminal {};
 
-        completion::executor executor;
-
-        executor.spawn(detail::escalate_heartbeat_failures(transport, client, request, terminal, executor));
-        executor.run();
+        spawn_and_run(detail::escalate_heartbeat_failures(transport, client, detail::loopback_connect_request, terminal, executor));
         CHECK(terminal);
     }
 
-    TEST_CASE("knx tunnelling client rejects operations after shutdown", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client rejects operations after shutdown", "[knx][client][unit]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         const auto& cemi = sample_cemi;
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
 
         client.shutdown();
         bool rejected {};
-        completion::executor executor;
 
-        executor.spawn(detail::reject_after_shutdown(client, request, cemi, rejected, executor));
-        executor.run();
+        spawn_and_run(detail::reject_after_shutdown(client, detail::loopback_connect_request, cemi, rejected, executor));
         CHECK(rejected);
     }
 
-    TEST_CASE("knx tunnelling client honors task cancellation", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client honors task cancellation", "[knx][client][unit]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         std::stop_source source;
         source.request_stop();
         bool cancelled {};
 
-        completion::executor executor;
         auto run = [&]() -> task<void>
         {
             const auto result = co_await client.receive_datagram();
             cancelled = !result.has_value() && result.error() == make_error_code(error::shutdown);
             executor.stop();
         };
-        executor.spawn(std::move(run()).with_stop_token(source.get_token()));
-        executor.run();
+        spawn_and_run(std::move(run()).with_stop_token(source.get_token()));
         CHECK(cancelled);
     }
 
-    TEST_CASE("knx tunnelling client rejects a concurrent public operation", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client rejects a concurrent public operation", "[knx][client][unit]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
-        completion::executor executor;
         transport.hold_receive = true;
         transport.wait_executor = &executor;
         bool first_completed {};
@@ -1262,46 +1181,31 @@ namespace kmx::aio::test::knx::client_test
         };
         auto run = [&]() -> task<void>
         {
+            // Spawned, not driven: the loop this is running on is the one that will resume it.
             executor.spawn(first());
             const auto result = co_await client.send(sample_cemi);
             second_rejected = !result.has_value() && result.error() == make_error_code(error::send_queue_full);
         };
 
-        executor.spawn(run());
-        executor.run();
+        spawn_and_run(run());
         CHECK(first_completed);
         CHECK(second_rejected);
     }
 
-    TEST_CASE("knx tunnelling client rejects receive APIs after shutdown", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client rejects receive APIs after shutdown", "[knx][client][unit]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         client.shutdown();
 
-        completion::executor executor;
         bool rejected {};
-        executor.spawn(detail::reject_receive_after_shutdown(client, rejected, executor));
-        executor.run();
+        spawn_and_run(detail::reject_receive_after_shutdown(client, rejected, executor));
         CHECK(rejected);
     }
 
-    TEST_CASE("knx tunnelling client can reset and reconnect", "[knx][client][integration]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client can reset and reconnect", "[knx][client][integration]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
         bool reconnected {};
 
-        completion::executor executor;
-
-        executor.spawn(detail::reset_and_reconnect(transport, client, request, reconnected, executor));
-        executor.run();
+        spawn_and_run(detail::reset_and_reconnect(transport, client, detail::loopback_connect_request, reconnected, executor));
         CHECK(reconnected);
         REQUIRE(transport.sent_peers().size() >= 3u);
         const auto& tunnelling_destination =
@@ -1466,10 +1370,7 @@ namespace kmx::aio::test::knx::client_test
     TEST_CASE("knx tunnelling client preserves transport error codes", "[knx][client][unit]")
     {
         const std::error_code transport_error { EPIPE, std::generic_category() };
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
+        const connect_request_frame& request {detail::loopback_connect_request};
 
         loopback_transport send_transport;
         send_transport.send_error = transport_error;
@@ -1508,10 +1409,7 @@ namespace kmx::aio::test::knx::client_test
     TEST_CASE("knx connected operations preserve transport error codes", "[knx][client][unit]")
     {
         const std::error_code transport_error { ECONNRESET, std::generic_category() };
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
+        const connect_request_frame& request {detail::loopback_connect_request};
         const auto& cemi = sample_cemi;
 
         loopback_transport send_transport;
@@ -1539,10 +1437,7 @@ namespace kmx::aio::test::knx::client_test
     TEST_CASE("knx disconnect preserves transport error codes", "[knx][client][unit]")
     {
         const std::error_code transport_error { ENETUNREACH, std::generic_category() };
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
+        const connect_request_frame& request {detail::loopback_connect_request};
 
         loopback_transport send_transport;
         sockaddr_storage send_peer {};
@@ -1566,37 +1461,20 @@ namespace kmx::aio::test::knx::client_test
         CHECK(receive_preserved);
     }
 
-    TEST_CASE("knx disconnect rejects an oversized receive count", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx disconnect rejects an oversized receive count", "[knx][client][unit]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
         bool rejected {};
-        completion::executor executor;
-        executor.spawn(detail::reject_oversized_disconnect_receive(transport, client, request, rejected, executor));
-        executor.run();
+        spawn_and_run(detail::reject_oversized_disconnect_receive(transport, client, detail::loopback_connect_request, rejected, executor));
         CHECK(rejected);
     }
 
-    TEST_CASE("knx disconnect observes cancellation", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx disconnect observes cancellation", "[knx][client][unit]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
         std::stop_source source;
         bool cancelled {};
-        completion::executor executor;
-        executor.spawn(std::move(detail::observe_disconnect_cancellation(client, request, source, cancelled, executor))
-                           .with_stop_token(source.get_token()));
-        executor.run();
+        spawn_and_run(
+            std::move(detail::observe_disconnect_cancellation(client, detail::loopback_connect_request, source, cancelled, executor))
+                .with_stop_token(source.get_token()));
         CHECK(cancelled);
     }
 
@@ -1610,10 +1488,7 @@ namespace kmx::aio::test::knx::client_test
         tunnelling_client client {
             transport, peer, sizeof(peer), tunnelling_config {.ack_timeout_ms = 1'000u, .connect_timeout_ms = 7'000u},
             &test_clock_now};
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
+        const connect_request_frame& request {detail::loopback_connect_request};
         bool succeeded {};
         completion::executor executor;
         auto run = [&]() -> task<void>
@@ -1641,10 +1516,7 @@ namespace kmx::aio::test::knx::client_test
             tunnelling_config {.inactivity_timeout_ms = 100u},
             &test_clock_now,
         };
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
+        const connect_request_frame& request {detail::loopback_connect_request};
         bool connected {};
         completion::executor executor;
         auto run = [&]() -> task<void>
@@ -1663,29 +1535,21 @@ namespace kmx::aio::test::knx::client_test
         test_now_ms = 0u;
     }
 
-    TEST_CASE("knx tunnelling client rejects an empty cEMI payload", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client rejects an empty cEMI payload", "[knx][client][unit]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         const std::array<std::uint8_t, 0u> cemi {};
-        completion::executor executor;
         bool rejected {};
-        executor.spawn(detail::reject_empty_cemi(client, cemi, rejected, executor));
-        executor.run();
+        spawn_and_run(detail::reject_empty_cemi(client, cemi, rejected, executor));
         CHECK(rejected);
     }
 
-    TEST_CASE("knx tunnelling client rejects unsupported HPAI connect metadata", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client rejects unsupported HPAI connect metadata",
+                     "[knx][client][unit]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x02u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
+            .control_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3671u}, 0x02u},
+            .data_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3672u}, 0x01u},
         };
-        completion::executor executor;
         bool rejected {};
         auto run = [&]() -> task<void>
         {
@@ -1693,44 +1557,34 @@ namespace kmx::aio::test::knx::client_test
             rejected = !result.has_value() && result.error() == make_error_code(error::unsupported_hpai);
             executor.stop();
         };
-        executor.spawn(run());
-        executor.run();
+        spawn_and_run(run());
         CHECK(rejected);
     }
 
-    TEST_CASE("knx tunnelling client rejects zero-port connect metadata", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client rejects zero-port connect metadata", "[knx][client][unit]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         const auto result_request = connect_request_frame {
             .control_endpoint = hpai { ipv4_endpoint {{127u, 0u, 0u, 1u}, 0u}, 0x01u },
             .data_endpoint = hpai { ipv4_endpoint {{127u, 0u, 0u, 1u}, 3672u}, 0x01u },
         };
         bool rejected {};
-        completion::executor executor;
         auto run = [&]() -> task<void>
         {
             const auto result = co_await client.connect(result_request);
             rejected = !result.has_value() && result.error() == make_error_code(error::invalid_configuration);
             executor.stop();
         };
-        executor.spawn(run());
-        executor.run();
+        spawn_and_run(run());
         CHECK(rejected);
     }
 
-    TEST_CASE("knx tunnelling client rejects an unexpected peer", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client rejects an unexpected peer", "[knx][client][unit]")
     {
-        loopback_transport transport;
         transport.wrong_peer = true;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         std::array<std::uint8_t, 10u> packet {};
         REQUIRE(frame::encode_tunnelling_ack_packet(packet, 3u, 7u).has_value());
         transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
 
-        completion::executor executor;
         bool rejected {};
         auto run = [&]() -> task<void>
         {
@@ -1738,8 +1592,7 @@ namespace kmx::aio::test::knx::client_test
             rejected = !result.has_value();
             executor.stop();
         };
-        executor.spawn(run());
-        executor.run();
+        spawn_and_run(run());
         CHECK(rejected);
     }
 
@@ -1769,25 +1622,20 @@ namespace kmx::aio::test::knx::client_test
         CHECK(ntohs(data_peer.sin6_port) == 3672u);
     }
 
-    TEST_CASE("knx tunnelling client rejects invalid peer metadata", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client rejects invalid peer metadata", "[knx][client][unit]")
     {
-        loopback_transport transport;
         transport.invalid_peer_length = true;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         std::array<std::uint8_t, 10u> packet {};
         REQUIRE(frame::encode_tunnelling_ack_packet(packet, 3u, 7u).has_value());
         transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
 
-        completion::executor executor;
         bool rejected {};
         auto run = [&]() -> task<void>
         {
             rejected = !(co_await client.receive_datagram()).has_value();
             executor.stop();
         };
-        executor.spawn(run());
-        executor.run();
+        spawn_and_run(run());
         CHECK(rejected);
     }
 
@@ -1840,57 +1688,42 @@ namespace kmx::aio::test::knx::client_test
         CHECK(accepted);
     }
 
-    TEST_CASE("knx tunnelling client rejects tunnelling traffic from the control peer", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client rejects tunnelling traffic from the control peer",
+                     "[knx][client][unit]")
     {
-        loopback_transport transport;
         transport.data_peer_as_control = true;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
-        const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
-        };
         std::array<std::uint8_t, 10u> packet {};
         REQUIRE(frame::encode_tunnelling_ack_packet(packet, 3u, 7u).has_value());
         bool rejected {};
-        completion::executor executor;
-        executor.spawn(detail::reject_control_peer_tunnelling(transport, client, request, packet, rejected, executor));
-        executor.run();
+        spawn_and_run(
+            detail::reject_control_peer_tunnelling(transport, client, detail::loopback_connect_request, packet, rejected, executor));
         CHECK(rejected);
     }
 
-    TEST_CASE("knx tunnelling client rejects a bounded peer-length mismatch", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client rejects a bounded peer-length mismatch", "[knx][client][unit]")
     {
-        loopback_transport transport;
         transport.short_peer_length = true;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         std::array<std::uint8_t, 10u> packet {};
         REQUIRE(frame::encode_tunnelling_ack_packet(packet, 3u, 7u).has_value());
         transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
 
-        completion::executor executor;
         bool rejected {};
         auto run = [&]() -> task<void>
         {
             rejected = !(co_await client.receive_datagram()).has_value();
             executor.stop();
         };
-        executor.spawn(run());
-        executor.run();
+        spawn_and_run(run());
         CHECK(rejected);
     }
 
-    TEST_CASE("knx tunnelling client rejects malformed application datagrams", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client rejects malformed application datagrams",
+                     "[knx][client][unit]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         transport.enqueue(std::vector<std::uint8_t> {
             0x06u, 0x10u, 0x04u, 0x21u, 0x00u, 0x05u,
         });
 
-        completion::executor executor;
         bool rejected {};
         auto run = [&]() -> task<void>
         {
@@ -1898,18 +1731,13 @@ namespace kmx::aio::test::knx::client_test
             rejected = !result.has_value() && result.error() == make_error_code(error::malformed_frame);
             executor.stop();
         };
-        executor.spawn(run());
-        executor.run();
+        spawn_and_run(run());
         CHECK(rejected);
     }
 
-    TEST_CASE("knx tunnelling client rejects an empty datagram", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client rejects an empty datagram", "[knx][client][unit]")
     {
-        loopback_transport transport;
         transport.empty_receive = true;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
-        completion::executor executor;
         bool rejected {};
         auto run = [&]() -> task<void>
         {
@@ -1917,18 +1745,13 @@ namespace kmx::aio::test::knx::client_test
             rejected = !result.has_value() && result.error() == make_error_code(error::invalid_length);
             executor.stop();
         };
-        executor.spawn(run());
-        executor.run();
+        spawn_and_run(run());
         CHECK(rejected);
     }
 
-    TEST_CASE("knx tunnelling client rejects an oversized receive result", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client rejects an oversized receive result", "[knx][client][unit]")
     {
-        loopback_transport transport;
         transport.oversized_receive = true;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
-        completion::executor executor;
         bool rejected {};
         auto run = [&]() -> task<void>
         {
@@ -1936,178 +1759,128 @@ namespace kmx::aio::test::knx::client_test
             rejected = !result.has_value() && result.error() == make_error_code(error::invalid_length);
             executor.stop();
         };
-        executor.spawn(run());
-        executor.run();
+        spawn_and_run(run());
         CHECK(rejected);
     }
 
-    TEST_CASE("knx tunnelling client receives an owning typed datagram", "[knx][client][integration]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client receives an owning typed datagram",
+                     "[knx][client][integration]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         bool received_ack {};
 
         std::array<std::uint8_t, 10u> packet {};
         REQUIRE(frame::encode_tunnelling_ack_packet(packet, 3u, 7u).has_value());
         transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
 
-        completion::executor executor;
-
-        executor.spawn(detail::receive_owning_datagram(client, received_ack, executor));
-        executor.run();
+        spawn_and_run(detail::receive_owning_datagram(client, received_ack, executor));
         CHECK(received_ack);
     }
 
-    TEST_CASE("knx tunnelling client receives an owning cEMI payload", "[knx][client][integration]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client receives an owning cEMI payload", "[knx][client][integration]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         const auto& cemi = sample_cemi;
         std::array<std::uint8_t, sample_tunnelling_packet_size> packet {};
         REQUIRE(frame::encode_tunnelling_request_packet(packet, 3u, 7u, cemi).has_value());
 
         bool matched {};
-        completion::executor executor;
 
-        executor.spawn(detail::receive_owning_cemi(transport, client, cemi, packet, matched, executor));
-        executor.run();
+        spawn_and_run(detail::receive_owning_cemi(transport, client, cemi, packet, matched, executor));
         CHECK(matched);
         CHECK(transport.ack_received);
     }
 
-    TEST_CASE("knx tunnelling client returns an owning cEMI copy", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client returns an owning cEMI copy", "[knx][client][unit]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         const auto& cemi = sample_cemi;
         std::array<std::uint8_t, sample_tunnelling_packet_size> request {};
         REQUIRE(frame::encode_tunnelling_request_packet(request, 3u, 7u, cemi).has_value());
         std::vector<std::uint8_t> received_payload {};
 
-        completion::executor executor;
-        executor.spawn(detail::receive_owning_cemi_copy(transport, client, request, received_payload, executor));
-        executor.run();
+        spawn_and_run(detail::receive_owning_cemi_copy(transport, client, request, received_payload, executor));
         CHECK(received_payload == std::vector<std::uint8_t>(cemi.begin(), cemi.end()));
     }
 
-    TEST_CASE("knx tunnelling client acknowledges but suppresses duplicate indications", "[knx][client][integration]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client acknowledges but suppresses duplicate indications",
+                     "[knx][client][integration]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         std::array<std::uint8_t, sample_tunnelling_packet_size> indication {};
         REQUIRE(frame::encode_tunnelling_request_packet(indication, 3u, 7u, sample_cemi).has_value());
 
         bool first_received {};
         bool duplicate_suppressed {};
-        completion::executor executor;
-        executor.spawn(
-            detail::suppress_duplicate_indication(transport, client, indication, first_received, duplicate_suppressed, executor));
-        executor.run();
+        spawn_and_run(detail::suppress_duplicate_indication(transport, client, indication, first_received, duplicate_suppressed, executor));
         CHECK(first_received);
         CHECK(duplicate_suppressed);
         CHECK(transport.ack_received);
     }
 
-    TEST_CASE("knx tunnelling client rejects out-of-order indications", "[knx][client][integration]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client rejects out-of-order indications",
+                     "[knx][client][integration]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         std::array<std::uint8_t, sample_tunnelling_packet_size> first {};
         std::array<std::uint8_t, sample_tunnelling_packet_size> out_of_order {};
         REQUIRE(frame::encode_tunnelling_request_packet(first, 3u, 7u, sample_cemi).has_value());
         REQUIRE(frame::encode_tunnelling_request_packet(out_of_order, 3u, 9u, sample_cemi).has_value());
 
         bool rejected {};
-        completion::executor executor;
-        executor.spawn(detail::reject_out_of_order_indication(transport, client, first, out_of_order, rejected, executor));
-        executor.run();
+        spawn_and_run(detail::reject_out_of_order_indication(transport, client, first, out_of_order, rejected, executor));
         CHECK(rejected);
     }
 
-    TEST_CASE("knx tunnelling client skips control datagrams before cEMI", "[knx][client][integration]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client skips control datagrams before cEMI",
+                     "[knx][client][integration]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         const auto& cemi = sample_cemi;
         std::array<std::uint8_t, sample_tunnelling_packet_size> request {};
         REQUIRE(frame::encode_tunnelling_request_packet(request, 3u, 7u, cemi).has_value());
         std::array<std::uint8_t, 10u> ack {};
         REQUIRE(frame::encode_tunnelling_ack_packet(ack, 3u, 7u).has_value());
         bool received {};
-        completion::executor executor;
-        executor.spawn(detail::skip_control_before_cemi(transport, client, request, ack, received, executor));
-        executor.run();
+        spawn_and_run(detail::skip_control_before_cemi(transport, client, request, ack, received, executor));
         CHECK(received);
     }
 
-    TEST_CASE("knx tunnelling client processes heartbeat before cEMI", "[knx][client][integration]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client processes heartbeat before cEMI", "[knx][client][integration]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         std::array<std::uint8_t, sample_tunnelling_packet_size> request {};
         const auto& cemi = sample_cemi;
         REQUIRE(frame::encode_tunnelling_request_packet(request, 3u, 7u, cemi).has_value());
 
         bool received {};
-        completion::executor executor;
-        executor.spawn(detail::process_heartbeat_before_cemi(transport, client, request, received, executor));
-        executor.run();
+        spawn_and_run(detail::process_heartbeat_before_cemi(transport, client, request, received, executor));
         CHECK(received);
     }
 
-    TEST_CASE("knx tunnelling client rejects cross-channel cEMI", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client rejects cross-channel cEMI", "[knx][client][unit]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         const auto& cemi = sample_cemi;
         std::array<std::uint8_t, sample_tunnelling_packet_size> request {};
         REQUIRE(frame::encode_tunnelling_request_packet(request, 4u, 7u, cemi).has_value());
 
-        completion::executor executor;
         bool rejected {};
-        executor.spawn(detail::reject_cross_channel_cemi(transport, client, request, rejected, executor));
-        executor.run();
+        spawn_and_run(detail::reject_cross_channel_cemi(transport, client, request, rejected, executor));
         CHECK(rejected);
     }
 
-    TEST_CASE("knx tunnelling client does not expose disconnect control as cEMI", "[knx][client][unit]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client does not expose disconnect control as cEMI",
+                     "[knx][client][unit]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer) };
         const std::array<std::uint8_t, 8u> disconnect {
             0x06u, 0x10u, 0x02u, 0x09u, 0x00u, 0x08u, 0x03u, 0x00u,
         };
-        completion::executor executor;
         bool rejected {};
-        executor.spawn(detail::reject_disconnect_control_as_cemi(transport, client, disconnect, rejected, executor));
-        executor.run();
+        spawn_and_run(detail::reject_disconnect_control_as_cemi(transport, client, disconnect, rejected, executor));
         CHECK(rejected);
     }
-
 }
 
 namespace kmx::aio::test::knx::client_test
 {
-    TEST_CASE("knx tunnelling client writes a typed group value", "[knx][client][dpt][integration]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client writes a typed group value", "[knx][client][dpt][integration]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client {transport, peer, sizeof(peer)};
         bool succeeded {};
 
-        completion::executor executor;
-
-        executor.spawn(detail::write_typed_group_value(client, succeeded, executor));
-        executor.run();
+        spawn_and_run(detail::write_typed_group_value(client, succeeded, executor));
 
         REQUIRE(succeeded);
         CHECK(client.assigned_address() == individual_address {1u, 1u, 10u});
@@ -2120,17 +1893,11 @@ namespace kmx::aio::test::knx::client_test
         CHECK(detail::last_sent_cemi(transport) == std::vector<std::uint8_t>(expected.begin(), expected.end()));
     }
 
-    TEST_CASE("knx tunnelling client reads a group value", "[knx][client][dpt][integration]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client reads a group value", "[knx][client][dpt][integration]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client {transport, peer, sizeof(peer)};
         bool succeeded {};
 
-        completion::executor executor;
-
-        executor.spawn(detail::read_group_value(client, succeeded, executor));
-        executor.run();
+        spawn_and_run(detail::read_group_value(client, succeeded, executor));
 
         REQUIRE(succeeded);
         const auto sent = detail::last_sent_cemi(transport);
@@ -2140,20 +1907,15 @@ namespace kmx::aio::test::knx::client_test
         CHECK(decoded->group_destination() == group_address {0x0A03u});
     }
 
-    TEST_CASE("knx tunnelling client decodes a received telegram", "[knx][client][dpt][integration]")
+    TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client decodes a received telegram",
+                     "[knx][client][dpt][integration]")
     {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client {transport, peer, sizeof(peer)};
         std::expected<telegram, std::error_code> received {std::unexpected(make_error_code(error::internal_error))};
 
         std::vector<std::uint8_t> indication(sample_tunnelling_packet_size + 2u, 0u);
         REQUIRE(frame::encode_tunnelling_request_packet(indication, 3u, 0u, sample_cemi_temperature).has_value());
 
-        completion::executor executor;
-
-        executor.spawn(detail::decode_received_telegram(transport, client, indication, received, executor));
-        executor.run();
+        spawn_and_run(detail::decode_received_telegram(transport, client, indication, received, executor));
 
         REQUIRE(received.has_value());
         CHECK(received->frame.application_service == apci::group_value_write);
