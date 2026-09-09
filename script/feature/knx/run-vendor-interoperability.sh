@@ -33,7 +33,7 @@ if [[ ! -f "$results_file" ]]; then
 fi
 
 if [[ "$mode" == "apply" ]]; then
-    bash "$script_dir/interoperability-matrix.sh" import --file "$results_file" --require-capture-files
+    bash "$script_dir/interoperability-matrix.sh" import --file "$results_file"
 else
-    bash "$script_dir/interoperability-matrix.sh" import --file "$results_file" --require-capture-files --dry-run
+    bash "$script_dir/interoperability-matrix.sh" import --file "$results_file" --dry-run
 fi

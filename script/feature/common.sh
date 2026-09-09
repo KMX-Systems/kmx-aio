@@ -17,6 +17,9 @@ source_dir="$repo_root/source"
 # output/coverage. Mixing an instrumented and a plain build in one tree only wastes rebuilds, and
 # leaves two binaries of the same name where the wrong one is easy to pick up.
 qbs_build_root="${KMX_BUILD_ROOT:-$repo_root/output}"
+# A relative KMX_BUILD_ROOT would resolve against the current directory, and these scripts run qbs
+# from source_dir - which is how build trees ended up inside source/. Anchor it to the repo root.
+[[ "$qbs_build_root" = /* ]] || qbs_build_root="$repo_root/$qbs_build_root"
 qbs_build_dir_args=(-d "$qbs_build_root")
 
 # Sets qbs_profile_args and qbs_profile_toolchain_type for the machine's default C++ compiler, or for

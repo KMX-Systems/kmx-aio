@@ -1,5 +1,0 @@
-Filters: [knx] [discovery]
-Randomness seeded to: 1592693699
-===============================================================================
-All tests passed (84 assertions in 19 test cases)
-

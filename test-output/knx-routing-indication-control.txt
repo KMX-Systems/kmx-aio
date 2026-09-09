@@ -1,6 +1,0 @@
-Filters: [knx] [routing]
-Randomness seeded to: 4264117373
-[I] [executor.cpp:115] Readiness executor backend: epoll
-===============================================================================
-All tests passed (101 assertions in 20 test cases)
-

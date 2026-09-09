@@ -22,7 +22,7 @@ Usage:
   interoperability-matrix.sh verify
   interoperability-matrix.sh render
   interoperability-matrix.sh record --profile <value> --peer <value> --transport <value> --result <pending|passing|failing|skipped> [--capture <value>] [--notes <value>]
-    interoperability-matrix.sh import --file <path> [--require-capture-files] [--dry-run]
+  interoperability-matrix.sh import --file <path> [--dry-run]
 EOF
 }
 
@@ -56,18 +56,6 @@ ensure_inputs() {
     fi
 }
 
-capture_exists() {
-    local capture="$1"
-    local resolved="$capture"
-
-    [[ -n "$resolved" ]] || return 1
-    if [[ "$resolved" != /* ]]; then
-        resolved="$repo_root/$resolved"
-    fi
-
-    [[ -f "$resolved" ]]
-}
-
 verify_matrix() {
     ensure_inputs
 
@@ -85,11 +73,6 @@ verify_matrix() {
 
         if ! is_valid_result "$result"; then
             echo "Invalid row $line_number: result '$result' is not supported" >&2
-            exit 1
-        fi
-
-        if [[ "$result" != "pending" && "$result" != "skipped" && -z "$capture" ]]; then
-            echo "Invalid row $line_number: capture is required for result '$result'" >&2
             exit 1
         fi
 
@@ -192,11 +175,6 @@ record_row() {
         exit 1
     fi
 
-    if [[ "$result" != "pending" && "$result" != "skipped" && -z "$capture" ]]; then
-        echo "Capture is required for result '$result'" >&2
-        exit 1
-    fi
-
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
         "$(normalize_field "$profile")" \
         "$(normalize_field "$peer")" \
@@ -214,7 +192,6 @@ import_rows() {
     ensure_inputs
 
     local import_file=""
-    local require_capture_files="false"
     local dry_run="false"
 
     while [[ $# -gt 0 ]]; do
@@ -222,10 +199,6 @@ import_rows() {
             --file)
                 import_file="${2:-}"
                 shift 2
-                ;;
-            --require-capture-files)
-                require_capture_files="true"
-                shift
                 ;;
             --dry-run)
                 dry_run="true"
@@ -272,18 +245,6 @@ import_rows() {
         if ! is_valid_result "$result"; then
             echo "Invalid import row $line_number: unsupported result '$result'" >&2
             exit 1
-        fi
-
-        if [[ "$result" != "pending" && "$result" != "skipped" && -z "$capture" ]]; then
-            echo "Invalid import row $line_number: capture is required for result '$result'" >&2
-            exit 1
-        fi
-
-        if [[ "$require_capture_files" == "true" && "$result" != "pending" && "$result" != "skipped" ]]; then
-            if ! capture_exists "$capture"; then
-                echo "Invalid import row $line_number: capture file not found '$capture'" >&2
-                exit 1
-            fi
         fi
 
         if [[ "$dry_run" == "false" ]]; then

@@ -152,6 +152,8 @@ if [[ "$qbs_profile_toolchain_type" == "clang" ]] && catch2_needs_no_pie; then
 fi
 
 full_build_root="${build_root_override:-${KMX_BUILD_ROOT:-$repo_root/output/full-${toolchain_tag}}}"
+# build_set runs qbs from source_dir, so a relative build root would land inside the source tree.
+[[ "$full_build_root" = /* ]] || full_build_root="$repo_root/$full_build_root"
 
 build_set() {
     local set_name="$1"
