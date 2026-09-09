@@ -273,6 +273,34 @@ namespace kmx::aio::completion::xdp
         return {};
     }
 
+    expected_void_t socket::submit_tx_frame(state& state, const std::uint64_t addr, const std::uint32_t length) noexcept
+    {
+        std::uint32_t idx {};
+        if (xsk_ring_prod__reserve(&state.tx, 1u, &idx) != 1u)
+        {
+            // The frame goes back to the free list: nothing was queued, so nothing will return it.
+            state.stats.tx_dropped_ring_full++;
+            state.free_frame_addrs.push_front(addr);
+            return std::unexpected(to_std_error_code(error_code::ring_full));
+        }
+
+        xdp_desc* const tx_desc = xsk_ring_prod__tx_desc(&state.tx, idx);
+        tx_desc->addr = addr;
+        tx_desc->len = length;
+        xsk_ring_prod__submit(&state.tx, 1u);
+        state.stats.tx_frames_sent++;
+
+        // The kernel only polls the ring while it has reason to; when it has stopped, a zero-length
+        // send is what tells it there is work again.
+        if (xsk_ring_prod__needs_wakeup(&state.tx))
+        {
+            state.stats.wakeups_triggered++;
+            (void) ::sendto(xsk_socket__fd(state.xsk), nullptr, 0, MSG_DONTWAIT, nullptr, 0);
+        }
+
+        return {};
+    }
+
     expected_void_t socket::send_via_af_xdp_backend(state& state, cspan_byte_t data) noexcept
     {
         recycle_completion_frames(state);
@@ -295,29 +323,7 @@ namespace kmx::aio::completion::xdp
         }
 
         std::memcpy(tx_data, data.data(), data.size());
-
-        std::uint32_t idx {};
-        const std::uint32_t reserved = xsk_ring_prod__reserve(&state.tx, 1u, &idx);
-        if (reserved != 1u)
-        {
-            state.stats.tx_dropped_ring_full++;
-            state.free_frame_addrs.push_front(addr);
-            return std::unexpected(to_std_error_code(error_code::ring_full));
-        }
-
-        xdp_desc* const tx_desc = xsk_ring_prod__tx_desc(&state.tx, idx);
-        tx_desc->addr = addr;
-        tx_desc->len = static_cast<std::uint32_t>(data.size());
-        xsk_ring_prod__submit(&state.tx, 1u);
-        state.stats.tx_frames_sent++;
-
-        if (xsk_ring_prod__needs_wakeup(&state.tx))
-        {
-            state.stats.wakeups_triggered++;
-            (void) ::sendto(xsk_socket__fd(state.xsk), nullptr, 0, MSG_DONTWAIT, nullptr, 0);
-        }
-
-        return {};
+        return submit_tx_frame(state, addr, static_cast<std::uint32_t>(data.size()));
     }
 
     void socket::seed_free_frames(state& state) noexcept
@@ -355,6 +361,40 @@ namespace kmx::aio::completion::xdp
         return out;
     }
 
+#if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
+    socket::expected_frame socket::receive_via_af_xdp_backend(state& state) noexcept
+    {
+        recycle_completion_frames(state);
+        refill_fill_ring(state);
+
+        std::uint32_t idx {};
+        if (xsk_ring_cons__peek(&state.rx, 1u, &idx) == 0u)
+            return std::unexpected(to_std_error_code(error_code::would_block));
+
+        const xdp_desc* desc = xsk_ring_cons__rx_desc(&state.rx, idx);
+        const std::uint64_t addr = xsk_umem__extract_addr(desc->addr);
+        auto* const data_ptr = reinterpret_cast<std::byte*>(xsk_umem__get_data(state.umem_area.get(), addr));
+        if (data_ptr == nullptr)
+        {
+            // The descriptor is released either way: leaving it in the ring would stall receive.
+            xsk_ring_cons__release(&state.rx, 1u);
+            return std::unexpected(to_std_error_code(error_code::internal_error));
+        }
+
+        // The frame stays out of the free list until the caller returns it, because the span handed back
+        // points straight into the UMEM slot it occupies.
+        state.rx_inflight.insert(addr);
+        xsk_ring_cons__release(&state.rx, 1u);
+        state.stats.rx_frames_received++;
+
+        return frame {
+            .data = span_byte_t(data_ptr, desc->len),
+            .addr = addr,
+            .length = desc->len,
+        };
+    }
+#endif
+
     task<std::expected<frame, std::error_code>> socket::recv() noexcept(false)
     {
         if (!state_)
@@ -364,36 +404,7 @@ namespace kmx::aio::completion::xdp
 
 #if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
         if (state_->af_xdp_backend_enabled)
-        {
-            recycle_completion_frames(*state_);
-            refill_fill_ring(*state_);
-
-            std::uint32_t idx {};
-            const std::uint32_t count = xsk_ring_cons__peek(&state_->rx, 1u, &idx);
-            if (count == 0u)
-                co_return std::unexpected(to_std_error_code(error_code::would_block));
-
-            const xdp_desc* desc = xsk_ring_cons__rx_desc(&state_->rx, idx);
-            const std::uint64_t addr = xsk_umem__extract_addr(desc->addr);
-            auto* const data_ptr = reinterpret_cast<std::byte*>(xsk_umem__get_data(state_->umem_area.get(), addr));
-            if (!data_ptr)
-            {
-                xsk_ring_cons__release(&state_->rx, 1u);
-                co_return std::unexpected(to_std_error_code(error_code::internal_error));
-            }
-
-            state_->rx_inflight.insert(addr);
-            xsk_ring_cons__release(&state_->rx, 1u);
-            state_->stats.rx_frames_received++;
-
-            frame out {
-                .data = span_byte_t(data_ptr, desc->len),
-                .addr = addr,
-                .length = desc->len,
-            };
-
-            co_return out;
-        }
+            co_return receive_via_af_xdp_backend(*state_);
 #endif
 
         if (state_->pending_rx.empty())

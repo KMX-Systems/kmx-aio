@@ -166,7 +166,22 @@ namespace kmx::aio::completion::xdp
         [[nodiscard]] static expected_void_t create_xsk_socket(state& state) noexcept;
 
         /// @brief Sends data through the AF_XDP backend.
+        /// @brief One received frame, or why none could be taken.
+        using expected_frame = std::expected<frame, std::error_code>;
+
         [[nodiscard]] static expected_void_t send_via_af_xdp_backend(state& state, cspan_byte_t data) noexcept;
+        /// @brief Queues one already-filled UMEM frame for transmission and wakes the kernel if needed.
+        /// @param state The socket's state.
+        /// @param addr The UMEM address of the frame to send.
+        /// @param length How many octets of it are the frame.
+        /// @return Nothing, or the reason the frame could not be queued.
+        [[nodiscard]] static expected_void_t submit_tx_frame(state& state, std::uint64_t addr, std::uint32_t length) noexcept;
+        /// @brief Takes one frame from the receive ring, leaving it mapped until the caller returns it.
+        /// @param state The socket's state.
+        /// @return The frame, or why none could be taken.
+        /// @note Defined only when the AF_XDP headers were available at build time, and called only from
+        ///       behind the same guard.
+        [[nodiscard]] static expected_frame receive_via_af_xdp_backend(state& state) noexcept;
 
         /// @brief Seeds the free-frame pool.
         static void seed_free_frames(state& state) noexcept;

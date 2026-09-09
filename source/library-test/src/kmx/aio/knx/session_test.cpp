@@ -102,7 +102,7 @@ namespace kmx::aio::test::knx::session_test
 
         const std::array<std::uint8_t, 10u> packet {
             0x06u, 0x10u, 0x04u, 0x21u, 0x00u, 0x0Au,
-            0x03u, 0x05u, 0x00u, 0x00u,
+            0x04u, 0x03u, 0x05u, 0x00u,
         };
 
         REQUIRE(session.on_ack_packet(packet).has_value());
@@ -208,8 +208,9 @@ namespace kmx::aio::test::knx::session_test
         CHECK(packet[0] == 0x06u);
         CHECK(packet[2] == 0x04u);
         CHECK(packet[3] == 0x20u);
-        CHECK(packet[6] == 3u);
-        CHECK(packet[7] == 0u);
+        CHECK(packet[6] == 0x04u); // connection header structure length
+        CHECK(packet[7] == 3u);    // channel id
+        CHECK(packet[8] == 0u);    // sequence counter
 
         const auto decoded = frame::decode_tunnelling_request_packet(packet);
         REQUIRE(decoded.has_value());
@@ -806,7 +807,9 @@ namespace kmx::aio::test::knx::session_test
 
     TEST_CASE("knx session tracks a timed connection attempt", "[knx][session][integration]")
     {
-        tunnelling_session session {{ .max_retries = 2u, .ack_timeout_ms = 100u }};
+        // A connect retry extends the deadline by the connect timeout, which is its own value: the
+        // tunnelling acknowledgement timeout is an order of magnitude shorter and is not this clock.
+        tunnelling_session session {{ .max_retries = 2u, .ack_timeout_ms = 10u, .connect_timeout_ms = 100u }};
         const connect_request_frame request {
             .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
             .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },

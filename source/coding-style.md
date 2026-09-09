@@ -122,6 +122,7 @@ Adherence to these guidelines try to ensure code is correct, readable, maintaina
     *   **4.5.5** **Branch Prediction Hints (C++20):** Use `[[likely]]`/`[[unlikely]]` only on hot-path branches whose outcome is strongly skewed and known (error paths, loop exits); leave balanced or unknown branches unannotated. They are hints only - correctness **must never** depend on them.
         *   **4.5.5.1** The attribute applies to the branch **statement**, and precedes a `case` label: `if (buffer.empty()) [[unlikely]] return error_t::no_data;`, `[[likely]] case state_t::running:`.
     *   **4.5.6** **Lambdas:** A lambda body longer than 3 lines **must** be extracted into a named function or method, leaving the lambda as glue that only forwards to it: `[this](const auto& item) { return process(item); }`.
+    *   **4.5.7** **Function and Method Length:** A function or method body **must not** exceed one display page, approximately 24 lines of implementation code. If it exceeds this limit, split it into smaller functions or methods with clear, focused responsibilities.
 
 ## 5. Documentation
 

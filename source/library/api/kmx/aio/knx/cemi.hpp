@@ -364,6 +364,64 @@ namespace kmx::aio::knx
         }
     };
 
+    /// @brief One cEMI device management property service.
+    /// @details The device management half of cEMI: the messages that read and write the interface object
+    ///          properties of a device, carried by DEVICE_CONFIGURATION_REQUEST rather than by tunnelling.
+    ///          Its shape has nothing in common with L_Data - no addresses, no APCI - which is why it is a
+    ///          separate frame type rather than a variant of @ref kmx::aio::knx::cemi_frame.
+    ///
+    /// Wire layout, all fields big-endian:
+    ///
+    /// | Offset | Size | Field |
+    /// | :--- | :--- | :--- |
+    /// | 0 | 1 | message code |
+    /// | 1 | 2 | interface object type |
+    /// | 3 | 1 | object instance |
+    /// | 4 | 1 | property id |
+    /// | 5 | 2 | element count in the high four bits, start index in the low twelve |
+    /// | 7 | n | the property data, absent from a read request |
+    /// @reference KNX System Specifications, Volume 3/6/3 "EMI/IMI", cEMI device management.
+    struct property_frame
+    {
+        /// @brief The message code.
+        cemi_message_code message_code = cemi_message_code::m_prop_read_req;
+        /// @brief The interface object type.
+        std::uint16_t object_type {};
+        /// @brief Which instance of that object type, counted from one.
+        std::uint8_t object_instance {};
+        /// @brief The property identifier.
+        std::uint8_t property_id {};
+        /// @brief How many elements the service names; zero in a confirmation reports an error.
+        std::uint8_t element_count {};
+        /// @brief The first element, counted from one; zero names the element count itself.
+        std::uint16_t start_index {};
+        /// @brief Offset of the property data within the buffer this frame was decoded from.
+        std::uint16_t data_offset {};
+        /// @brief Size of the property data.
+        std::uint16_t data_size {};
+
+        /// @brief Indicates whether a confirmation reports a failure.
+        /// @details A confirmation with no elements carries a one-octet error code instead of data, which
+        ///          is the only way a device management service reports that it refused the request.
+        [[nodiscard]] constexpr bool failed() const noexcept
+        {
+            return ((message_code == cemi_message_code::m_prop_read_con) ||
+                    (message_code == cemi_message_code::m_prop_write_con)) &&
+                   (element_count == 0u);
+        }
+
+        /// @brief Returns the property data, mapped onto the buffer this frame was decoded from.
+        /// @param bytes The very buffer it was decoded from.
+        /// @return The data octets, empty when the message carries none.
+        [[nodiscard]] constexpr cspan_uint8_t data(const cspan_uint8_t bytes) const noexcept
+        {
+            if ((data_size == 0u) || ((static_cast<std::size_t>(data_offset) + data_size) > bytes.size()))
+                return {};
+
+            return bytes.subspan(data_offset, data_size);
+        }
+    };
+
     /// @brief cEMI encode and decode operations.
     namespace cemi
     {
@@ -376,7 +434,18 @@ namespace kmx::aio::knx
         /// @brief Smallest L_Data message: no additional information and a compact APDU.
         inline constexpr std::size_t min_l_data_size = prologue_size + link_header_size + apci_size;
         /// @brief Largest L_Data message this build accepts, with no additional information.
+        /// @warning This is the size of a message an *encoder* here produces, which never emits an
+        ///          additional information block. It is not an upper bound on a *decoded* message: a peer
+        ///          may send up to @ref max_additional_info_size octets of additional information ahead of
+        ///          the link header. Size a buffer that receives decoded octets with @ref max_message_size.
         inline constexpr std::size_t max_l_data_size = min_l_data_size + apdu_payload::max_octets;
+        /// @brief Largest additional information block, the range of the one-octet length field.
+        inline constexpr std::size_t max_additional_info_size = 0xFFu;
+        /// @brief Largest L_Data message that can reach the decoder at all.
+        /// @details Both variable fields at their maximum: a full additional information block and the
+        ///          longest APDU the data length octet can describe. Nothing @ref decode accepts is larger,
+        ///          which the static assertion below pins to the length arithmetic rather than to this sum.
+        inline constexpr std::size_t max_message_size = max_l_data_size + max_additional_info_size;
         /// @brief Largest data length field a standard frame may carry; longer frames must be extended.
         inline constexpr std::uint8_t max_standard_data_length = 0x0Fu;
         /// @brief Transport layer control value of an unnumbered data packet, which is what group traffic uses.
@@ -399,6 +468,12 @@ namespace kmx::aio::knx
             return prologue_size + additional_info_size + link_header_size + 1u + data_length;
         }
 
+        // Both variable fields are one octet wide, so this is the largest size the length arithmetic above
+        // can produce - and therefore the largest message decode() can accept. A buffer sized to hold a
+        // decoded message must be at least this large; max_l_data_size is 255 octets short of it.
+        static_assert(encoded_size(max_additional_info_size, 0xFFu) == max_message_size,
+                      "max_message_size must bound every size encoded_size can return");
+
         /// @brief Indicates whether a message code names an L_Data message.
         /// @param code The message code to test.
         /// @return `true` for the request, confirmation and indication codes.
@@ -406,6 +481,145 @@ namespace kmx::aio::knx
         {
             return (code == cemi_message_code::l_data_req) || (code == cemi_message_code::l_data_con) ||
                    (code == cemi_message_code::l_data_ind);
+        }
+
+        /// @brief Size of a device management property service header, message code included.
+        /// @details Message code, interface object type (2), object instance, property id, then the element
+        ///          count and start index packed into one 16-bit field.
+        inline constexpr std::size_t property_header_size = 7u;
+        /// @brief Largest element count a property service can name; the field is four bits.
+        inline constexpr std::uint8_t max_property_elements = 0x0Fu;
+        /// @brief Largest start index a property service can name; the field is twelve bits.
+        inline constexpr std::uint16_t max_property_start_index = 0x0FFFu;
+
+        /// @brief Indicates whether a message code names a device management property service.
+        [[nodiscard]] constexpr bool is_property_service(const cemi_message_code code) noexcept
+        {
+            return (code == cemi_message_code::m_prop_read_req) || (code == cemi_message_code::m_prop_read_con) ||
+                   (code == cemi_message_code::m_prop_write_req) || (code == cemi_message_code::m_prop_write_con) ||
+                   (code == cemi_message_code::m_prop_info_ind);
+        }
+
+        /// @brief Indicates whether a message code names a device management reset service.
+        [[nodiscard]] constexpr bool is_reset(const cemi_message_code code) noexcept
+        {
+            return (code == cemi_message_code::m_reset_req) || (code == cemi_message_code::m_reset_ind);
+        }
+
+        /// @brief Encodes one cEMI device management property service.
+        /// @param dest The buffer to write into.
+        /// @param value The service to encode; its data offset and size are ignored.
+        /// @param data The property data; empty for a read request.
+        /// @return The number of octets written, or the reason the message could not be encoded.
+        [[nodiscard]] constexpr std::expected<std::size_t, error> encode_property(const span_uint8_t dest,
+                                                                                  const property_frame& value,
+                                                                                  const cspan_uint8_t data = {}) noexcept
+        {
+            if (!is_property_service(value.message_code))
+                return std::unexpected(error::unsupported_message_code);
+            if ((value.element_count > max_property_elements) || (value.start_index > max_property_start_index))
+                return std::unexpected(error::invalid_configuration);
+            if (data.size() > apdu_payload::max_octets)
+                return std::unexpected(error::payload_too_large);
+
+            const auto size = property_header_size + data.size();
+            if (dest.size() < size)
+                return std::unexpected(error::invalid_length);
+
+            dest[0u] = static_cast<std::uint8_t>(value.message_code);
+            dest[1u] = static_cast<std::uint8_t>(value.object_type >> 8u);
+            dest[2u] = static_cast<std::uint8_t>(value.object_type & 0xFFu);
+            dest[3u] = value.object_instance;
+            dest[4u] = value.property_id;
+            dest[5u] = static_cast<std::uint8_t>((value.element_count << 4u) | ((value.start_index >> 8u) & 0x0Fu));
+            dest[6u] = static_cast<std::uint8_t>(value.start_index & 0xFFu);
+
+            for (std::size_t i {}; i < data.size(); ++i)
+                dest[property_header_size + i] = data[i];
+
+            return size;
+        }
+
+        /// @brief Encodes an M_PropRead.req.
+        /// @param dest The buffer to write into.
+        /// @param object_type The interface object type.
+        /// @param object_instance Which instance of that type, counted from one.
+        /// @param property_id The property to read.
+        /// @param element_count How many elements to read.
+        /// @param start_index The first element, counted from one.
+        /// @return The number of octets written, or the reason it could not be encoded.
+        [[nodiscard]] constexpr std::expected<std::size_t, error> encode_property_read(
+            const span_uint8_t dest, const std::uint16_t object_type, const std::uint8_t object_instance,
+            const std::uint8_t property_id, const std::uint8_t element_count = 1u, const std::uint16_t start_index = 1u) noexcept
+        {
+            return encode_property(dest, property_frame {cemi_message_code::m_prop_read_req, object_type, object_instance, property_id,
+                                                          element_count, start_index});
+        }
+
+        /// @brief Encodes an M_PropWrite.req.
+        /// @param dest The buffer to write into.
+        /// @param object_type The interface object type.
+        /// @param object_instance Which instance of that type, counted from one.
+        /// @param property_id The property to write.
+        /// @param data The value to write.
+        /// @param element_count How many elements the value covers.
+        /// @param start_index The first element, counted from one.
+        /// @return The number of octets written, or the reason it could not be encoded.
+        [[nodiscard]] constexpr std::expected<std::size_t, error> encode_property_write(
+            const span_uint8_t dest, const std::uint16_t object_type, const std::uint8_t object_instance,
+            const std::uint8_t property_id, const cspan_uint8_t data, const std::uint8_t element_count = 1u,
+            const std::uint16_t start_index = 1u) noexcept
+        {
+            return encode_property(dest, property_frame {cemi_message_code::m_prop_write_req, object_type, object_instance, property_id,
+                                                          element_count, start_index},
+                                   data);
+        }
+
+        /// @brief Encodes an M_Reset.req, which carries nothing but its message code.
+        /// @param dest The buffer to write into.
+        /// @param code The reset code; must be a reset service.
+        /// @return The number of octets written, or the reason it could not be encoded.
+        [[nodiscard]] constexpr std::expected<std::size_t, error> encode_reset(
+            const span_uint8_t dest, const cemi_message_code code = cemi_message_code::m_reset_req) noexcept
+        {
+            if (!is_reset(code))
+                return std::unexpected(error::unsupported_message_code);
+            if (dest.empty())
+                return std::unexpected(error::invalid_length);
+
+            dest[0u] = static_cast<std::uint8_t>(code);
+            return std::size_t {1u};
+        }
+
+        /// @brief Decodes one cEMI device management property service.
+        /// @param bytes The message octets; the data is named by offset into this very buffer.
+        /// @return The decoded message, or the reason it could not be decoded.
+        [[nodiscard]] constexpr std::expected<property_frame, error> decode_property(const cspan_uint8_t bytes) noexcept
+        {
+            if (bytes.empty())
+                return std::unexpected(error::malformed_frame);
+
+            const auto code = static_cast<cemi_message_code>(bytes[0u]);
+            if (!is_property_service(code))
+                return std::unexpected(error::unsupported_message_code);
+            if (bytes.size() < property_header_size)
+                return std::unexpected(error::malformed_frame);
+
+            property_frame decoded {};
+            decoded.message_code = code;
+            decoded.object_type = static_cast<std::uint16_t>((static_cast<std::uint16_t>(bytes[1u]) << 8u) | bytes[2u]);
+            decoded.object_instance = bytes[3u];
+            decoded.property_id = bytes[4u];
+            decoded.element_count = static_cast<std::uint8_t>((bytes[5u] >> 4u) & 0x0Fu);
+            decoded.start_index = static_cast<std::uint16_t>((static_cast<std::uint16_t>(bytes[5u] & 0x0Fu) << 8u) | bytes[6u]);
+
+            const auto data_size = bytes.size() - property_header_size;
+            if (data_size != 0u)
+            {
+                decoded.data_offset = static_cast<std::uint16_t>(property_header_size);
+                decoded.data_size = static_cast<std::uint16_t>(data_size);
+            }
+            return decoded;
         }
 
         /// @brief Identifies the application service a ten-bit APCI value names.
@@ -453,6 +667,46 @@ namespace kmx::aio::knx
             return value;
         }
 
+        /// @brief Writes the octets of one L_Data message into a buffer already known to be large enough.
+        /// @param dest The buffer to write into.
+        /// @param code The message code.
+        /// @param source The sending device.
+        /// @param destination The raw destination address.
+        /// @param destination_type How the destination address is to be read.
+        /// @param service The application layer service.
+        /// @param payload The application payload.
+        /// @param options The link layer flags.
+        /// @param data_length The wire data length field, as the payload reported it.
+        /// @note Every bound is the caller's to check; nothing here rejects anything.
+        constexpr void write_l_data(const span_uint8_t dest, const cemi_message_code code, const individual_address source,
+                                    const std::uint16_t destination, const knx::address_type destination_type,
+                                    const apci service, const apdu_payload& payload, const l_data_options& options,
+                                    const std::uint8_t data_length) noexcept
+        {
+            const auto raw_service = static_cast<std::uint16_t>(service);
+            dest[0u] = static_cast<std::uint8_t>(code);
+            dest[1u] = 0u;
+            dest[2u] = make_control_field_1(options, data_length);
+            dest[3u] = make_control_field_2(destination_type, options.hop_count);
+            dest[4u] = static_cast<std::uint8_t>(source.value() >> 8u);
+            dest[5u] = static_cast<std::uint8_t>(source.value() & 0xFFu);
+            dest[6u] = static_cast<std::uint8_t>(destination >> 8u);
+            dest[7u] = static_cast<std::uint8_t>(destination & 0xFFu);
+            dest[8u] = data_length;
+            dest[9u] = static_cast<std::uint8_t>(tpci_unnumbered_data | ((raw_service >> 8u) & 0x03u));
+            dest[10u] = static_cast<std::uint8_t>(raw_service & 0xFFu);
+
+            // A compact APDU rides in the low six bits of the service octet; anything longer follows it.
+            if (payload.compacted())
+                dest[10u] = static_cast<std::uint8_t>(dest[10u] | payload.compact_value());
+            else
+            {
+                const auto octets = payload.octets();
+                for (std::size_t i {}; i < octets.size(); ++i)
+                    dest[min_l_data_size + i] = octets[i];
+            }
+        }
+
         /// @brief Encodes one cEMI L_Data message.
         /// @param dest The buffer to write into.
         /// @param code The message code; must be one of the L_Data codes.
@@ -482,28 +736,7 @@ namespace kmx::aio::knx
             if (dest.size() < size)
                 return std::unexpected(error::invalid_length);
 
-            const auto raw_service = static_cast<std::uint16_t>(service);
-            dest[0u] = static_cast<std::uint8_t>(code);
-            dest[1u] = 0u;
-            dest[2u] = make_control_field_1(options, data_length);
-            dest[3u] = make_control_field_2(destination_type, options.hop_count);
-            dest[4u] = static_cast<std::uint8_t>(source.value() >> 8u);
-            dest[5u] = static_cast<std::uint8_t>(source.value() & 0xFFu);
-            dest[6u] = static_cast<std::uint8_t>(destination >> 8u);
-            dest[7u] = static_cast<std::uint8_t>(destination & 0xFFu);
-            dest[8u] = data_length;
-            dest[9u] = static_cast<std::uint8_t>(tpci_unnumbered_data | ((raw_service >> 8u) & 0x03u));
-            dest[10u] = static_cast<std::uint8_t>(raw_service & 0xFFu);
-
-            if (payload.compacted())
-                dest[10u] = static_cast<std::uint8_t>(dest[10u] | payload.compact_value());
-            else
-            {
-                const auto octets = payload.octets();
-                for (std::size_t i {}; i < octets.size(); ++i)
-                    dest[min_l_data_size + i] = octets[i];
-            }
-
+            write_l_data(dest, code, source, destination, destination_type, service, payload, options, data_length);
             return size;
         }
 
@@ -599,6 +832,31 @@ namespace kmx::aio::knx
             return static_cast<cemi_message_code>(bytes[0u]);
         }
 
+        /// @brief Reads the link layer header of an L_Data message into a frame.
+        /// @param bytes The message's octets.
+        /// @param link_offset Where the link header starts, past any additional information.
+        /// @param code The message code already read from the prologue.
+        /// @param additional_info_length The additional information length already read from the prologue.
+        /// @return The frame with its link layer fields filled in; the application service is the
+        ///         caller's to add, since reading it needs the length the caller already validated.
+        [[nodiscard]] constexpr cemi_frame read_link_header(const cspan_uint8_t bytes, const std::size_t link_offset,
+                                                            const cemi_message_code code,
+                                                            const std::uint8_t additional_info_length) noexcept
+        {
+            cemi_frame decoded {};
+            decoded.message_code = code;
+            decoded.additional_info_length = additional_info_length;
+            decoded.control_field_1 = bytes[link_offset];
+            decoded.control_field_2 = bytes[link_offset + 1u];
+            decoded.source = individual_address {
+                static_cast<std::uint16_t>((static_cast<std::uint16_t>(bytes[link_offset + 2u]) << 8u) | bytes[link_offset + 3u])};
+            decoded.destination =
+                static_cast<std::uint16_t>((static_cast<std::uint16_t>(bytes[link_offset + 4u]) << 8u) | bytes[link_offset + 5u]);
+            decoded.data_length = bytes[link_offset + 6u];
+            decoded.transport_control = static_cast<std::uint8_t>(bytes[link_offset + 7u] & tpci_mask);
+            return decoded;
+        }
+
         /// @brief Decodes one cEMI L_Data message.
         /// @param bytes The message octets; the payload is named by offset into this very buffer.
         /// @return The decoded message, or the reason it could not be decoded.
@@ -631,17 +889,7 @@ namespace kmx::aio::knx
             const auto raw_service =
                 static_cast<std::uint16_t>((static_cast<std::uint16_t>(bytes[link_offset + 7u] & 0x03u) << 8u) | bytes[link_offset + 8u]);
 
-            cemi_frame decoded {};
-            decoded.message_code = code;
-            decoded.additional_info_length = additional_info_length;
-            decoded.control_field_1 = bytes[link_offset];
-            decoded.control_field_2 = bytes[link_offset + 1u];
-            decoded.source = individual_address {
-                static_cast<std::uint16_t>((static_cast<std::uint16_t>(bytes[link_offset + 2u]) << 8u) | bytes[link_offset + 3u])};
-            decoded.destination =
-                static_cast<std::uint16_t>((static_cast<std::uint16_t>(bytes[link_offset + 4u]) << 8u) | bytes[link_offset + 5u]);
-            decoded.data_length = data_length;
-            decoded.transport_control = static_cast<std::uint8_t>(bytes[link_offset + 7u] & tpci_mask);
+            auto decoded = read_link_header(bytes, link_offset, code, additional_info_length);
             decoded.application_service = service_of(raw_service);
 
             if (data_length == 1u)

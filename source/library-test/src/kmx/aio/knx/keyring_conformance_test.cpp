@@ -27,7 +27,7 @@ namespace kmx::aio::test::knx::keyring_conformance_test
             std::string device_id {};
             std::string key_id {};
             bool use_decryptor {};
-            std::optional<std::array<std::uint8_t, kmx::aio::knx::keyring::key_size>> expected_key {};
+            std::optional<kmx::aio::knx::keyring::key_t> expected_key {};
             std::optional<kmx::aio::knx::error> expected_error {};
         };
 
@@ -100,7 +100,7 @@ namespace kmx::aio::test::knx::keyring_conformance_test
             return bytes;
         }
 
-        [[nodiscard]] std::optional<std::array<std::uint8_t, kmx::aio::knx::keyring::key_size>> decode_hex_key(
+        [[nodiscard]] std::optional<kmx::aio::knx::keyring::key_t> decode_hex_key(
             const std::string_view text)
         {
             const auto decoded = decode_hex(std::string(text));
@@ -109,7 +109,7 @@ namespace kmx::aio::test::knx::keyring_conformance_test
             if (decoded->size() != kmx::aio::knx::keyring::key_size)
                 return std::nullopt;
 
-            std::array<std::uint8_t, kmx::aio::knx::keyring::key_size> result {};
+            kmx::aio::knx::keyring::key_t result {};
             for (std::size_t index = 0u; index < result.size(); ++index)
                 result[index] = (*decoded)[index];
             return result;
@@ -172,6 +172,61 @@ namespace kmx::aio::test::knx::keyring_conformance_test
             return masks;
         }
 
+        /// @brief Indicates whether a line carries a case rather than a comment or the header row.
+        [[nodiscard]] bool is_data_line(const std::string_view trimmed)
+        {
+            return !trimmed.empty() && !trimmed.starts_with('#') && !trimmed.starts_with("case_id\t");
+        }
+
+        /// @brief Fills in the expected key and error a row may carry; a row may carry neither.
+        /// @param fields The row's fields.
+        /// @param value The case being built.
+        /// @return `false` when a field is present but cannot be read.
+        [[nodiscard]] bool parse_expectations(const std::vector<std::string>& fields, case_definition& value)
+        {
+            if (const auto expected_key = trim(fields[5u]); !expected_key.empty())
+            {
+                value.expected_key = decode_hex_key(expected_key);
+                if (!value.expected_key.has_value())
+                    return false;
+            }
+
+            if (const auto expected_error = trim(fields[6u]); !expected_error.empty())
+            {
+                value.expected_error = parse_error(expected_error);
+                if (!value.expected_error.has_value())
+                    return false;
+            }
+            return true;
+        }
+
+        /// @brief Reads one case row.
+        /// @param line The row, tabs and all.
+        /// @return The case, or nothing when the row cannot be read.
+        [[nodiscard]] std::optional<case_definition> parse_case(const std::string& line)
+        {
+            auto fields = split_tsv(line);
+            if (fields.size() == 6u)
+                fields.emplace_back("");
+            if (fields.size() != 7u)
+                return std::nullopt;
+
+            case_definition value {};
+            value.case_id = trim(fields[0u]);
+            value.keyring_file = trim(fields[1u]);
+            value.device_id = trim(fields[2u]);
+            value.key_id = trim(fields[3u]);
+
+            const auto use_decryptor = parse_bool(fields[4u]);
+            if (!use_decryptor.has_value())
+                return std::nullopt;
+            value.use_decryptor = *use_decryptor;
+
+            if (!parse_expectations(fields, value))
+                return std::nullopt;
+            return value;
+        }
+
         [[nodiscard]] std::optional<std::vector<case_definition>> parse_cases(const std::filesystem::path& path)
         {
             std::ifstream input(path);
@@ -184,45 +239,13 @@ namespace kmx::aio::test::knx::keyring_conformance_test
             {
                 if (!line.empty() && (line.back() == '\r'))
                     line.pop_back();
-
-                const auto trimmed = trim(line);
-                if (trimmed.empty() || trimmed.starts_with('#') || trimmed.starts_with("case_id\t"))
+                if (!is_data_line(trim(line)))
                     continue;
 
-                auto fields = split_tsv(line);
-                if (fields.size() == 6u)
-                    fields.emplace_back("");
-                if (fields.size() != 7u)
+                auto value = parse_case(line);
+                if (!value.has_value())
                     return std::nullopt;
-
-                case_definition value {};
-                value.case_id = trim(fields[0u]);
-                value.keyring_file = trim(fields[1u]);
-                value.device_id = trim(fields[2u]);
-                value.key_id = trim(fields[3u]);
-
-                const auto use_decryptor = parse_bool(fields[4u]);
-                if (!use_decryptor.has_value())
-                    return std::nullopt;
-                value.use_decryptor = *use_decryptor;
-
-                const auto expected_key = trim(fields[5u]);
-                if (!expected_key.empty())
-                {
-                    value.expected_key = decode_hex_key(expected_key);
-                    if (!value.expected_key.has_value())
-                        return std::nullopt;
-                }
-
-                const auto expected_error = trim(fields[6u]);
-                if (!expected_error.empty())
-                {
-                    value.expected_error = parse_error(expected_error);
-                    if (!value.expected_error.has_value())
-                        return std::nullopt;
-                }
-
-                cases.push_back(std::move(value));
+                cases.push_back(std::move(*value));
             }
 
             if (cases.empty())
@@ -249,7 +272,7 @@ namespace kmx::aio::test::knx::keyring_conformance_test
             explicit xor_mask_decryptor(std::unordered_map<std::string, std::uint8_t> masks) noexcept:
                 masks_(std::move(masks)) {}
 
-            [[nodiscard]] std::expected<std::array<std::uint8_t, kmx::aio::knx::keyring::key_size>, kmx::aio::knx::error>
+            [[nodiscard]] std::expected<kmx::aio::knx::keyring::key_t, kmx::aio::knx::error>
             decrypt_key(
                 const std::span<const std::uint8_t> encrypted_key,
                 const std::string_view password_id) noexcept override
@@ -261,7 +284,7 @@ namespace kmx::aio::test::knx::keyring_conformance_test
                 if (it == masks_.end())
                     return std::unexpected(kmx::aio::knx::error::secure_unsupported);
 
-                std::array<std::uint8_t, kmx::aio::knx::keyring::key_size> key {};
+                kmx::aio::knx::keyring::key_t key {};
                 for (std::size_t index = 0u; index < key.size(); ++index)
                     key[index] = encrypted_key[index] ^ it->second;
                 return key;

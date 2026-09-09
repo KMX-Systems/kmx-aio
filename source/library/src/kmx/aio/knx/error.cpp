@@ -2,6 +2,7 @@
 #include <kmx/aio/knx/error.hpp>
 
 #include <string>
+#include <string_view>
 
 namespace kmx::aio::knx
 {
@@ -12,9 +13,12 @@ namespace kmx::aio::knx
         public:
             const char* name() const noexcept override { return "knx"; }
 
-            std::string message(const int ev) const override
+            /// @brief Names the errors raised while reading or building a frame.
+            /// @param value The error to name.
+            /// @return Its text, or nothing when it belongs to another group.
+            [[nodiscard]] static constexpr std::string_view framing_message(const error value) noexcept
             {
-                switch (static_cast<error>(ev))
+                switch (value)
                 {
                     case error::success:
                         return "success";
@@ -32,6 +36,17 @@ namespace kmx::aio::knx
                         return "KNX connection type is unsupported";
                     case error::invalid_length:
                         return "KNX frame length is invalid";
+                    default:
+                        return {};
+                }
+            }
+
+            /// @copydoc framing_message
+            /// @brief Names the errors raised while running a connection.
+            [[nodiscard]] static constexpr std::string_view session_message(const error value) noexcept
+            {
+                switch (value)
+                {
                     case error::connection_failed:
                         return "KNX connection failed";
                     case error::timeout:
@@ -48,6 +63,17 @@ namespace kmx::aio::knx
                         return "KNX session is shut down";
                     case error::internal_error:
                         return "KNX internal error";
+                    default:
+                        return {};
+                }
+            }
+
+            /// @copydoc framing_message
+            /// @brief Names the errors raised by the application layer and by KNX Secure.
+            [[nodiscard]] static constexpr std::string_view application_message(const error value) noexcept
+            {
+                switch (value)
+                {
                     case error::invalid_address:
                         return "KNX address is invalid";
                     case error::unsupported_message_code:
@@ -62,7 +88,20 @@ namespace kmx::aio::knx
                         return "KNX datapoint value is out of range";
                     case error::secure_unsupported:
                         return "KNX Secure profile or cryptographic operation is unsupported";
+                    default:
+                        return {};
                 }
+            }
+
+            std::string message(const int ev) const override
+            {
+                const auto value = static_cast<error>(ev);
+                if (const auto text = framing_message(value); !text.empty())
+                    return std::string {text};
+                if (const auto text = session_message(value); !text.empty())
+                    return std::string {text};
+                if (const auto text = application_message(value); !text.empty())
+                    return std::string {text};
                 return "unknown KNX error";
             }
         };

@@ -2,6 +2,7 @@
 #include <kmx/aio/modbus/error.hpp>
 
 #include <string>
+#include <string_view>
 
 namespace kmx::aio::modbus
 {
@@ -12,9 +13,12 @@ namespace kmx::aio::modbus
         public:
             const char* name() const noexcept override { return "modbus"; }
 
-            std::string message(const int ev) const override
+            /// @brief Names the errors about the link this Modbus session runs over.
+            /// @param value The error to name.
+            /// @return Its text, or nothing when it belongs to another group.
+            [[nodiscard]] static constexpr std::string_view link_message(const error value) noexcept
             {
-                switch (static_cast<error>(ev))
+                switch (value)
                 {
                     case error::success:
                         return "success";
@@ -26,6 +30,24 @@ namespace kmx::aio::modbus
                         return "Modbus connection failed";
                     case error::disconnected:
                         return "Modbus peer is disconnected";
+                    case error::tls_handshake_failed:
+                        return "Modbus TLS handshake failed";
+                    case error::timed_out:
+                        return "Modbus operation timed out";
+                    case error::internal_error:
+                        return "Modbus internal error";
+                    default:
+                        return {};
+                }
+            }
+
+            /// @brief Names the errors about what a Modbus peer actually said.
+            /// @param value The error to name.
+            /// @return Its text, or nothing when it belongs to another group.
+            [[nodiscard]] static constexpr std::string_view protocol_message(const error value) noexcept
+            {
+                switch (value)
+                {
                     case error::exception_response:
                         return "Modbus server returned an exception response";
                     case error::unexpected_function_code:
@@ -38,14 +60,18 @@ namespace kmx::aio::modbus
                         return "Modbus frame is malformed or truncated";
                     case error::invalid_unit_id:
                         return "Modbus response unit identifier does not match request";
-                    case error::tls_handshake_failed:
-                        return "Modbus TLS handshake failed";
-                    case error::timed_out:
-                        return "Modbus operation timed out";
-                    case error::internal_error:
-                        return "Modbus internal error";
+                    default:
+                        return {};
                 }
+            }
 
+            std::string message(const int ev) const override
+            {
+                const auto value = static_cast<error>(ev);
+                if (const auto text = link_message(value); !text.empty())
+                    return std::string {text};
+                if (const auto text = protocol_message(value); !text.empty())
+                    return std::string {text};
                 return "unknown Modbus error";
             }
         };

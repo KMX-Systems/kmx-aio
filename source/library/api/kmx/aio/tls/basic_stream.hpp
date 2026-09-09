@@ -109,6 +109,12 @@ namespace kmx::aio::tls
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] status_task handshake() noexcept(false);
 
+        /// @brief Runs one SSL_do_handshake step under the engine lock.
+        /// @param completed Set when the handshake finished.
+        /// @param err Receives the SSL error when it did not.
+        /// @param fills Receives the read BIO's fill count as this step saw it.
+        void handshake_step(bool& completed, int& err, std::uint64_t& fills) noexcept;
+
         /// @brief Reads decrypted application data, pumping the transport until a record is complete.
         /// @param buffer Destination buffer.
         /// @return The number of bytes read, zero once the peer has closed the TLS session, or an error.

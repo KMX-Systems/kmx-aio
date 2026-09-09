@@ -7,9 +7,12 @@ namespace kmx::aio::http3
         return "kmx.aio.http3";
     }
 
-    std::string http3_error_category::message(const int ev) const
+    /// @brief Names the errors that end or refuse a whole connection.
+    /// @param value The code to name.
+    /// @return Its text, or nothing when it belongs to another group.
+    [[nodiscard]] static constexpr std::string_view connection_message(const error_code value) noexcept
     {
-        switch (static_cast<error_code>(static_cast<std::uint64_t>(ev)))
+        switch (value)
         {
             case error_code::no_error:
                 return "no error";
@@ -21,18 +24,32 @@ namespace kmx::aio::http3
                 return "stream creation error";
             case error_code::closed_critical_stream:
                 return "closed critical stream";
-            case error_code::frame_unexpected:
-                return "frame unexpected";
-            case error_code::frame_error:
-                return "frame error";
             case error_code::excessive_load:
                 return "excessive load";
-            case error_code::id_error:
-                return "id error";
             case error_code::settings_error:
                 return "settings error";
             case error_code::missing_settings:
                 return "missing settings";
+            case error_code::version_fallback:
+                return "version fallback";
+            default:
+                return {};
+        }
+    }
+
+    /// @brief Names the errors about one request, its frames or its message.
+    /// @param value The code to name.
+    /// @return Its text, or nothing when it belongs to another group.
+    [[nodiscard]] static constexpr std::string_view request_message(const error_code value) noexcept
+    {
+        switch (value)
+        {
+            case error_code::frame_unexpected:
+                return "frame unexpected";
+            case error_code::frame_error:
+                return "frame error";
+            case error_code::id_error:
+                return "id error";
             case error_code::request_rejected:
                 return "request rejected";
             case error_code::request_cancelled:
@@ -43,11 +60,19 @@ namespace kmx::aio::http3
                 return "message error";
             case error_code::connect_error:
                 return "connect error";
-            case error_code::version_fallback:
-                return "version fallback";
             default:
-                return "unknown http3 error";
+                return {};
         }
+    }
+
+    std::string http3_error_category::message(const int ev) const
+    {
+        const auto value = static_cast<error_code>(static_cast<std::uint64_t>(ev));
+        if (const auto text = connection_message(value); !text.empty())
+            return std::string {text};
+        if (const auto text = request_message(value); !text.empty())
+            return std::string {text};
+        return "unknown http3 error";
     }
 
     const std::error_category& http3_error_category_instance() noexcept

@@ -91,73 +91,111 @@ namespace kmx::aio::test::knx::integration
             };
         }
 
+        /// @brief Receives one datagram, remembering who sent it.
+        /// @param fd The bound socket to receive on.
+        /// @param buffer Where to receive into.
+        /// @param peer Receives the sender's address.
+        /// @param peer_length Receives how many octets of @p peer are meaningful.
+        /// @return The datagram's octets, empty when nothing arrived.
+        [[nodiscard]] cspan_uint8_t receive_from(const fd_t fd, std::span<std::uint8_t> buffer, sockaddr_storage& peer,
+                                                 ::socklen_t& peer_length)
+        {
+            peer = {};
+            peer_length = sizeof(peer);
+            const auto received =
+                ::recvfrom(fd, buffer.data(), buffer.size(), 0, reinterpret_cast<sockaddr*>(&peer), &peer_length);
+            if (received <= 0)
+                return {};
+            return {buffer.data(), static_cast<std::size_t>(received)};
+        }
+
+        /// @brief Sends one datagram back to the peer a request came from.
+        /// @return `true` when the datagram was handed to the kernel.
+        [[nodiscard]] bool send_to(const fd_t fd, const cspan_uint8_t packet, const sockaddr_storage& peer,
+                                   const ::socklen_t peer_length)
+        {
+            return ::sendto(fd, packet.data(), packet.size(), 0, reinterpret_cast<const sockaddr*>(&peer), peer_length) >= 0;
+        }
+
+        /// @brief Answers one CONNECT_REQUEST on the control socket, pointing the client at the data one.
+        [[nodiscard]] bool serve_connect_request(const udp_socket_binding& control, const udp_socket_binding& data,
+                                                 std::span<std::uint8_t> buffer, server_observation& out)
+        {
+            sockaddr_storage peer {};
+            ::socklen_t peer_length {};
+            const auto packet = receive_from(control.socket.get(), buffer, peer, peer_length);
+            if (packet.empty() || !connection::decode_connect_request_packet(packet).has_value())
+                return false;
+
+            out.connect_received = true;
+            std::vector<std::uint8_t> response(20u, 0u);
+            const connect_response_frame value {
+                .channel_id = 3u,
+                .status = connect_status::no_error,
+                .data_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, data.port}, 0x01u},
+                .assigned_address = individual_address {1u, 1u, 10u},
+            };
+            if (!connection::encode_connect_response_packet(response, value).has_value())
+                return false;
+            return send_to(control.socket.get(), response, peer, peer_length);
+        }
+
+        /// @brief Acknowledges one TUNNELLING_REQUEST on the data socket.
+        [[nodiscard]] bool serve_tunnelling_request(const udp_socket_binding& data, std::span<std::uint8_t> buffer,
+                                                    server_observation& out)
+        {
+            sockaddr_storage peer {};
+            ::socklen_t peer_length {};
+            const auto packet = receive_from(data.socket.get(), buffer, peer, peer_length);
+            if (packet.empty())
+                return false;
+
+            const auto request = frame::decode_tunnelling_request_packet(packet);
+            if (!request.has_value())
+                return false;
+
+            out.tunnelling_received = true;
+            std::vector<std::uint8_t> ack(10u, 0u);
+            if (!frame::encode_tunnelling_ack_packet(ack, request->channel_id, request->sequence_number).has_value())
+                return false;
+            return send_to(data.socket.get(), ack, peer, peer_length);
+        }
+
+        /// @brief Answers one DISCONNECT_REQUEST on the control socket.
+        [[nodiscard]] bool serve_disconnect_request(const udp_socket_binding& control, std::span<std::uint8_t> buffer,
+                                                    server_observation& out)
+        {
+            sockaddr_storage peer {};
+            ::socklen_t peer_length {};
+            const auto packet = receive_from(control.socket.get(), buffer, peer, peer_length);
+            if (packet.empty())
+                return false;
+
+            const auto request = connection::decode_disconnect_request_packet(packet);
+            if (!request.has_value())
+                return false;
+
+            out.disconnect_received = true;
+            std::vector<std::uint8_t> response(8u, 0u);
+            const disconnect_response_frame value {request->channel_id, connect_status::no_error};
+            if (!connection::encode_disconnect_response_packet(response, value).has_value())
+                return false;
+            return send_to(control.socket.get(), response, peer, peer_length);
+        }
+
+        /// @brief Plays a whole tunnelling lifecycle back at a client: connect, one frame, disconnect.
+        /// @details Each step stops the run when it fails, so a client that never got past connect leaves
+        ///          the later observations unset rather than blocking on a datagram that will not come.
         void run_loopback_server(const udp_socket_binding& control_binding, const udp_socket_binding& data_binding,
                                  server_observation& out) noexcept
         {
             std::array<std::uint8_t, frame::max_datagram_size> buffer {};
-            sockaddr_storage peer {};
-            ::socklen_t peer_length = sizeof(peer);
-
-            const auto connect_size =
-                ::recvfrom(control_binding.socket.get(), buffer.data(), buffer.size(), 0, reinterpret_cast<sockaddr*>(&peer), &peer_length);
-            if (connect_size <= 0)
+            if (!serve_connect_request(control_binding, data_binding, buffer, out))
                 return;
-            const auto connect = connection::decode_connect_request_packet({buffer.data(), static_cast<std::size_t>(connect_size)});
-            if (!connect.has_value())
-                return;
-            out.connect_received = true;
-
-            std::vector<std::uint8_t> connect_response(20u, 0u);
-            if (!connection::encode_connect_response_packet(
-                     connect_response,
-                     connect_response_frame {
-                         .channel_id = 3u,
-                         .status = connect_status::no_error,
-                         .data_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, data_binding.port}, 0x01u},
-                         .assigned_address = individual_address {1u, 1u, 10u},
-                     })
-                     .has_value())
-                return;
-            if (::sendto(control_binding.socket.get(), connect_response.data(), connect_response.size(), 0,
-                         reinterpret_cast<const sockaddr*>(&peer), peer_length) < 0)
+            if (!serve_tunnelling_request(data_binding, buffer, out))
                 return;
 
-            peer = {};
-            peer_length = sizeof(peer);
-            const auto tunnelling_size =
-                ::recvfrom(data_binding.socket.get(), buffer.data(), buffer.size(), 0, reinterpret_cast<sockaddr*>(&peer), &peer_length);
-            if (tunnelling_size <= 0)
-                return;
-            const auto tunnelling = frame::decode_tunnelling_request_packet({buffer.data(), static_cast<std::size_t>(tunnelling_size)});
-            if (!tunnelling.has_value())
-                return;
-            out.tunnelling_received = true;
-
-            std::vector<std::uint8_t> ack(10u, 0u);
-            if (!frame::encode_tunnelling_ack_packet(ack, tunnelling->channel_id, tunnelling->sequence_number).has_value())
-                return;
-            if (::sendto(data_binding.socket.get(), ack.data(), ack.size(), 0, reinterpret_cast<const sockaddr*>(&peer), peer_length) < 0)
-                return;
-
-            peer = {};
-            peer_length = sizeof(peer);
-            const auto disconnect_size =
-                ::recvfrom(control_binding.socket.get(), buffer.data(), buffer.size(), 0, reinterpret_cast<sockaddr*>(&peer), &peer_length);
-            if (disconnect_size <= 0)
-                return;
-            const auto disconnect =
-                connection::decode_disconnect_request_packet({buffer.data(), static_cast<std::size_t>(disconnect_size)});
-            if (!disconnect.has_value())
-                return;
-            out.disconnect_received = true;
-
-            std::vector<std::uint8_t> disconnect_response(8u, 0u);
-            if (!connection::encode_disconnect_response_packet(disconnect_response,
-                                                               disconnect_response_frame {disconnect->channel_id, connect_status::no_error})
-                     .has_value())
-                return;
-            static_cast<void>(::sendto(control_binding.socket.get(), disconnect_response.data(), disconnect_response.size(), 0,
-                                       reinterpret_cast<const sockaddr*>(&peer), peer_length));
+            static_cast<void>(serve_disconnect_request(control_binding, buffer, out));
         }
 
         [[nodiscard]] port_t bound_port(const fd_t fd)
@@ -196,6 +234,7 @@ namespace kmx::aio::test::knx::integration
             executor.stop();
         }
 
+#if defined(KMX_AIO_FEATURE_READINESS)
         /// @brief Connects, sends one cEMI and disconnects over the readiness transport.
         task<void> run_readiness_lifecycle(const std::shared_ptr<readiness::executor>& executor, tunnelling_client& client, const int fd,
                                            bool& succeeded) noexcept(false)
@@ -207,6 +246,7 @@ namespace kmx::aio::test::knx::integration
             succeeded = connected.has_value() && sent.has_value() && disconnected.has_value();
             executor->stop();
         }
+#endif // KMX_AIO_FEATURE_READINESS
 
         /// @brief Answers one IPv6 SEARCH request on the loopback socket the test bound.
         /// @param server_binding The bound socket to receive on and reply from.
@@ -215,13 +255,9 @@ namespace kmx::aio::test::knx::integration
         {
             std::array<std::uint8_t, frame::max_datagram_size> buffer {};
             sockaddr_storage peer {};
-            socklen_t peer_length = sizeof(peer);
-            const auto received =
-                ::recvfrom(server_binding.socket.get(), buffer.data(), buffer.size(), 0, reinterpret_cast<sockaddr*>(&peer), &peer_length);
-            if (received <= 0)
-                return;
-            const auto request = discovery::decode_ipv6_search_request_packet({buffer.data(), static_cast<std::size_t>(received)});
-            if (!request.has_value())
+            ::socklen_t peer_length {};
+            const auto packet = receive_from(server_binding.socket.get(), buffer, peer, peer_length);
+            if (packet.empty() || !discovery::decode_ipv6_search_request_packet(packet).has_value())
                 return;
             server_received = true;
             std::array<std::uint8_t, 30u> response {};
@@ -237,8 +273,7 @@ namespace kmx::aio::test::knx::integration
                      })
                      .has_value())
                 return;
-            static_cast<void>(::sendto(server_binding.socket.get(), response.data(), response.size(), 0,
-                                       reinterpret_cast<const sockaddr*>(&peer), peer_length));
+            static_cast<void>(send_to(server_binding.socket.get(), response, peer, peer_length));
         }
     }
 
@@ -260,7 +295,7 @@ namespace kmx::aio::test::knx::integration
     {
         const std::array<std::uint8_t, 10u> packet {
             0x06u, 0x10u, 0x04u, 0x20u, 0x00u, 0x12u,
-            0x07u, 0x02u, 0x00u, 0x00u,
+            0x04u, 0x07u, 0x02u, 0x00u,
         };
 
         const auto decoded = frame::decode_tunnelling_request_packet(packet);
@@ -391,7 +426,7 @@ namespace kmx::aio::test::knx::integration
         readiness::knx::udp_transport transport {*endpoint};
         tunnelling_client client {
             transport,
-            *reinterpret_cast<sockaddr_storage*>(&peer_address),
+            reinterpret_cast<const sockaddr*>(&peer_address),
             sizeof(peer_address),
             tunnelling_config {.max_retries = 0u, .ack_timeout_ms = 50u},
         };

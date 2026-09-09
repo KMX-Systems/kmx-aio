@@ -107,29 +107,34 @@ namespace kmx::aio::test::knx::contract_test
     TEST_CASE("knx routing indication round-trips cEMI", "[knx][routing][integration]")
     {
         std::array<std::uint8_t, 512u> packet {};
-        const kmx::aio::knx::routing::indication value {3u, sample_cemi};
+        const kmx::aio::knx::routing::indication value {sample_cemi};
         REQUIRE(kmx::aio::knx::routing::encode_indication_packet(packet, value).has_value());
         const auto decoded = kmx::aio::knx::routing::decode_indication_packet(
-            {packet.data(), 6u + 4u + sample_cemi.size()});
+            {packet.data(), kmx::aio::knx::frame::communication_header_size + sample_cemi.size()});
         REQUIRE(decoded.has_value());
-        CHECK(decoded->channel_id == 3u);
         CHECK(decoded->cemi_bytes.size() == sample_cemi.size());
     }
 
     TEST_CASE("knx routing busy and lost-message controls round-trip", "[knx][routing][unit]")
     {
-        std::array<std::uint8_t, 8u> busy_packet {};
+        std::array<std::uint8_t, kmx::aio::knx::frame::communication_header_size + kmx::aio::knx::routing::busy_body_size>
+            busy_packet {};
         REQUIRE(kmx::aio::knx::routing::encode_busy_packet(
-            busy_packet, kmx::aio::knx::routing::busy {.wait_time_ms = 250u}).has_value());
+            busy_packet, kmx::aio::knx::routing::busy {.device_state = 0x01u, .wait_time_ms = 250u, .control_field = 0x0002u})
+                    .has_value());
         const auto busy = kmx::aio::knx::routing::decode_busy_packet(busy_packet);
         REQUIRE(busy.has_value());
+        CHECK(busy->device_state == 0x01u);
         CHECK(busy->wait_time_ms == 250u);
+        CHECK(busy->control_field == 0x0002u);
 
-        std::array<std::uint8_t, 8u> lost_packet {};
+        std::array<std::uint8_t, kmx::aio::knx::frame::communication_header_size + kmx::aio::knx::routing::lost_message_body_size>
+            lost_packet {};
         REQUIRE(kmx::aio::knx::routing::encode_lost_message_packet(
-            lost_packet, kmx::aio::knx::routing::lost_message {.count = 7u}).has_value());
+            lost_packet, kmx::aio::knx::routing::lost_message {.device_state = 0x03u, .count = 7u}).has_value());
         const auto lost = kmx::aio::knx::routing::decode_lost_message_packet(lost_packet);
         REQUIRE(lost.has_value());
+        CHECK(lost->device_state == 0x03u);
         CHECK(lost->count == 7u);
         CHECK(!kmx::aio::knx::routing::decode_busy_packet(
             {busy_packet.data(), busy_packet.size() - 1u}).has_value());

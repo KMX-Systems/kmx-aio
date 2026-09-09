@@ -5,6 +5,7 @@
 #include <kmx/aio/completion/timer.hpp>
 #include <kmx/aio/knx/client.hpp>
 #include <kmx/aio/test/knx/telegram.hpp>
+#include <kmx/aio/test/knx/transport.hpp>
 
 #include <algorithm>
 #include <array>
@@ -46,7 +47,7 @@ namespace kmx::aio::test::knx::client_test
     };
 
 
-    class loopback_transport final: public datagram_transport
+    class loopback_transport final: public test::knx::recording_transport
     {
     public:
         bool timeout_next_receive {};
@@ -76,9 +77,158 @@ namespace kmx::aio::test::knx::client_test
             responses_.push_back(std::move(packet));
         }
 
-        /// @brief Returns every packet the client handed to this transport, in order.
-        [[nodiscard]] const std::vector<std::vector<std::uint8_t>>& sent_packets() const noexcept { return sent_packets_; }
-        [[nodiscard]] const std::vector<sockaddr_storage>& sent_peers() const noexcept { return sent_peers_; }
+        /// @brief A synthesised answer, or the reason none could be built.
+        /// @details An empty vector means the request needed no answer.
+        using response_result = std::expected<std::vector<std::uint8_t>, std::error_code>;
+
+        [[nodiscard]] response_result make_connect_response() const
+        {
+            const auto status = connect_failure ? connect_status::no_more_connections : connect_status::no_error;
+            std::vector<std::uint8_t> response(ipv6_connect ? 32u : 20u, 0u);
+            if (ipv6_connect)
+            {
+                const ipv6_connect_response_frame value {
+                    .channel_id = 3u,
+                    .status = status,
+                    .data_endpoint = ipv6_hpai {ipv6_endpoint {{0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 1u},
+                                                               advertised_data_port},
+                                                0x01u},
+                    .assigned_address = individual_address {1u, 1u, 10u},
+                };
+                if (const auto result = connection::encode_ipv6_connect_response_packet(response, value); !result.has_value())
+                    return std::unexpected(result.error());
+                return response;
+            }
+
+            const connect_response_frame value {
+                .channel_id = 3u,
+                .status = status,
+                .data_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, advertised_data_port}, 0x01u},
+                .assigned_address = individual_address {1u, 1u, 10u},
+            };
+            if (const auto result = connection::encode_connect_response_packet(response, value); !result.has_value())
+                return std::unexpected(result.error());
+            return response;
+        }
+
+        [[nodiscard]] static response_result make_tunnelling_ack(const cspan_uint8_t packet)
+        {
+            const auto request = frame::decode_tunnelling_request_packet(packet);
+            if (!request.has_value())
+                return std::unexpected(request.error());
+
+            std::vector<std::uint8_t> response(10u, 0u);
+            if (const auto result = frame::encode_tunnelling_ack_packet(response, request->channel_id, request->sequence_number);
+                !result.has_value())
+                return std::unexpected(result.error());
+            return response;
+        }
+
+        /// @brief Wraps one plain frame in this stand-in server's secure envelope.
+        /// @param selected The profile the request arrived under.
+        /// @param inner The frame to wrap.
+        /// @return The wrapped frame, or why it could not be encoded.
+        [[nodiscard]] response_result wrap(const secure::profile selected, std::vector<std::uint8_t> inner)
+        {
+            secure::packet wrapped {
+                .selected = selected,
+                .sequence = secure_response_sequence++,
+                .payload = std::move(inner),
+            };
+            std::vector<std::uint8_t> response(
+                frame::communication_header_size + secure::secure_packet_header_size + wrapped.payload.size(), 0u);
+            if (const auto encoded = secure::encode_secure_packet(response, wrapped); !encoded.has_value())
+                return std::unexpected(encoded.error());
+            return response;
+        }
+
+        /// @brief Answers a wrapped request with a wrapped acknowledgement.
+        /// @return The wrapped acknowledgement, or an empty vector when the wrapped frame was itself an
+        ///         acknowledgement and so ends the exchange.
+        [[nodiscard]] response_result make_secure_response(const cspan_uint8_t packet)
+        {
+            const auto secure_packet = secure::decode_secure_packet(packet);
+            if (!secure_packet.has_value())
+                return std::unexpected(secure_packet.error());
+
+            const auto decoded = decode_datagram(secure_packet->payload);
+            if (!decoded.has_value())
+                return std::unexpected(decoded.error());
+            if (decoded->service_type == frame::tunnelling_ack_service)
+            {
+                ack_received = true;
+                return std::vector<std::uint8_t> {};
+            }
+            if (decoded->service_type != frame::tunnelling_request_service)
+                return std::unexpected(make_error_code(error::unsupported_service));
+
+            const auto* request = std::get_if<tunnelling_request_frame>(&decoded->payload);
+            if (request == nullptr)
+                return std::unexpected(make_error_code(error::malformed_frame));
+
+            auto inner = make_tunnelling_ack_for(*request);
+            if (!inner.has_value())
+                return std::unexpected(inner.error());
+            return wrap(secure_packet->selected, std::move(*inner));
+        }
+
+        [[nodiscard]] static response_result make_tunnelling_ack_for(const tunnelling_request_frame& request)
+        {
+            std::vector<std::uint8_t> ack(10u, 0u);
+            if (const auto encoded = frame::encode_tunnelling_ack_packet(ack, request.channel_id, request.sequence_number);
+                !encoded.has_value())
+                return std::unexpected(encoded.error());
+            return ack;
+        }
+
+        [[nodiscard]] static response_result make_disconnect_response(const cspan_uint8_t packet)
+        {
+            const auto request = connection::decode_disconnect_request_packet(packet);
+            if (!request.has_value())
+                return std::unexpected(request.error());
+
+            std::vector<std::uint8_t> response(8u, 0u);
+            const disconnect_response_frame value {request->channel_id, connect_status::no_error};
+            if (const auto result = connection::encode_disconnect_response_packet(response, value); !result.has_value())
+                return std::unexpected(result.error());
+            return response;
+        }
+
+        [[nodiscard]] response_result make_connectionstate_response(const cspan_uint8_t packet) const
+        {
+            const auto request = connection::decode_connectionstate_request_packet(packet);
+            if (!request.has_value())
+                return std::unexpected(request.error());
+
+            std::vector<std::uint8_t> response(8u, 0u);
+            const connectionstate_response_frame value {
+                request->channel_id,
+                heartbeat_failure ? connect_status::connection_type : connect_status::no_error,
+            };
+            if (const auto result = connection::encode_connectionstate_response_packet(response, value); !result.has_value())
+                return std::unexpected(result.error());
+            return response;
+        }
+
+        /// @brief Builds the answer this stand-in server gives to one request.
+        [[nodiscard]] response_result make_response(const std::uint16_t service, const cspan_uint8_t packet)
+        {
+            switch (service)
+            {
+                case connection::connect_request_service:
+                    return make_connect_response();
+                case frame::tunnelling_request_service:
+                    return make_tunnelling_ack(packet);
+                case secure::secure_service:
+                    return make_secure_response(packet);
+                case connection::disconnect_request_service:
+                    return make_disconnect_response(packet);
+                case connection::connectionstate_request_service:
+                    return make_connectionstate_response(packet);
+                default:
+                    return std::unexpected(make_error_code(error::unsupported_service));
+            }
+        }
 
         [[nodiscard]] task_returning_expected_size_t send(
             const cspan_byte_t payload, const sockaddr* peer, const ::socklen_t peer_length) noexcept(false) override
@@ -86,139 +236,128 @@ namespace kmx::aio::test::knx::client_test
             if (send_error)
                 co_return std::unexpected(send_error);
 
-            const auto* bytes = reinterpret_cast<const std::uint8_t*>(payload.data());
-            const cspan_uint8_t packet { bytes, payload.size() };
-            sent_packets_.emplace_back(packet.begin(), packet.end());
-            sockaddr_storage sent_peer {};
-            if ((peer != nullptr) && (peer_length <= sizeof(sent_peer)))
-                std::memcpy(&sent_peer, peer, peer_length);
-            sent_peers_.push_back(sent_peer);
+            record_send(payload, peer, peer_length);
+            const cspan_uint8_t packet {reinterpret_cast<const std::uint8_t*>(payload.data()), payload.size()};
             const auto header = frame::decode_communication_header(packet);
             if (!header.has_value())
                 co_return std::unexpected(header.error());
 
-            std::vector<std::uint8_t> response {};
-            switch (header->service_type)
+            // An acknowledgement ends an exchange rather than starting one, so there is nothing to answer.
+            if (header->service_type == frame::tunnelling_ack_service)
             {
-                case connection::connect_request_service:
-                {
-                    if (ipv6_connect)
-                    {
-                        response.resize(32u);
-                        const ipv6_connect_response_frame value {
-                            .channel_id = 3u,
-                            .status = connect_failure ? connect_status::no_more_connections : connect_status::no_error,
-                            .data_endpoint = ipv6_hpai {ipv6_endpoint {{0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 1u},
-                                                                       advertised_data_port},
-                                                        0x01u},
-                            .assigned_address = individual_address {1u, 1u, 10u},
-                        };
-                        const auto result = connection::encode_ipv6_connect_response_packet(response, value);
-                        if (!result.has_value())
-                            co_return std::unexpected(result.error());
-                    }
-                    else
-                    {
-                        response.resize(20u);
-                        const connect_response_frame value {
-                            .channel_id = 3u,
-                            .status = connect_failure ? connect_status::no_more_connections : connect_status::no_error,
-                            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, advertised_data_port }, 0x01u },
-                            .assigned_address = individual_address { 1u, 1u, 10u },
-                        };
-                        const auto result = connection::encode_connect_response_packet(response, value);
-                        if (!result.has_value())
-                            co_return std::unexpected(result.error());
-                    }
-                    break;
-                }
-                case frame::tunnelling_request_service:
-                {
-                    const auto request = frame::decode_tunnelling_request_packet(packet);
-                    if (!request.has_value())
-                        co_return std::unexpected(request.error());
-                    response.resize(10u);
-                    const auto result = frame::encode_tunnelling_ack_packet(
-                        response, request->channel_id, request->sequence_number);
-                    if (!result.has_value())
-                        co_return std::unexpected(result.error());
-                    break;
-                }
-                case secure::secure_service:
-                {
-                    const auto secure_packet = secure::decode_secure_packet(packet);
-                    if (!secure_packet.has_value())
-                        co_return std::unexpected(secure_packet.error());
-                    const auto decoded = decode_datagram(secure_packet->payload);
-                    if (!decoded.has_value())
-                        co_return std::unexpected(decoded.error());
-
-                    if (decoded->service_type == frame::tunnelling_ack_service)
-                    {
-                        ack_received = true;
-                        co_return expected_size_t { payload.size() };
-                    }
-
-                    if (decoded->service_type != frame::tunnelling_request_service)
-                        co_return std::unexpected(make_error_code(error::unsupported_service));
-
-                    const auto* request = std::get_if<tunnelling_request_frame>(&decoded->payload);
-                    if (request == nullptr)
-                        co_return std::unexpected(make_error_code(error::malformed_frame));
-
-                    std::vector<std::uint8_t> ack(10u, 0u);
-                    const auto encoded_ack = frame::encode_tunnelling_ack_packet(
-                        ack, request->channel_id, request->sequence_number);
-                    if (!encoded_ack.has_value())
-                        co_return std::unexpected(encoded_ack.error());
-
-                    secure::packet wrapped {
-                        .selected = secure_packet->selected,
-                        .sequence = secure_response_sequence++,
-                        .payload = std::move(ack),
-                    };
-                    response.resize(frame::communication_header_size + secure::secure_packet_header_size + wrapped.payload.size());
-                    const auto encoded_secure = secure::encode_secure_packet(response, wrapped);
-                    if (!encoded_secure.has_value())
-                        co_return std::unexpected(encoded_secure.error());
-                    break;
-                }
-                case frame::tunnelling_ack_service:
-                    ack_received = true;
-                    co_return expected_size_t { payload.size() };
-                case connection::disconnect_request_service:
-                {
-                    const auto request = connection::decode_disconnect_request_packet(packet);
-                    if (!request.has_value())
-                        co_return std::unexpected(request.error());
-                    response.resize(8u);
-                    const auto result = connection::encode_disconnect_response_packet(
-                        response, disconnect_response_frame { request->channel_id, connect_status::no_error });
-                    if (!result.has_value())
-                        co_return std::unexpected(result.error());
-                    break;
-                }
-                case connection::connectionstate_request_service:
-                {
-                    const auto request = connection::decode_connectionstate_request_packet(packet);
-                    if (!request.has_value())
-                        co_return std::unexpected(request.error());
-                    response.resize(8u);
-                    const auto result = connection::encode_connectionstate_response_packet(
-                        response, connectionstate_response_frame {
-                            request->channel_id,
-                            heartbeat_failure ? connect_status::connection_type : connect_status::no_error,
-                        });
-                    if (!result.has_value())
-                        co_return std::unexpected(result.error());
-                    break;
-                }
-                default:
-                    co_return std::unexpected(make_error_code(error::unsupported_service));
+                ack_received = true;
+                co_return expected_size_t {payload.size()};
             }
 
-            responses_.push_back(std::move(response));
-            co_return expected_size_t { short_send ? payload.size() - 1u : payload.size() };
+            auto response = make_response(header->service_type, packet);
+            if (!response.has_value())
+                co_return std::unexpected(response.error());
+            if (!response->empty())
+                responses_.push_back(std::move(*response));
+
+            co_return expected_size_t {short_send ? payload.size() - 1u : payload.size()};
+        }
+
+        /// @brief An outcome a configured fault dictates, or nothing when the queue decides.
+        using optional_size_result = std::optional<expected_size_t>;
+
+        /// @brief Writes the peer every receive starts from, before any response-specific adjustment.
+        void set_initial_peer(transport_peer& peer) const noexcept
+        {
+            peer.length = sizeof(sockaddr_storage);
+            if (invalid_peer_length)
+                peer.length = sizeof(sockaddr_storage) + 1u;
+            if (short_peer_length)
+                peer.length = sizeof(sockaddr_in) - 1u;
+
+            peer.address = {};
+            if (wrong_peer)
+                peer.address.ss_family = AF_UNIX;
+        }
+
+        /// @brief Returns the outcome a configured fault dictates, if one does.
+        /// @param buffer The caller's buffer, for the oversized-receive fault to overstate.
+        /// @return The outcome, or nothing when the response queue should decide instead.
+        [[nodiscard]] optional_size_result configured_outcome(const span_byte_t buffer) noexcept
+        {
+            const auto timed_out = expected_size_t {std::unexpected(make_error_code(error::timeout))};
+            if (timeout_next_receive)
+            {
+                timeout_next_receive = false;
+                return timed_out;
+            }
+            if (always_timeout)
+                return timed_out;
+            if (empty_receive)
+                return expected_size_t {0u};
+            if (oversized_receive)
+                return expected_size_t {buffer.size() + 1u};
+            if (responses_.empty())
+                return timed_out;
+            return {};
+        }
+
+        /// @brief Reports whether a response is one the client should see arriving on its data endpoint.
+        /// @param response The response about to be delivered.
+        /// @return `true` when it belongs to the data channel rather than the control channel.
+        [[nodiscard]] static bool from_data_peer(const std::vector<std::uint8_t>& response) noexcept
+        {
+            const auto header = frame::decode_communication_header(response);
+            if (!header.has_value())
+                return false;
+            if ((header->service_type == frame::tunnelling_ack_service) ||
+                (header->service_type == frame::tunnelling_request_service))
+                return true;
+            if (header->service_type != secure::secure_service)
+                return false;
+
+            // A wrapped frame travels on whichever channel the frame inside it belongs to.
+            const auto secure_packet = secure::decode_secure_packet(response);
+            if (!secure_packet.has_value())
+                return false;
+
+            const auto decoded = decode_datagram(secure_packet->payload);
+            return decoded.has_value() && ((decoded->service_type == frame::tunnelling_ack_service) ||
+                                           (decoded->service_type == frame::tunnelling_request_service));
+        }
+
+        /// @brief Adjusts the peer to the endpoint a particular response would really have come from.
+        /// @param peer The peer to adjust; its length is left as @ref set_initial_peer wrote it.
+        /// @param response The response about to be delivered.
+        void apply_response_peer(transport_peer& peer, const std::vector<std::uint8_t>& response) const noexcept
+        {
+            const auto header = frame::decode_communication_header(response);
+            if (ipv6_connect && header.has_value() &&
+                ((header->service_type == connection::connect_response_service) ||
+                 (header->service_type == connection::disconnect_response_service)))
+            {
+                auto& control_peer = reinterpret_cast<sockaddr_in6&>(peer.address);
+                control_peer.sin6_family = AF_INET6;
+                control_peer.sin6_port = htons(3671u);
+                control_peer.sin6_addr = in6addr_loopback;
+            }
+
+            if (wrong_peer || !from_data_peer(response))
+                return;
+            if (data_peer_as_control)
+            {
+                peer.address = {};
+                return;
+            }
+
+            if (ipv6_peer)
+            {
+                auto& data_peer = reinterpret_cast<sockaddr_in6&>(peer.address);
+                data_peer.sin6_family = AF_INET6;
+                data_peer.sin6_port = htons(advertised_data_port);
+                data_peer.sin6_addr = in6addr_loopback;
+                return;
+            }
+
+            auto& data_peer = reinterpret_cast<sockaddr_in&>(peer.address);
+            data_peer.sin_family = AF_INET;
+            data_peer.sin_port = htons(advertised_data_port);
+            data_peer.sin_addr.s_addr = htonl(0x7F000001u);
         }
 
         [[nodiscard]] task_returning_expected_size_t receive(
@@ -232,90 +371,17 @@ namespace kmx::aio::test::knx::client_test
                     co_return std::unexpected(waited.error());
                 co_return std::unexpected(make_error_code(error::timeout));
             }
-
             if (receive_error)
                 co_return std::unexpected(receive_error);
 
-            peer.length = sizeof(sockaddr_storage);
-            if (invalid_peer_length)
-                peer.length = sizeof(sockaddr_storage) + 1u;
-            if (short_peer_length)
-                peer.length = sizeof(sockaddr_in) - 1u;
-            peer.address = {};
-            if (wrong_peer)
-                peer.address.ss_family = AF_UNIX;
-            if (timeout_next_receive)
-            {
-                timeout_next_receive = false;
-                co_return std::unexpected(make_error_code(error::timeout));
-            }
-
-            if (always_timeout)
-                co_return std::unexpected(make_error_code(error::timeout));
-            if (empty_receive)
-                co_return expected_size_t { 0u };
-            if (oversized_receive)
-                co_return expected_size_t { buffer.size() + 1u };
-
-            if (responses_.empty())
-                co_return std::unexpected(make_error_code(error::timeout));
+            set_initial_peer(peer);
+            if (const auto configured = configured_outcome(buffer); configured.has_value())
+                co_return *configured;
 
             const auto response = std::move(responses_.front());
             responses_.pop_front();
-            if (response.size() > buffer.size())
-                co_return std::unexpected(make_error_code(error::invalid_length));
-
-            const auto header = frame::decode_communication_header(response);
-            if (ipv6_connect && header.has_value() &&
-                ((header->service_type == connection::connect_response_service) ||
-                 (header->service_type == connection::disconnect_response_service)))
-            {
-                auto& control_peer = reinterpret_cast<sockaddr_in6&>(peer.address);
-                control_peer.sin6_family = AF_INET6;
-                control_peer.sin6_port = htons(3671u);
-                control_peer.sin6_addr = in6addr_loopback;
-            }
-            bool tunneled_from_data_peer =
-                header.has_value() &&
-                ((header->service_type == frame::tunnelling_ack_service) ||
-                 (header->service_type == frame::tunnelling_request_service));
-            if (header.has_value() && (header->service_type == secure::secure_service))
-            {
-                const auto secure_packet = secure::decode_secure_packet(response);
-                if (secure_packet.has_value())
-                {
-                    const auto decoded = decode_datagram(secure_packet->payload);
-                    tunneled_from_data_peer = decoded.has_value() &&
-                        ((decoded->service_type == frame::tunnelling_ack_service) ||
-                         (decoded->service_type == frame::tunnelling_request_service));
-                }
-            }
-
-            if (!wrong_peer && tunneled_from_data_peer)
-            {
-                if (data_peer_as_control)
-                {
-                    peer.address = {};
-                }
-                else if (ipv6_peer)
-                {
-                    auto& data_peer = reinterpret_cast<sockaddr_in6&>(peer.address);
-                    data_peer.sin6_family = AF_INET6;
-                    data_peer.sin6_port = htons(advertised_data_port);
-                    data_peer.sin6_addr = in6addr_loopback;
-                }
-                else
-                {
-                    auto& data_peer = reinterpret_cast<sockaddr_in&>(peer.address);
-                    data_peer.sin_family = AF_INET;
-                    data_peer.sin_port = htons(advertised_data_port);
-                    data_peer.sin_addr.s_addr = htonl(0x7F000001u);
-                }
-            }
-
-            for (std::size_t i = 0u; i < response.size(); ++i)
-                buffer[i] = static_cast<std::byte>(response[i]);
-            co_return expected_size_t { response.size() };
+            apply_response_peer(peer, response);
+            co_return deliver(response, buffer);
         }
 
         [[nodiscard]] task_returning_expected_size_t receive_until(
@@ -327,8 +393,6 @@ namespace kmx::aio::test::knx::client_test
 
     private:
         std::deque<std::vector<std::uint8_t>> responses_ {};
-        std::vector<std::vector<std::uint8_t>> sent_packets_ {};
-        std::vector<sockaddr_storage> sent_peers_ {};
     };
 
     namespace detail
@@ -1541,7 +1605,11 @@ namespace kmx::aio::test::knx::client_test
         test_now_ms = 42'000u;
         loopback_transport transport;
         sockaddr_storage peer {};
-        tunnelling_client client { transport, peer, sizeof(peer), {}, &test_clock_now };
+        // Distinct values so the assertion below proves which timeout the connect wait uses. A connect is
+        // not acknowledged on the tunnelling clock.
+        tunnelling_client client {
+            transport, peer, sizeof(peer), tunnelling_config {.ack_timeout_ms = 1'000u, .connect_timeout_ms = 7'000u},
+            &test_clock_now};
         const connect_request_frame request {
             .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
             .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
@@ -1557,7 +1625,7 @@ namespace kmx::aio::test::knx::client_test
         executor.run();
         CHECK(succeeded);
         CHECK(client.last_activity_ms() == test_now_ms);
-        CHECK(transport.last_receive_deadline == test_now_ms + 1000u);
+        CHECK(transport.last_receive_deadline == test_now_ms + 7'000u);
         test_now_ms = 0u;
     }
 

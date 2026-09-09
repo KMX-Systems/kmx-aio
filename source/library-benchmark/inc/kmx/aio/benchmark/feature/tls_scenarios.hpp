@@ -416,12 +416,9 @@ namespace kmx::aio::benchmark::feature
         auto& exec = hold.get();
 
         typename Backend::tcp_listener_t listener {exec, loopback(), 0u};
-        if (!listener.listen(8))
-            return skipped(std::move(name), "listen failed");
-
-        const auto port = bound_port(listener.get_fd());
+        const auto port = listen_on_ephemeral_port(listener, 8);
         if (port == 0u)
-            return skipped(std::move(name), "the listener reported no port");
+            return skipped(std::move(name), "the listener could not be bound");
 
         std::vector<double> samples {};
         samples.reserve(rounds);
@@ -469,12 +466,9 @@ namespace kmx::aio::benchmark::feature
         auto& exec = hold.get();
 
         typename Backend::tcp_listener_t listener {exec, loopback(), 0u};
-        if (!listener.listen(8))
-            return skipped(std::move(name), "listen failed");
-
-        const auto port = bound_port(listener.get_fd());
+        const auto port = listen_on_ephemeral_port(listener, 8);
         if (port == 0u)
-            return skipped(std::move(name), "the listener reported no port");
+            return skipped(std::move(name), "the listener could not be bound");
 
         std::atomic_size_t received_blocks {};
         detail::run_window window {};

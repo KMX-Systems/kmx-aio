@@ -1,4 +1,6 @@
 #include <kmx/aio/http3/codec.hpp>
+
+#include <array>
 #include <kmx/aio/exception.hpp>
 #include <kmx/aio/http3/qpack.hpp>
 
@@ -178,6 +180,36 @@ namespace kmx::aio::http3
         return frame_codec::encode(frame_type::settings, payload);
     }
 
+    /// @brief Records one setting, ignoring identifiers this build has no field for.
+    /// @param parsed The settings being built.
+    /// @param identifier The setting's identifier.
+    /// @param value The setting's value.
+    /// @note An unknown identifier is skipped rather than refused: a peer is allowed to send settings a
+    ///       given implementation does not know, and rejecting the connection over one would be wrong.
+    static void apply_setting(settings& parsed, const settings_identifier identifier, const std::uint64_t value) noexcept
+    {
+        switch (identifier)
+        {
+            case settings_identifier::qpack_max_table_capacity:
+                parsed.qpack_max_table_capacity = value;
+                break;
+            case settings_identifier::max_field_section_size:
+                parsed.max_field_section_size = value;
+                break;
+            case settings_identifier::qpack_blocked_streams:
+                parsed.qpack_blocked_streams = value;
+                break;
+            case settings_identifier::enable_connect_protocol:
+                parsed.enable_connect_protocol = value != 0u;
+                break;
+            case settings_identifier::h3_datagram:
+                parsed.h3_datagram = value != 0u;
+                break;
+            default:
+                break;
+        }
+    }
+
     std::expected<settings, std::error_code> settings_codec::decode(cspan_uint8_t payload) noexcept
     {
         settings parsed {};
@@ -194,26 +226,7 @@ namespace kmx::aio::http3
                 return std::unexpected(make_error_code(error_code::settings_error));
             offset += value->second;
 
-            switch (static_cast<settings_identifier>(identifier->first))
-            {
-                case settings_identifier::qpack_max_table_capacity:
-                    parsed.qpack_max_table_capacity = value->first;
-                    break;
-                case settings_identifier::max_field_section_size:
-                    parsed.max_field_section_size = value->first;
-                    break;
-                case settings_identifier::qpack_blocked_streams:
-                    parsed.qpack_blocked_streams = value->first;
-                    break;
-                case settings_identifier::enable_connect_protocol:
-                    parsed.enable_connect_protocol = value->first != 0u;
-                    break;
-                case settings_identifier::h3_datagram:
-                    parsed.h3_datagram = value->first != 0u;
-                    break;
-                default:
-                    break;
-            }
+            apply_setting(parsed, static_cast<settings_identifier>(identifier->first), value->first);
         }
 
         return parsed;
@@ -281,6 +294,49 @@ namespace kmx::aio::http3
         return bytes;
     }
 
+    /// @brief Folds one control stream frame into the state being built.
+    /// @param state The state to update.
+    /// @param frame The frame to apply.
+    /// @return Nothing, or why the frame does not belong on a control stream.
+    [[nodiscard]] static std::expected<void, std::error_code> apply_control_frame(control_stream_state& state,
+                                                                                  const frame& frame) noexcept
+    {
+        switch (frame.type)
+        {
+            case frame_type::settings:
+            {
+                // Settings are sent once. A second SETTINGS frame is a protocol error, not an update.
+                if (state.saw_settings)
+                    return std::unexpected(make_error_code(error_code::settings_error));
+
+                auto settings = settings_codec::decode(frame.payload);
+                if (!settings)
+                    return std::unexpected(settings.error());
+
+                state.saw_settings = true;
+                state.negotiated_settings = *settings;
+                return {};
+            }
+            case frame_type::goaway:
+            {
+                auto goaway = goaway_codec::decode(frame.payload);
+                if (!goaway)
+                    return std::unexpected(goaway.error());
+
+                state.goaway = *goaway;
+                return {};
+            }
+            case frame_type::data:
+            case frame_type::headers:
+            case frame_type::push_promise:
+                // Request frames on a control stream: the peer has confused its streams.
+                return std::unexpected(make_error_code(error_code::frame_unexpected));
+            default:
+                // CANCEL_PUSH and MAX_PUSH_ID are accepted but not yet modelled, as is anything newer.
+                return {};
+        }
+    }
+
     std::expected<control_stream_state, std::error_code> control_stream_codec::decode(cspan_uint8_t payload) noexcept
     {
         auto stream_type_value = detail::decode_varint(payload, 0u);
@@ -305,44 +361,8 @@ namespace kmx::aio::http3
                     return std::unexpected(make_error_code(error_code::missing_settings));
             }
 
-            switch (frame.type)
-            {
-                case frame_type::settings:
-                {
-                    if (state.saw_settings)
-                        return std::unexpected(make_error_code(error_code::settings_error));
-
-                    auto settings = settings_codec::decode(frame.payload);
-                    if (!settings)
-                        return std::unexpected(settings.error());
-                    state.saw_settings = true;
-                    state.negotiated_settings = *settings;
-                    break;
-                }
-
-                case frame_type::goaway:
-                {
-                    auto goaway = goaway_codec::decode(frame.payload);
-                    if (!goaway)
-                        return std::unexpected(goaway.error());
-                    state.goaway = *goaway;
-                    break;
-                }
-
-                case frame_type::data:
-                case frame_type::headers:
-                case frame_type::push_promise:
-                    return std::unexpected(make_error_code(error_code::frame_unexpected));
-
-                case frame_type::cancel_push:
-                case frame_type::max_push_id:
-                    // Accepted control frames not modeled in control_stream_state
-                    // yet.
-                    break;
-
-                default:
-                    break;
-            }
+            if (const auto applied = apply_control_frame(state, frame); !applied.has_value())
+                return std::unexpected(applied.error());
         }
 
         if (!state.saw_settings)
@@ -361,55 +381,13 @@ namespace kmx::aio::http3::demo
             if (pseudo_name.empty() || (pseudo_name.front() != ':'))
                 return pseudo_name;
 
-            const char* const p = pseudo_name.data();
-            switch (pseudo_name.size())
-            {
-                case 5u: // ":path"
-                    if ((p[1] == 'p') && (p[2] == 'a') && (p[3] == 't') && (p[4] == 'h'))
-                        return ":path";
-                    break;
-
-                case 7u: // ":method" / ":scheme"
-                    switch (p[1])
-                    {
-                        case 'm':
-                            if ((p[2] == 'e') && (p[3] == 't') && (p[4] == 'h') && (p[5] == 'o') && (p[6] == 'd'))
-                                return ":method";
-                            break;
-
-                        case 's':
-                            if ((p[2] == 'c') && (p[3] == 'h') && (p[4] == 'e') && (p[5] == 'm') && (p[6] == 'e'))
-                                return ":scheme";
-                            break;
-
-                        default:
-                            break;
-                    }
-                    break;
-
-                case 10u: // ":authority" / ":status"
-                    switch (p[1])
-                    {
-                        case 'a':
-                            if ((p[2] == 'u') && (p[3] == 't') && (p[4] == 'h') && (p[5] == 'o') && (p[6] == 'r') && (p[7] == 'i') &&
-                                (p[8] == 't') && (p[9] == 'y'))
-                                return ":authority";
-                            break;
-
-                        case 's':
-                            if ((p[2] == 't') && (p[3] == 'a') && (p[4] == 't') && (p[5] == 'u') && (p[6] == 's'))
-                                return ":status";
-                            break;
-
-                        default:
-                            break;
-                    }
-                    break;
-
-                default:
-                    break;
-            }
-
+            // The literal is returned rather than the argument so the result outlives the buffer the
+            // name was parsed out of. Comparing views costs a length check first, so a name of the
+            // wrong length is rejected without looking at a single character.
+            static constexpr std::array<std::string_view, 5u> known {":path", ":method", ":scheme", ":status", ":authority"};
+            for (const auto name: known)
+                if (name == pseudo_name)
+                    return name;
             return pseudo_name;
         }
 
@@ -503,6 +481,177 @@ namespace kmx::aio::http3::demo
         }
     } // namespace detail
 
+    /// @brief Reads the CRLF-terminated header lines of a message head.
+    /// @tparam OnHeader A callable taking one header's name and value.
+    /// @param head The head section, positioned at its first header line.
+    /// @param on_header Called once per header line, in order.
+    /// @return Nothing, or why a line is not a header.
+    /// @details The run ends at the first empty line or at the end of the head, whichever comes first.
+    template <typename OnHeader>
+    [[nodiscard]] static std::expected<void, std::error_code> read_header_lines(std::string_view head,
+                                                                                OnHeader&& on_header) noexcept
+    {
+        while (!head.empty())
+        {
+            const std::size_t line_end = head.find("\r\n");
+            const std::string_view line = (line_end == std::string_view::npos) ? head : head.substr(0u, line_end);
+            if (line.empty())
+                break;
+
+            auto split = detail::split_header(line);
+            if (!split)
+                return std::unexpected(split.error());
+            on_header(split->first, split->second);
+
+            if (line_end == std::string_view::npos)
+                break;
+            head.remove_prefix(line_end + 2u);
+        }
+        return {};
+    }
+
+    /// @brief Reads a decimal HTTP status code.
+    /// @param text The status code's characters, and nothing else.
+    /// @return The code, or why the characters are not one.
+    [[nodiscard]] static std::expected<std::uint16_t, std::error_code> parse_status(const std::string_view text) noexcept
+    {
+        std::uint32_t parsed {};
+        const auto [ptr, ec] = std::from_chars(text.data(), text.data() + text.size(), parsed);
+        if ((ec != std::errc {}) || (ptr != (text.data() + text.size())) || (parsed > 65535u))
+            return std::unexpected(::kmx::aio::http3::detail::message_parse_error());
+        return static_cast<std::uint16_t>(parsed);
+    }
+
+    /// @brief Appends a DATA frame's payload to a message body.
+    /// @param body The body to append to.
+    /// @param payload The frame's payload.
+    /// @return Nothing, or why the frame could not be read.
+    /// @note Appended straight from the decoded bytes: converting to a string first would build a whole
+    ///       second copy of the body only for the append to copy it again and throw it away.
+    [[nodiscard]] static std::expected<void, std::error_code> append_body(std::string& body, const cspan_uint8_t payload) noexcept
+    {
+        auto decoded = data_codec::decode(payload);
+        if (!decoded)
+            return std::unexpected(decoded.error());
+
+        body.append(reinterpret_cast<const char*>(decoded->data()), decoded->size());
+        return {};
+    }
+
+    /// @brief Places one decoded header onto a request head, recognising the request pseudo-headers.
+    /// @param head The head to fill in.
+    /// @param name The header's name.
+    /// @param value The header's value.
+    static void apply_request_header(request_head& head, const std::string& name, const std::string& value) noexcept(false)
+    {
+        if (name == ":method")
+            head.method = value;
+        else if (name == ":scheme")
+            head.scheme = value;
+        else if (name == ":authority")
+            head.authority = value;
+        else if (name == ":path")
+            head.target = value;
+        else
+            head.headers.emplace_back(name, value);
+    }
+
+    /// @brief Places one decoded header onto a response head, recognising the status pseudo-header.
+    /// @param head The head to fill in.
+    /// @param name The header's name.
+    /// @param value The header's value.
+    /// @return Nothing, or why the status could not be read.
+    [[nodiscard]] static std::expected<void, std::error_code> apply_response_header(response_head& head, const std::string& name,
+                                                                                    const std::string& value) noexcept
+    {
+        if (name != ":status")
+        {
+            head.headers.emplace_back(name, value);
+            return {};
+        }
+
+        const auto status = parse_status(value);
+        if (!status.has_value())
+            return std::unexpected(status.error());
+
+        head.status = *status;
+        return {};
+    }
+
+    /// @brief Writes a header list as "name: value" lines.
+    /// @param payload The payload to append to.
+    /// @param headers The headers to write.
+    static void append_header_lines(std::string& payload, const header_list& headers) noexcept(false)
+    {
+        for (const auto& [name, value]: headers)
+        {
+            payload += name;
+            payload += ": ";
+            payload += value;
+            payload += "\r\n";
+        }
+    }
+
+    /// @brief Appends a Content-Length header unless the caller already supplied one.
+    /// @param payload The payload to append to.
+    /// @param headers The headers already written, searched for an existing Content-Length.
+    /// @param body The body whose length is being announced.
+    static void append_content_length(std::string& payload, const header_list& headers, const std::string_view body) noexcept(false)
+    {
+        if (detail::has_header(headers, "Content-Length"))
+            return;
+
+        payload += "Content-Length: ";
+        payload += std::to_string(body.size());
+        payload += "\r\n";
+    }
+
+    /// @brief Reads a request line into a request head.
+    /// @param line The request line, without its terminator.
+    /// @param head The head to fill in.
+    /// @return Nothing, or why the line is not a request line.
+    /// @note The version that follows the target is accepted and ignored; this demo speaks one version.
+    [[nodiscard]] static std::expected<void, std::error_code> parse_request_line(const std::string_view line,
+                                                                                 request_head& head) noexcept
+    {
+        const std::size_t first_space = line.find(' ');
+        const std::size_t second_space = line.rfind(' ');
+        if ((first_space == std::string_view::npos) || (second_space == std::string_view::npos) || (first_space == second_space))
+            return std::unexpected(::kmx::aio::http3::detail::message_parse_error());
+
+        head.method = std::string(line.substr(0u, first_space));
+        head.target = std::string(line.substr(first_space + 1u, second_space - first_space - 1u));
+        return {};
+    }
+
+    /// @brief Reads the status code out of a status line.
+    /// @param line The status line, without its terminator.
+    /// @return The code, or why the line does not carry one.
+    /// @note The version before the code and the reason phrase after it are both ignored.
+    [[nodiscard]] static std::expected<std::uint16_t, std::error_code> parse_status_line(const std::string_view line) noexcept
+    {
+        const std::size_t first_space = line.find(' ');
+        if (first_space == std::string_view::npos)
+            return std::unexpected(::kmx::aio::http3::detail::message_parse_error());
+
+        const std::size_t second_space = line.find(' ', first_space + 1u);
+        const auto status_text = (second_space == std::string_view::npos)
+                                     ? line.substr(first_space + 1u)
+                                     : line.substr(first_space + 1u, second_space - first_space - 1u);
+        return parse_status(status_text);
+    }
+
+    /// @brief Returns how many octets a header list occupies once written as "name: value\r\n" lines.
+    /// @param headers The headers to measure.
+    /// @return Their encoded size, so the payload string is allocated once rather than grown.
+    [[nodiscard]] static std::size_t headers_size(const header_list& headers) noexcept
+    {
+        std::size_t total {};
+        for (const auto& [name, value]: headers)
+            total += name.size() + value.size() + 4u; // ": " and "\r\n"
+        return total;
+    }
+
     std::string message_builder::make_request_payload(const request_head& request, std::string_view body) noexcept(false)
     {
         if (request.method.empty())
@@ -512,12 +661,9 @@ namespace kmx::aio::http3::demo
         if (request.authority.empty())
             throw invalid_argument("HTTP/3 demo request requires an authority");
 
-        std::size_t total_size = 96u + request.method.size() + request.target.size() + request.authority.size() + body.size();
-        for (const auto& [name, value]: request.headers)
-            total_size += name.size() + value.size() + 4u; // ": " and "\r\n"
-
         std::string payload;
-        payload.reserve(total_size);
+        payload.reserve(96u + request.method.size() + request.target.size() + request.authority.size() + body.size() +
+                        headers_size(request.headers));
         payload += request.method;
         payload += ' ';
         payload += request.target;
@@ -526,23 +672,13 @@ namespace kmx::aio::http3::demo
         payload += request.authority;
         payload += "\r\n";
 
-        for (const auto& [name, value]: request.headers)
-        {
-            payload += name;
-            payload += ": ";
-            payload += value;
-            payload += "\r\n";
-        }
+        append_header_lines(payload, request.headers);
 
         if (!detail::has_header(request.headers, "Connection"))
             payload += "Connection: close\r\n";
 
-        if (!body.empty() && !detail::has_header(request.headers, "Content-Length"))
-        {
-            payload += "Content-Length: ";
-            payload += std::to_string(body.size());
-            payload += "\r\n";
-        }
+        if (!body.empty())
+            append_content_length(payload, request.headers, body);
 
         payload += "\r\n";
         payload += body;
@@ -563,13 +699,7 @@ namespace kmx::aio::http3::demo
         payload += detail::reason_phrase(response.status);
         payload += "\r\n";
 
-        for (const auto& [name, value]: response.headers)
-        {
-            payload += name;
-            payload += ": ";
-            payload += value;
-            payload += "\r\n";
-        }
+        append_header_lines(payload, response.headers);
 
         if (!detail::has_header(response.headers, "Content-Length"))
         {
@@ -598,37 +728,22 @@ namespace kmx::aio::http3::demo
         const std::size_t request_line_end = head_and_body->first.find("\r\n");
         if (request_line_end == std::string_view::npos)
             return std::unexpected(::kmx::aio::http3::detail::message_parse_error());
+        if (const auto parsed = parse_request_line(head_and_body->first.substr(0u, request_line_end), message.head);
+            !parsed.has_value())
+            return std::unexpected(parsed.error());
 
-        std::string_view request_line = head_and_body->first.substr(0u, request_line_end);
-        const std::size_t first_space = request_line.find(' ');
-        const std::size_t second_space = request_line.rfind(' ');
-        if ((first_space == std::string_view::npos) || (second_space == std::string_view::npos) || (first_space == second_space))
-            return std::unexpected(::kmx::aio::http3::detail::message_parse_error());
-
-        message.head.method = std::string(request_line.substr(0u, first_space));
-        message.head.target = std::string(request_line.substr(first_space + 1u, second_space - first_space - 1u));
-
-        std::string_view remaining = head_and_body->first.substr(request_line_end + 2u);
-        while (!remaining.empty())
-        {
-            const std::size_t line_end = remaining.find("\r\n");
-            const std::string_view line = line_end == std::string_view::npos ? remaining : remaining.substr(0u, line_end);
-            if (line.empty())
-                break;
-
-            auto split = detail::split_header(line);
-            if (!split)
-                return std::unexpected(split.error());
-
-            if (split->first == "Host")
-                message.head.authority = std::string(split->second);
-            else
-                message.head.headers.emplace_back(std::string(split->first), std::string(split->second));
-
-            if (line_end == std::string_view::npos)
-                break;
-            remaining.remove_prefix(line_end + 2u);
-        }
+        // Host is the HTTP/1 spelling of the :authority pseudo-header, so it is lifted out of the
+        // ordinary headers rather than left among them.
+        const auto read = read_header_lines(head_and_body->first.substr(request_line_end + 2u),
+                                            [&message](const std::string_view name, const std::string_view value)
+                                            {
+                                                if (name == "Host")
+                                                    message.head.authority = std::string(value);
+                                                else
+                                                    message.head.headers.emplace_back(std::string(name), std::string(value));
+                                            });
+        if (!read.has_value())
+            return std::unexpected(read.error());
 
         return message;
     }
@@ -646,39 +761,16 @@ namespace kmx::aio::http3::demo
         if (status_line_end == std::string_view::npos)
             return std::unexpected(::kmx::aio::http3::detail::message_parse_error());
 
-        const std::string_view status_line = head_and_body->first.substr(0u, status_line_end);
-        const std::size_t first_space = status_line.find(' ');
-        const std::size_t second_space = status_line.find(' ', first_space == std::string_view::npos ? 0u : first_space + 1u);
-        if (first_space == std::string_view::npos)
-            return std::unexpected(::kmx::aio::http3::detail::message_parse_error());
+        const auto status = parse_status_line(head_and_body->first.substr(0u, status_line_end));
+        if (!status.has_value())
+            return std::unexpected(status.error());
+        message.head.status = *status;
 
-        const std::string_view status_text = second_space == std::string_view::npos ?
-                                                 status_line.substr(first_space + 1u) :
-                                                 status_line.substr(first_space + 1u, second_space - first_space - 1u);
-        std::uint32_t parsed_status {};
-        const auto [ptr, ec] = std::from_chars(status_text.data(), status_text.data() + status_text.size(), parsed_status);
-        if ((ec != std::errc {}) || (ptr != status_text.data() + status_text.size()) || (parsed_status > 65535u))
-            return std::unexpected(::kmx::aio::http3::detail::message_parse_error());
-        message.head.status = static_cast<std::uint16_t>(parsed_status);
-
-        std::string_view remaining = head_and_body->first.substr(status_line_end + 2u);
-        while (!remaining.empty())
-        {
-            const std::size_t line_end = remaining.find("\r\n");
-            const std::string_view line = line_end == std::string_view::npos ? remaining : remaining.substr(0u, line_end);
-            if (line.empty())
-                break;
-
-            auto split = detail::split_header(line);
-            if (!split)
-                return std::unexpected(split.error());
-
-            message.head.headers.emplace_back(std::string(split->first), std::string(split->second));
-
-            if (line_end == std::string_view::npos)
-                break;
-            remaining.remove_prefix(line_end + 2u);
-        }
+        const auto read = read_header_lines(head_and_body->first.substr(status_line_end + 2u),
+                                            [&message](const std::string_view name, const std::string_view value)
+                                            { message.head.headers.emplace_back(std::string(name), std::string(value)); });
+        if (!read.has_value())
+            return std::unexpected(read.error());
 
         return message;
     }
@@ -740,29 +832,13 @@ namespace kmx::aio::http3::demo
                 if (!headers)
                     return std::unexpected(headers.error());
                 for (const auto& [name, value]: *headers)
-                {
-                    if (name == ":method")
-                        message.head.method = value;
-                    else if (name == ":scheme")
-                        message.head.scheme = value;
-                    else if (name == ":authority")
-                        message.head.authority = value;
-                    else if (name == ":path")
-                        message.head.target = value;
-                    else
-                        message.head.headers.emplace_back(name, value);
-                }
+                    apply_request_header(message.head, name, value);
                 have_headers = true;
             }
             else if (frame.type == frame_type::data)
             {
-                auto body = data_codec::decode(frame.payload);
-                if (!body)
-                    return std::unexpected(body.error());
-
-                // Appended straight from the decoded bytes: bytes_to_string() would build a whole
-                // second copy of the body only for operator+= to copy it again and throw it away.
-                message.body.append(reinterpret_cast<const char*>(body->data()), body->size());
+                if (const auto appended = append_body(message.body, frame.payload); !appended.has_value())
+                    return std::unexpected(appended.error());
             }
         }
 
@@ -787,29 +863,14 @@ namespace kmx::aio::http3::demo
                 if (!headers)
                     return std::unexpected(headers.error());
                 for (const auto& [name, value]: *headers)
-                {
-                    if (name == ":status")
-                    {
-                        std::uint32_t parsed_status {};
-                        const auto [ptr, ec] = std::from_chars(value.data(), value.data() + value.size(), parsed_status);
-                        if ((ec != std::errc {}) || (ptr != value.data() + value.size()) || (parsed_status > 65535u))
-                            return std::unexpected(::kmx::aio::http3::detail::message_parse_error());
-                        message.head.status = static_cast<std::uint16_t>(parsed_status);
-                    }
-                    else
-                        message.head.headers.emplace_back(name, value);
-                }
+                    if (const auto applied = apply_response_header(message.head, name, value); !applied.has_value())
+                        return std::unexpected(applied.error());
                 have_headers = true;
             }
             else if (frame.type == frame_type::data)
             {
-                auto body = data_codec::decode(frame.payload);
-                if (!body)
-                    return std::unexpected(body.error());
-
-                // Appended straight from the decoded bytes: bytes_to_string() would build a whole
-                // second copy of the body only for operator+= to copy it again and throw it away.
-                message.body.append(reinterpret_cast<const char*>(body->data()), body->size());
+                if (const auto appended = append_body(message.body, frame.payload); !appended.has_value())
+                    return std::unexpected(appended.error());
             }
         }
 

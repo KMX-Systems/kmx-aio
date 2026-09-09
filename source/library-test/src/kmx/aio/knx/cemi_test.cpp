@@ -4,6 +4,7 @@
 #include <kmx/aio/knx/cemi.hpp>
 #include <kmx/aio/test/knx/telegram.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <vector>
@@ -243,5 +244,89 @@ namespace kmx::aio::test::knx::cemi_test
         CHECK(!decoded->standard_frame());
         CHECK(decoded->data_length == 255u);
         CHECK(decoded->payload_size == apdu_payload::max_octets);
+    }
+
+    // Device management is the other half of cEMI: the services that read and write a device's interface
+    // object properties. They share nothing with L_Data - no addresses, no APCI - and were previously
+    // rejected outright, which left the APCI names for property access with no transport to travel on.
+    TEST_CASE("knx cemi encodes a property read request", "[knx][cemi][unit]")
+    {
+        // FC (M_PropRead.req) | 0000 (device object) | 01 (instance) | 33 (PID) | 1 element at index 1.
+        const std::array<std::uint8_t, cemi::property_header_size> expected {
+            0xFCu, 0x00u, 0x00u, 0x01u, 0x33u, 0x10u, 0x01u,
+        };
+
+        std::array<std::uint8_t, cemi::property_header_size> buffer {};
+        const auto size = cemi::encode_property_read(buffer, 0u, 1u, 0x33u);
+        REQUIRE(size.has_value());
+        CHECK(*size == cemi::property_header_size);
+        CHECK(buffer == expected);
+
+        const auto decoded = cemi::decode_property(buffer);
+        REQUIRE(decoded.has_value());
+        CHECK(decoded->message_code == cemi_message_code::m_prop_read_req);
+        CHECK(decoded->object_type == 0u);
+        CHECK(decoded->object_instance == 1u);
+        CHECK(decoded->property_id == 0x33u);
+        CHECK(decoded->element_count == 1u);
+        CHECK(decoded->start_index == 1u);
+        CHECK(decoded->data(buffer).empty());
+    }
+
+    TEST_CASE("knx cemi round-trips a property write with data", "[knx][cemi][unit]")
+    {
+        const std::array<std::uint8_t, 2u> value {0x12u, 0x34u};
+        std::array<std::uint8_t, cemi::property_header_size + value.size()> buffer {};
+        const auto size = cemi::encode_property_write(buffer, 11u, 1u, 0x34u, value);
+        REQUIRE(size.has_value());
+        CHECK(*size == buffer.size());
+        CHECK(buffer[0u] == static_cast<std::uint8_t>(cemi_message_code::m_prop_write_req));
+
+        const auto decoded = cemi::decode_property(buffer);
+        REQUIRE(decoded.has_value());
+        CHECK(decoded->object_type == 11u);
+        CHECK(decoded->property_id == 0x34u);
+        const auto data = decoded->data(buffer);
+        REQUIRE(data.size() == value.size());
+        CHECK(std::equal(data.begin(), data.end(), value.begin()));
+    }
+
+    TEST_CASE("knx cemi reports a failed property confirmation", "[knx][cemi][unit]")
+    {
+        // A confirmation with no elements carries an error code where the data would be.
+        const std::array<std::uint8_t, cemi::property_header_size + 1u> packet {
+            0xFBu, 0x00u, 0x00u, 0x01u, 0x33u, 0x00u, 0x01u, 0x07u,
+        };
+        const auto decoded = cemi::decode_property(packet);
+        REQUIRE(decoded.has_value());
+        CHECK(decoded->message_code == cemi_message_code::m_prop_read_con);
+        CHECK(decoded->element_count == 0u);
+        CHECK(decoded->failed());
+        REQUIRE(decoded->data(packet).size() == 1u);
+        CHECK(decoded->data(packet)[0u] == 0x07u);
+    }
+
+    TEST_CASE("knx cemi rejects a property service that is not one", "[knx][cemi][unit]")
+    {
+        std::array<std::uint8_t, cemi::property_header_size> buffer {};
+        CHECK(cemi::encode_property(buffer, property_frame {cemi_message_code::l_data_req}).error() ==
+              error::unsupported_message_code);
+        CHECK(cemi::decode_property(sample_cemi).error() == error::unsupported_message_code);
+
+        // The element count is four bits and the start index twelve; neither silently truncates.
+        CHECK(cemi::encode_property(buffer, property_frame {cemi_message_code::m_prop_read_req, 0u, 1u, 0x33u, 0x10u, 1u}).error() ==
+              error::invalid_configuration);
+        CHECK(cemi::encode_property(buffer, property_frame {cemi_message_code::m_prop_read_req, 0u, 1u, 0x33u, 1u, 0x1000u}).error() ==
+              error::invalid_configuration);
+    }
+
+    TEST_CASE("knx cemi encodes a reset request", "[knx][cemi][unit]")
+    {
+        std::array<std::uint8_t, 1u> buffer {};
+        const auto size = cemi::encode_reset(buffer);
+        REQUIRE(size.has_value());
+        CHECK(*size == 1u);
+        CHECK(buffer[0u] == 0xF1u);
+        CHECK(cemi::encode_reset(buffer, cemi_message_code::l_data_req).error() == error::unsupported_message_code);
     }
 }

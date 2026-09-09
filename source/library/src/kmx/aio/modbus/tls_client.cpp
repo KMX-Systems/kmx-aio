@@ -143,21 +143,29 @@ namespace kmx::aio::modbus
             co_return expected_void_t();
         }
 
+        /// @brief Builds the SSL context on first use and keeps it for every later connect.
+        /// @return Nothing, or why the context could not be built.
+        [[nodiscard]] expected_void_t ensure_ssl_ctx() noexcept
+        {
+            if (ssl_ctx_ != nullptr)
+                return {};
+
+            const auto ctx_result = create_ssl_ctx();
+            if (!ctx_result)
+                return std::unexpected(ctx_result.error());
+
+            ssl_ctx_ = *ctx_result;
+            return {};
+        }
+
         [[nodiscard]] async_result connect() noexcept(false)
         {
             if (stream_.has_value())
                 co_return expected_void_t();
 
-            // Build SSL_CTX
-            if (!ssl_ctx_)
-            {
-                const auto ctx_result = create_ssl_ctx();
-                if (!ctx_result)
-                    co_return std::unexpected(ctx_result.error());
-                ssl_ctx_ = *ctx_result;
-            }
+            if (const auto ready = ensure_ssl_ctx(); !ready)
+                co_return std::unexpected(ready.error());
 
-            // Parse IPv4 host
             ipv4::storage_t ip_storage {};
             if (!ipv4::parse_address(config_.host, ip_storage))
                 co_return std::unexpected(make_error_code(error::invalid_configuration));

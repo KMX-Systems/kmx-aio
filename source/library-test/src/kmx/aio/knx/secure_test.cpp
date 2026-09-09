@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <kmx/aio/knx/datagram.hpp>
+#include <kmx/aio/knx/detail/secure_vectors.hpp>
 #include <kmx/aio/knx/secure.hpp>
 
 #include <array>
@@ -90,6 +91,71 @@ namespace kmx::aio::test::knx::secure_test
             provider, secure::profile::data_secure, *protected_packet, &replay);
         REQUIRE(!duplicate.has_value());
         CHECK(duplicate.error() == make_error_code(error::sequence_error));
+    }
+
+    /// @brief A provider that refuses everything, to prove ordering rather than cryptography.
+    class rejecting_provider final: public secure::provider
+    {
+    public:
+        std::size_t unprotect_calls {};
+
+        [[nodiscard]] std::expected<std::vector<std::uint8_t>, std::error_code> protect(
+            const std::span<const std::uint8_t> packet, std::uint64_t) noexcept override
+        {
+            return std::vector<std::uint8_t>(packet.begin(), packet.end());
+        }
+
+        [[nodiscard]] std::expected<std::vector<std::uint8_t>, std::error_code> unprotect(
+            std::span<const std::uint8_t>, std::uint64_t) noexcept override
+        {
+            ++unprotect_calls;
+            return std::unexpected(std::make_error_code(std::errc::protocol_error));
+        }
+    };
+
+    // The sequence number of an unverified datagram is attacker-controlled. Admitting it to the replay
+    // window before the provider has authenticated the frame lets one forged packet carrying a sequence
+    // near the top of the range push the window past every value a genuine peer will send, after which
+    // real traffic is rejected as replayed.
+    TEST_CASE("knx secure unprotect does not admit an unauthenticated sequence", "[knx][secure][unit]")
+    {
+        rejecting_provider provider;
+        secure::replay_window_state replay {8u};
+
+        secure::packet forged {
+            .selected = secure::profile::data_secure,
+            .sequence = 0xFFFFFFFFFFFFFF00ull,
+            .payload = {0x01u, 0x02u, 0x03u},
+        };
+        std::vector<std::uint8_t> forged_packet(6u + 12u + forged.payload.size(), 0u);
+        REQUIRE(secure::encode_secure_packet(forged_packet, forged).has_value());
+
+        const auto rejected = secure::unprotect_packet(provider, secure::profile::data_secure, forged_packet, &replay);
+        REQUIRE(!rejected.has_value());
+        CHECK(provider.unprotect_calls == 1u);
+        CHECK(!replay.initialized());
+        CHECK(replay.highest() == 0u);
+    }
+
+    TEST_CASE("knx secure decoder refuses a real SECURE_WRAPPER", "[knx][secure][unit]")
+    {
+        // This build's envelope is not KNX Secure. A genuine SECURE_WRAPPER must be named as unsupported
+        // rather than parsed with a layout that has no message authentication code in it at all.
+        auto wrapper = std::vector<std::uint8_t>(detail::secure_vectors::ip_secure_wire.begin(),
+                                                 detail::secure_vectors::ip_secure_wire.end());
+        wrapper[2u] = 0x09u;
+        wrapper[3u] = 0x50u;
+
+        const auto decoded = secure::decode_secure_packet(wrapper);
+        REQUIRE(!decoded.has_value());
+        CHECK(decoded.error() == make_error_code(error::secure_unsupported));
+
+        // And through the dispatcher, which is the only route a received datagram actually takes. Without
+        // its own case for 0x0950 this would fall to the default arm and report unsupported_service, and
+        // the check above would be unreachable from the network.
+        const auto dispatched = decode_datagram(wrapper);
+        REQUIRE(!dispatched.has_value());
+        CHECK(dispatched.error() == make_error_code(error::secure_unsupported));
     }
 
     TEST_CASE("knx datagram dispatches secure packets", "[knx][secure][datagram][integration]")

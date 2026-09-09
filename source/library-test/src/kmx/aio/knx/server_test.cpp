@@ -3,8 +3,10 @@
 
 #include <cstring>
 #include <kmx/aio/completion/executor.hpp>
+#include <kmx/aio/knx/dib.hpp>
 #include <kmx/aio/knx/server.hpp>
 #include <kmx/aio/test/knx/telegram.hpp>
+#include <kmx/aio/test/knx/transport.hpp>
 
 #include <deque>
 #include <netinet/in.h>
@@ -20,7 +22,7 @@ namespace kmx::aio::test::knx::server_test
         return server_now_ms;
     }
 
-    class server_transport final: public datagram_transport
+    class server_transport final: public test::knx::recording_transport
     {
     public:
         bool ipv6_peer {};
@@ -28,24 +30,24 @@ namespace kmx::aio::test::knx::server_test
         std::uint32_t receive_address = 0x7F000001u;
         std::uint32_t timeout_receives {};
         std::deque<std::vector<std::uint8_t>> incoming {};
-        std::vector<std::vector<std::uint8_t>> outgoing {};
-        std::vector<sockaddr_storage> outgoing_peers {};
+
+        /// @brief The packets this transport was asked to send; a spelling of @ref sent_packets.
+        [[nodiscard]] const std::vector<std::vector<std::uint8_t>>& outgoing() const noexcept { return sent_packets(); }
+        /// @brief The peers those packets were addressed to; a spelling of @ref sent_peers.
+        [[nodiscard]] const std::vector<sockaddr_storage>& outgoing_peers() const noexcept { return sent_peers(); }
 
         [[nodiscard]] task_returning_expected_size_t send(
             const cspan_byte_t payload, const sockaddr* peer, const ::socklen_t peer_length) noexcept(false) override
         {
-            const auto* bytes = reinterpret_cast<const std::uint8_t*>(payload.data());
-            outgoing.emplace_back(bytes, bytes + payload.size());
-            sockaddr_storage destination {};
-            if ((peer != nullptr) && (peer_length <= sizeof(destination)))
-                std::memcpy(&destination, peer, peer_length);
-            outgoing_peers.push_back(destination);
+            record_send(payload, peer, peer_length);
             co_return expected_size_t {payload.size()};
         }
 
         [[nodiscard]] task_returning_expected_size_t receive(
             const span_byte_t buffer, transport_peer& peer) noexcept(false) override
         {
+            // A configured run of timeouts comes first, so a test can make the server wait before it
+            // ever sees a datagram.
             if (timeout_receives != 0u)
             {
                 --timeout_receives;
@@ -53,31 +55,12 @@ namespace kmx::aio::test::knx::server_test
             }
             if (incoming.empty())
                 co_return std::unexpected(make_error_code(error::timeout));
+
             const auto packet = std::move(incoming.front());
             incoming.pop_front();
-            if (packet.size() > buffer.size())
-                co_return std::unexpected(make_error_code(error::invalid_length));
 
-            peer = {};
-            if (ipv6_peer)
-            {
-                auto& address = reinterpret_cast<sockaddr_in6&>(peer.address);
-                address.sin6_family = AF_INET6;
-                address.sin6_addr = in6addr_loopback;
-                address.sin6_port = htons(receive_port);
-                peer.length = sizeof(sockaddr_in6);
-            }
-            else
-            {
-                auto& address = reinterpret_cast<sockaddr_in&>(peer.address);
-                address.sin_family = AF_INET;
-                address.sin_addr.s_addr = htonl(receive_address);
-                address.sin_port = htons(receive_port);
-                peer.length = sizeof(sockaddr_in);
-            }
-            for (std::size_t i = 0u; i < packet.size(); ++i)
-                buffer[i] = static_cast<std::byte>(packet[i]);
-            co_return expected_size_t {packet.size()};
+            fill_peer(peer, ipv6_peer, receive_address, receive_port);
+            co_return deliver(packet, buffer);
         }
     };
 
@@ -136,13 +119,13 @@ namespace kmx::aio::test::knx::server_test
         REQUIRE(connected);
         CHECK(channel_id != 0u);
         CHECK(server.channel_active(channel_id));
-        REQUIRE(transport.outgoing.size() == 1u);
-        const auto response = connection::decode_connect_response_packet(transport.outgoing.front());
+        REQUIRE(transport.sent_packets().size() == 1u);
+        const auto response = connection::decode_connect_response_packet(transport.sent_packets().front());
         REQUIRE(response.has_value());
         CHECK(response->channel_id == channel_id);
         CHECK(response->assigned_address == individual_address {1u, 1u, 10u});
 
-        transport.outgoing.clear();
+        transport.clear_sent_packets();
         transport.receive_port = 40001u;
         transport.receive_address = 0x7F000002u;
         std::vector<std::uint8_t> request(6u + 4u + sample_cemi.size());
@@ -154,14 +137,14 @@ namespace kmx::aio::test::knx::server_test
         tunnel_executor.spawn(detail::serve_tunnelling(server, channel_id, received, tunnel_executor));
         tunnel_executor.run();
         CHECK(received);
-        REQUIRE(transport.outgoing.size() == 1u);
-        CHECK(frame::decode_tunnelling_ack_packet(transport.outgoing.front()).has_value());
-        REQUIRE(transport.outgoing_peers.size() >= 2u);
-        CHECK(ntohs(reinterpret_cast<const sockaddr_in&>(transport.outgoing_peers[1u]).sin_port) == 40001u);
-                CHECK(reinterpret_cast<const sockaddr_in&>(transport.outgoing_peers[1u]).sin_addr.s_addr ==
+        REQUIRE(transport.sent_packets().size() == 1u);
+        CHECK(frame::decode_tunnelling_ack_packet(transport.sent_packets().front()).has_value());
+        REQUIRE(transport.sent_peers().size() >= 2u);
+        CHECK(ntohs(reinterpret_cast<const sockaddr_in&>(transport.sent_peers()[1u]).sin_port) == 40001u);
+                CHECK(reinterpret_cast<const sockaddr_in&>(transport.sent_peers()[1u]).sin_addr.s_addr ==
                             htonl(0x7F000002u));
 
-        transport.outgoing.clear();
+        transport.clear_sent_packets();
         transport.incoming.push_back(request);
         bool duplicate_delivered = true;
         completion::executor duplicate_executor;
@@ -174,8 +157,8 @@ namespace kmx::aio::test::knx::server_test
         duplicate_executor.spawn(duplicate_task());
         duplicate_executor.run();
         CHECK(!duplicate_delivered);
-        REQUIRE(transport.outgoing.size() == 1u);
-        CHECK(frame::decode_tunnelling_ack_packet(transport.outgoing.front()).has_value());
+        REQUIRE(transport.sent_packets().size() == 1u);
+        CHECK(frame::decode_tunnelling_ack_packet(transport.sent_packets().front()).has_value());
 
         std::vector<std::uint8_t> out_of_order(6u + 4u + sample_cemi.size());
         REQUIRE(frame::encode_tunnelling_request_packet(out_of_order, channel_id, 9u, sample_cemi).has_value());
@@ -262,8 +245,8 @@ namespace kmx::aio::test::knx::server_test
         executor.run();
 
         REQUIRE(accepted);
-        REQUIRE(transport.outgoing.size() == 1u);
-        const auto response = connection::decode_ipv6_connect_response_packet(transport.outgoing.front());
+        REQUIRE(transport.sent_packets().size() == 1u);
+        const auto response = connection::decode_ipv6_connect_response_packet(transport.sent_packets().front());
         REQUIRE(response.has_value());
         CHECK(response->channel_id != 0u);
     }
@@ -459,6 +442,398 @@ namespace kmx::aio::test::knx::server_test
 
         CHECK(rejected);
         CHECK(server.active_channels() == 0u);
-        CHECK(transport.outgoing.empty());
+        REQUIRE(transport.sent_packets().size() == 1u);
+        const auto response = connection::decode_connect_response_packet(transport.sent_packets().front());
+        REQUIRE(response.has_value());
+        CHECK(response->channel_id == 0u);
+        CHECK(response->status == connect_status::host_protocol_type);
+    }
+
+    // A KNXnet/IP server that never answers SEARCH cannot be found by ETS or by any other client, however
+    // well its tunnelling works. The answer goes to the discovery endpoint the request named, not back to
+    // the multicast group the request arrived on.
+    TEST_CASE("knx server answers a search request", "[knx][server][integration]")
+    {
+        server_transport transport;
+        const server_config config {
+            .control_endpoint = hpai {ipv4_endpoint {{192u, 0u, 2u, 20u}, 3671u}, 0x01u},
+            .device_info_blocks = {0x04u, 0x02u, 0x01u, 0x00u},
+        };
+        generic_server server {transport, config};
+
+        std::array<std::uint8_t, frame::communication_header_size + discovery::search_request_body_size> request {};
+        REQUIRE(discovery::encode_search_request_packet(request, discovery::search_request_frame {
+                                                                     hpai {ipv4_endpoint {{192u, 0u, 2u, 99u}, 3672u}, 0x01u},
+                                                                 })
+                    .has_value());
+        transport.incoming.emplace_back(request.begin(), request.end());
+
+        completion::executor executor;
+        auto run = [&]() -> task<void>
+        {
+            static_cast<void>(co_await server.serve_once());
+            executor.stop();
+        };
+        executor.spawn(run());
+        executor.run();
+
+        REQUIRE(transport.sent_packets().size() == 1u);
+        const auto answer = discovery::decode_search_response_packet(transport.sent_packets().front());
+        REQUIRE(answer.has_value());
+        CHECK(answer->control_endpoint.endpoint.address[3u] == 20u);
+        CHECK(answer->device_info_blocks == byte_buffer_t {0x04u, 0x02u, 0x01u, 0x00u});
+
+        // Sent to the discovery endpoint the request named, 192.0.2.99:3672.
+        const auto& destination = reinterpret_cast<const sockaddr_in&>(transport.sent_peers().front());
+        CHECK(destination.sin_addr.s_addr == htonl(0xC0000263u));
+        CHECK(destination.sin_port == htons(3672u));
+    }
+
+    TEST_CASE("knx server answers a description request", "[knx][server][integration]")
+    {
+        server_transport transport;
+        const server_config config {
+            .control_endpoint = hpai {ipv4_endpoint {{192u, 0u, 2u, 20u}, 3671u}, 0x01u},
+            .device_info_blocks = {0x04u, 0x02u, 0x01u, 0x00u},
+        };
+        generic_server server {transport, config};
+
+        std::array<std::uint8_t, frame::communication_header_size + discovery::description_request_body_size> request {};
+        REQUIRE(discovery::encode_description_request_packet(request, discovery::description_request_frame {
+                                                                         hpai {ipv4_endpoint {{192u, 0u, 2u, 99u}, 3672u}, 0x01u},
+                                                                     })
+                    .has_value());
+        transport.incoming.emplace_back(request.begin(), request.end());
+
+        completion::executor executor;
+        auto run = [&]() -> task<void>
+        {
+            static_cast<void>(co_await server.serve_once());
+            executor.stop();
+        };
+        executor.spawn(run());
+        executor.run();
+
+        REQUIRE(transport.sent_packets().size() == 1u);
+        const auto answer = discovery::decode_description_response_packet(transport.sent_packets().front());
+        REQUIRE(answer.has_value());
+        CHECK(answer->device_info_blocks == byte_buffer_t {0x04u, 0x02u, 0x01u, 0x00u});
+    }
+
+    TEST_CASE("knx server answers a route-back search at the datagram source", "[knx][server][integration]")
+    {
+        server_transport transport;
+        transport.receive_address = 0x0A000005u; // 10.0.0.5, the address NAT presents
+        transport.receive_port = 51234u;
+        const server_config config {
+            .control_endpoint = hpai {ipv4_endpoint {{192u, 0u, 2u, 20u}, 3671u}, 0x01u},
+            .device_info_blocks = {0x04u, 0x02u, 0x01u, 0x00u},
+        };
+        generic_server server {transport, config};
+
+        // The all-zero HPAI a client behind NAT sends: it cannot know the address the server will see.
+        std::array<std::uint8_t, frame::communication_header_size + discovery::search_request_body_size> request {};
+        REQUIRE(discovery::encode_search_request_packet(request, discovery::search_request_frame {hpai {ipv4_endpoint {}, 0x01u}})
+                    .has_value());
+        transport.incoming.emplace_back(request.begin(), request.end());
+
+        completion::executor executor;
+        auto run = [&]() -> task<void>
+        {
+            static_cast<void>(co_await server.serve_once());
+            executor.stop();
+        };
+        executor.spawn(run());
+        executor.run();
+
+        REQUIRE(transport.sent_peers().size() == 1u);
+        const auto& destination = reinterpret_cast<const sockaddr_in&>(transport.sent_peers().front());
+        CHECK(destination.sin_addr.s_addr == htonl(0x0A000005u));
+        CHECK(destination.sin_port == htons(51234u));
+    }
+
+    TEST_CASE("knx server accepts a route-back connect request", "[knx][server][integration]")
+    {
+        server_transport transport;
+        transport.receive_address = 0x0A000005u;
+        transport.receive_port = 51234u;
+        generic_server server {transport, server_config {.max_channels = 1u}};
+
+        std::array<std::uint8_t, frame::communication_header_size + connection::connect_request_body_size> request {};
+        REQUIRE(connection::encode_connect_request_packet(request, connect_request_frame {hpai {ipv4_endpoint {}, 0x01u},
+                                                                                          hpai {ipv4_endpoint {}, 0x01u}})
+                    .has_value());
+        transport.incoming.emplace_back(request.begin(), request.end());
+
+        completion::executor executor;
+        auto run = [&]() -> task<void>
+        {
+            static_cast<void>(co_await server.serve_once());
+            executor.stop();
+        };
+        executor.spawn(run());
+        executor.run();
+
+        REQUIRE(transport.sent_packets().size() == 1u);
+        const auto response = connection::decode_connect_response_packet(transport.sent_packets().front());
+        REQUIRE(response.has_value());
+        CHECK(response->status == connect_status::no_error);
+        CHECK(server.active_channels() == 1u);
+    }
+
+    TEST_CASE("knx server refuses an unsupported tunnelling layer", "[knx][server][integration]")
+    {
+        server_transport transport;
+        generic_server server {transport};
+        std::array<std::uint8_t, frame::communication_header_size + connection::connect_request_body_size> request {};
+        REQUIRE(connection::encode_connect_request_packet(request, connect_request_frame {
+                                                                  hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3671u}, 0x01u},
+                                                                  hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3672u}, 0x01u},
+                                                                  0x01u,
+                                                              })
+                    .has_value());
+        transport.incoming.emplace_back(request.begin(), request.end());
+                                                            completion::executor executor;
+                                                            auto run = [&]() -> task<void>
+                                                            {
+                                                                static_cast<void>(co_await server.serve_once());
+                                                                executor.stop();
+                                                            };
+                                                            executor.spawn(run());
+                                                            executor.run();
+
+        REQUIRE(transport.sent_packets().size() == 1u);
+        const auto response = connection::decode_connect_response_packet(transport.sent_packets().front());
+        REQUIRE(response.has_value());
+        CHECK(response->channel_id == 0u);
+        CHECK(response->status == connect_status::connection_type);
+        CHECK(server.active_channels() == 0u);
+    }
+
+    namespace detail
+    {
+        /// @brief Drives one serve_once and returns what the server sent.
+        inline void serve_one(server_transport& /* transport */, generic_server& server)
+        {
+            completion::executor executor;
+            auto run = [&]() -> task<void>
+            {
+                static_cast<void>(co_await server.serve_once());
+                executor.stop();
+            };
+            executor.spawn(run());
+            executor.run();
+        }
+
+        /// @brief Builds a SEARCH_REQUEST_EXTENDED with one parameter block.
+        [[nodiscard]] inline std::vector<std::uint8_t> extended_search(const discovery::search_parameter& parameter)
+        {
+            const discovery::extended_search_request_frame request {
+                hpai {ipv4_endpoint {{192u, 0u, 2u, 99u}, 3672u}, 0x01u},
+                {parameter},
+            };
+            const auto size = discovery::extended_search_request_size(request);
+            REQUIRE(size.has_value());
+            std::vector<std::uint8_t> packet(*size, 0u);
+            REQUIRE(discovery::encode_extended_search_request_packet(packet, request).has_value());
+            return packet;
+        }
+    }
+
+    TEST_CASE("knx server answers an extended search it matches", "[knx][server][integration]")
+    {
+        server_transport transport;
+        const server_config config {
+            .control_endpoint = hpai {ipv4_endpoint {{192u, 0u, 2u, 20u}, 3671u}, 0x01u},
+            .device_info_blocks = {0x04u, 0x02u, 0x01u, 0x00u},
+            .mac_address = {0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u},
+        };
+        generic_server server {transport, config};
+
+        transport.incoming.emplace_back(detail::extended_search(discovery::search_parameter {
+            true, discovery::search_parameter_type::mac_address, {0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u}}));
+        detail::serve_one(transport, server);
+
+        REQUIRE(transport.sent_packets().size() == 1u);
+        const auto answer = discovery::decode_extended_search_response_packet(transport.sent_packets().front());
+        REQUIRE(answer.has_value());
+        CHECK(answer->control_endpoint.endpoint.address[3u] == 20u);
+    }
+
+    TEST_CASE("knx server limits an extended response to requested DIBs", "[knx][server][integration]")
+    {
+        server_transport transport;
+        dib::device_info info {};
+        info.address = individual_address {1u, 1u, 0u};
+        const server_config config {
+            .control_endpoint = hpai {ipv4_endpoint {{192u, 0u, 2u, 20u}, 3671u}, 0x01u},
+            .description_blocks = {
+                dib::block {info},
+                dib::block {dib::supported_service_families {
+                    false, {{dib::service_family::core, 2u}, {dib::service_family::tunnelling, 2u}}}},
+            },
+        };
+        generic_server server {transport, config};
+        transport.incoming.emplace_back(detail::extended_search(discovery::search_parameter {
+            true, discovery::search_parameter_type::request_dibs,
+            {static_cast<std::uint8_t>(dib::block_type::device_info)}}));
+        detail::serve_one(transport, server);
+
+        REQUIRE(transport.sent_packets().size() == 1u);
+        const auto response = discovery::decode_extended_search_response_packet(transport.sent_packets().front());
+        REQUIRE(response.has_value());
+        const auto blocks = dib::decode_all(response->device_info_blocks);
+        REQUIRE(blocks.has_value());
+        REQUIRE(blocks->size() == 1u);
+        CHECK(std::holds_alternative<dib::device_info>(blocks->front()));
+    }
+
+    // The point of the mandatory flag: a searcher narrowing by MAC wants only the server it named, not an
+    // answer from every other one explaining that it does not match.
+    TEST_CASE("knx server stays silent on a mandatory parameter it cannot match", "[knx][server][integration]")
+    {
+        server_transport transport;
+        const server_config config {
+            .control_endpoint = hpai {ipv4_endpoint {{192u, 0u, 2u, 20u}, 3671u}, 0x01u},
+            .device_info_blocks = {0x04u, 0x02u, 0x01u, 0x00u},
+            .mac_address = {0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u},
+        };
+        generic_server server {transport, config};
+
+        transport.incoming.emplace_back(detail::extended_search(discovery::search_parameter {
+            true, discovery::search_parameter_type::mac_address, {0xAAu, 0xBBu, 0xCCu, 0xDDu, 0xEEu, 0xFFu}}));
+        detail::serve_one(transport, server);
+        CHECK(transport.sent_packets().empty());
+
+        // Programming mode, which this server is not in.
+        transport.incoming.emplace_back(
+            detail::extended_search(discovery::search_parameter {true, discovery::search_parameter_type::programming_mode, {}}));
+        detail::serve_one(transport, server);
+        CHECK(transport.sent_packets().empty());
+    }
+
+    TEST_CASE("knx server answers when an unmatched parameter is optional", "[knx][server][integration]")
+    {
+        server_transport transport;
+        const server_config config {
+            .control_endpoint = hpai {ipv4_endpoint {{192u, 0u, 2u, 20u}, 3671u}, 0x01u},
+            .device_info_blocks = {0x04u, 0x02u, 0x01u, 0x00u},
+        };
+        generic_server server {transport, config};
+
+        transport.incoming.emplace_back(
+            detail::extended_search(discovery::search_parameter {false, discovery::search_parameter_type::programming_mode, {}}));
+        detail::serve_one(transport, server);
+        CHECK(transport.sent_packets().size() == 1u);
+    }
+
+    namespace detail
+    {
+        /// @brief The description a server that serves core and tunnelling advertises.
+        [[nodiscard]] inline std::vector<dib::block> serving_core_and_tunnelling()
+        {
+            dib::device_info info {};
+            info.address = individual_address {1u, 1u, 0u};
+            info.set_name("kmx test server");
+            return {
+                dib::block {info},
+                dib::block {dib::supported_service_families {
+                    false, {{dib::service_family::core, 2u}, {dib::service_family::tunnelling, 2u}}}},
+            };
+        }
+
+        /// @brief Builds a SEARCH_REQUEST_EXTENDED selecting by one service family and version.
+        [[nodiscard]] inline std::vector<std::uint8_t> select_by_service(const dib::service_family family,
+                                                                         const std::uint8_t version, const bool mandatory = true)
+        {
+            return extended_search(discovery::search_parameter {
+                mandatory,
+                discovery::search_parameter_type::service,
+                {static_cast<std::uint8_t>(family), version},
+            });
+        }
+    }
+
+    // The point of modelling service families rather than shipping opaque description octets: the server
+    // answers a select-by-service search from the very list it advertises, so a client cannot be told one
+    // thing by a search and another by a description of the same server.
+    TEST_CASE("knx server answers a search for a family it serves", "[knx][server][integration]")
+    {
+        server_transport transport;
+        const server_config config {
+            .control_endpoint = hpai {ipv4_endpoint {{192u, 0u, 2u, 20u}, 3671u}, 0x01u},
+            .description_blocks = detail::serving_core_and_tunnelling(),
+        };
+        generic_server server {transport, config};
+
+        transport.incoming.emplace_back(detail::select_by_service(dib::service_family::tunnelling, 2u));
+        detail::serve_one(transport, server);
+
+        REQUIRE(transport.sent_packets().size() == 1u);
+        const auto answer = discovery::decode_extended_search_response_packet(transport.sent_packets().front());
+        REQUIRE(answer.has_value());
+
+        // And the description it answered with really does name the family that was asked for.
+        const auto blocks = dib::decode_all(answer->device_info_blocks);
+        REQUIRE(blocks.has_value());
+        const auto* families = dib::find_service_families(*blocks);
+        REQUIRE(families != nullptr);
+        CHECK(families->contains(dib::service_family::tunnelling, 2u));
+        REQUIRE(dib::find_device_info(*blocks) != nullptr);
+        CHECK(dib::find_device_info(*blocks)->name() == "kmx test server");
+    }
+
+    TEST_CASE("knx server declines a search for a family it does not serve", "[knx][server][integration]")
+    {
+        server_transport transport;
+        const server_config config {
+            .control_endpoint = hpai {ipv4_endpoint {{192u, 0u, 2u, 20u}, 3671u}, 0x01u},
+            .description_blocks = detail::serving_core_and_tunnelling(),
+        };
+        generic_server server {transport, config};
+
+        // A family it does not serve at all.
+        transport.incoming.emplace_back(detail::select_by_service(dib::service_family::routing, 1u));
+        detail::serve_one(transport, server);
+        CHECK(transport.sent_packets().empty());
+
+        // And a version of a family it serves, but at a lower version than asked for.
+        transport.incoming.emplace_back(detail::select_by_service(dib::service_family::tunnelling, 3u));
+        detail::serve_one(transport, server);
+        CHECK(transport.sent_packets().empty());
+    }
+
+    TEST_CASE("knx server still answers an optional service parameter", "[knx][server][integration]")
+    {
+        server_transport transport;
+        const server_config config {
+            .control_endpoint = hpai {ipv4_endpoint {{192u, 0u, 2u, 20u}, 3671u}, 0x01u},
+            .description_blocks = detail::serving_core_and_tunnelling(),
+        };
+        generic_server server {transport, config};
+
+        transport.incoming.emplace_back(detail::select_by_service(dib::service_family::routing, 1u, false));
+        detail::serve_one(transport, server);
+        CHECK(transport.sent_packets().size() == 1u);
+    }
+
+    TEST_CASE("knx server refuses a malformed verbatim description", "[knx][server][unit]")
+    {
+        server_transport transport;
+        const server_config config {
+            .control_endpoint = hpai {ipv4_endpoint {{192u, 0u, 2u, 20u}, 3671u}, 0x01u},
+            // A block claiming more octets than it has: caught here rather than sent to a peer.
+            .device_info_blocks = {0x08u, 0x02u, 0x04u},
+        };
+        generic_server server {transport, config};
+
+        std::array<std::uint8_t, frame::communication_header_size + discovery::search_request_body_size> request {};
+        REQUIRE(discovery::encode_search_request_packet(request, discovery::search_request_frame {
+                                                                     hpai {ipv4_endpoint {{192u, 0u, 2u, 99u}, 3672u}, 0x01u},
+                                                                 })
+                    .has_value());
+        transport.incoming.emplace_back(request.begin(), request.end());
+        detail::serve_one(transport, server);
+        CHECK(transport.sent_packets().empty());
     }
 }

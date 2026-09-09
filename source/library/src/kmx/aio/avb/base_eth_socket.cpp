@@ -14,6 +14,39 @@ namespace kmx::aio::avb
         return static_cast<avb_timestamp_t>(ts[index].tv_sec) * 1'000'000'000ULL + static_cast<avb_timestamp_t>(ts[index].tv_nsec);
     }
 
+    void attach_tx_time(::msghdr& msg, tx_time_control_t& control, const avb_timestamp_t tx_time) noexcept
+    {
+        msg.msg_control = control.data();
+        msg.msg_controllen = control.size();
+        auto* const cmsg = CMSG_FIRSTHDR(&msg);
+        cmsg->cmsg_level = SOL_SOCKET;
+        cmsg->cmsg_type = SCM_TXTIME;
+        cmsg->cmsg_len = CMSG_LEN(sizeof(std::uint64_t));
+        std::memcpy(CMSG_DATA(cmsg), &tx_time, sizeof(std::uint64_t));
+    }
+
+    void prepare_frame_message(::msghdr& msg, ::sockaddr_ll& dest, ::iovec& iov, tx_time_control_t& control,
+                               const int iface_index, const std::uint16_t ethertype, const mac_address_t& dest_mac,
+                               const cspan_byte_t payload, const std::optional<avb_timestamp_t>& tx_time) noexcept
+    {
+        dest = {};
+        dest.sll_family = AF_PACKET;
+        dest.sll_ifindex = iface_index;
+        dest.sll_protocol = ::htons(ethertype);
+        dest.sll_halen = ETH_ALEN;
+        std::memcpy(dest.sll_addr, dest_mac.data(), ETH_ALEN);
+
+        iov = {const_cast<std::byte*>(payload.data()), payload.size()};
+        msg = {};
+        msg.msg_name = &dest;
+        msg.msg_namelen = sizeof(dest);
+        msg.msg_iov = &iov;
+        msg.msg_iovlen = 1;
+
+        if (tx_time.has_value())
+            attach_tx_time(msg, control, *tx_time);
+    }
+
     avb_timestamp_t extract_timestamp_from_ancillary(::msghdr& msg) noexcept
     {
         avb_timestamp_t hw_ts {};
@@ -101,33 +134,11 @@ namespace kmx::aio::avb
     expected_void_t primary_eth_socket::do_send(const mac_address_t& dest_mac, const cspan_byte_t payload,
                                                 const std::optional<avb_timestamp_t> tx_time)
     {
-        // Build sockaddr_ll destination
-        ::sockaddr_ll dest {};
-        dest.sll_family = AF_PACKET;
-        dest.sll_ifindex = iface_index_;
-        dest.sll_protocol = ::htons(ethertype_);
-        dest.sll_halen = ETH_ALEN;
-        std::memcpy(dest.sll_addr, dest_mac.data(), ETH_ALEN);
-
         ::msghdr msg {};
-        ::iovec iov {const_cast<std::byte*>(payload.data()), payload.size()};
-        msg.msg_name = &dest;
-        msg.msg_namelen = sizeof(dest);
-        msg.msg_iov = &iov;
-        msg.msg_iovlen = 1;
-
-        // Attach SO_TXTIME control message if scheduled TX was requested
-        alignas(::cmsghdr) std::array<std::byte, CMSG_SPACE(sizeof(std::uint64_t))> ctrl_buf {};
-        if (tx_time.has_value())
-        {
-            msg.msg_control = ctrl_buf.data();
-            msg.msg_controllen = ctrl_buf.size();
-            auto* const cmsg = CMSG_FIRSTHDR(&msg);
-            cmsg->cmsg_level = SOL_SOCKET;
-            cmsg->cmsg_type = SCM_TXTIME;
-            cmsg->cmsg_len = CMSG_LEN(sizeof(std::uint64_t));
-            std::memcpy(CMSG_DATA(cmsg), &tx_time.value(), sizeof(std::uint64_t));
-        }
+        ::sockaddr_ll dest {};
+        ::iovec iov {};
+        alignas(::cmsghdr) tx_time_control_t ctrl_buf {};
+        prepare_frame_message(msg, dest, iov, ctrl_buf, iface_index_, ethertype_, dest_mac, payload, tx_time);
 
         const ssize_t sent = ::sendmsg(fd_.get(), &msg, 0);
         if (sent < 0)

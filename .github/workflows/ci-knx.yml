@@ -73,3 +73,39 @@ jobs:
             output/ci-logs/knx/secure-conformance.log
             output/ci-logs/knx/keyring-conformance.log
             output/ci-logs/knx/vendor-interop-validate.log
+
+  # The half of the suite that builds real clients over real sockets, run instrumented. Kept as its own
+  # job rather than folded into the gates above: the sanitizer build is a separate output tree and must not
+  # replace the plain binary the release gates measure.
+  knx-sanitizers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qbs liburing-dev libssl-dev catch2
+
+      - name: Make the default toolchain build-capable
+        run: |
+          bash script/ci/setup-default-toolchain.sh
+
+      - name: Run KNX unit and integration tests under ASan and UBSan
+        run: |
+          set -euo pipefail
+          mkdir -p output/ci-logs/knx
+          KMX_ENABLE_KNX=true \
+          KMX_ENABLE_READINESS=true \
+          KMX_ENABLE_COMPLETION=true \
+            bash script/run-sanitizer-tests.sh asan+ubsan | tee output/ci-logs/knx/sanitizers.log
+
+      - name: Upload sanitizer log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: knx-sanitizer-log
+          path: output/ci-logs/knx/sanitizers.log

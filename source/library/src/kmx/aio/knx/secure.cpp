@@ -62,19 +62,34 @@ namespace kmx::aio::knx::secure
         return {};
     }
 
+    /// @brief Checks a datagram's header names this build's secure envelope and matches its length.
+    /// @param header The already-decoded communication header.
+    /// @param packet_size The datagram's size in octets.
+    /// @return Nothing, or why the datagram is not an envelope this decoder reads.
+    [[nodiscard]] static expected_void_t validate_secure_header(const communication_header& header,
+                                                                 const std::size_t packet_size) noexcept
+    {
+        // A real SECURE_WRAPPER is named separately from every other unknown service, because answering it
+        // with this envelope's layout would read an authenticated frame as if it were this one.
+        if (header.service_type == knx_secure_wrapper_service)
+            return std::unexpected(make_error_code(error::secure_unsupported));
+        if (header.service_type != secure_service)
+            return std::unexpected(make_error_code(error::unsupported_service));
+        if (header.total_length != packet_size)
+            return std::unexpected(make_error_code(error::malformed_frame));
+        if (packet_size < frame::communication_header_size + secure_packet_header_size)
+            return std::unexpected(make_error_code(error::malformed_frame));
+        return {};
+    }
+
     std::expected<packet, std::error_code> decode_secure_packet(const cspan_uint8_t packet_bytes) noexcept
     {
         const auto header = frame::decode_communication_header(packet_bytes);
         if (!header.has_value())
             return std::unexpected(header.error());
 
-        if (header->service_type != secure_service)
-            return std::unexpected(make_error_code(error::unsupported_service));
-        if (header->total_length != packet_bytes.size())
-            return std::unexpected(make_error_code(error::malformed_frame));
-
-        if (packet_bytes.size() < frame::communication_header_size + secure_packet_header_size)
-            return std::unexpected(make_error_code(error::malformed_frame));
+        if (const auto valid = validate_secure_header(header.value(), packet_bytes.size()); !valid.has_value())
+            return std::unexpected(valid.error());
 
         const auto selected = static_cast<profile>(packet_bytes[frame::communication_header_size]);
         if (!supported_profile(selected))
@@ -141,9 +156,19 @@ namespace kmx::aio::knx::secure
         if (decoded->selected != expected_profile)
             return std::unexpected(make_error_code(error::invalid_configuration));
 
+        // Authenticate first, then admit the sequence to the replay window - never the other way round.
+        // The sequence number is attacker-controlled until the provider has verified the frame it arrived
+        // in, so advancing the window on an unverified packet lets one forged datagram carrying a sequence
+        // near the top of the range move `highest_` past every value a genuine peer will ever send, and
+        // the session then rejects all real traffic as replayed. Ordering the two this way costs one
+        // decryption of a packet that turns out to be a duplicate, which is the cheaper failure.
+        auto unprotected = crypto.unprotect(decoded->payload, decoded->sequence);
+        if (!unprotected.has_value())
+            return unprotected;
+
         if ((replay != nullptr) && !replay->accept(decoded->sequence))
             return std::unexpected(make_error_code(error::sequence_error));
 
-        return crypto.unprotect(decoded->payload, decoded->sequence);
+        return unprotected;
     }
 }

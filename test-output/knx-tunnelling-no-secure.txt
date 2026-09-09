@@ -1,5 +1,5 @@
 Filters: "knx tunnelling client completes a loopback lifecycle"
-Randomness seeded to: 1532342367
+Randomness seeded to: 2945429694
 ===============================================================================
 All tests passed (5 assertions in 1 test case)
 

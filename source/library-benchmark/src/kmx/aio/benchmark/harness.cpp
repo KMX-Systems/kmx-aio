@@ -423,49 +423,130 @@ namespace kmx::aio::benchmark
         }
     } // namespace detail
 
+    namespace detail
+    {
+        /// @brief The widths one report's columns need to hold every row.
+        struct layout
+        {
+            /// @brief Width of the case-name column.
+            std::size_t name {};
+            /// @brief Width of the note column; zero when no row has a note.
+            std::size_t note {};
+            /// @brief Width of everything but the note column.
+            std::size_t columns {};
+            /// @brief Width of the horizontal rules, which span the note column too.
+            std::size_t rule {};
+        };
+
+        /// @brief Builds the header row and measures the columns it needs.
+        /// @param results The rows the report will hold.
+        /// @param out Receives the widths.
+        /// @return The header row.
+        [[nodiscard]] std::string make_header(const std::vector<result>& results, layout& out)
+        {
+            out.name = 4u;
+            out.note = 0u;
+            for (const auto& item: results)
+            {
+                out.name = std::max(out.name, case_of(item.name).size() + row_indent);
+                out.note = std::max(out.note, item.note.size());
+            }
+            out.note = std::min(out.note, note_width_cap);
+
+            auto header = left("case", out.name);
+            for (const auto* column: {"mean", "min", "p50", "p99"})
+                add_column(header, column, time_width);
+            add_column(header, "rate", rate_width);
+            add_column(header, "ops", count_width);
+
+            // The rule spans the note column as well, which the header itself only starts.
+            out.columns = width_of(header);
+            out.rule = (out.note == 0u) ? out.columns : (out.columns + column_gap.size() + out.note);
+            if (out.note != 0u)
+                add_last_column(header, "what it means");
+            return header;
+        }
+
+        /// @brief Writes the measured columns of one row.
+        /// @param line The row being built.
+        /// @param item The result to write.
+        void add_measurements(std::string& line, const result& item)
+        {
+            if (item.skipped)
+            {
+                // The numeric columns stay empty, so the reason lands under the note column like any
+                // other remark.
+                add_column(line, "skipped", time_width);
+                for (int i = 0; i < 3; ++i)
+                    add_column(line, "", time_width);
+                add_column(line, "", rate_width);
+                add_column(line, "", count_width);
+                return;
+            }
+
+            add_column(line, duration_text(item.mean_ns), time_width);
+            if (item.has_distribution)
+            {
+                add_column(line, duration_text(item.min_ns), time_width);
+                add_column(line, duration_text(item.p50_ns), time_width);
+                add_column(line, item.has_p99 ? duration_text(item.p99_ns) : std::string {"-"}, time_width);
+            }
+            else
+                for (int i = 0; i < 3; ++i)
+                    add_column(line, "-", time_width);
+
+            add_column(line, rate_text((item.mean_ns > 0.0) ? (1e9 / item.mean_ns) : 0.0), rate_width);
+            add_column(line, count_text(item.operations), count_width);
+        }
+
+        /// @brief Writes one row, carrying an over-long note down its own column.
+        void print_row(const result& item, const layout& widths)
+        {
+            auto line = run_of(' ', row_indent) + left(case_of(item.name), widths.name - row_indent);
+            add_measurements(line, item);
+
+            const auto note_lines = wrapped(item.note, widths.note);
+            if (!note_lines.empty())
+                add_last_column(line, note_lines.front());
+            std::println("{}", line);
+
+            for (std::size_t i = 1u; i < note_lines.size(); ++i)
+                std::println("{}{}{}", run_of(' ', widths.columns), column_gap, note_lines[i]);
+        }
+
+        /// @brief Returns the groups the rows fall into, in the order they are first seen.
+        /// @details Collected by group rather than taken from adjacency: a paired scenario registers one
+        ///          case in each of two groups, so registration order no longer keeps a group's rows
+        ///          together. Rows keep their order within a group, which is what plain adjacency gave
+        ///          when every group was contiguous.
+        [[nodiscard]] std::vector<std::string_view> groups_of(const std::vector<result>& results)
+        {
+            std::vector<std::string_view> groups {};
+            for (const auto& item: results)
+                if (const auto group = group_of(item.name); std::find(groups.begin(), groups.end(), group) == groups.end())
+                    groups.push_back(group);
+            return groups;
+        }
+
+        /// @brief Writes the trailing note explaining what each column means.
+        void print_legend(const layout& widths)
+        {
+            std::println("");
+            std::println("{}", run_of('-', widths.rule));
+            std::println("mean, min, p50 and p99 are the cost of one operation; rate is 1 s / mean; ops is how many were measured.");
+            std::println("A \"-\" means the case timed the whole loop rather than each operation, so it has no distribution to report,");
+            std::println("or - under p99 alone - that it took fewer than {} samples, too few for a percentile to name anything.",
+                         min_samples_for_p99);
+        }
+    }
+
     void print_results(const std::vector<result>& results, const registry& reg) noexcept
     {
+        detail::layout widths {};
+        std::println("{}", detail::make_header(results, widths));
+        std::println("{}", detail::run_of('-', widths.rule));
 
-        std::size_t name_width = 4u;
-        std::size_t note_width {};
-        for (const auto& item: results)
-        {
-            name_width = std::max(name_width, detail::case_of(item.name).size() + detail::row_indent);
-            note_width = std::max(note_width, item.note.size());
-        }
-
-        note_width = std::min(note_width, detail::note_width_cap);
-
-        auto header = detail::left("case", name_width);
-        detail::add_column(header, "mean", detail::time_width);
-        detail::add_column(header, "min", detail::time_width);
-        detail::add_column(header, "p50", detail::time_width);
-        detail::add_column(header, "p99", detail::time_width);
-        detail::add_column(header, "rate", detail::rate_width);
-        detail::add_column(header, "ops", detail::count_width);
-
-        // The rule spans the note column as well, which the header itself only starts.
-        const auto columns_width = detail::width_of(header);
-        const auto rule_width = (note_width == 0u) ? columns_width : (columns_width + detail::column_gap.size() + note_width);
-        if (note_width != 0u)
-            detail::add_last_column(header, "what it means");
-
-        std::println("{}", header);
-        std::println("{}", detail::run_of('-', rule_width));
-
-        // Sections are collected by group rather than taken from adjacency: a paired scenario
-        // registers one case in each of two groups, so registration order no longer keeps a group's
-        // rows together. Groups appear in the order they are first seen and rows keep their order
-        // within a group, which is what plain adjacency gave when every group was contiguous.
-        std::vector<std::string_view> groups {};
-        for (const auto& item: results)
-        {
-            const auto item_group = detail::group_of(item.name);
-            if (std::find(groups.begin(), groups.end(), item_group) == groups.end())
-                groups.push_back(item_group);
-        }
-
-        for (const auto& group: groups)
+        for (const auto& group: detail::groups_of(results))
         {
             std::println("");
             if (!group.empty())
@@ -478,60 +559,11 @@ namespace kmx::aio::benchmark
             }
 
             for (const auto& item: results)
-            {
-                if (detail::group_of(item.name) != group)
-                    continue;
-
-                auto line =
-                    detail::run_of(' ', detail::row_indent) + detail::left(detail::case_of(item.name), name_width - detail::row_indent);
-                if (item.skipped)
-                {
-                    // The numeric columns stay empty, so the reason lands under the note column like any other remark.
-                    detail::add_column(line, "skipped", detail::time_width);
-                    detail::add_column(line, "", detail::time_width);
-                    detail::add_column(line, "", detail::time_width);
-                    detail::add_column(line, "", detail::time_width);
-                    detail::add_column(line, "", detail::rate_width);
-                    detail::add_column(line, "", detail::count_width);
-                }
-                else
-                {
-                    detail::add_column(line, detail::duration_text(item.mean_ns), detail::time_width);
-                    if (item.has_distribution)
-                    {
-                        detail::add_column(line, detail::duration_text(item.min_ns), detail::time_width);
-                        detail::add_column(line, detail::duration_text(item.p50_ns), detail::time_width);
-                        detail::add_column(line, item.has_p99 ? detail::duration_text(item.p99_ns) : std::string {"-"}, detail::time_width);
-                    }
-                    else
-                    {
-                        detail::add_column(line, "-", detail::time_width);
-                        detail::add_column(line, "-", detail::time_width);
-                        detail::add_column(line, "-", detail::time_width);
-                    }
-
-                    detail::add_column(line, detail::rate_text((item.mean_ns > 0.0) ? (1e9 / item.mean_ns) : 0.0), detail::rate_width);
-                    detail::add_column(line, detail::count_text(item.operations), detail::count_width);
-                }
-
-                const auto note_lines = detail::wrapped(item.note, note_width);
-                if (!note_lines.empty())
-                    detail::add_last_column(line, note_lines.front());
-
-                std::println("{}", line);
-
-                // A note too long for the column carries on down it, under its own first line.
-                for (std::size_t i = 1u; i < note_lines.size(); ++i)
-                    std::println("{}{}{}", detail::run_of(' ', columns_width), detail::column_gap, note_lines[i]);
-            }
+                if (detail::group_of(item.name) == group)
+                    detail::print_row(item, widths);
         }
 
-        std::println("");
-        std::println("{}", detail::run_of('-', rule_width));
-        std::println("mean, min, p50 and p99 are the cost of one operation; rate is 1 s / mean; ops is how many were measured.");
-        std::println("A \"-\" means the case timed the whole loop rather than each operation, so it has no distribution to report,");
-        std::println("or - under p99 alone - that it took fewer than {} samples, too few for a percentile to name anything.",
-                     detail::min_samples_for_p99);
+        detail::print_legend(widths);
         std::fflush(stdout);
     }
 
@@ -580,39 +612,45 @@ namespace kmx::aio::benchmark
         /// @param text The text to escape.
         /// @return The escaped text, without the surrounding quotes.
         /// @throws std::bad_alloc if the result cannot be stored.
+        /// @brief The JSON escape one character needs, or nothing when it may pass through.
+        /// @param c The character to escape.
+        /// @return The replacement text, empty when @p c needs none.
+        /// @note Everything below a space has to be escaped; a UTF-8 continuation byte is above it and
+        ///       passes through, which keeps a "µs" in a note intact.
+        [[nodiscard]] static std::string json_escape_of(const char c) noexcept(false)
+        {
+            switch (c)
+            {
+                case '"':
+                    return "\\\"";
+                case '\\':
+                    return "\\\\";
+                case '\n':
+                    return "\\n";
+                case '\r':
+                    return "\\r";
+                case '\t':
+                    return "\\t";
+                default:
+                    break;
+            }
+
+            if (static_cast<unsigned char>(c) < 0x20u)
+                return std::format("\\u{:04x}", static_cast<unsigned>(static_cast<unsigned char>(c)));
+            return {};
+        }
+
         static std::string json_escaped(const std::string_view text) noexcept(false)
         {
             std::string out {};
             out.reserve(text.size());
             for (const auto c: text)
             {
-                switch (c)
-                {
-                    case '"':
-                        out += "\\\"";
-                        break;
-                    case '\\':
-                        out += "\\\\";
-                        break;
-                    case '\n':
-                        out += "\\n";
-                        break;
-                    case '\r':
-                        out += "\\r";
-                        break;
-                    case '\t':
-                        out += "\\t";
-                        break;
-                    default:
-                        // Everything below a space has to be escaped; a UTF-8 continuation byte is
-                        // above it and passes through, which keeps a "µs" in a note intact.
-                        if (static_cast<unsigned char>(c) < 0x20u)
-                            out += std::format("\\u{:04x}", static_cast<unsigned>(static_cast<unsigned char>(c)));
-                        else
-                            out += c;
-
-                        break;
-                }
+                const auto escape = json_escape_of(c);
+                if (escape.empty())
+                    out += c;
+                else
+                    out += escape;
             }
 
             return out;
@@ -637,150 +675,206 @@ namespace kmx::aio::benchmark
         }
     } // namespace detail
 
+    namespace detail
+    {
+        /// @brief The two sides of one scenario, either of which may be absent.
+        struct pair_sides
+        {
+            /// @brief The epoll side, or null when it was not run.
+            const result* readiness {};
+            /// @brief The io_uring side, or null when it was not run.
+            const result* completion {};
+
+            /// @brief Whether both sides ran to completion.
+            [[nodiscard]] bool both_ran() const noexcept
+            {
+                return (readiness != nullptr) && (completion != nullptr) && !readiness->skipped && !completion->skipped;
+            }
+        };
+
+        /// @brief Finds both sides of one scenario among the results.
+        [[nodiscard]] pair_sides sides_of(const std::vector<result>& results, const std::string_view key)
+        {
+            return {side_of(results, key, execution_model::readiness), side_of(results, key, execution_model::completion)};
+        }
+
+        /// @brief Selects the pairings with at least one side present, and measures the columns.
+        /// @param results The rows the report holds.
+        /// @param reg The registry naming the pairings.
+        /// @param out Receives the widths.
+        /// @return The pairings to print; empty when a filter selected none of them.
+        [[nodiscard]] std::vector<const pair_entry*> present_pairs(const std::vector<result>& results, const registry& reg,
+                                                                   layout& out)
+        {
+            std::vector<const pair_entry*> present {};
+            out.name = 8u;
+            out.note = 0u;
+            for (const auto& pair: reg.pairs())
+            {
+                const auto sides = sides_of(results, pair.key);
+                if ((sides.readiness == nullptr) && (sides.completion == nullptr))
+                    continue;
+
+                present.push_back(&pair);
+                out.name = std::max(out.name, width_of(pair.key) + row_indent);
+
+                // A skipped side explains itself in the note column, so its reason has to fit there too.
+                out.note = std::max(out.note, pair.description.size());
+                for (const auto* side: {sides.readiness, sides.completion})
+                    if ((side != nullptr) && side->skipped)
+                        out.note = std::max(out.note, side->note.size());
+            }
+            out.note = std::min(out.note, note_width_cap);
+            return present;
+        }
+
+        /// @brief Builds the comparison header and finishes measuring the columns.
+        [[nodiscard]] std::string make_comparison_header(layout& out)
+        {
+            auto header = left("scenario", out.name);
+            add_column(header, "epoll", time_width);
+            add_column(header, "io_uring", time_width);
+            add_column(header, "delta", delta_width);
+            add_column(header, "ops", count_width);
+
+            out.columns = width_of(header);
+            out.rule = (out.note == 0u) ? out.columns : (out.columns + column_gap.size() + out.note);
+            if (out.note != 0u)
+                add_last_column(header, "what the scenario does");
+            return header;
+        }
+
+        /// @brief The figure one side contributes to a comparison row.
+        /// @note "not run" and "skipped" are different answers and the reader needs both: the first
+        ///       means a filter or a build gate left the side out, the second that it could not run.
+        [[nodiscard]] std::string comparison_cell(const result* side)
+        {
+            if (side == nullptr)
+                return "not run";
+            return side->skipped ? std::string {"skipped"} : duration_text(quoted_ns(*side));
+        }
+
+        /// @brief The operation count that describes a comparison row.
+        /// @note Both sides run the same amount of work by construction; where they disagree the
+        ///       smaller one is the honest figure to print.
+        [[nodiscard]] std::size_t comparison_operations(const pair_sides& sides)
+        {
+            if (sides.both_ran())
+                return std::min(sides.readiness->operations, sides.completion->operations);
+            if (sides.readiness != nullptr)
+                return sides.readiness->operations;
+            if (sides.completion != nullptr)
+                return sides.completion->operations;
+            return 0u;
+        }
+
+        /// @brief The note a comparison row carries.
+        /// @note The scenario's own description normally, replaced by a skip reason when there is one:
+        ///       why a side could not run is what the reader needs from that row.
+        [[nodiscard]] std::string_view comparison_note(const pair_entry& pair, const pair_sides& sides)
+        {
+            for (const auto* side: {sides.readiness, sides.completion})
+                if ((side != nullptr) && side->skipped && !side->note.empty())
+                    return side->note;
+            return pair.description;
+        }
+
+        /// @brief Writes one scenario's row.
+        void print_comparison_row(const std::vector<result>& results, const pair_entry& pair, const layout& widths)
+        {
+            const auto sides = sides_of(results, pair.key);
+            auto line = run_of(' ', row_indent) + left(pair.key, widths.name - row_indent);
+            add_column(line, comparison_cell(sides.readiness), time_width);
+            add_column(line, comparison_cell(sides.completion), time_width);
+
+            // A delta is only meaningful with two figures in hand, and only when both quote the same
+            // kind of figure - a median against a whole-loop mean would be a number with no meaning.
+            const auto comparable = sides.both_ran() && (sides.readiness->has_distribution == sides.completion->has_distribution);
+            add_column(line,
+                       comparable ? delta_text(quoted_ns(*sides.readiness), quoted_ns(*sides.completion)) : std::string {"-"},
+                       delta_width);
+
+            const auto operations = comparison_operations(sides);
+            add_column(line, (operations == 0u) ? std::string {"-"} : count_text(operations), count_width);
+
+            const auto note_lines = wrapped(comparison_note(pair, sides), widths.note);
+            if (!note_lines.empty())
+                add_last_column(line, note_lines.front());
+            std::println("{}", line);
+
+            for (std::size_t i = 1u; i < note_lines.size(); ++i)
+                std::println("{}{}{}", run_of(' ', widths.columns), column_gap, note_lines[i]);
+        }
+
+        /// @brief Writes the trailing note explaining the comparison columns.
+        void print_comparison_legend(const layout& widths)
+        {
+            std::println("");
+            std::println("{}", run_of('-', widths.rule));
+            std::println("Each figure is the cost of one operation: the median where the case sampled every operation, the mean");
+            std::println("where it timed a whole loop. delta is how the io_uring figure differs from the epoll one, so a negative");
+            std::println("delta means io_uring was the faster of the two. The same figures appear in the table above, with their");
+            std::println("distributions; this section only puts the two sides of each scenario on one line.");
+        }
+    }
+
     void print_comparison(const std::vector<result>& results, const registry& reg) noexcept
     {
-
         if (reg.pairs().empty())
             return;
 
-        // Only pairings with at least one side among the results, so a --filter that selected none of
-        // them prints no empty section.
-        std::vector<const pair_entry*> present {};
-        std::size_t name_width = 8u;
-        std::size_t note_width {};
-        for (const auto& pair: reg.pairs())
-        {
-            const auto* readiness_side = detail::side_of(results, pair.key, execution_model::readiness);
-            const auto* completion_side = detail::side_of(results, pair.key, execution_model::completion);
-            if ((readiness_side == nullptr) && (completion_side == nullptr))
-                continue;
-
-            present.push_back(&pair);
-            name_width = std::max(name_width, detail::width_of(pair.key) + detail::row_indent);
-
-            // A skipped side explains itself in the note column, so its reason has to fit there too.
-            auto note = pair.description;
-            note_width = std::max(note_width, note.size());
-            for (const auto* side: {readiness_side, completion_side})
-                if ((side != nullptr) && side->skipped)
-                    note_width = std::max(note_width, side->note.size());
-        }
-
+        detail::layout widths {};
+        const auto present = detail::present_pairs(results, reg, widths);
         if (present.empty())
             return;
 
-        note_width = std::min(note_width, detail::note_width_cap);
-
-        auto header = detail::left("scenario", name_width);
-        detail::add_column(header, "epoll", detail::time_width);
-        detail::add_column(header, "io_uring", detail::time_width);
-        detail::add_column(header, "delta", detail::delta_width);
-        detail::add_column(header, "ops", detail::count_width);
-
-        const auto columns_width = detail::width_of(header);
-        const auto rule_width = (note_width == 0u) ? columns_width : (columns_width + detail::column_gap.size() + note_width);
-        if (note_width != 0u)
-            detail::add_last_column(header, "what the scenario does");
-
+        const auto header = detail::make_comparison_header(widths);
         std::println("");
         std::println("");
         std::println("epoll against io_uring - one scenario, the same work, measured on both executors");
         std::println("");
         std::println("{}", header);
-        std::println("{}", detail::run_of('-', rule_width));
+        std::println("{}", detail::run_of('-', widths.rule));
 
         for (const auto* pair: present)
+            detail::print_comparison_row(results, *pair, widths);
+
+        detail::print_comparison_legend(widths);
+        std::fflush(stdout);
+    }
+
+    /// @brief Writes one result as a JSON object.
+    /// @param item The result to write.
+    /// @return The object, without the separator that may follow it.
+    [[nodiscard]] static std::string json_result(const result& item) noexcept(false)
+    {
+        std::string line = "    {";
+        line += std::format("\"name\": \"{}\"", detail::json_escaped(item.name));
+        line += std::format(", \"pair\": \"{}\"", detail::json_escaped(item.pair_key));
+        line += std::format(", \"model\": \"{}\"", detail::model_name(item.model));
+        line += std::format(", \"skipped\": {}", item.skipped ? "true" : "false");
+        line += std::format(", \"operations\": {}", item.operations);
+        line += std::format(", \"mean_ns\": {:.3f}", item.mean_ns);
+        if (item.has_distribution)
         {
-            const auto* readiness_side = detail::side_of(results, pair->key, execution_model::readiness);
-            const auto* completion_side = detail::side_of(results, pair->key, execution_model::completion);
-
-            // "not run" and "skipped" are different answers and the reader needs both: the first means
-            // a filter or a build gate left the side out, the second that the machine could not run it.
-            const auto cell = [](const result* side) noexcept(false) -> std::string
-            {
-                if (side == nullptr)
-                    return "not run";
-
-                return side->skipped ? std::string {"skipped"} : detail::duration_text(detail::quoted_ns(*side));
-            };
-
-            auto line = detail::run_of(' ', detail::row_indent) + detail::left(pair->key, name_width - detail::row_indent);
-            detail::add_column(line, cell(readiness_side), detail::time_width);
-            detail::add_column(line, cell(completion_side), detail::time_width);
-
-            // A delta is only meaningful with two figures in hand, and only when both quote the same
-            // kind of figure - a median against a whole-loop mean would be a number with no meaning.
-            const auto both_ran =
-                (readiness_side != nullptr) && (completion_side != nullptr) && !readiness_side->skipped && !completion_side->skipped;
-            const auto comparable = both_ran && (readiness_side->has_distribution == completion_side->has_distribution);
-            detail::add_column(line,
-                               comparable ? detail::delta_text(detail::quoted_ns(*readiness_side), detail::quoted_ns(*completion_side)) :
-                                            std::string {"-"},
-                               detail::delta_width);
-
-            // Both sides run the same amount of work by construction, so one operation count describes
-            // the row; where they disagree the smaller one is the honest figure to print.
-            std::size_t operations {};
-            if (both_ran)
-                operations = std::min(readiness_side->operations, completion_side->operations);
-            else if (readiness_side != nullptr)
-                operations = readiness_side->operations;
-            else if (completion_side != nullptr)
-                operations = completion_side->operations;
-
-            detail::add_column(line, (operations == 0u) ? std::string {"-"} : detail::count_text(operations), detail::count_width);
-
-            // The scenario's own line normally, replaced by a skip reason when there is one to give -
-            // why a side could not run is what the reader needs from that row, not what it would have done.
-            auto note = pair->description;
-            for (const auto* side: {readiness_side, completion_side})
-                if ((side != nullptr) && side->skipped && !side->note.empty())
-                    note = side->note;
-
-            const auto note_lines = detail::wrapped(note, note_width);
-            if (!note_lines.empty())
-                detail::add_last_column(line, note_lines.front());
-
-            std::println("{}", line);
-
-            for (std::size_t i = 1u; i < note_lines.size(); ++i)
-                std::println("{}{}{}", detail::run_of(' ', columns_width), detail::column_gap, note_lines[i]);
+            line += std::format(", \"min_ns\": {:.3f}", item.min_ns);
+            line += std::format(", \"p50_ns\": {:.3f}", item.p50_ns);
+            if (item.has_p99)
+                line += std::format(", \"p99_ns\": {:.3f}", item.p99_ns);
         }
 
-        std::println("");
-        std::println("{}", detail::run_of('-', rule_width));
-        std::println("Each figure is the cost of one operation: the median where the case sampled every operation, the mean");
-        std::println("where it timed a whole loop. delta is how the io_uring figure differs from the epoll one, so a negative");
-        std::println("delta means io_uring was the faster of the two. The same figures appear in the table above, with their");
-        std::println("distributions; this section only puts the two sides of each scenario on one line.");
-        std::fflush(stdout);
+        line += std::format(", \"note\": \"{}\"", detail::json_escaped(item.note));
+        line += '}';
+        return line;
     }
 
     void print_json(const std::vector<result>& results, std::FILE* const out) noexcept
     {
-
         std::println(out, "{{");
         std::println(out, "  \"results\": [");
         for (std::size_t i {}; i != results.size(); ++i)
         {
-            const auto& item = results[i];
-            std::string line = "    {";
-            line += std::format("\"name\": \"{}\"", detail::json_escaped(item.name));
-            line += std::format(", \"pair\": \"{}\"", detail::json_escaped(item.pair_key));
-            line += std::format(", \"model\": \"{}\"", detail::model_name(item.model));
-            line += std::format(", \"skipped\": {}", item.skipped ? "true" : "false");
-            line += std::format(", \"operations\": {}", item.operations);
-            line += std::format(", \"mean_ns\": {:.3f}", item.mean_ns);
-            if (item.has_distribution)
-            {
-                line += std::format(", \"min_ns\": {:.3f}", item.min_ns);
-                line += std::format(", \"p50_ns\": {:.3f}", item.p50_ns);
-                if (item.has_p99)
-                    line += std::format(", \"p99_ns\": {:.3f}", item.p99_ns);
-            }
-
-            line += std::format(", \"note\": \"{}\"", detail::json_escaped(item.note));
-            line += '}';
+            auto line = json_result(results[i]);
             if ((i + 1u) != results.size())
                 line += ',';
 

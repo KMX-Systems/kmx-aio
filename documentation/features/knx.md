@@ -7,18 +7,35 @@ tunnelling foundation:
 
 - KNXnet/IP communication-header encoding and validation
 - IPv4 UDP HPAI encoding and validation
-- SEARCH and DESCRIPTION request/response framing with opaque DIB preservation
+- SEARCH and DESCRIPTION request/response framing
+- typed description information blocks: DEVICE_INFO, SUPP_SVC_FAMILIES, SECURED_SERVICE_FAMILIES,
+  IP_CONFIG, IP_CUR_CONFIG, KNX_ADDRESSES and MFR_DATA, with unmodelled types preserved verbatim so a
+  decode and re-encode is lossless
+- the eight KNXnet/IP service family identifiers, and `dib::family_of` naming the family a service type
+  belongs to from its high octet
+- server-side service family advertisement: a SEARCH_REQUEST_EXTENDED selecting by service is answered from
+  the same list the server advertises, at the version granularity the parameter asks for
 - IPv4 and parallel IPv6 SEARCH request/response codec APIs
+- `search_all()` collecting every server that answers a multicast SEARCH, each with its source address
+- SEARCH_REQUEST_EXTENDED and SEARCH_RESPONSE_EXTENDED, with the four search request parameter blocks
+  (programming mode, select by MAC, select by service, request DIBs) and their mandatory flag
+- server-side selection on those parameters: a mandatory parameter it cannot match produces silence
+- the four tunnelling feature services, with the eight defined feature identifiers and the rules for which
+  of them carry a value
 - IPv4 and IPv6 SEARCH typed datagram dispatch
 - executor-neutral typed discovery client for IPv4 and IPv6 SEARCH responses
 - completion real-UDP IPv6 SEARCH socket integration coverage
-- KNX Secure profile/replay-policy configuration boundary with injectable crypto provider interface
-- provider-backed KNX Secure wire-envelope packet codec and typed datagram dispatch
+- placeholder secure profile/replay-policy configuration boundary with injectable crypto provider
+  interface; no cryptography is implemented and the envelope is **not** KNX Secure
+- provider-backed placeholder secure envelope codec on an unassigned service type, with typed
+  datagram dispatch; a real SECURE_WRAPPER is rejected as `error::secure_unsupported`
 - secure packet protect/unprotect helpers with optional replay-window enforcement
 - optional Secure configuration/provider validation at the tunnelling client boundary
 - routing/multicast configuration validation and executor-neutral indication sender boundary
-- routing indication cEMI envelope codec with strict channel/reserved/length validation
-- routing BUSY and LOST_MESSAGE control codecs with typed datagram dispatch
+- ROUTING_INDICATION codec carrying the cEMI frame directly after the KNXnet/IP header, with no
+  connection header, per 03/08/05
+- ROUTING_BUSY (six-octet block) and ROUTING_LOST_MESSAGE (four-octet block) control codecs with
+  typed datagram dispatch, each pinned to a golden wire vector
 - readiness and completion transport multicast join/leave runtime socket operations
 - routing runtime client API with multicast join/leave and indication send/receive integration
 - bounded tunnelling server channel allocator with CONNECT, TUNNELLING, heartbeat and DISCONNECT handling
@@ -27,7 +44,7 @@ tunnelling foundation:
 - gateway composition wrapper combining tunnelling server and routing runtime
 - gateway stop/start lifecycle and continuous serving aliases for both executor pillars
 - bounded keyring parser with selected-record lookup and encrypted-key decryptor seam
-- KNX Secure golden envelope vectors with strict malformed-frame reject coverage
+- golden envelope vectors for the placeholder secure format, with strict malformed-frame rejects
 - data-driven KNX Secure conformance vector ingestion for external standards bundles
 - data-driven `.knxkeys` conformance bundle ingestion with password-id keyed decryptor selection
 - deterministic provider contract coverage for sequence-bound protect/unprotect behavior
@@ -39,7 +56,16 @@ tunnelling foundation:
 - IPv6 client CONNECT and negotiated data-peer routing
 - CONNECT and CONNECTIONSTATE control frames, including the individual address the interface assigns
 - DISCONNECT control frames
-- TUNNELLING_REQUEST and TUNNELLING_ACK framing
+- TUNNELLING_REQUEST and TUNNELLING_ACK framing, with the four-octet KNXnet/IP connection header
+- DEVICE_CONFIGURATION_REQUEST and DEVICE_CONFIGURATION_ACK framing
+- device management CONNECT_REQUEST/RESPONSE with the two-octet management information block
+- cEMI device management services: M_PropRead, M_PropWrite, M_PropInfo and M_Reset
+- selectable KNX layer in a tunnelling CONNECT_REQUEST (link layer, raw, bus monitor)
+- route-back (NAT) HPAI on both the client and the server, for search, description and connect
+- per-service timeouts: tunnelling acknowledgement, connect, connection state and disconnect
+- multicast-aware SEARCH that collects every answering server within a window
+- DESCRIPTION_REQUEST carrying the requester's control endpoint, and a client `describe()`
+- server-side SEARCH and DESCRIPTION answers
 - Typed datagram dispatch and response encoding
 - KNX individual and group address value types, with text parsing and formatting in all three group styles
 - cEMI L_Data encoding and decoding: control fields, addressing, TPCI/APCI, compact and extended APDUs,
@@ -82,9 +108,31 @@ The KNXnet/IP framing layer (`frame`, `connection`, `discovery`, `datagram`) and
 
 ## Wire Format Notes
 
-Two details are easy to get wrong in a way no round-trip test can catch, because encoder and decoder agree
-with each other while disagreeing with every real interface. Both are pinned by golden byte vectors in
-`connection_test.cpp`:
+These details are easy to get wrong in a way no round-trip test can catch, because encoder and decoder
+agree with each other while disagreeing with every real interface. Each is pinned by golden byte vectors:
+
+- The connection header of TUNNELLING_REQUEST, TUNNELLING_ACK and the two DEVICE_CONFIGURATION services is
+  *structure length, communication channel id, sequence counter, reserved or status* — `04 07 02 00`. The
+  leading `0x04` is part of the header: starting at the channel id yields four octets whose every field is
+  one early, which no interface accepts and which two ends of this library exchanged happily.
+- ROUTING_INDICATION has **no** connection header. The cEMI frame begins immediately after the six-octet
+  KNXnet/IP header; there is no channel id and no sequence counter, because routing is connectionless.
+- ROUTING_LOST_MESSAGE carries a four-octet block and ROUTING_BUSY a six-octet one, each beginning with its
+  own structure length, then a device state octet, then the value.
+- DESCRIPTION_REQUEST carries the requester's control endpoint HPAI, so it is fourteen octets, not six. A
+  header-only request names nowhere to send the answer.
+- A description information block is *structure length, type, data*, and the length counts its own two
+  octets. DEVICE_INFO is fixed at 54 octets and IP_CONFIG at 16, so a block of the right type and the wrong
+  length is rejected rather than read into the wrong fields. A supported-service-families body is two
+  octets per entry, so an odd one is not a list of them.
+- A search request parameter block is *structure length, mandatory flag and type, data* — the length counts
+  its own two octets, the mandatory flag is the top bit of the type octet, and a block is an even number of
+  octets, so a request-DIBs list of odd length is padded. A block whose length is below two would never
+  advance a decoder's cursor, and is rejected rather than skipped.
+- The tunnelling feature services put the feature identifier and one return-code octet after the connection
+  header. That octet is reserved and zero in a get, a set and an info; only a response fills it in. Which
+  services carry a value is not free: a get carries none, a set and an info always do, and a response does
+  only when it succeeded.
 
 - The connection request information block is *structure length, connection type, KNX layer, reserved* —
   `04 04 02 00`. Swapping the last two asks for KNX layer `0x00`, which no interface accepts.
@@ -230,20 +278,43 @@ handshake bytes, allowing an explicit retry or reset. Application cEMI payloads 
 | :--- | :--- | :--- |
 | KNXnet/IP total length field | 65535 | `frame::max_frame_size`, the protocol maximum |
 | Buffered datagram | 1472 | `frame::max_datagram_size`, one IPv4 UDP payload on Ethernet |
-| cEMI message accepted by `send()` | 1462 | buffered datagram minus the KNXnet/IP and connection headers |
+| cEMI message accepted by `send()` | 520 | `cemi::max_message_size`; longer messages cannot be decoded |
+| cEMI message accepted by the decoder | 520 | `cemi::max_message_size`, both variable fields at maximum |
 | APDU payload octets | 254 | `apdu_payload::max_octets`, the data length field minus one |
+| cEMI additional information | 255 | `cemi::max_additional_info_size`, the length field's range |
 | Encoded datapoint value | 14 octets | `dpt::payload::capacity`, the width of DPT 16 |
 | Tunnelling retries | 2 | `tunnelling_config::max_retries` |
+| TUNNELLING_ACK wait | 1 s | `tunnelling_config::ack_timeout_ms` |
+| CONNECT / CONNECTIONSTATE / DISCONNECT wait | 10 s each | their own `tunnelling_config` fields |
+| Heartbeat interval a supervisor should use | 60 s | `tunnelling_config::heartbeat_interval_ms` |
 | Heartbeat failures before teardown | 3 | `tunnelling_config::heartbeat_failure_limit` |
+| SEARCH collection window | 3 s | `discovery::discovery_config::search_timeout_ms` |
+| Tunnelling feature value | 16 octets | `tunnelling_feature_value::capacity`; every defined value is 1-2 |
+| Search request parameter block | 255 octets | the block's own one-octet structure length |
 
 The buffered datagram limit is an order of magnitude above what any KNXnet/IP service needs — the longest
-tunnelling frame a cEMI message can fill is about 530 octets — and is what keeps a 64 KiB array off every
+tunnelling frame a cEMI message can fill is 530 octets — and is what keeps a 64 KiB array off every
 coroutine frame that sends a telegram of a couple of dozen bytes.
+
+`send()` is bounded by what a decoder accepts rather than by what the datagram buffer holds. The buffer
+would take 1462 octets, but the cEMI length fields cannot describe a message longer than 520, so anything
+above that would encode into a frame every peer must reject.
+
+**Size of a decoded datagram.** `cemi_bytes_storage` holds `cemi::max_message_size` (520 octets), which
+makes `knx::datagram` 560 bytes — up from 312 when the storage was sized to `max_l_data_size`. That is the
+price of accepting a maximal additional-information block without a heap allocation on the receive path.
+The 255-octet block that forces it is legal but not something field devices send; a build that would rather
+have the smaller coroutine frame should reject oversized additional information at the decoder instead of
+shrinking the storage, which is what reintroduces the overflow.
 
 ## Scope Limits
 
 The current implementation does not claim:
 
+- **any KNX Secure capability.** `secure.hpp` is a configuration and provider-injection boundary with an
+  invented envelope on an unassigned service type. There is no key agreement, no AES-CCM, and no message
+  authentication code. `keyring.hpp` reads a `<Key key="..."/>` attribute format of this repository's own,
+  not the ETS `.knxkeys` container, and performs no PBKDF2 or AES-CBC decryption.
 - vendor interoperability certification
 - IPv6 HPAI integration is implemented for CONNECT, CONNECT_RESPONSE, client data-peer routing, SEARCH
   codec/dispatch, and completion localhost SEARCH socket coverage; real vendor interoperability coverage
@@ -251,13 +322,21 @@ The current implementation does not claim:
 - external certification evidence for vendor KNX Secure cryptographic interoperability
 - vendor multicast routing interoperability beyond loopback/runtime integration
 - point-to-point transport connections; a transport control APDU (data length zero) is reported as
-  `error::unsupported_service` rather than decoded
+  `error::unsupported_service`, so the application-layer property and memory services named in the `apci`
+  enumeration cannot be addressed to a single device over a tunnel. Device management reaches a server's
+  own interface objects through DEVICE_CONFIGURATION_REQUEST instead
+- bus monitor and raw tunnels. The connection codec carries all three KNX layers so a peer's request is
+  decoded faithfully, but the cEMI layer decodes only L_Data, so `generic_server` refuses any layer but the
+  link layer rather than accepting a connection whose every frame it would then reject
+- background timers of any kind. `tunnelling_config::heartbeat_interval_ms` states the interval a
+  supervisor should use; nothing in the library schedules it
 - ETS project parsing
 - the complete datapoint catalogue; a user can add a `dpt::traits` specialisation for a main type this
   build does not carry without patching the library
 
-Opaque DIB and cEMI payload bytes are preserved where the protocol layer does not yet have a named
-higher-level schema.
+Opaque cEMI payload bytes are preserved where the protocol layer does not yet have a named higher-level
+schema. Description blocks are now typed; the two whose bodies this build does not model — TUNNELING_INFO
+and EXTENDED_DEVICE_INFO — keep their octets so a gateway forwarding a description does not strip them.
 
 ## Interoperability Matrix
 
@@ -285,7 +364,7 @@ bash script/feature/knx/run-vendor-interoperability.sh --apply
 
 KNX unit and integration-style tests use Catch2 tags `[knx]`, `[knx][integration]`, and service-specific
 tags `[address]`, `[cemi]`, `[dpt]`, `[codec]`, `[frame]`, `[connection]`, `[discovery]`, `[datagram]`,
-`[session]`, `[client]`. Unit-style client tests use an injected fake datagram transport; socket-tagged
+`[session]`, `[client]`, `[dib]`. Unit-style client tests use an injected fake datagram transport; socket-tagged
 integration tests additionally exercise real localhost UDP endpoints and executor-backed deadline expiry.
 
 ```bash
@@ -306,10 +385,15 @@ KMX_BUILD_ROOT=output/debug-knx-minimal bash script/feature/knx/run-unit-tests.s
 KMX_BUILD_ROOT=output/debug-knx-minimal bash script/feature/knx/run-integration-tests.sh
 ```
 
-The current secure/keyring-gated readiness-enabled test binary reports 9,866 passing assertions in 560 tests;
-the latest KNX-focused run reports 1,388 assertions in 274 tests. The release-gate workflow additionally runs
-secure conformance (21 assertions / 1 test), keyring conformance (23 assertions / 1 test), vendor bundle
+The current readiness-enabled test binary reports 10,232 passing assertions in 622 tests; the latest
+KNX-focused run reports 1,754 assertions in 336 tests. The release-gate workflow additionally runs secure
+conformance (23 assertions / 1 test), keyring conformance (23 assertions / 1 test), vendor bundle
 validation (6 imported rows), and the focused server and routing suites before the full regression suite.
+
+The `ci-knx` workflow also runs the KNX unit **and integration** suites under AddressSanitizer and
+UndefinedBehaviorSanitizer. Only the unit half used to be instrumented, which is why a remotely reachable
+out-of-bounds write in the tunnelling decoder and an out-of-bounds read in the client constructor both
+survived a green suite.
 
 To exercise both supported KNX executor configurations in one pass:
 
@@ -317,8 +401,9 @@ To exercise both supported KNX executor configurations in one pass:
 bash script/feature/knx/run-matrix-tests.sh
 ```
 
-The secure/keyring release gate builds both executor pillars with
-`project.enable_knx_secure:true` and `project.enable_knx_keyring:true`, then runs the KNX and full suites:
+The release gate builds both executor pillars, then runs the KNX and full suites. The secure and keyring
+surfaces have no build flag of their own - they are part of the KNX product and are always compiled with
+it:
 
 ```bash
 bash script/feature/knx/run-release-gates.sh

@@ -6,6 +6,7 @@
 #include <kmx/aio/knx/routing.hpp>
 #include <kmx/aio/test/knx/telegram.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -94,11 +95,11 @@ namespace kmx::aio::test::knx::routing_client_test
 
     namespace detail
     {
-        /// @brief Reads one indication and records whether it carried the expected channel and cEMI.
+        /// @brief Reads one indication and records whether it carried the expected cEMI.
         task<void> receive_indication(routing::client& client, bool& received, completion::executor& executor) noexcept(false)
         {
             const auto indication = co_await client.receive_indication();
-            received = indication.has_value() && (indication->channel_id == 7u) &&
+            received = indication.has_value() &&
                        (indication->cemi_bytes == std::vector<std::uint8_t>(sample_cemi.begin(), sample_cemi.end()));
             executor.stop();
         }
@@ -144,6 +145,82 @@ namespace kmx::aio::test::knx::routing_client_test
             executor.stop();
         }
     } // namespace detail
+
+    // Golden wire vectors, the routing counterpart of the compile-time cEMI vectors. Encoder and decoder
+    // agree with each other by construction, so only bytes captured from the specification can catch the
+    // whole codec drifting - which is how a connection header that ROUTING_INDICATION does not have, and
+    // two-octet bodies for services that define four and six, survived a green round-trip suite.
+    //
+    // KNX System Specifications, 03/08/05 "KNXnet/IP Routing".
+    TEST_CASE("knx routing indication is a bare cEMI frame after the header", "[knx][routing][unit]")
+    {
+        // 06 10 | 05 30 | 00 11, then the cEMI frame itself - no channel id, no sequence, no reserved.
+        const std::array<std::uint8_t, frame::communication_header_size + sample_cemi_size> expected {
+            0x06u, 0x10u, 0x05u, 0x30u, 0x00u, 0x11u,
+            0x11u, 0x00u, 0xBCu, 0xE0u, 0x11u, 0x01u, 0x0Au, 0x03u, 0x01u, 0x00u, 0x81u,
+        };
+
+        std::array<std::uint8_t, expected.size()> encoded {};
+        REQUIRE(routing::encode_indication_packet(encoded, routing::indication {sample_cemi}).has_value());
+        CHECK(encoded == expected);
+
+        const auto decoded = routing::decode_indication_packet(expected);
+        REQUIRE(decoded.has_value());
+        CHECK(decoded->cemi_bytes.size() == sample_cemi_size);
+        CHECK(std::equal(decoded->cemi_bytes.begin(), decoded->cemi_bytes.end(), sample_cemi.begin()));
+    }
+
+    TEST_CASE("knx routing lost message carries a four-octet information block", "[knx][routing][unit]")
+    {
+        // 06 10 | 05 31 | 00 0A, then structure length 04, device state 21, lost count 0005.
+        const std::array<std::uint8_t, frame::communication_header_size + routing::lost_message_body_size> expected {
+            0x06u, 0x10u, 0x05u, 0x31u, 0x00u, 0x0Au, 0x04u, 0x21u, 0x00u, 0x05u,
+        };
+
+        std::array<std::uint8_t, expected.size()> encoded {};
+        REQUIRE(routing::encode_lost_message_packet(encoded, routing::lost_message {.device_state = 0x21u, .count = 5u}).has_value());
+        CHECK(encoded == expected);
+
+        const auto decoded = routing::decode_lost_message_packet(expected);
+        REQUIRE(decoded.has_value());
+        CHECK(decoded->device_state == 0x21u);
+        CHECK(decoded->count == 5u);
+    }
+
+    TEST_CASE("knx routing busy carries a six-octet information block", "[knx][routing][unit]")
+    {
+        // 06 10 | 05 32 | 00 0C, then structure length 06, device state 21, wait 0064, control 0000.
+        const std::array<std::uint8_t, frame::communication_header_size + routing::busy_body_size> expected {
+            0x06u, 0x10u, 0x05u, 0x32u, 0x00u, 0x0Cu, 0x06u, 0x21u, 0x00u, 0x64u, 0x00u, 0x00u,
+        };
+
+        std::array<std::uint8_t, expected.size()> encoded {};
+        REQUIRE(routing::encode_busy_packet(encoded, routing::busy {.device_state = 0x21u, .wait_time_ms = 100u}).has_value());
+        CHECK(encoded == expected);
+
+        const auto decoded = routing::decode_busy_packet(expected);
+        REQUIRE(decoded.has_value());
+        CHECK(decoded->device_state == 0x21u);
+        CHECK(decoded->wait_time_ms == 100u);
+        CHECK(decoded->control_field == 0u);
+    }
+
+    TEST_CASE("knx routing control decoders reject a mismatched structure length", "[knx][routing][unit]")
+    {
+        std::array<std::uint8_t, frame::communication_header_size + routing::busy_body_size> busy_packet {};
+        REQUIRE(routing::encode_busy_packet(busy_packet, routing::busy {.wait_time_ms = 100u}).has_value());
+        busy_packet[frame::communication_header_size] = 0x04u; // the lost-message block size, not this one
+        const auto busy = routing::decode_busy_packet(busy_packet);
+        REQUIRE(!busy.has_value());
+        CHECK(busy.error() == make_error_code(error::malformed_frame));
+
+        std::array<std::uint8_t, frame::communication_header_size + routing::lost_message_body_size> lost_packet {};
+        REQUIRE(routing::encode_lost_message_packet(lost_packet, routing::lost_message {.count = 1u}).has_value());
+        lost_packet[frame::communication_header_size] = 0x06u;
+        const auto lost = routing::decode_lost_message_packet(lost_packet);
+        REQUIRE(!lost.has_value());
+        CHECK(lost.error() == make_error_code(error::malformed_frame));
+    }
 
     TEST_CASE("knx routing client joins and leaves multicast runtime", "[knx][routing][unit]")
     {
@@ -233,7 +310,7 @@ namespace kmx::aio::test::knx::routing_client_test
         completion::executor executor;
         auto run = [&]() -> task<void>
         {
-            sent = (co_await client.send_indication(routing::indication {4u, sample_cemi})).has_value();
+            sent = (co_await client.send_indication(routing::indication {sample_cemi})).has_value();
             executor.stop();
         };
 
@@ -243,7 +320,6 @@ namespace kmx::aio::test::knx::routing_client_test
         REQUIRE(sent);
         const auto decoded = routing::decode_indication_packet(transport.last_sent);
         REQUIRE(decoded.has_value());
-        CHECK(decoded->channel_id == 4u);
         CHECK(decoded->cemi_bytes.size() == sample_cemi.size());
     }
 
@@ -253,8 +329,8 @@ namespace kmx::aio::test::knx::routing_client_test
         routing::client client {transport};
         REQUIRE(client.start().has_value());
 
-        std::array<std::uint8_t, frame::communication_header_size + routing::indication_header_size + sample_cemi.size()> packet {};
-        REQUIRE(routing::encode_indication_packet(packet, routing::indication {7u, sample_cemi}).has_value());
+        std::array<std::uint8_t, frame::communication_header_size + sample_cemi.size()> packet {};
+        REQUIRE(routing::encode_indication_packet(packet, routing::indication {sample_cemi}).has_value());
         transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
 
         bool received {};
@@ -271,7 +347,7 @@ namespace kmx::aio::test::knx::routing_client_test
         routing::client client {transport};
         REQUIRE(client.start().has_value());
 
-        std::array<std::uint8_t, 8u> busy_packet {};
+        std::array<std::uint8_t, frame::communication_header_size + routing::busy_body_size> busy_packet {};
         REQUIRE(routing::encode_busy_packet(busy_packet, routing::busy {.wait_time_ms = 125u}).has_value());
         transport.enqueue(std::vector<std::uint8_t>(busy_packet.begin(), busy_packet.end()));
 
@@ -282,7 +358,7 @@ namespace kmx::aio::test::knx::routing_client_test
         CHECK(busy_received);
         CHECK(client.counters().busy_messages == 1u);
 
-        std::array<std::uint8_t, 8u> lost_packet {};
+        std::array<std::uint8_t, frame::communication_header_size + routing::lost_message_body_size> lost_packet {};
         REQUIRE(routing::encode_lost_message_packet(lost_packet, routing::lost_message {.count = 3u}).has_value());
         transport.enqueue(std::vector<std::uint8_t>(lost_packet.begin(), lost_packet.end()));
 
@@ -300,7 +376,7 @@ namespace kmx::aio::test::knx::routing_client_test
         transport.invalid_peer = true;
         routing::client client {transport};
         REQUIRE(client.start().has_value());
-        std::array<std::uint8_t, 8u> packet {};
+        std::array<std::uint8_t, frame::communication_header_size + routing::busy_body_size> packet {};
         REQUIRE(routing::encode_busy_packet(packet, routing::busy {.wait_time_ms = 10u}).has_value());
         transport.enqueue(std::vector<std::uint8_t>(packet.begin(), packet.end()));
 
@@ -326,14 +402,14 @@ namespace kmx::aio::test::knx::routing_client_test
         completion::executor send_executor;
         auto send_run = [&]() -> task<void>
         {
-            REQUIRE((co_await client.send_indication(routing::indication {2u, sample_cemi})).has_value());
+            REQUIRE((co_await client.send_indication(routing::indication {sample_cemi})).has_value());
             send_executor.stop();
         };
         send_executor.spawn(send_run());
         send_executor.run();
 
         transport.enqueue(transport.last_sent);
-        std::array<std::uint8_t, 8u> busy_packet {};
+        std::array<std::uint8_t, frame::communication_header_size + routing::busy_body_size> busy_packet {};
         REQUIRE(routing::encode_busy_packet(busy_packet, routing::busy {.wait_time_ms = 75u}).has_value());
         transport.enqueue(std::vector<std::uint8_t>(busy_packet.begin(), busy_packet.end()));
 
@@ -342,6 +418,37 @@ namespace kmx::aio::test::knx::routing_client_test
         receive_executor.spawn(detail::receive_busy_after_reflection(client, received_busy, receive_executor));
         receive_executor.run();
         CHECK(received_busy);
+        CHECK(client.counters().reflected_messages == 1u);
+    }
+
+    TEST_CASE("knx routing client suppresses reflections from recent sends", "[knx][routing][integration]")
+    {
+        loopback_routing_transport transport;
+        routing::client client {transport};
+        REQUIRE(client.start().has_value());
+
+        std::vector<std::uint8_t> first_packet {};
+        completion::executor send_executor;
+        auto send_run = [&]() -> task<void>
+        {
+            REQUIRE((co_await client.send_indication(routing::indication {sample_cemi})).has_value());
+            first_packet = transport.last_sent;
+            REQUIRE((co_await client.send_busy(routing::busy {.wait_time_ms = 75u})).has_value());
+            send_executor.stop();
+        };
+        send_executor.spawn(send_run());
+        send_executor.run();
+
+        transport.enqueue(std::move(first_packet));
+        std::array<std::uint8_t, frame::communication_header_size + routing::lost_message_body_size> lost_packet {};
+        REQUIRE(routing::encode_lost_message_packet(lost_packet, routing::lost_message {.count = 3u}).has_value());
+        transport.enqueue(std::vector<std::uint8_t>(lost_packet.begin(), lost_packet.end()));
+
+        bool received_lost {};
+        completion::executor receive_executor;
+        receive_executor.spawn(detail::receive_lost_message(client, received_lost, receive_executor));
+        receive_executor.run();
+        CHECK(received_lost);
         CHECK(client.counters().reflected_messages == 1u);
     }
 
@@ -357,7 +464,7 @@ namespace kmx::aio::test::knx::routing_client_test
         completion::executor blocked_executor;
         auto blocked_run = [&]() -> task<void>
         {
-            const auto result = co_await client.send_indication(routing::indication {1u, sample_cemi});
+            const auto result = co_await client.send_indication(routing::indication {sample_cemi});
             blocked = !result.has_value() && result.error() == make_error_code(error::timeout);
             blocked_executor.stop();
         };
@@ -370,7 +477,7 @@ namespace kmx::aio::test::knx::routing_client_test
         completion::executor sent_executor;
         auto sent_run = [&]() -> task<void>
         {
-            sent = (co_await client.send_indication(routing::indication {1u, sample_cemi})).has_value();
+            sent = (co_await client.send_indication(routing::indication {sample_cemi})).has_value();
             sent_executor.stop();
         };
         sent_executor.spawn(sent_run());
@@ -408,7 +515,7 @@ namespace kmx::aio::test::knx::routing_client_test
         completion::executor executor;
         auto run = [&]() -> task<void>
         {
-            sent = (co_await client.send_indication(routing::indication {1u, sample_cemi})).has_value();
+            sent = (co_await client.send_indication(routing::indication {sample_cemi})).has_value();
             executor.stop();
         };
         executor.spawn(run());

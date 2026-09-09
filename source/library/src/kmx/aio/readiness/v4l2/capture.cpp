@@ -82,73 +82,73 @@ namespace kmx::aio::readiness::v4l2
 
     // capture::create()
 
-    capture::create_result capture::create(executor& exec, capture_config cfg) noexcept
+    void capture::unmap_all(std::vector<mmap_buffer>& buffers) noexcept
     {
-        // 1. Open the device node.
+        for (auto& buffer: buffers)
+            if ((buffer.ptr != nullptr) && (buffer.ptr != MAP_FAILED))
+                ::munmap(buffer.ptr, buffer.length);
+    }
+
+    capture::expected_fd capture::open_capture_device(const capture_config& cfg) noexcept
+    {
         const int raw_fd = ::open(cfg.device.c_str(), O_RDWR | O_NONBLOCK | O_CLOEXEC); // NOLINT(cppcoreguidelines-pro-type-vararg)
         if (raw_fd < 0)
             return std::unexpected(kmx::aio::from_errno(errno));
 
         file_descriptor fd {raw_fd};
-
-        // 2. Query capabilities.
         ::v4l2_capability cap {};
         if (::ioctl(raw_fd, VIDIOC_QUERYCAP, &cap) < 0)
             return std::unexpected(kmx::aio::from_errno(errno));
 
+        // A driver that reports per-device capabilities describes this node with them; the older field
+        // describes everything the driver offers, which may be more than this node does.
         const auto caps = ((cap.capabilities & V4L2_CAP_DEVICE_CAPS) != 0u) ? cap.device_caps : cap.capabilities;
-
-        if ((caps & V4L2_CAP_VIDEO_CAPTURE) == 0u)
+        if (((caps & V4L2_CAP_VIDEO_CAPTURE) == 0u) || ((caps & V4L2_CAP_STREAMING) == 0u))
             return std::unexpected(kmx::aio::error_code::unsupported_operation);
 
-        if ((caps & V4L2_CAP_STREAMING) == 0u)
-            return std::unexpected(kmx::aio::error_code::unsupported_operation);
+        return fd;
+    }
 
-        // 3. Negotiate pixel format and frame size.
+    std::expected<void, kmx::aio::error_code> capture::negotiate_format(const int fd, capture_config& cfg) noexcept
+    {
         ::v4l2_format fmt {};
         fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        auto& pix = fmt.fmt.pix;
+        pix.width = cfg.size.width;
+        pix.height = cfg.size.height;
+        pix.pixelformat = cfg.format.fourcc;
+        pix.field = V4L2_FIELD_NONE;
 
-        {
-            auto& pix = fmt.fmt.pix;
-            pix.width = cfg.size.width;
-            pix.height = cfg.size.height;
-            pix.pixelformat = cfg.format.fourcc;
-            pix.field = V4L2_FIELD_NONE;
-        }
-
-        if (::ioctl(raw_fd, VIDIOC_S_FMT, &fmt) < 0)
+        if (::ioctl(fd, VIDIOC_S_FMT, &fmt) < 0)
             return std::unexpected(kmx::aio::from_errno(errno));
 
-        // Reflect what the driver actually negotiated.
+        // The driver is free to pick something near what was asked for, so the configuration is rewritten
+        // to what it actually granted rather than to what was requested.
         cfg.size.width = fmt.fmt.pix.width;
         cfg.size.height = fmt.fmt.pix.height;
         cfg.format.fourcc = fmt.fmt.pix.pixelformat;
 
-        // 4. Negotiate frame rate (best-effort; not all drivers support VIDIOC_S_PARM).
-        {
-            ::v4l2_streamparm parm {};
-            parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-            parm.parm.capture.timeperframe.numerator = cfg.fps.numerator;
-            parm.parm.capture.timeperframe.denominator = cfg.fps.denominator;
-            // Ignore failure — frame rate negotiation is advisory.
-            (void) ::ioctl(raw_fd, VIDIOC_S_PARM, &parm);
-        }
+        ::v4l2_streamparm parm {};
+        parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        parm.parm.capture.timeperframe.numerator = cfg.fps.numerator;
+        parm.parm.capture.timeperframe.denominator = cfg.fps.denominator;
+        // Advisory: not every driver implements VIDIOC_S_PARM, and none has to.
+        static_cast<void>(::ioctl(fd, VIDIOC_S_PARM, &parm));
+        return {};
+    }
 
-        // 5. Request MMAP buffers from the driver.
+    capture::expected_mmap_buffers capture::map_buffers(const int fd, capture_config& cfg) noexcept
+    {
         ::v4l2_requestbuffers req {};
         req.count = cfg.buffer_count;
         req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         req.memory = V4L2_MEMORY_MMAP;
-
-        if (::ioctl(raw_fd, VIDIOC_REQBUFS, &req) < 0)
+        if (::ioctl(fd, VIDIOC_REQBUFS, &req) < 0)
             return std::unexpected(kmx::aio::from_errno(errno));
-
-        if (req.count == 0)
+        if (req.count == 0u)
             return std::unexpected(kmx::aio::error_code::internal_error);
 
-        cfg.buffer_count = req.count; // Driver may grant fewer buffers than requested.
-
-        // 6. Map each buffer into userspace.
+        cfg.buffer_count = req.count; // the driver may grant fewer buffers than were asked for
         std::vector<mmap_buffer> buffers;
         buffers.reserve(req.count);
 
@@ -159,68 +159,67 @@ namespace kmx::aio::readiness::v4l2
             buf.memory = V4L2_MEMORY_MMAP;
             buf.index = i;
 
-            if (::ioctl(raw_fd, VIDIOC_QUERYBUF, &buf) < 0)
-            {
-                // Unmap already mapped buffers before returning.
-                for (auto& b: buffers)
-                    if (b.ptr && (b.ptr != MAP_FAILED))
-                        ::munmap(b.ptr, b.length);
-
-                return std::unexpected(kmx::aio::from_errno(errno));
-            }
-
-            void* const ptr = ::mmap(nullptr, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, raw_fd, static_cast<off_t>(buf.m.offset));
-
+            void* ptr = MAP_FAILED; // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
+            if (::ioctl(fd, VIDIOC_QUERYBUF, &buf) >= 0)
+                ptr = ::mmap(nullptr, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, static_cast<off_t>(buf.m.offset));
             if (ptr == MAP_FAILED) // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
             {
-                for (auto& b: buffers)
-                    if (b.ptr && (b.ptr != MAP_FAILED))
-                        ::munmap(b.ptr, b.length);
-
+                // Whatever was mapped before this failure is released here: the caller is handed either a
+                // complete set of buffers or none at all.
+                unmap_all(buffers);
                 return std::unexpected(kmx::aio::from_errno(errno));
             }
 
             buffers.push_back({ptr, buf.length});
         }
+        return buffers;
+    }
 
-        // 7. Enqueue all buffers to prime the driver queue.
-        for (std::uint32_t i = 0u; i < req.count; ++i)
+    std::expected<void, kmx::aio::error_code> capture::enqueue_buffers(const int fd, const std::uint32_t count) noexcept
+    {
+        // Primes the driver's queue: a capture that starts streaming with nothing queued delivers nothing.
+        for (std::uint32_t i = 0u; i < count; ++i)
         {
             ::v4l2_buffer buf {};
             buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
             buf.memory = V4L2_MEMORY_MMAP;
             buf.index = i;
-
-            if (::ioctl(raw_fd, VIDIOC_QBUF, &buf) < 0)
-            {
-                for (auto& b: buffers)
-                    ::munmap(b.ptr, b.length);
-
+            if (::ioctl(fd, VIDIOC_QBUF, &buf) < 0)
                 return std::unexpected(kmx::aio::from_errno(errno));
-            }
         }
+        return {};
+    }
 
-        // 8. Register fd with epoll.
+    capture::create_result capture::create(executor& exec, capture_config cfg) noexcept
+    {
+        auto fd = open_capture_device(cfg);
+        if (!fd.has_value())
+            return std::unexpected(fd.error());
+
+        const int raw_fd = fd->get();
+        if (const auto negotiated = negotiate_format(raw_fd, cfg); !negotiated.has_value())
+            return std::unexpected(negotiated.error());
+
+        auto buffers = map_buffers(raw_fd, cfg);
+        if (!buffers.has_value())
+            return std::unexpected(buffers.error());
+
+        const auto fail = [&buffers](const kmx::aio::error_code ec) noexcept
+        { unmap_all(*buffers); return std::unexpected(ec); };
+
+        if (const auto queued = enqueue_buffers(raw_fd, cfg.buffer_count); !queued.has_value())
+            return fail(queued.error());
         if (const auto reg = exec.register_fd(raw_fd); !reg)
-        {
-            for (auto& b: buffers)
-                ::munmap(b.ptr, b.length);
+            return fail(kmx::aio::from_errno(reg.error().value()));
 
-            return std::unexpected(kmx::aio::from_errno(reg.error().value()));
-        }
-
-        // 9. Start streaming.
         const int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         if (::ioctl(raw_fd, VIDIOC_STREAMON, &type) < 0)
         {
             exec.unregister_fd(raw_fd);
-            for (auto& b: buffers)
-                ::munmap(b.ptr, b.length);
-
-            return std::unexpected(kmx::aio::from_errno(errno));
+            return fail(kmx::aio::from_errno(errno));
         }
 
-        capture result {exec, std::move(fd), std::move(cfg), std::move(buffers)};
+        capture result {exec, std::move(*fd), std::move(cfg), std::move(*buffers)};
         result.streaming_ = true;
         return result;
     }

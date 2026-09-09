@@ -41,6 +41,33 @@ namespace kmx::aio::avb
     /// @return The hardware timestamp in nanoseconds, or 0 when the NIC supplied none.
     [[nodiscard]] avb_timestamp_t extract_timestamp_from_ancillary(::msghdr& msg) noexcept;
 
+    /// @brief The control buffer an SO_TXTIME message needs.
+    using tx_time_control_t = std::array<std::byte, CMSG_SPACE(sizeof(std::uint64_t))>;
+
+    /// @brief Attaches the SO_TXTIME control message that paces a frame's departure.
+    /// @param msg The message to attach it to.
+    /// @param control Storage for the control message; must outlive the send that reads it.
+    /// @param tx_time When the frame is to leave the interface.
+    /// @details SO_TXTIME hands the frame to the qdisc with a launch time, which is what lets a
+    ///          credit-based shaper pace it instead of sending it as soon as the queue drains.
+    void attach_tx_time(::msghdr& msg, tx_time_control_t& control, avb_timestamp_t tx_time) noexcept;
+
+    /// @brief Builds the message one AVB frame is sent as.
+    /// @param msg The message header to fill in.
+    /// @param dest Storage for the link-layer destination.
+    /// @param iov Storage for the single payload segment.
+    /// @param control Storage for the SO_TXTIME control message.
+    /// @param iface_index The interface to send on.
+    /// @param ethertype The EtherType to send under.
+    /// @param dest_mac The destination MAC address.
+    /// @param payload The frame's payload.
+    /// @param tx_time When the frame is to leave the interface, when its departure is scheduled.
+    /// @note Every one of @p dest, @p iov and @p control is pointed at by @p msg, so all three have to
+    ///       outlive the `sendmsg()` call that reads them.
+    void prepare_frame_message(::msghdr& msg, ::sockaddr_ll& dest, ::iovec& iov, tx_time_control_t& control, int iface_index,
+                               std::uint16_t ethertype, const mac_address_t& dest_mac, cspan_byte_t payload,
+                               const std::optional<avb_timestamp_t>& tx_time) noexcept;
+
     /// @brief Executor-agnostic part of the AVB raw socket: descriptor, interface state and syscalls.
     /// @details Holds everything that does not depend on the executor type, so the code is emitted once
     ///          instead of once per pillar. `base_eth_socket` adds the executor-specific registration.

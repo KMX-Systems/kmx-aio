@@ -106,6 +106,22 @@ namespace kmx::aio::modbus
         impl_->handlers_[static_cast<std::uint8_t>(fc)] = std::move(handler);
     }
 
+    /// @brief Reads the address a server should bind to, defaulting to every interface.
+    /// @param text The configured address; empty means every interface.
+    /// @param out Receives the address.
+    /// @return `true` when @p text names an address this build can bind to.
+    [[nodiscard]] static bool resolve_bind_address(const std::string& text, ipv4::storage_t& out) noexcept
+    {
+        if (text.empty())
+        {
+            out = ipv4::any;
+            return true;
+        }
+
+        out = ipv4::storage_t {};
+        return ipv4::parse_address(text, out);
+    }
+
     async_result tls_server::serve(readiness::executor& exec, server_config config, tls_config tls) noexcept(false)
     {
         const auto ctx_result = impl::create_ssl_ctx(tls);
@@ -114,15 +130,11 @@ namespace kmx::aio::modbus
 
         ::SSL_CTX* ssl_ctx = *ctx_result;
 
-        ipv4::storage_t bind_ip = ipv4::any;
-        if (!config.bind_address.empty())
+        ipv4::storage_t bind_ip {};
+        if (!resolve_bind_address(config.bind_address, bind_ip))
         {
-            bind_ip = ipv4::storage_t {};
-            if (!ipv4::parse_address(config.bind_address, bind_ip))
-            {
-                ::SSL_CTX_free(ssl_ctx);
-                co_return std::unexpected(make_error_code(error::invalid_configuration));
-            }
+            ::SSL_CTX_free(ssl_ctx);
+            co_return std::unexpected(make_error_code(error::invalid_configuration));
         }
 
         readiness::tcp::listener listener {exec, ipv4::make_address(bind_ip), config.port};
@@ -144,8 +156,10 @@ namespace kmx::aio::modbus
             auto fd_result = co_await listener.accept();
             if (!fd_result)
             {
+                // A cancelled accept is how stop() wakes this loop, not a failure to serve.
                 if (stop_token.stop_requested())
                     break;
+
                 ::SSL_CTX_free(ssl_ctx);
                 co_return std::unexpected(fd_result.error());
             }

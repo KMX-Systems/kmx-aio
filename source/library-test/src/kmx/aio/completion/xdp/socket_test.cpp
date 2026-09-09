@@ -23,9 +23,72 @@ namespace kmx::aio::test::completion::xdp::socket_test
         std::error_code recv_empty_error {};
     };
 
+    /// @brief The two frames the ring is filled with, and the third that must not fit.
+    inline constexpr std::array<std::byte, 3u> payload_a {std::byte {0x11u}, std::byte {0x22u}, std::byte {0x33u}};
+    inline constexpr std::array<std::byte, 2u> payload_b {std::byte {0x44u}, std::byte {0x55u}};
+    inline constexpr std::array<std::byte, 1u> payload_c {std::byte {0x66u}};
+
+    /// @brief Receives one frame and checks it is the one that was sent, then returns it to the ring.
+    /// @param sock The socket to receive on.
+    /// @param expected The payload the frame should carry.
+    /// @return Nothing, or that the frame did not arrive or did not match.
+    auto expect_frame(socket& sock, const cspan_byte_t expected) -> task<expected_void_t>
+    {
+        const auto received = co_await sock.recv();
+        if (!received)
+            co_return std::unexpected(received.error());
+        if (received->length != expected.size())
+            co_return std::unexpected(std::make_error_code(std::errc::io_error));
+        if (std::memcmp(received->data.data(), expected.data(), expected.size()) != 0)
+            co_return std::unexpected(std::make_error_code(std::errc::bad_message));
+
+        sock.release_frame(received->addr);
+        co_return expected_void_t {};
+    }
+
+    /// @brief Fills the two-frame ring, checks a third send is refused, then drains it.
+    /// @param sock The socket to exercise.
+    /// @param state Receives the errors the test asserts on.
+    /// @return Nothing, or the reason the exchange did not complete.
+    auto exchange_frames(socket& sock, xdp_roundtrip_state& state) -> task<expected_void_t>
+    {
+        const auto send_a = co_await sock.send(cspan_byte_t(payload_a));
+        if (!send_a)
+        {
+            state.send_overflow_error = send_a.error();
+            co_return std::unexpected(send_a.error());
+        }
+
+        const auto send_b = co_await sock.send(cspan_byte_t(payload_b));
+        if (!send_b)
+        {
+            state.send_overflow_error = send_b.error();
+            co_return std::unexpected(send_b.error());
+        }
+
+        // The ring holds two frames, so the third send has nowhere to go. That refusal is the point.
+        const auto send_c = co_await sock.send(cspan_byte_t(payload_c));
+        if (send_c)
+            co_return std::unexpected(std::make_error_code(std::errc::io_error));
+        state.send_overflow_error = send_c.error();
+
+        if (const auto first = co_await expect_frame(sock, cspan_byte_t(payload_a)); !first)
+            co_return std::unexpected(first.error());
+        if (const auto second = co_await expect_frame(sock, cspan_byte_t(payload_b)); !second)
+            co_return std::unexpected(second.error());
+
+        // Both frames are back in the ring and nothing else was sent, so a third receive finds nothing.
+        const auto empty = co_await sock.recv();
+        if (empty)
+            co_return std::unexpected(std::make_error_code(std::errc::io_error));
+
+        state.recv_empty_error = empty.error();
+        co_return expected_void_t {};
+    }
+
     auto run_roundtrip(executor& exec, std::shared_ptr<xdp_roundtrip_state> state) -> task<void>
     {
-        socket_config cfg {
+        const socket_config cfg {
             .interface_name = "lo",
             .queue_id = 0u,
             .frame_size = 4096u,
@@ -45,95 +108,7 @@ namespace kmx::aio::test::completion::xdp::socket_test
         }
 
         auto sock = std::move(*sock_result);
-
-        static constexpr std::array<std::byte, 3u> payload_a {
-            std::byte {0x11u},
-            std::byte {0x22u},
-            std::byte {0x33u},
-        };
-
-        static constexpr std::array<std::byte, 2u> payload_b {
-            std::byte {0x44u},
-            std::byte {0x55u},
-        };
-
-        const auto send_a = co_await sock.send(cspan_byte_t(payload_a));
-        if (!send_a)
-        {
-            state->send_overflow_error = send_a.error();
-            exec.stop();
-            co_return;
-        }
-
-        const auto send_b = co_await sock.send(cspan_byte_t(payload_b));
-        if (!send_b)
-        {
-            state->send_overflow_error = send_b.error();
-            exec.stop();
-            co_return;
-        }
-
-        static constexpr std::array<std::byte, 1u> payload_c {
-            std::byte {0x66u},
-        };
-
-        const auto send_c = co_await sock.send(cspan_byte_t(payload_c));
-        if (send_c)
-        {
-            exec.stop();
-            co_return;
-        }
-
-        state->send_overflow_error = send_c.error();
-        const auto recv_a = co_await sock.recv();
-        if (!recv_a)
-        {
-            exec.stop();
-            co_return;
-        }
-
-        if (recv_a->length != payload_a.size())
-        {
-            exec.stop();
-            co_return;
-        }
-
-        if (std::memcmp(recv_a->data.data(), payload_a.data(), payload_a.size()) != 0)
-        {
-            exec.stop();
-            co_return;
-        }
-
-        sock.release_frame(recv_a->addr);
-        const auto recv_b = co_await sock.recv();
-        if (!recv_b)
-        {
-            exec.stop();
-            co_return;
-        }
-
-        if (recv_b->length != payload_b.size())
-        {
-            exec.stop();
-            co_return;
-        }
-
-        if (std::memcmp(recv_b->data.data(), payload_b.data(), payload_b.size()) != 0)
-        {
-            exec.stop();
-            co_return;
-        }
-
-        sock.release_frame(recv_b->addr);
-        const auto recv_empty = co_await sock.recv();
-        if (recv_empty)
-        {
-            exec.stop();
-            co_return;
-        }
-
-        state->recv_empty_error = recv_empty.error();
-        state->ok = true;
+        state->ok = (co_await exchange_frames(sock, *state)).has_value();
         exec.stop();
     }
 

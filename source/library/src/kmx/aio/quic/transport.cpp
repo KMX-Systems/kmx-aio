@@ -187,60 +187,41 @@ namespace kmx::aio::quic
         return open_stream();
     }
 
-    task<void> basic_endpoint::run() noexcept(false)
+    void basic_endpoint::drain_socket(std::vector<char>& packet, const ::sockaddr_storage& local) noexcept
     {
-        std::vector<char> packet(2048u);
-        running_ = true;
-
-        ::sockaddr_storage local {};
-        ::socklen_t local_len = sizeof(local);
-        (void) ::getsockname(socket_.get(), reinterpret_cast<::sockaddr*>(&local), &local_len);
-
-        while (running_)
+        for (;;)
         {
-            arm_readable_poll();
+            ::sockaddr_storage from {};
+            ::iovec iov {packet.data(), packet.size()};
+            ::msghdr msg {};
+            msg.msg_name = &from;
+            msg.msg_namelen = sizeof(from);
+            msg.msg_iov = &iov;
+            msg.msg_iovlen = 1u;
 
-            for (;;)
-            {
-                ::sockaddr_storage from {};
-                ::iovec iov {packet.data(), packet.size()};
-                ::msghdr msg {};
-                msg.msg_name = &from;
-                msg.msg_namelen = sizeof(from);
-                msg.msg_iov = &iov;
-                msg.msg_iovlen = 1u;
-
-                const auto received = ::recvmsg(socket_.get(), &msg, MSG_DONTWAIT);
-                if (received <= 0)
-                    break;
-
-                ++packets_in_;
-
-                (void) ::lsquic_engine_packet_in(engine_, reinterpret_cast<const unsigned char*>(packet.data()),
-                                                 static_cast<std::size_t>(received), reinterpret_cast<const ::sockaddr*>(&local),
-                                                 reinterpret_cast<const ::sockaddr*>(&from), this, 0);
-            }
-
-            ::lsquic_engine_process_conns(engine_);
-            drain_ready();
-
-            if (!running_)
+            const auto received = ::recvmsg(socket_.get(), &msg, MSG_DONTWAIT);
+            if (received <= 0)
                 break;
 
-            ++ticks_;
-
-            int diff {};
-            const auto has_tick = ::lsquic_engine_earliest_adv_tick(engine_, &diff);
-            std::uint64_t wait_ns = max_tick_ns;
-            if (has_tick != 0)
-                wait_ns = (diff <= 0) ? min_tick_ns : std::min(static_cast<std::uint64_t>(diff) * 1000u, max_tick_ns);
-
-            // Race the socket against the timer. Both signal the same wakeup and the first one wins; the
-            // loser signalling later is harmless, costing at most one extra pass over an empty socket.
-            io_spawn(tick_timer(std::max(wait_ns, min_tick_ns)));
-            co_await wakeup {*this};
+            ++packets_in_;
+            (void) ::lsquic_engine_packet_in(engine_, reinterpret_cast<const unsigned char*>(packet.data()),
+                                             static_cast<std::size_t>(received), reinterpret_cast<const ::sockaddr*>(&local),
+                                             reinterpret_cast<const ::sockaddr*>(&from), this, 0);
         }
+    }
 
+    std::uint64_t basic_endpoint::next_tick_ns() const noexcept
+    {
+        int diff {};
+        if (::lsquic_engine_earliest_adv_tick(engine_, &diff) == 0)
+            return max_tick_ns;
+
+        // A tick already due asks for the shortest wait rather than none, so the loop cannot spin.
+        return (diff <= 0) ? min_tick_ns : std::min(static_cast<std::uint64_t>(diff) * 1000u, max_tick_ns);
+    }
+
+    void basic_endpoint::release_waiters() noexcept
+    {
         // Any outstanding readability poll has to be able to finish, or the executor never sees its work
         // reach zero and the process hangs on shutdown. Shutting the socket down completes it at once.
         (void) ::shutdown(socket_.get(), SHUT_RDWR);
@@ -264,7 +245,37 @@ namespace kmx::aio::quic
             park(ready_, entry.second->reader);
             park(ready_, entry.second->writer);
         }
+    }
 
+    task<void> basic_endpoint::run() noexcept(false)
+    {
+        std::vector<char> packet(2048u);
+        running_ = true;
+
+        ::sockaddr_storage local {};
+        ::socklen_t local_len = sizeof(local);
+        (void) ::getsockname(socket_.get(), reinterpret_cast<::sockaddr*>(&local), &local_len);
+
+        while (running_)
+        {
+            arm_readable_poll();
+
+            drain_socket(packet, local);
+            ::lsquic_engine_process_conns(engine_);
+            drain_ready();
+
+            if (!running_)
+                break;
+
+            ++ticks_;
+
+            // Race the socket against the timer. Both signal the same wakeup and the first one wins; the
+            // loser signalling later is harmless, costing at most one extra pass over an empty socket.
+            io_spawn(tick_timer(std::max(next_tick_ns(), min_tick_ns)));
+            co_await wakeup {*this};
+        }
+
+        release_waiters();
         drain_ready();
         co_return;
     }
@@ -317,6 +328,59 @@ namespace kmx::aio::quic
         return ::ntohs(reinterpret_cast<const ::sockaddr_in*>(&addr)->sin_port);
     }
 
+    void basic_endpoint::fill_engine_api(::lsquic_engine_api& api, ::lsquic_engine_settings& settings, const bool server) noexcept
+    {
+        stream_if_.on_new_conn = &basic_endpoint::cb_new_conn;
+        stream_if_.on_conn_closed = &basic_endpoint::cb_conn_closed;
+        stream_if_.on_new_stream = &basic_endpoint::cb_new_stream;
+        stream_if_.on_read = &basic_endpoint::cb_read;
+        stream_if_.on_write = &basic_endpoint::cb_write;
+        stream_if_.on_close = &basic_endpoint::cb_close;
+        stream_if_.on_hsk_done = &basic_endpoint::cb_hsk_done;
+
+        api.ea_settings = &settings;
+        api.ea_stream_if = &stream_if_;
+        api.ea_stream_if_ctx = this;
+        api.ea_packets_out = &basic_endpoint::cb_packets_out;
+        api.ea_packets_out_ctx = this;
+        api.ea_get_ssl_ctx = &basic_endpoint::cb_get_ssl_ctx;
+        // QUIC requires ALPN, and both peers must offer the same name or the handshake fails with no
+        // packet ever reaching the application. lsquic supplies it from here when the engine is not in
+        // HTTP/3 mode, which this is not.
+        api.ea_alpn = alpn_;
+        if (!server)
+            return;
+
+        api.ea_lookup_cert = &basic_endpoint::cb_lookup_cert;
+        // ea_lookup_cert is invoked with ea_cert_lu_ctx, not with ea_stream_if_ctx. Leaving it unset
+        // hands the callback a null pointer during the handshake.
+        api.ea_cert_lu_ctx = this;
+    }
+
+    expected_void_t basic_endpoint::open_socket(const ip_address_t ip, const port_t port) noexcept
+    {
+        auto sock = file_descriptor::create_socket(ip_family(ip), SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+        if (!sock)
+            return std::unexpected(sock.error());
+
+        socket_ = std::move(*sock);
+        return socket_.bind(ip, port);
+    }
+
+    expected_void_t basic_endpoint::init_settings(::lsquic_engine_settings& settings, const unsigned flags) noexcept
+    {
+        ::lsquic_engine_init_settings(&settings, flags);
+        settings.es_max_streams_in = 64u;
+        settings.es_idle_timeout = 30u;
+
+        // Checked, not assumed: lsquic refuses to start when the versions it was built with disagree
+        // with the defaults it just wrote, and says so only through this call.
+        std::array<char, 256u> err {};
+        if (::lsquic_engine_check_settings(&settings, flags, err.data(), err.size()) != 0)
+            return std::unexpected(std::make_error_code(std::errc::invalid_argument));
+        return {};
+    }
+
     expected_void_t basic_endpoint::setup(const ip_address_t ip, const port_t port, void* const ssl_ctx, const bool server) noexcept
     {
         is_server_ = server;
@@ -331,50 +395,15 @@ namespace kmx::aio::quic
         if (!global_ready)
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
 
-        auto sock = file_descriptor::create_socket(ip_family(ip), SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
-        if (!sock)
-            return std::unexpected(sock.error());
-
-        socket_ = std::move(*sock);
-        const auto bound = socket_.bind(ip, port);
-        if (!bound)
+        if (const auto bound = open_socket(ip, port); !bound)
             return std::unexpected(bound.error());
 
         ::lsquic_engine_settings settings {};
-        ::lsquic_engine_init_settings(&settings, flags);
-        settings.es_max_streams_in = 64u;
-        settings.es_idle_timeout = 30u;
-        // Without this lsquic refuses to start when the versions it was built with disagree with defaults.
-        std::array<char, 256u> err {};
-        if (::lsquic_engine_check_settings(&settings, flags, err.data(), err.size()) != 0)
-            return std::unexpected(std::make_error_code(std::errc::invalid_argument));
-
-        stream_if_.on_new_conn = &basic_endpoint::cb_new_conn;
-        stream_if_.on_conn_closed = &basic_endpoint::cb_conn_closed;
-        stream_if_.on_new_stream = &basic_endpoint::cb_new_stream;
-        stream_if_.on_read = &basic_endpoint::cb_read;
-        stream_if_.on_write = &basic_endpoint::cb_write;
-        stream_if_.on_close = &basic_endpoint::cb_close;
-        stream_if_.on_hsk_done = &basic_endpoint::cb_hsk_done;
+        if (const auto checked = init_settings(settings, flags); !checked)
+            return std::unexpected(checked.error());
 
         ::lsquic_engine_api api {};
-        api.ea_settings = &settings;
-        api.ea_stream_if = &stream_if_;
-        api.ea_stream_if_ctx = this;
-        api.ea_packets_out = &basic_endpoint::cb_packets_out;
-        api.ea_packets_out_ctx = this;
-        api.ea_get_ssl_ctx = &basic_endpoint::cb_get_ssl_ctx;
-        // QUIC requires ALPN, and both peers must offer the same name or the handshake fails with no
-        // packet ever reaching the application. lsquic supplies it from here when the engine is not in
-        // HTTP/3 mode, which this is not.
-        api.ea_alpn = alpn_;
-        if (server)
-        {
-            api.ea_lookup_cert = &basic_endpoint::cb_lookup_cert;
-            // ea_lookup_cert is invoked with ea_cert_lu_ctx, not with ea_stream_if_ctx. Leaving it unset
-            // hands the callback a null pointer during the handshake.
-            api.ea_cert_lu_ctx = this;
-        }
+        fill_engine_api(api, settings, server);
 
         engine_ = ::lsquic_engine_new(flags, &api);
         if (engine_ == nullptr)

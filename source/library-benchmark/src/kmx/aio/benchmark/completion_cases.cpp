@@ -93,6 +93,36 @@ namespace kmx::aio::benchmark
         return out;
     }
 
+    namespace completion_detail
+    {
+        /// @brief Creates @p count connected socket pairs.
+        /// @param count How many pairs to create.
+        /// @return Both ends of every pair, or an empty list when any one of them could not be made.
+        /// @note All or nothing: a partial set is closed rather than handed back, so a caller never has
+        ///       to decide what to do with fewer connections than it asked for.
+        [[nodiscard]] inline std::vector<int> make_socket_pairs(const std::size_t count)
+        {
+            std::vector<int> fds {};
+            fds.reserve(count * 2u);
+            for (std::size_t i {}; i != count; ++i)
+            {
+                int pair[2] {-1, -1};
+                if (::socketpair(AF_UNIX, SOCK_STREAM, 0, pair) != 0)
+                    break;
+
+                fds.push_back(pair[0]);
+                fds.push_back(pair[1]);
+            }
+
+            if (fds.size() == (count * 2u))
+                return fds;
+
+            for (const int fd: fds)
+                ::close(fd);
+            return {};
+        }
+    }
+
     static result measure_completion_concurrent(std::string name, const std::size_t connections, const double scale)
     {
         // Many coroutines in flight at once, which is the shape a server actually has and the only one
@@ -103,25 +133,9 @@ namespace kmx::aio::benchmark
         constexpr std::size_t total_rounds = 12'800u;
         const auto rounds = scaled(total_rounds / connections, scale);
 
-        std::vector<int> fds {};
-        fds.reserve(connections * 2u);
-        for (std::size_t i {}; i != connections; ++i)
-        {
-            int pair[2] {-1, -1};
-            if (::socketpair(AF_UNIX, SOCK_STREAM, 0, pair) != 0)
-                break;
-
-            fds.push_back(pair[0]);
-            fds.push_back(pair[1]);
-        }
-
-        if (fds.size() != (connections * 2u))
-        {
-            for (const int fd: fds)
-                ::close(fd);
-
+        auto fds = completion_detail::make_socket_pairs(connections);
+        if (fds.empty())
             return skipped(std::move(name), "socketpair failed");
-        }
 
         std::atomic_size_t completed {};
         completion_detail::run_window window {};

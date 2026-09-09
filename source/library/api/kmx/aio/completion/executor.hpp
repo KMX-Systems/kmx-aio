@@ -272,6 +272,16 @@ namespace kmx::aio::completion
         /// @brief The main event loop running on the I/O thread.
         void event_loop(std::stop_token st) noexcept;
 
+        /// @brief Asks the kernel to cancel every request this executor still has outstanding.
+        void request_cancel_all() noexcept;
+        /// @brief Runs one iteration's shutdown bookkeeping.
+        /// @param cancel_issued Whether the cancel-all has already been sent; set here when it is.
+        /// @param deadline When the drain gives up; set here alongside @p cancel_issued.
+        /// @return `true` when the drain has run out of time and the loop must stop regardless.
+        [[nodiscard]] bool drain_expired(bool& cancel_issued, std::chrono::steady_clock::time_point& deadline) noexcept;
+        /// @brief Submits what the resumed coroutines prepared and reaps whatever the kernel returns.
+        void submit_and_reap() noexcept;
+
         /// @brief Pins the calling thread to the configured CPU core.
         void pin_to_core() const noexcept;
 

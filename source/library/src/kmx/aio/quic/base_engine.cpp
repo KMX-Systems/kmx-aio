@@ -51,7 +51,10 @@ namespace kmx::aio::quic::detail
         return static_cast<long>(parsed);
     }
 
-    [[nodiscard]] auto conn_status_to_string(const ::LSQUIC_CONN_STATUS status) noexcept -> std::string_view
+    /// @brief Names the statuses a connection holds while it is being established.
+    /// @param status The status to name.
+    /// @return Its name, or nothing when it belongs to another group.
+    [[nodiscard]] static constexpr std::string_view handshake_status_name(const ::LSQUIC_CONN_STATUS status) noexcept
     {
         switch (status)
         {
@@ -61,8 +64,23 @@ namespace kmx::aio::quic::detail
                 return "LSCONN_ST_CONNECTED";
             case LSCONN_ST_HSK_FAILURE:
                 return "LSCONN_ST_HSK_FAILURE";
+            case LSCONN_ST_VERNEG_FAILURE:
+                return "LSCONN_ST_VERNEG_FAILURE";
+            default:
+                return {};
+        }
+    }
+
+    /// @copydoc handshake_status_name
+    /// @brief Names the statuses a connection holds while it is going away or already gone.
+    [[nodiscard]] static constexpr std::string_view closing_status_name(const ::LSQUIC_CONN_STATUS status) noexcept
+    {
+        switch (status)
+        {
             case LSCONN_ST_GOING_AWAY:
                 return "LSCONN_ST_GOING_AWAY";
+            case LSCONN_ST_PEER_GOING_AWAY:
+                return "LSCONN_ST_PEER_GOING_AWAY";
             case LSCONN_ST_TIMED_OUT:
                 return "LSCONN_ST_TIMED_OUT";
             case LSCONN_ST_RESET:
@@ -73,13 +91,18 @@ namespace kmx::aio::quic::detail
                 return "LSCONN_ST_ERROR";
             case LSCONN_ST_CLOSED:
                 return "LSCONN_ST_CLOSED";
-            case LSCONN_ST_PEER_GOING_AWAY:
-                return "LSCONN_ST_PEER_GOING_AWAY";
-            case LSCONN_ST_VERNEG_FAILURE:
-                return "LSCONN_ST_VERNEG_FAILURE";
             default:
-                return "LSCONN_ST_UNKNOWN";
+                return {};
         }
+    }
+
+    [[nodiscard]] auto conn_status_to_string(const ::LSQUIC_CONN_STATUS status) noexcept -> std::string_view
+    {
+        if (const auto name = handshake_status_name(status); !name.empty())
+            return name;
+        if (const auto name = closing_status_name(status); !name.empty())
+            return name;
+        return "LSCONN_ST_UNKNOWN";
     }
 
     void configure_stream_if(::lsquic_stream_if& stream_if, ::lsquic_conn_ctx_t* (*on_new_conn)(void*, ::lsquic_conn_t*),
@@ -316,61 +339,74 @@ namespace kmx::aio::quic
         handle_read_result(nr);
     }
 
+    /// @brief Writes one payload to a stream, stopping at the first refusal.
+    /// @param stream The stream to write to.
+    /// @param payload The octets to write.
+    /// @note A short write is logged and abandoned rather than retried: the stream is shut down straight
+    ///       after, so there is nowhere for the remainder to go.
+    static void write_payload(::lsquic_stream_t* const stream, const std::string& payload) noexcept
+    {
+        std::size_t written {};
+        while (written < payload.size())
+        {
+            const ssize_t chunk = ::lsquic_stream_write(stream, payload.data() + written, payload.size() - written);
+            if (chunk <= 0)
+            {
+                logger::log(logger::level::warn, std::source_location::current(),
+                            "QUIC client write failed on stream {}, written={}/{}",
+                            static_cast<unsigned long long>(::lsquic_stream_id(stream)), written, payload.size());
+                return;
+            }
+
+            written += static_cast<std::size_t>(chunk);
+        }
+    }
+
+    bool primary_base_impl::write_post_handshake_stream(::lsquic_stream_t* const stream) noexcept
+    {
+        const auto bootstrap_it = post_handshake_streams_.find(stream);
+        if (bootstrap_it == post_handshake_streams_.end())
+            return false;
+
+        if (post_handshake_stream_writer_)
+        {
+            try
+            {
+                post_handshake_stream_writer_(stream);
+            }
+            catch (const std::exception& ex)
+            {
+                logger::log(logger::level::error, std::source_location::current(), "Post-handshake stream writer failed: {}",
+                            ex.what());
+            }
+        }
+
+        post_handshake_streams_.erase(bootstrap_it);
+        ::lsquic_stream_wantwrite(stream, 0);
+        ::lsquic_stream_wantread(stream, 1);
+        return true;
+    }
+
     void primary_base_impl::on_write(::lsquic_stream_t* stream, ::lsquic_stream_ctx_t* /*ctx*/)
     {
         auto* const self = reinterpret_cast<primary_base_impl*>(::lsquic_conn_get_ctx(::lsquic_stream_conn(stream)));
-        if (self->is_client_)
-        {
-            const auto bootstrap_it = self->post_handshake_streams_.find(stream);
-            if (bootstrap_it != self->post_handshake_streams_.end())
-            {
-                if (self->post_handshake_stream_writer_)
-                {
-                    try
-                    {
-                        self->post_handshake_stream_writer_(stream);
-                    }
-                    catch (const std::exception& ex)
-                    {
-                        logger::log(logger::level::error, std::source_location::current(), "Post-handshake stream writer failed: {}",
-                                    ex.what());
-                    }
-                }
+        if (self->is_client_ && self->write_post_handshake_stream(stream))
+            return;
 
-                self->post_handshake_streams_.erase(bootstrap_it);
-                ::lsquic_stream_wantwrite(stream, 0);
-                ::lsquic_stream_wantread(stream, 1);
-                return;
-            }
+        if (!self->is_client_ || self->client_payloads_.empty())
+        {
+            ::lsquic_stream_wantwrite(stream, 0);
+            return;
         }
 
-        if (self->is_client_ && !self->client_payloads_.empty())
-        {
-            std::string payload = std::move(self->client_payloads_.front());
-            self->client_payloads_.pop();
+        std::string payload = std::move(self->client_payloads_.front());
+        self->client_payloads_.pop();
+        write_payload(stream, payload);
 
-            std::size_t written {};
-            while (written < payload.size())
-            {
-                const ssize_t chunk = ::lsquic_stream_write(stream, payload.data() + written, payload.size() - written);
-                if (chunk <= 0)
-                {
-                    logger::log(logger::level::warn, std::source_location::current(),
-                                "QUIC client write failed on stream {}, written={}/{}",
-                                static_cast<unsigned long long>(::lsquic_stream_id(stream)), written, payload.size());
-                    break;
-                }
-
-                written += static_cast<std::size_t>(chunk);
-            }
-
-            ::lsquic_stream_flush(stream);
-            ::lsquic_stream_shutdown(stream, 1);
-            ::lsquic_stream_wantwrite(stream, 0);
-            ::lsquic_stream_wantread(stream, 1);
-        }
-        else
-            ::lsquic_stream_wantwrite(stream, 0);
+        ::lsquic_stream_flush(stream);
+        ::lsquic_stream_shutdown(stream, 1);
+        ::lsquic_stream_wantwrite(stream, 0);
+        ::lsquic_stream_wantread(stream, 1);
     }
 
     struct ssl_ctx_st* primary_base_impl::get_ssl_ctx(void* peer_ctx, const struct sockaddr* /*local*/)
@@ -465,6 +501,19 @@ namespace kmx::aio::quic
         return {};
     }
 
+    auto primary_base_impl::connect_socket_to(const socket_address& peer) -> expected_void_t
+    {
+        // Connected rather than left unbound: the kernel then fills in a source address, which the
+        // engine needs, and refuses datagrams from anywhere but this peer.
+        if (::connect(socket_fd_, reinterpret_cast<const sockaddr*>(&peer.storage), peer.length) < 0)
+            return std::unexpected(error_from_errno());
+
+        ::socklen_t local_len = sizeof(local_addr_);
+        if (::getsockname(socket_fd_, reinterpret_cast<sockaddr*>(&local_addr_), &local_len) < 0)
+            return std::unexpected(error_from_errno());
+        return {};
+    }
+
     auto primary_base_impl::connect_setup_after_socket(const ip_address_t peer_ip, const port_t peer_port, const std::string& hostname,
                                                        void* ssl_ctx, const kmx::aio::quic::settings& config) -> expected_void_t
     {
@@ -485,13 +534,8 @@ namespace kmx::aio::quic
         auto peer_addr_result = make_socket_address(peer_ip, peer_port);
         if (!peer_addr_result)
             return std::unexpected(peer_addr_result.error());
-
-        if (::connect(socket_fd_, reinterpret_cast<sockaddr*>(&peer_addr_result->storage), peer_addr_result->length) < 0)
-            return std::unexpected(error_from_errno());
-
-        ::socklen_t local_len = sizeof(local_addr_);
-        if (::getsockname(socket_fd_, reinterpret_cast<sockaddr*>(&local_addr_), &local_len) < 0)
-            return std::unexpected(error_from_errno());
+        if (auto connected = connect_socket_to(*peer_addr_result); !connected)
+            return std::unexpected(connected.error());
 
         const char* host = hostname.empty() ? nullptr : hostname.c_str();
 

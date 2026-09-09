@@ -565,6 +565,63 @@ namespace kmx::aio::completion
         }
     }
 
+    void executor::request_cancel_all() noexcept
+    {
+        auto* const cancel_sqe = ::io_uring_get_sqe(&ring_);
+        if (cancel_sqe == nullptr)
+            return;
+
+        ::io_uring_prep_cancel(cancel_sqe, nullptr, IORING_ASYNC_CANCEL_ANY | IORING_ASYNC_CANCEL_ALL);
+        ::io_uring_sqe_set_data(cancel_sqe, nullptr);
+        if (const auto sub = submit(); !sub)
+            logger::log(logger::level::error, std::source_location::current(),
+                        "Failed to submit shutdown cancel-all request: {}", sub.error().message());
+    }
+
+    bool executor::drain_expired(bool& cancel_issued, std::chrono::steady_clock::time_point& deadline) noexcept
+    {
+        if (!cancel_issued)
+        {
+            request_cancel_all();
+            cancel_issued = true;
+            // Bounded, so one operation the kernel never completes cannot hang shutdown forever.
+            deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+            return false;
+        }
+
+        if (std::chrono::steady_clock::now() < deadline)
+            return false;
+
+        logger::log(logger::level::error, std::source_location::current(),
+                    "Forced shutdown with {} task(s) still active after cancellation drain timeout",
+                    active_work_.load(mem_order));
+        return true;
+    }
+
+    void executor::submit_and_reap() noexcept
+    {
+        ::io_uring_cqe* cqe {};
+        __kernel_timespec ts {};
+        ts.tv_sec = {};
+        ts.tv_nsec = 100'000'000; // 100ms timeout
+
+        // Submits whatever the coroutines resumed on this thread have prepared and waits for the
+        // next completion, in one io_uring_enter().
+        const int ret = detail::uring_syscalls::submit_and_wait_timeout(&ring_, &cqe, 1u, &ts);
+
+        // Reaped whatever the wait returned: a timeout, or an error such as a full completion
+        // queue, does not mean there is nothing to collect, and peeking when there is not costs a
+        // read of the ring head.
+        process_completions();
+
+        if ((ret < 0) && (ret != -ETIME) && (ret != -EINTR) && (ret != -EAGAIN) && (ret != -EBUSY))
+        {
+            metrics_.error_count.fetch_add(1u, mem_order);
+            logger::log(logger::level::error, std::source_location::current(), "io_uring_submit_and_wait_timeout error: {}",
+                        std::strerror(-ret));
+        }
+    }
+
     void executor::event_loop(std::stop_token st) noexcept
     {
         pin_to_core();
@@ -577,75 +634,26 @@ namespace kmx::aio::completion
             ~loop_thread_marker() noexcept { t_current_loop_executor = nullptr; }
         } marker {};
 
-        // Initialize coroutine slab allocator for this event loop thread.
-        // E.g. allocating 1024-byte frames for up to the maximum ring entries.
-        // Adjust sizes according to actual task frame requirements.
+        // Coroutine frames are cut from a slab owned by this thread: 1024-byte frames, enough of them
+        // for the ring to be full of work.
         allocator::slab coro_allocator {1024u, std::max(1024u, config_.ring_entries * 4u)};
         set_thread_allocator(&coro_allocator);
 
-        // Once stop() has been requested, spawned tasks may still be suspended
-        // waiting on in-flight io_uring operations. Exiting the loop immediately
-        // would abandon their coroutine frames without resuming them (leak) and
-        // tear down the ring while operations referencing it are still pending.
-        // Instead: ask the kernel to cancel every outstanding request (so
-        // suspended coroutines resume with an error and unwind normally), then
-        // keep draining completions until active_work_ reaches zero, bounded by
-        // a timeout to avoid hanging shutdown forever on a stuck operation.
+        // A stop request does not end the loop: spawned tasks may still be suspended on in-flight
+        // operations, and leaving now would abandon their frames and tear the ring down underneath
+        // them. Every request is cancelled instead, and completions are drained until no work is left.
         bool cancel_issued {};
         std::chrono::steady_clock::time_point drain_deadline {};
 
         while (!st.stop_requested() || (active_work_.load(mem_order) > 0u))
         {
-            if (st.stop_requested())
-            {
-                if (!cancel_issued)
-                {
-                    if (auto* const cancel_sqe = ::io_uring_get_sqe(&ring_))
-                    {
-                        ::io_uring_prep_cancel(cancel_sqe, nullptr, IORING_ASYNC_CANCEL_ANY | IORING_ASYNC_CANCEL_ALL);
-                        ::io_uring_sqe_set_data(cancel_sqe, nullptr);
-                        if (const auto sub = submit(); !sub)
-                            logger::log(logger::level::error, std::source_location::current(),
-                                        "Failed to submit shutdown cancel-all request: {}", sub.error().message());
-                    }
+            if (st.stop_requested() && drain_expired(cancel_issued, drain_deadline))
+                break;
 
-                    cancel_issued = true;
-                    drain_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-                }
-                else if (std::chrono::steady_clock::now() >= drain_deadline)
-                {
-                    logger::log(logger::level::error, std::source_location::current(),
-                                "Forced shutdown with {} task(s) still active after cancellation drain timeout",
-                                active_work_.load(mem_order));
-                    break;
-                }
-            }
-
-            ::io_uring_cqe* cqe {};
-            __kernel_timespec ts {};
-            ts.tv_sec = {};
-            ts.tv_nsec = 100'000'000; // 100ms timeout
-
-            // Submits whatever the coroutines resumed on this thread have prepared and waits for the
-            // next completion, in one io_uring_enter().
-            const int ret = detail::uring_syscalls::submit_and_wait_timeout(&ring_, &cqe, 1u, &ts);
-
-            // Reaped whatever the wait returned: a timeout, or an error such as a full completion
-            // queue, does not mean there is nothing to collect, and peeking when there is not costs a
-            // read of the ring head.
-            process_completions();
-
-            if ((ret < 0) && (ret != -ETIME) && (ret != -EINTR) && (ret != -EAGAIN) && (ret != -EBUSY))
-            {
-                metrics_.error_count.fetch_add(1u, mem_order);
-                logger::log(logger::level::error, std::source_location::current(), "io_uring_submit_and_wait_timeout error: {}",
-                            std::strerror(-ret));
-            }
+            submit_and_reap();
         }
 
-        // Drain remaining completions before shutdown
         process_completions();
-
         set_thread_allocator(nullptr);
     }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Builds the project under a sanitizer and runs the unit tests against it.
+# Builds the project under a sanitizer and runs the unit and integration tests against it.
 #
 #   bash script/run-sanitizer-tests.sh                 # AddressSanitizer + UndefinedBehaviorSanitizer
 #   bash script/run-sanitizer-tests.sh asan
@@ -29,6 +29,8 @@ options:
 
 environment:
   KMX_ENABLE_<FEATURE>   true/false, as for script/run-unit-tests.sh
+  KMX_SANITIZE_INTEGRATION
+                         false to run the unit tests alone; the integration tests run by default
   ASAN_OPTIONS, UBSAN_OPTIONS, TSAN_OPTIONS, LSAN_OPTIONS
                          override the defaults the runner would otherwise set
 USAGE
@@ -129,5 +131,20 @@ for variable in ASAN_OPTIONS LSAN_OPTIONS UBSAN_OPTIONS TSAN_OPTIONS; do
 done
 
 bash "$repo_root/script/run-unit-tests.sh"
+
+# The integration tests too, and not as a nicety: they are the half that builds real clients over real
+# sockets, so they own most of the pointer arithmetic a sanitizer exists to check. Running only the unit
+# half used to report "no findings" for a tree whose KNX integration suite aborted on an out-of-bounds
+# read the moment it was run instrumented.
+#
+# run-unit-tests.sh has just rebuilt the tree for whichever feature it enabled last, and
+# run-integration-tests.sh runs against pre-built binaries and derives its feature set from the binary's
+# own tags, so this ordering is what makes the two agree on one build. Skipping it when the caller asked
+# for unit tests alone keeps a quick check quick.
+if [[ "$(normalize_bool "${KMX_SANITIZE_INTEGRATION:-true}")" == "true" ]]; then
+    bash "$repo_root/script/run-integration-tests.sh"
+else
+    echo "==> Integration tests skipped (KMX_SANITIZE_INTEGRATION=false)"
+fi
 
 echo "==> Sanitizer run completed with no findings ($selection)"

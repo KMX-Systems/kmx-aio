@@ -653,6 +653,42 @@ namespace kmx::aio::benchmark::feature
     /// @param payload_size Bytes per round trip.
     /// @return The measured result, or a skip when the machine would not give up the sockets.
     /// @throws std::bad_alloc if the samples or the executor cannot be allocated.
+    /// @brief Turns a finished run into a result.
+    /// @param name The case's name.
+    /// @param sampled Whether per-round-trip samples were taken.
+    /// @param samples Those samples, when they were.
+    /// @param done How many round trips completed.
+    /// @param window When the first started and the last finished.
+    /// @return The result, or a skip when nothing ran to completion.
+    [[nodiscard]] inline result rtt_result(std::string name, const bool sampled, std::vector<double>& samples,
+                                           const std::size_t done, const detail::run_window& window) noexcept(false)
+    {
+        if (done == 0u)
+            return skipped(std::move(name), "no round trip completed");
+        if (sampled)
+            return from_samples(std::move(name), samples);
+
+        const auto elapsed = window.end - window.begin;
+        if (elapsed <= clock_t::duration::zero())
+            return skipped(std::move(name), "no connection ran to completion");
+        return from_total(std::move(name), done, elapsed);
+    }
+
+    /// @brief Listens on an ephemeral loopback port and reports the port the kernel chose.
+    /// @tparam Listener The backend's listener type.
+    /// @param listener The listener to bring up.
+    /// @param backlog The listen backlog.
+    /// @return The bound port, or zero when the listener could not be brought up.
+    /// @note Port zero, then read back what the kernel chose: a fixed port would make a case fail
+    ///       rather than measure whenever anything else on the machine happened to be using it.
+    template <typename Listener>
+    [[nodiscard]] port_t listen_on_ephemeral_port(Listener& listener, const int backlog) noexcept(false)
+    {
+        if (!listener.listen(backlog))
+            return 0u;
+        return bound_port(listener.get_fd());
+    }
+
     template <typename Backend>
     [[nodiscard]] result tcp_echo_rtt(std::string name, const std::size_t connections, const std::size_t rounds_per_connection,
                                       const std::size_t payload_size) noexcept(false)
@@ -663,12 +699,9 @@ namespace kmx::aio::benchmark::feature
         // Port zero, then read back what the kernel chose: a fixed port would make this case fail
         // rather than measure whenever anything else on the machine happened to be using it.
         typename Backend::tcp_listener_t listener {exec, loopback(), 0u};
-        if (!listener.listen(static_cast<int>(connections) + 64))
-            return skipped(std::move(name), "listen failed");
-
-        const auto port = bound_port(listener.get_fd());
+        const auto port = listen_on_ephemeral_port(listener, static_cast<int>(connections) + 64);
         if (port == 0u)
-            return skipped(std::move(name), "the listener reported no port");
+            return skipped(std::move(name), "the listener could not be bound");
 
         std::vector<double> samples {};
         std::atomic_size_t completed {};
@@ -691,18 +724,7 @@ namespace kmx::aio::benchmark::feature
             exec.run();
         }
 
-        const auto done = completed.load(std::memory_order_relaxed);
-        if (done == 0u)
-            return skipped(std::move(name), "no round trip completed");
-
-        if (sampled)
-            return from_samples(std::move(name), samples);
-
-        const auto elapsed = window.end - window.begin;
-        if (elapsed <= clock_t::duration::zero())
-            return skipped(std::move(name), "no connection ran to completion");
-
-        return from_total(std::move(name), done, elapsed);
+        return rtt_result(std::move(name), sampled, samples, completed.load(std::memory_order_relaxed), window);
     }
 
     /// @brief Blocks streamed one way over a loopback TCP connection.

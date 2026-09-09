@@ -8,10 +8,10 @@ build_root="${KMX_BUILD_ROOT:-$repo_root/output/knx-release-gates}"
 
 cd "$repo_root/source"
 qbs resolve -d "$build_root" -f source.qbs config:debug \
-    project.enable_knx:true project.enable_knx_secure:true project.enable_knx_keyring:true \
+    project.enable_knx:true \
     project.enable_readiness:true project.enable_completion:true
 qbs build -d "$build_root" -f source.qbs config:debug \
-    project.enable_knx:true project.enable_knx_secure:true project.enable_knx_keyring:true \
+    project.enable_knx:true \
     project.enable_readiness:true project.enable_completion:true --products kmx-aio-test
 
 cd "$repo_root"

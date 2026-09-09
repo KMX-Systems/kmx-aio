@@ -86,63 +86,50 @@ namespace kmx::aio::tls
         return {reinterpret_cast<const char*>(data), len};
     }
 
+    void basic_stream::handshake_step(bool& completed, int& err, std::uint64_t& fills) noexcept
+    {
+        // SSL_get_error() reports on the last call made on this SSL by this thread, so it has to be
+        // asked inside the same critical section as the call it is reporting on. The fill count is read
+        // there too, so it describes the read BIO as this call saw it.
+        const std::lock_guard lock(engine_mutex_);
+        const int ret = ::SSL_do_handshake(ssl_);
+        completed = ret == 1;
+        if (!completed)
+            err = ::SSL_get_error(ssl_, ret);
+
+        fills = read_bio_fills_;
+    }
+
     basic_stream::status_task basic_stream::handshake() noexcept(false)
     {
         while (true)
         {
-            // SSL_get_error() reports on the last call made on this SSL by this thread, so it has to be
-            // asked inside the same critical section as the call it is reporting on. The fill count is
-            // read there too, so it describes the read BIO as this call saw it.
             bool completed {};
             int err {};
             std::uint64_t fills {};
-            {
-                const std::lock_guard lock(engine_mutex_);
-                const int ret = ::SSL_do_handshake(ssl_);
-                completed = ret == 1;
-                if (!completed)
-                    err = ::SSL_get_error(ssl_, ret);
-
-                fills = read_bio_fills_;
-            }
+            handshake_step(completed, err, fills);
 
             if (completed)
             {
-                // Handshake success, pump any remaining output writes. The flush is checked like
-                // every other one here: it carries the last handshake record, and dropping its error
-                // would report a completed handshake whose final flight never reached the transport.
-                auto w_res = co_await pump_write();
-                if (!w_res)
-                    co_return std::unexpected(w_res.error());
-
+                // The last flush is checked like every other one here: it carries the final handshake
+                // record, and dropping its error would report a completed handshake whose closing
+                // flight never reached the transport.
+                if (auto flushed = co_await pump_write(); !flushed)
+                    co_return std::unexpected(flushed.error());
                 co_return expected_void_t {};
             }
 
-            switch (err)
+            // Whatever the engine is waiting on, what it has already produced goes out first.
+            if (auto flushed = co_await pump_write(); !flushed)
+                co_return std::unexpected(flushed.error());
+
+            if (err == SSL_ERROR_WANT_READ)
             {
-                case SSL_ERROR_WANT_READ:
-                {
-                    auto w_res = co_await pump_write();
-                    if (!w_res)
-                        co_return std::unexpected(w_res.error());
-
-                    auto r_res = co_await pump_read(fills);
-                    if (!r_res)
-                        co_return std::unexpected(r_res.error());
-
-                    break;
-                }
-                case SSL_ERROR_WANT_WRITE:
-                {
-                    auto w_res = co_await pump_write();
-                    if (!w_res)
-                        co_return std::unexpected(w_res.error());
-
-                    break;
-                }
-                default:
-                    co_return std::unexpected(std::make_error_code(std::errc::protocol_error));
+                if (auto filled = co_await pump_read(fills); !filled)
+                    co_return std::unexpected(filled.error());
             }
+            else if (err != SSL_ERROR_WANT_WRITE)
+                co_return std::unexpected(std::make_error_code(std::errc::protocol_error));
         }
     }
 

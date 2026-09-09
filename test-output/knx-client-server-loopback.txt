@@ -1,5 +1,5 @@
 Filters: [knx] [server]
-Randomness seeded to: 2644338612
+Randomness seeded to: 1313264247
 ===============================================================================
-All tests passed (58 assertions in 9 test cases)
+All tests passed (112 assertions in 20 test cases)
 

@@ -265,28 +265,30 @@ namespace kmx::aio::knx
         return on_ack(ack.channel_id, ack.sequence_number);
     }
 
+    void tunnelling_session::abandon_connect() noexcept
+    {
+        // Only a connect still in flight is abandoned: a response that arrives in any other state is
+        // stale, and rewinding an established session on account of one would be the real fault.
+        if (state_ != session_state::connecting)
+            return;
+
+        state_ = session_state::idle;
+        connect_packet_.clear();
+        connect_retries_ = 0u;
+    }
+
     expected_void_t tunnelling_session::on_connect_response(const connect_response_frame& response) noexcept
     {
         if ((state_ != session_state::idle) && (state_ != session_state::connecting))
             return std::unexpected(make_error_code(error::invalid_configuration));
         if (response.status != connect_status::no_error)
         {
-            if (state_ == session_state::connecting)
-            {
-                state_ = session_state::idle;
-                connect_packet_.clear();
-                connect_retries_ = 0u;
-            }
+            abandon_connect();
             return std::unexpected(make_error_code(error::connection_failed));
         }
         if (response.channel_id == 0u)
         {
-            if (state_ == session_state::connecting)
-            {
-                state_ = session_state::idle;
-                connect_packet_.clear();
-                connect_retries_ = 0u;
-            }
+            abandon_connect();
             return std::unexpected(make_error_code(error::sequence_error));
         }
 
@@ -346,7 +348,7 @@ namespace kmx::aio::knx
             return std::unexpected(make_error_code(error::timeout));
         }
 
-        last_deadline_ms_ += config_.ack_timeout_ms;
+        last_deadline_ms_ += config_.connect_timeout_ms;
         return {};
     }
 
@@ -423,7 +425,61 @@ namespace kmx::aio::knx
         return {};
     }
 
-    expected_void_t tunnelling_session::on_datagram(const datagram& value) noexcept
+    expected_void_t tunnelling_session::on_indication(const tunnelling_request_frame& request) noexcept
+    {
+        if (state_ != session_state::connected)
+            return std::unexpected(make_error_code(error::invalid_configuration));
+        if (request.channel_id != channel_id_)
+            return std::unexpected(make_error_code(error::sequence_error));
+        if (request.cemi_bytes.empty())
+            return std::unexpected(make_error_code(error::malformed_frame));
+        if (duplicate_indication(request) || out_of_order_indication(request))
+            return std::unexpected(make_error_code(error::sequence_error));
+
+        incoming_sequence_valid_ = true;
+        last_incoming_sequence_ = request.sequence_number;
+        next_incoming_sequence_ = static_cast<std::uint8_t>(request.sequence_number + 1u);
+        return {};
+    }
+
+    expected_void_t tunnelling_session::on_connectionstate_request(const connectionstate_request_frame& request) noexcept
+    {
+        if (state_ != session_state::connected)
+            return std::unexpected(make_error_code(error::invalid_configuration));
+        if (request.channel_id != channel_id_)
+            return std::unexpected(make_error_code(error::sequence_error));
+        return {};
+    }
+
+    expected_void_t tunnelling_session::on_disconnect_request(const disconnect_request_frame& request) noexcept
+    {
+        if ((state_ != session_state::connected) && (state_ != session_state::closing))
+            return std::unexpected(make_error_code(error::invalid_configuration));
+        if (request.channel_id != channel_id_)
+            return std::unexpected(make_error_code(error::sequence_error));
+
+        state_ = session_state::closing;
+        return {};
+    }
+
+    expected_void_t tunnelling_session::on_disconnect_response(const disconnect_response_frame& response) noexcept
+    {
+        if (state_ == session_state::closed)
+            return std::unexpected(make_error_code(error::shutdown));
+        if (state_ != session_state::closing)
+            return std::unexpected(make_error_code(error::invalid_configuration));
+        if (response.channel_id != channel_id_)
+            return std::unexpected(make_error_code(error::sequence_error));
+        if (response.status != connect_status::no_error)
+            return std::unexpected(make_error_code(error::connection_failed));
+
+        shutdown();
+        return {};
+    }
+
+    // Each payload is acted on only under the service type that carries it: a frame decoded from one
+    // service and presented under another is not a datagram this session will act on.
+    optional_expected_void_t tunnelling_session::on_response_datagram(const datagram& value) noexcept
     {
         if (const auto* response = std::get_if<connect_response_frame>(&value.payload))
         {
@@ -449,65 +505,47 @@ namespace kmx::aio::knx
                 return std::unexpected(make_error_code(error::invalid_configuration));
             return on_ack(*ack);
         }
+        if (const auto* response = std::get_if<disconnect_response_frame>(&value.payload))
+        {
+            if (value.service_type != connection::disconnect_response_service)
+                return std::unexpected(make_error_code(error::invalid_configuration));
+            return on_disconnect_response(*response);
+        }
+        return {};
+    }
+
+    optional_expected_void_t tunnelling_session::on_request_datagram(const datagram& value) noexcept
+    {
         if (const auto* request = std::get_if<tunnelling_request_frame>(&value.payload))
         {
             if (value.service_type != frame::tunnelling_request_service)
                 return std::unexpected(make_error_code(error::invalid_configuration));
-            if (state_ != session_state::connected)
-                return std::unexpected(make_error_code(error::invalid_configuration));
-            if (request->channel_id != channel_id_)
-                return std::unexpected(make_error_code(error::sequence_error));
-            if (request->cemi_bytes.empty())
-                return std::unexpected(make_error_code(error::malformed_frame));
-            if (duplicate_indication(*request))
-                return std::unexpected(make_error_code(error::sequence_error));
-            if (out_of_order_indication(*request))
-                return std::unexpected(make_error_code(error::sequence_error));
-            incoming_sequence_valid_ = true;
-            last_incoming_sequence_ = request->sequence_number;
-            next_incoming_sequence_ = static_cast<std::uint8_t>(request->sequence_number + 1u);
-            return {};
+            return on_indication(*request);
         }
         if (const auto* request = std::get_if<connectionstate_request_frame>(&value.payload))
         {
             if (value.service_type != connection::connectionstate_request_service)
                 return std::unexpected(make_error_code(error::invalid_configuration));
-            if (state_ != session_state::connected)
-                return std::unexpected(make_error_code(error::invalid_configuration));
-            if (request->channel_id != channel_id_)
-                return std::unexpected(make_error_code(error::sequence_error));
-            return {};
+            return on_connectionstate_request(*request);
         }
         if (const auto* request = std::get_if<disconnect_request_frame>(&value.payload))
         {
             if (value.service_type != connection::disconnect_request_service)
                 return std::unexpected(make_error_code(error::invalid_configuration));
-            if ((state_ != session_state::connected) && (state_ != session_state::closing))
-                return std::unexpected(make_error_code(error::invalid_configuration));
-            if (request->channel_id != channel_id_)
-                return std::unexpected(make_error_code(error::sequence_error));
-            state_ = session_state::closing;
-            return {};
+            return on_disconnect_request(*request);
         }
-        if (const auto* response = std::get_if<disconnect_response_frame>(&value.payload))
-        {
-            if (value.service_type != connection::disconnect_response_service)
-                return std::unexpected(make_error_code(error::invalid_configuration));
-            if (state_ == session_state::closed)
-                return std::unexpected(make_error_code(error::shutdown));
-            if (state_ != session_state::closing)
-                return std::unexpected(make_error_code(error::invalid_configuration));
-            if (response->channel_id != channel_id_)
-                return std::unexpected(make_error_code(error::sequence_error));
-            if (response->status != connect_status::no_error)
-                return std::unexpected(make_error_code(error::connection_failed));
+        return {};
+    }
 
-            shutdown();
-            return {};
-        }
-
+    expected_void_t tunnelling_session::on_datagram(const datagram& value) noexcept
+    {
+        if (const auto handled = on_response_datagram(value); handled.has_value())
+            return *handled;
+        if (const auto handled = on_request_datagram(value); handled.has_value())
+            return *handled;
         return std::unexpected(make_error_code(error::unsupported_service));
     }
+
 
     expected_void_t tunnelling_session::dispatch_session_datagram(const datagram& value,
                                                                                        const std::uint32_t now_ms) noexcept

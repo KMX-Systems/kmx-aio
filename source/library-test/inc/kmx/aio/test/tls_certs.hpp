@@ -112,12 +112,54 @@ namespace kmx::aio::test
     /// @param server_common_name The server's CN; must match the address the client connects to.
     /// @param client_common_name The client's CN.
     /// @return The generated paths, or nothing when any openssl step failed.
+    /// @brief Indicates whether a certificate file was already generated and is intact.
+    /// @param cert The PEM file to check.
+    /// @return True when it exists and holds a certificate.
+    /// @note Checked for content rather than existence, so a truncated file left by an interrupted run
+    ///       is regenerated instead of being handed on as if it were valid.
+    [[nodiscard]] inline bool looks_generated(const std::filesystem::path& cert) noexcept(false)
+    {
+        return std::filesystem::exists(cert) && (read_file_text(cert).find("BEGIN CERTIFICATE") != std::string::npos);
+    }
+
+    /// @brief Indicates whether a complete set is already on disk.
+    /// @param paths The set to check.
+    /// @return True when every file a test needs is present and intact.
+    [[nodiscard]] inline bool set_is_usable(const cert_set& paths) noexcept(false)
+    {
+        return looks_generated(paths.ca_cert) && looks_generated(paths.server_cert) && looks_generated(paths.client_cert) &&
+               std::filesystem::exists(paths.server_key) && std::filesystem::exists(paths.client_key);
+    }
+
+    /// @brief Issues one CA-signed leaf certificate: a key, a request, and the signature over it.
+    /// @param paths The set being built, for the CA that signs.
+    /// @param key The private key file to create.
+    /// @param cert The certificate file to create.
+    /// @param csr The request file to use in between.
+    /// @param common_name The subject common name.
+    /// @return True when every openssl(1) step succeeded.
+    [[nodiscard]] inline bool issue_leaf(const cert_set& paths, const std::filesystem::path& key,
+                                         const std::filesystem::path& cert, const std::filesystem::path& csr,
+                                         const std::string_view common_name) noexcept(false)
+    {
+        const auto q = [](const std::filesystem::path& value) { return shell_quote(value.string()); };
+        return detail::run_openssl("openssl genrsa -out " + q(key) + " 2048") &&
+               detail::run_openssl("openssl req -new -key " + q(key) + " -out " + q(csr) + " -subj " +
+                                   shell_quote("/CN=" + std::string(common_name))) &&
+               detail::run_openssl("openssl x509 -req -in " + q(csr) + " -CA " + q(paths.ca_cert) + " -CAkey " + q(paths.ca_key) +
+                                   " -CAcreateserial -out " + q(cert) + " -days 30");
+    }
+
+    /// @brief Returns a CA-signed server and client certificate set, generating it only when needed.
+    /// @param dir The directory to keep the set in.
+    /// @param server_common_name The server certificate's subject common name.
+    /// @param client_common_name The client certificate's subject common name.
+    /// @return The set, or nothing when openssl(1) could not produce it.
+    /// @note Reusing an existing set keeps a test that runs twice from paying for key generation twice.
     [[nodiscard]] inline std::optional<cert_set> ensure_ca_signed_set(
         const std::filesystem::path& dir, const std::string_view server_common_name = "127.0.0.1",
         const std::string_view client_common_name = "kmx-test-client") noexcept(false)
     {
-        namespace fs = std::filesystem;
-
         const cert_set paths {
             .ca_cert = dir / "ca_cert.pem",
             .ca_key = dir / "ca_key.pem",
@@ -127,37 +169,17 @@ namespace kmx::aio::test
             .client_key = dir / "client_key.pem",
         };
 
-        const auto server_csr = dir / "server.csr";
-        const auto client_csr = dir / "client.csr";
-
-        const auto looks_generated = [](const fs::path& cert)
-        { return fs::exists(cert) && (read_file_text(cert).find("BEGIN CERTIFICATE") != std::string::npos); };
-
-        // Reusing an existing set keeps a test that runs twice from paying for key generation twice; it
-        // is checked for content rather than existence, so a truncated file from an interrupted run is
-        // regenerated instead of being handed on as if it were valid.
-        if (looks_generated(paths.ca_cert) && looks_generated(paths.server_cert) && looks_generated(paths.client_cert) &&
-            fs::exists(paths.server_key) && fs::exists(paths.client_key))
+        if (set_is_usable(paths))
             return paths;
 
         std::error_code ignored;
-        fs::create_directories(dir, ignored);
+        std::filesystem::create_directories(dir, ignored);
 
-        const auto q = [](const fs::path& p) { return shell_quote(p.string()); };
-
-        const bool ok = detail::run_openssl("openssl req -x509 -newkey rsa:2048 -keyout " + q(paths.ca_key) + " -out " + q(paths.ca_cert) +
-                                            " -days 30 -nodes -subj " + shell_quote("/CN=KmxAioTestCA")) &&
-                        detail::run_openssl("openssl genrsa -out " + q(paths.server_key) + " 2048") &&
-                        detail::run_openssl("openssl req -new -key " + q(paths.server_key) + " -out " + q(server_csr) + " -subj " +
-                                            shell_quote("/CN=" + std::string(server_common_name))) &&
-                        detail::run_openssl("openssl x509 -req -in " + q(server_csr) + " -CA " + q(paths.ca_cert) + " -CAkey " +
-                                            q(paths.ca_key) + " -CAcreateserial -out " + q(paths.server_cert) + " -days 30") &&
-                        detail::run_openssl("openssl genrsa -out " + q(paths.client_key) + " 2048") &&
-                        detail::run_openssl("openssl req -new -key " + q(paths.client_key) + " -out " + q(client_csr) + " -subj " +
-                                            shell_quote("/CN=" + std::string(client_common_name))) &&
-                        detail::run_openssl("openssl x509 -req -in " + q(client_csr) + " -CA " + q(paths.ca_cert) + " -CAkey " +
-                                            q(paths.ca_key) + " -CAcreateserial -out " + q(paths.client_cert) + " -days 30");
-
+        const auto q = [](const std::filesystem::path& value) { return shell_quote(value.string()); };
+        const bool ok = detail::run_openssl("openssl req -x509 -newkey rsa:2048 -keyout " + q(paths.ca_key) + " -out " +
+                                            q(paths.ca_cert) + " -days 30 -nodes -subj " + shell_quote("/CN=KmxAioTestCA")) &&
+                        issue_leaf(paths, paths.server_key, paths.server_cert, dir / "server.csr", server_common_name) &&
+                        issue_leaf(paths, paths.client_key, paths.client_cert, dir / "client.csr", client_common_name);
         if (!ok)
             return std::nullopt;
 

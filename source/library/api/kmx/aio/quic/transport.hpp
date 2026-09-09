@@ -386,6 +386,29 @@ namespace kmx::aio::quic
         [[nodiscard]] task<void> tick_timer(std::uint64_t duration_ns) noexcept(false);
 
         /// @brief Keeps one readability poll outstanding on the socket.
+        /// @brief Creates the UDP socket this endpoint runs on and binds it.
+        /// @param ip The address to bind to.
+        /// @param port The port to bind to.
+        /// @return Nothing, or the reason the socket could not be opened or bound.
+        [[nodiscard]] expected_void_t open_socket(ip_address_t ip, port_t port) noexcept;
+        /// @brief Fills in the engine settings and checks lsquic will accept them.
+        /// @param settings The settings to initialise.
+        /// @param flags The engine flags, which select the role the settings are checked against.
+        /// @return Nothing, or the reason lsquic refused them.
+        [[nodiscard]] expected_void_t init_settings(::lsquic_engine_settings& settings, unsigned flags) noexcept;
+        /// @brief Reads every datagram the socket already holds and hands each to the engine.
+        /// @param packet Scratch space for one datagram.
+        /// @param local This endpoint's own address, which the engine needs alongside the peer's.
+        void drain_socket(std::vector<char>& packet, const ::sockaddr_storage& local) noexcept;
+        /// @brief Returns how long to wait before the engine next needs attention.
+        [[nodiscard]] std::uint64_t next_tick_ns() const noexcept;
+        /// @brief Wakes everything suspended on this endpoint so a stopped loop cannot strand it.
+        void release_waiters() noexcept;
+        /// @brief Fills in the engine API this endpoint is built from.
+        /// @param api The structure to fill in.
+        /// @param settings The engine settings, which @p api points at and so must outlive it.
+        /// @param server Whether this endpoint is the server side.
+        void fill_engine_api(::lsquic_engine_api& api, ::lsquic_engine_settings& settings, bool server) noexcept;
         void arm_readable_poll() noexcept(false);
 
         /// @brief Waits for the socket to become readable, then allows the next poll to be armed.

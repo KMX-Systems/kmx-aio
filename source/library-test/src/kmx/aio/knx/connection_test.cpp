@@ -273,4 +273,83 @@ namespace kmx::aio::test::knx::connection_test
         REQUIRE(!response_result.has_value());
         CHECK(response_result.error() == make_error_code(error::unsupported_hpai));
     }
+
+    // The second connection type a KNXnet/IP server offers. Its information block is two octets - length and
+    // type - with no KNX layer and no assigned address, because nothing is tunnelled onto the bus.
+    TEST_CASE("knx management connect request round-trips", "[knx][connection][unit]")
+    {
+        const management_connect_request_frame request {
+            hpai {ipv4_endpoint {{192u, 0u, 2u, 1u}, 3671u}, 0x01u},
+            hpai {ipv4_endpoint {{192u, 0u, 2u, 1u}, 3672u}, 0x01u},
+        };
+
+        std::array<std::uint8_t, frame::communication_header_size + connection::management_connect_request_body_size> packet {};
+        REQUIRE(connection::encode_management_connect_request_packet(packet, request).has_value());
+        CHECK(packet[2u] == 0x02u);
+        CHECK(packet[3u] == 0x05u);
+        CHECK(packet[22u] == 0x02u); // information block length
+        CHECK(packet[23u] == 0x03u); // device management connection type
+
+        const auto decoded = connection::decode_management_connect_request_packet(packet);
+        REQUIRE(decoded.has_value());
+        CHECK(decoded->control_endpoint.endpoint.port == 3671u);
+        CHECK(decoded->data_endpoint.endpoint.port == 3672u);
+    }
+
+    TEST_CASE("knx management connect response round-trips", "[knx][connection][unit]")
+    {
+        const management_connect_response_frame response {
+            9u, connect_status::no_error, hpai {ipv4_endpoint {{192u, 0u, 2u, 20u}, 3671u}, 0x01u},
+        };
+
+        std::array<std::uint8_t, frame::communication_header_size + connection::management_connect_response_body_size> packet {};
+        REQUIRE(connection::encode_management_connect_response_packet(packet, response).has_value());
+
+        const auto decoded = connection::decode_management_connect_response_packet(packet);
+        REQUIRE(decoded.has_value());
+        CHECK(decoded->channel_id == 9u);
+        CHECK(decoded->status == connect_status::no_error);
+        CHECK(decoded->data_endpoint.endpoint.address[3u] == 20u);
+    }
+
+    TEST_CASE("knx connect response decodes 8-byte error response", "[knx][connection][unit]")
+    {
+        // 06 10 | 02 06 | 00 08 | 00 (channel 0) | 26 (no more connections)
+        const std::array<std::uint8_t, 8u> error_packet {
+            0x06u, 0x10u, 0x02u, 0x06u, 0x00u, 0x08u, 0x00u, 0x26u,
+        };
+
+        const auto decoded = connection::decode_connect_response_packet(error_packet);
+        REQUIRE(decoded.has_value());
+        CHECK(decoded->channel_id == 0u);
+        CHECK(decoded->status == connect_status::no_more_connections);
+
+        const auto mgmt_decoded = connection::decode_management_connect_response_packet(error_packet);
+        REQUIRE(mgmt_decoded.has_value());
+        CHECK(mgmt_decoded->channel_id == 0u);
+        CHECK(mgmt_decoded->status == connect_status::no_more_connections);
+    }
+
+    TEST_CASE("knx connect request carries the requested knx layer", "[knx][connection][unit]")
+    {
+        const connect_request_frame request {
+            hpai {ipv4_endpoint {{192u, 0u, 2u, 1u}, 3671u}, 0x01u},
+            hpai {ipv4_endpoint {{192u, 0u, 2u, 1u}, 3672u}, 0x01u},
+            connection::tunnel_busmonitor_layer,
+        };
+
+        std::array<std::uint8_t, frame::communication_header_size + connection::connect_request_body_size> packet {};
+        REQUIRE(connection::encode_connect_request_packet(packet, request).has_value());
+        CHECK(packet[24u] == 0x80u);
+
+        const auto decoded = connection::decode_connect_request_packet(packet);
+        REQUIRE(decoded.has_value());
+        CHECK(decoded->knx_layer == connection::tunnel_busmonitor_layer);
+
+        // A layer nobody defines is refused rather than sent.
+        auto rejected = request;
+        rejected.knx_layer = 0x7Fu;
+        CHECK(connection::encode_connect_request_packet(packet, rejected).error() ==
+              make_error_code(error::invalid_configuration));
+    }
 }

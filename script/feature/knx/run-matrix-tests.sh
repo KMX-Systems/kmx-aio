@@ -12,10 +12,10 @@ build_and_test() {
 
     echo "==> Building KNX ${label} configuration"
     qbs resolve -d "$repo_root/$build_root" -f "$repo_root/source/source.qbs" config:debug \
-        project.enable_knx:true project.enable_knx_secure:true project.enable_knx_keyring:true \
+        project.enable_knx:true \
         project.enable_readiness:"$readiness_enabled"
     qbs build -d "$repo_root/$build_root" -f "$repo_root/source/source.qbs" config:debug \
-        project.enable_knx:true project.enable_knx_secure:true project.enable_knx_keyring:true \
+        project.enable_knx:true \
         project.enable_readiness:"$readiness_enabled"
 
     echo "==> Running KNX unit tests for ${label}"

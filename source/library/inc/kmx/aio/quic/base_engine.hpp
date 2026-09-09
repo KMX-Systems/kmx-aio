@@ -283,6 +283,16 @@ namespace kmx::aio::quic
                                                                  const std::string& hostname, void* ssl_ctx,
                                                                  const kmx::aio::quic::settings& config);
 
+        /// @brief Connects the socket to one peer and records the local address the kernel chose.
+        /// @param peer The peer to connect to.
+        /// @return Success, or the reason the socket could not be connected.
+        [[nodiscard]] expected_void_t connect_socket_to(const socket_address& peer);
+
+        /// @brief Serves a stream opened for the post-handshake bootstrap, if this is one.
+        /// @param stream The stream being asked for data.
+        /// @return `true` when the stream was one of those and has now been handled.
+        [[nodiscard]] bool write_post_handshake_stream(::lsquic_stream_t* stream) noexcept;
+
         /// @brief Replaces the client payload queue with a single payload; an empty payload queues nothing.
         void set_client_payload(const std::string& payload);
 
@@ -491,6 +501,11 @@ namespace kmx::aio::quic
         /// @return Success, or an error code if the timer could not be armed or awaited.
         task_returning_expected_void_t wait_readiness_idle_tick(kmx::aio::readiness::descriptor::timer& readiness_tick);
 
+        /// @brief Waits one idle tick on whichever timer this executor provides.
+        /// @param readiness_tick The readiness timer, used only when the executor has no direct timeout.
+        /// @return Nothing, or the reason the wait failed.
+        task_returning_expected_void_t wait_idle_tick(std::optional<kmx::aio::readiness::descriptor::timer>& readiness_tick);
+
     public:
         /// @brief Shared event processing loop.
         task_returning_expected_void_t process();
@@ -534,6 +549,18 @@ namespace kmx::aio::quic
     }
 
     template <typename Executor, typename UdpSocket>
+    task_returning_expected_void_t base_impl<Executor, UdpSocket>::wait_idle_tick(
+        std::optional<kmx::aio::readiness::descriptor::timer>& readiness_tick)
+    {
+        // Which timer serves depends on the executor: a completion executor times out directly, while a
+        // readiness one needs a descriptor to wait on.
+        if constexpr (requires(Executor& e) { e.async_timeout(std::uint64_t {}); })
+            co_return co_await wait_completion_idle_tick();
+        else
+            co_return co_await wait_readiness_idle_tick(*readiness_tick);
+    }
+
+    template <typename Executor, typename UdpSocket>
     task_returning_expected_void_t base_impl<Executor, UdpSocket>::process()
     {
         running_ = true;
@@ -560,20 +587,8 @@ namespace kmx::aio::quic
                 co_return std::unexpected(recv_res.error());
 
             if (*recv_res)
-            {
-                if constexpr (requires(Executor& e) { e.async_timeout(std::uint64_t {}); })
-                {
-                    auto idle_res = co_await wait_completion_idle_tick();
-                    if (!idle_res)
-                        co_return std::unexpected(idle_res.error());
-                }
-                else
-                {
-                    auto idle_res = co_await wait_readiness_idle_tick(*readiness_tick);
-                    if (!idle_res)
-                        co_return std::unexpected(idle_res.error());
-                }
-            }
+                if (auto idle_res = co_await wait_idle_tick(readiness_tick); !idle_res)
+                    co_return std::unexpected(idle_res.error());
         }
 
         co_return expected_void_t {};

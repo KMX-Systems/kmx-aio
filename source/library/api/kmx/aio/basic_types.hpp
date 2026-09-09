@@ -6,6 +6,7 @@
     #include <cerrno>
     #include <cstring>
     #include <expected>
+    #include <optional>
     #include <netinet/in.h>
     #include <span>
     #include <string>
@@ -48,6 +49,10 @@ namespace kmx::aio
     using expected_size_t = std::expected<std::size_t, std::error_code>;
     /// @brief Result of an operation yielding nothing, or an error code.
     using expected_void_t = std::expected<void, std::error_code>;
+    /// @brief An outcome, or nothing when the value was not this handler's to produce.
+    /// @details The return of a dispatch arm that may decline: nothing means "not mine, try the next",
+    ///          which a bare @ref expected_void_t cannot say without borrowing an error code to mean it.
+    using optional_expected_void_t = std::optional<expected_void_t>;
 
     /// @brief Owned, resizable buffer of bytes.
     using byte_buffer_t = std::vector<std::uint8_t>;

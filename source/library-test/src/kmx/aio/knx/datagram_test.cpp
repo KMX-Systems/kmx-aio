@@ -188,25 +188,29 @@ namespace kmx::aio::test::knx::datagram_test
 
     TEST_CASE("knx datagram dispatches routing control services", "[knx][datagram][routing][integration]")
     {
-        const std::array<std::uint8_t, 8u> original_busy {
-            0x06u, 0x10u, 0x05u, 0x32u, 0x00u, 0x08u, 0x01u, 0x2Cu,
+        // ROUTING_BUSY body: structure length 0x06, device state, wait time, control field.
+        const std::array<std::uint8_t, 12u> original_busy {
+            0x06u, 0x10u, 0x05u, 0x32u, 0x00u, 0x0Cu, 0x06u, 0x01u, 0x01u, 0x2Cu, 0x00u, 0x02u,
         };
         const auto busy = decode_datagram(original_busy);
         REQUIRE(busy.has_value());
         REQUIRE(std::holds_alternative<routing::busy>(busy->payload));
+        CHECK(std::get<routing::busy>(busy->payload).device_state == 0x01u);
         CHECK(std::get<routing::busy>(busy->payload).wait_time_ms == 300u);
-        std::array<std::uint8_t, 8u> encoded_busy {};
+        CHECK(std::get<routing::busy>(busy->payload).control_field == 0x0002u);
+        std::array<std::uint8_t, 12u> encoded_busy {};
         REQUIRE(encode_datagram(encoded_busy, busy.value()).has_value());
         CHECK(encoded_busy == original_busy);
 
         const datagram lost {
             .service_type = routing::lost_message_service,
-            .payload = routing::lost_message {.count = 4u},
+            .payload = routing::lost_message {.device_state = 0x03u, .count = 4u},
         };
-        std::array<std::uint8_t, 8u> encoded_lost {};
+        std::array<std::uint8_t, 10u> encoded_lost {};
         REQUIRE(encode_datagram(encoded_lost, lost).has_value());
         const auto decoded_lost = decode_datagram(encoded_lost);
         REQUIRE(decoded_lost.has_value());
+        CHECK(std::get<routing::lost_message>(decoded_lost->payload).device_state == 0x03u);
         CHECK(std::get<routing::lost_message>(decoded_lost->payload).count == 4u);
     }
 

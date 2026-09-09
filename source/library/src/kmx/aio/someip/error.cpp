@@ -2,6 +2,7 @@
 #include <kmx/aio/someip/error.hpp>
 
 #include <string>
+#include <string_view>
 
 namespace kmx::aio::someip
 {
@@ -12,9 +13,12 @@ namespace kmx::aio::someip
         public:
             const char* name() const noexcept override { return "someip"; }
 
-            std::string message(const int ev) const override
+            /// @brief Names the errors about this endpoint's own runtime and configuration.
+            /// @param value The error to name.
+            /// @return Its text, or nothing when it belongs to another group.
+            [[nodiscard]] static constexpr std::string_view lifecycle_message(const error value) noexcept
             {
-                switch (static_cast<error>(ev))
+                switch (value)
                 {
                     case error::success:
                         return "success";
@@ -28,6 +32,20 @@ namespace kmx::aio::someip
                         return "SOME/IP runtime start failed";
                     case error::stopped:
                         return "SOME/IP runtime is stopped";
+                    case error::internal_error:
+                        return "SOME/IP internal error";
+                    default:
+                        return {};
+                }
+            }
+
+            /// @brief Names the errors about reaching a service and exchanging messages with it.
+            /// @param value The error to name.
+            /// @return Its text, or nothing when it belongs to another group.
+            [[nodiscard]] static constexpr std::string_view service_message(const error value) noexcept
+            {
+                switch (value)
+                {
                     case error::service_not_found:
                         return "SOME/IP service not found";
                     case error::service_unavailable:
@@ -40,10 +58,18 @@ namespace kmx::aio::someip
                         return "SOME/IP subscription is closed";
                     case error::timed_out:
                         return "SOME/IP operation timed out";
-                    case error::internal_error:
-                        return "SOME/IP internal error";
+                    default:
+                        return {};
                 }
+            }
 
+            std::string message(const int ev) const override
+            {
+                const auto value = static_cast<error>(ev);
+                if (const auto text = lifecycle_message(value); !text.empty())
+                    return std::string {text};
+                if (const auto text = service_message(value); !text.empty())
+                    return std::string {text};
                 return "unknown SOME/IP error";
             }
         };

@@ -18,6 +18,10 @@
         #include <kmx/aio/task.hpp>
     #endif
 
+/// @brief The kernel's V4L2 buffer descriptor, forward declared so this header need not pull in
+///        <linux/videodev2.h> for a type it only ever names by reference.
+struct v4l2_buffer;
+
 namespace kmx::aio::completion::v4l2
 {
     // Bring shared V4L2 domain types into the completion::v4l2 namespace so client code
@@ -130,7 +134,9 @@ namespace kmx::aio::completion::v4l2
     {
     public:
         /// @brief Result type for asynchronous frame retrieval.
-        using frame_result = task<std::expected<frame_view, kmx::aio::error_code>>;
+        /// @brief One captured frame, or why none could be produced.
+        using expected_frame = std::expected<frame_view, kmx::aio::error_code>;
+        using frame_result = task<expected_frame>;
         /// @brief Result type returned by device creation.
         using expected_t = std::expected<capture, kmx::aio::error_code>;
         /// @brief Result type used for operations returning no payload.
@@ -204,6 +210,15 @@ namespace kmx::aio::completion::v4l2
         [[nodiscard]] static expected_void_t negotiate_format(const fd_t device_fd, capture_config& cfg) noexcept;
         /// @brief Negotiates the device frame rate when supported.
         [[nodiscard]] static expected_void_t negotiate_frame_rate(const fd_t device_fd, const capture_config& cfg) noexcept;
+        /// @brief Maps every buffer the driver granted, releasing them all if any one cannot be mapped.
+        /// @param device_fd The opened capture device.
+        /// @param count How many buffers the driver granted.
+        /// @return The complete set of mappings, or why one could not be made.
+        [[nodiscard]] static expected_mmap_buffers map_granted_buffers(fd_t device_fd, std::uint32_t count) noexcept;
+        /// @brief Turns a dequeued driver buffer into a frame view, checking what the driver reported.
+        /// @param buf The buffer the driver handed back.
+        /// @return The view, or why the buffer cannot be trusted.
+        [[nodiscard]] expected_frame dequeued_frame(const ::v4l2_buffer& buf) noexcept;
         /// @brief Allocates and maps the MMAP buffer set.
         [[nodiscard]] static expected_mmap_buffers request_and_map_buffers(fd_t device_fd, capture_config& cfg) noexcept;
         /// @brief Queues every mapped buffer so streaming can start immediately.

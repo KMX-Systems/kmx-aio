@@ -137,6 +137,34 @@ namespace kmx::aio::completion::v4l2
         return {};
     }
 
+    capture::expected_mmap_buffers capture::map_granted_buffers(const fd_t device_fd, const std::uint32_t count) noexcept
+    {
+        std::vector<mmap_buffer> buffers;
+        buffers.reserve(count);
+
+        for (std::uint32_t i = 0u; i < count; ++i)
+        {
+            ::v4l2_buffer buf {};
+            buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+            buf.memory = V4L2_MEMORY_MMAP;
+            buf.index = i;
+
+            void* ptr = MAP_FAILED; // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
+            if (::ioctl(device_fd, VIDIOC_QUERYBUF, &buf) >= 0)
+                ptr = ::mmap(nullptr, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, device_fd, static_cast<off_t>(buf.m.offset));
+            if (ptr == MAP_FAILED) // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
+            {
+                // Whatever was mapped before this failure is released here: the caller is handed either
+                // a complete set of buffers or none at all.
+                unmap_buffers(buffers);
+                return std::unexpected(kmx::aio::from_errno(errno));
+            }
+
+            buffers.push_back({ptr, buf.length});
+        }
+        return buffers;
+    }
+
     capture::expected_mmap_buffers capture::request_and_map_buffers(const fd_t device_fd, capture_config& cfg) noexcept
     {
         ::v4l2_requestbuffers req {};
@@ -150,36 +178,8 @@ namespace kmx::aio::completion::v4l2
         if (req.count == 0)
             return std::unexpected(kmx::aio::error_code::internal_error);
 
-        cfg.buffer_count = req.count;
-
-        std::vector<mmap_buffer> buffers;
-        buffers.reserve(req.count);
-
-        ::v4l2_buffer buf;
-        for (std::uint32_t i = 0u; i < req.count; ++i)
-        {
-            buf = {};
-            buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-            buf.memory = V4L2_MEMORY_MMAP;
-            buf.index = i;
-
-            if (::ioctl(device_fd, VIDIOC_QUERYBUF, &buf) < 0)
-            {
-                unmap_buffers(buffers);
-                return std::unexpected(kmx::aio::from_errno(errno));
-            }
-
-            void* const ptr = ::mmap(nullptr, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, device_fd, static_cast<off_t>(buf.m.offset));
-            if (ptr == MAP_FAILED) // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
-            {
-                unmap_buffers(buffers);
-                return std::unexpected(kmx::aio::from_errno(errno));
-            }
-
-            buffers.push_back({ptr, buf.length});
-        }
-
-        return buffers;
+        cfg.buffer_count = req.count; // the driver may grant fewer buffers than were asked for
+        return map_granted_buffers(device_fd, req.count);
     }
 
     capture::expected_void_t capture::queue_all_buffers(const fd_t device_fd, const mmap_buffers& buffers) noexcept
@@ -305,6 +305,33 @@ namespace kmx::aio::completion::v4l2
 
     // capture::next_frame()
 
+    capture::expected_frame capture::dequeued_frame(const ::v4l2_buffer& buf) noexcept
+    {
+        // The index and the byte count both come from the driver, and both are checked: a buffer this
+        // process never mapped, or a frame longer than the mapping holding it, would be read out of
+        // bounds by the caller that trusted the view handed back.
+        if (buf.index >= static_cast<std::uint32_t>(buffers_.size()))
+            return std::unexpected(kmx::aio::error_code::internal_error);
+
+        const auto& mapped = buffers_[buf.index];
+        if (buf.bytesused > mapped.length)
+            return std::unexpected(kmx::aio::error_code::internal_error);
+
+        const frame_metadata meta {
+            .sequence = buf.sequence,
+            .timestamp_ns = static_cast<std::uint64_t>(buf.timestamp.tv_sec) * 1'000'000'000ull +
+                            static_cast<std::uint64_t>(buf.timestamp.tv_usec) * 1'000ull,
+            .bytes_used = buf.bytesused,
+            .width = config_.size.width,
+            .height = config_.size.height,
+            .fourcc = config_.format.fourcc,
+        };
+
+        return frame_view {
+            fd_.get(), buf.index, static_cast<const std::byte*>(mapped.ptr), mapped.length, meta, device_lifetime_,
+        };
+    }
+
     capture::frame_result capture::next_frame() noexcept(false)
     {
         while (true)
@@ -323,33 +350,11 @@ namespace kmx::aio::completion::v4l2
             if (::ioctl(fd_.get(), VIDIOC_DQBUF, &buf) < 0)
             {
                 if (would_block(errno))
-                    continue; // Spurious wakeup — re-arm poll and retry.
+                    continue; // a spurious wakeup: re-arm the poll and wait again
                 co_return std::unexpected(kmx::aio::from_errno(errno));
             }
 
-            if (buf.index >= static_cast<std::uint32_t>(buffers_.size()))
-                co_return std::unexpected(kmx::aio::error_code::internal_error);
-
-            const auto& mapped = buffers_[buf.index];
-
-            if (buf.bytesused > mapped.length)
-                co_return std::unexpected(kmx::aio::error_code::internal_error);
-
-            const std::uint64_t timestamp_ns = static_cast<std::uint64_t>(buf.timestamp.tv_sec) * 1'000'000'000ull +
-                                               static_cast<std::uint64_t>(buf.timestamp.tv_usec) * 1'000ull;
-
-            frame_metadata meta {
-                .sequence = buf.sequence,
-                .timestamp_ns = timestamp_ns,
-                .bytes_used = buf.bytesused,
-                .width = config_.size.width,
-                .height = config_.size.height,
-                .fourcc = config_.format.fourcc,
-            };
-
-            co_return frame_view {
-                fd_.get(), buf.index, static_cast<const std::byte*>(mapped.ptr), mapped.length, meta, device_lifetime_,
-            };
+            co_return dequeued_frame(buf);
         }
     }
 

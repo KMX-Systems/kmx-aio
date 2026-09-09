@@ -40,32 +40,11 @@ namespace kmx::aio::avb
     task_returning_expected_void_t generic_eth_socket<Executor>::send(const mac_address_t& dest_mac, cspan_byte_t frame,
                                                                       std::optional<avb_timestamp_t> tx_time) noexcept(false)
     {
-        ::sockaddr_ll dest {};
-        dest.sll_family = AF_PACKET;
-        dest.sll_ifindex = impl_->iface_index_;
-        dest.sll_protocol = ::htons(impl_->ethertype_);
-        dest.sll_halen = ETH_ALEN;
-        std::memcpy(dest.sll_addr, dest_mac.data(), ETH_ALEN);
-
-        ::iovec iov {const_cast<std::byte*>(frame.data()), frame.size()};
         ::msghdr msg {};
-        msg.msg_name = &dest;
-        msg.msg_namelen = sizeof(dest);
-        msg.msg_iov = &iov;
-        msg.msg_iovlen = 1;
-
-        // Attach SO_TXTIME control message for CBS-scheduled transmission
-        alignas(::cmsghdr) std::array<std::byte, CMSG_SPACE(sizeof(std::uint64_t))> ctrl_buf {};
-        if (tx_time.has_value())
-        {
-            msg.msg_control = ctrl_buf.data();
-            msg.msg_controllen = ctrl_buf.size();
-            auto* cmsg = CMSG_FIRSTHDR(&msg);
-            cmsg->cmsg_level = SOL_SOCKET;
-            cmsg->cmsg_type = SCM_TXTIME;
-            cmsg->cmsg_len = CMSG_LEN(sizeof(std::uint64_t));
-            std::memcpy(CMSG_DATA(cmsg), &tx_time.value(), sizeof(std::uint64_t));
-        }
+        ::sockaddr_ll dest {};
+        ::iovec iov {};
+        alignas(::cmsghdr) tx_time_control_t ctrl_buf {};
+        prepare_frame_message(msg, dest, iov, ctrl_buf, impl_->iface_index_, impl_->ethertype_, dest_mac, frame, tx_time);
 
         const auto res = co_await impl_->exec_.async_sendmsg(impl_->fd_.get(), &msg, 0);
         if (!res)

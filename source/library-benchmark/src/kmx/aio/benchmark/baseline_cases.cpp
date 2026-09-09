@@ -66,6 +66,31 @@ namespace kmx::aio::benchmark
         }
     } // namespace baseline_detail
 
+    namespace baseline_detail
+    {
+        /// @brief Creates an epoll set watching both ends of a pair for read readiness.
+        /// @param pair The socket pair to watch.
+        /// @return The epoll descriptor, or a negative value when the set could not be created.
+        /// @note Read readiness only. Registering EPOLLOUT as well would have every wait return at once
+        ///       on a socket that is always writable, and a case built on it would measure nothing it
+        ///       claims to.
+        [[nodiscard]] inline int watch_for_read(const socket_pair& pair)
+        {
+            const int epoll_fd = ::epoll_create1(0);
+            if (epoll_fd < 0)
+                return epoll_fd;
+
+            for (const int fd: pair.fd)
+            {
+                epoll_event ev {};
+                ev.events = EPOLLIN | EPOLLET;
+                ev.data.fd = fd;
+                keep(::epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev));
+            }
+            return epoll_fd;
+        }
+    }
+
     static result bench_epoll_rtt(const double scale)
     {
         const auto iterations = scaled(200'000u, scale);
@@ -73,17 +98,9 @@ namespace kmx::aio::benchmark
         if (!pair.valid)
             return skipped("baseline/socketpair_rtt (epoll, 1 thread)", "socketpair failed");
 
-        const int epoll_fd = ::epoll_create1(0);
+        const int epoll_fd = baseline_detail::watch_for_read(pair);
         if (epoll_fd < 0)
             return skipped("baseline/socketpair_rtt (epoll, 1 thread)", "epoll_create1 failed");
-
-        for (const int fd: pair.fd)
-        {
-            epoll_event ev {};
-            ev.events = EPOLLIN | EPOLLET;
-            ev.data.fd = fd;
-            keep(::epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev));
-        }
 
         std::vector<double> samples {};
         samples.reserve(iterations);
@@ -110,6 +127,35 @@ namespace kmx::aio::benchmark
         return out;
     }
 
+    namespace baseline_detail
+    {
+        /// @brief Sends one byte and immediately reads its own end, which cannot yet hold an answer.
+        /// @param fd The end to send on and read back.
+        /// @details This is the readiness executor's inline round trip, syscall for syscall. Each side
+        ///          sends and then reads its own end straight away, before the peer has had a chance to
+        ///          answer: that read reports EAGAIN, and the wait which follows is what the event loop
+        ///          does next. The order matters. A read placed after the peer's write finds the byte
+        ///          already queued, returns it without ever waiting, and measures a loop that never
+        ///          enters epoll_wait at all - which is not what the executor does.
+        inline void send_then_probe(const int fd) noexcept
+        {
+            ping(fd);
+
+            char byte {};
+            keep(::read(fd, &byte, 1u)); // EAGAIN: the answer cannot be here yet.
+        }
+
+        /// @brief Waits for readiness and takes the byte that woke it.
+        /// @param epoll_fd The epoll set to wait on.
+        /// @param events Scratch space for the events the wait reports.
+        /// @param fd The end to drain.
+        inline void wait_then_receive(const int epoll_fd, epoll_event* const events, const int fd) noexcept
+        {
+            keep(::epoll_wait(epoll_fd, events, 8, -1));
+            drain(fd);
+        }
+    }
+
     static result bench_epoll_rtt_eagain(const double scale)
     {
         const auto iterations = scaled(200'000u, scale);
@@ -117,51 +163,22 @@ namespace kmx::aio::benchmark
         if (!pair.valid)
             return skipped("baseline/socketpair_rtt (epoll + EAGAIN probe)", "socketpair failed");
 
-        const int epoll_fd = ::epoll_create1(0);
+        const int epoll_fd = baseline_detail::watch_for_read(pair);
         if (epoll_fd < 0)
             return skipped("baseline/socketpair_rtt (epoll + EAGAIN probe)", "epoll_create1 failed");
-
-        for (const int fd: pair.fd)
-        {
-            // Read readiness only. Registering EPOLLOUT as well would have every wait return at once on
-            // a socket that is always writable, and the case would measure nothing it claims to.
-            epoll_event ev {};
-            ev.events = EPOLLIN | EPOLLET;
-            ev.data.fd = fd;
-            keep(::epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev));
-        }
 
         std::vector<double> samples {};
         samples.reserve(iterations);
         epoll_event events[8] {};
 
-        // The readiness executor's inline round trip, syscall for syscall. Each side sends and then reads
-        // its own end straight away, before the peer has had a chance to answer: that read reports
-        // EAGAIN, and the wait which follows is what the event loop does next. The order matters. A read
-        // placed after the peer's write finds the byte already queued, returns it without ever waiting,
-        // and measures a loop that never enters epoll_wait at all - which is not what the executor does.
-        const auto send_then_probe = [&](const int fd) noexcept
-        {
-            baseline_detail::ping(fd);
-
-            char byte {};
-            keep(::read(fd, &byte, 1u)); // EAGAIN: the answer cannot be here yet.
-        };
-
-        const auto wait_then_receive = [&](const int fd) noexcept
-        {
-            keep(::epoll_wait(epoll_fd, events, 8, -1));
-            baseline_detail::drain(fd);
-        };
-
         for (std::size_t i {}; i != iterations; ++i)
         {
             const auto start = clock_t::now();
 
-            send_then_probe(pair.fd[0]);   // The ping side writes and parks on its own end.
-            wait_then_receive(pair.fd[1]); // The loop wakes the echo side, which takes the byte,
-            send_then_probe(pair.fd[1]);   // answers, and parks on its end in turn.
-            wait_then_receive(pair.fd[0]); // The loop wakes the ping side with the answer.
+            baseline_detail::send_then_probe(pair.fd[0]);              // The ping side writes and parks on its own end.
+            baseline_detail::wait_then_receive(epoll_fd, events, pair.fd[1]); // The loop wakes the echo side, which takes
+            baseline_detail::send_then_probe(pair.fd[1]);              // the byte, answers, and parks on its end in turn.
+            baseline_detail::wait_then_receive(epoll_fd, events, pair.fd[0]); // The loop wakes the ping side with the answer.
 
             samples.push_back(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(clock_t::now() - start).count()));
         }

@@ -1,6 +1,22 @@
 # kmx-aio
 
-**kmx-aio** is a modern, high-performance C++26 asynchronous I/O library designed for building non-blocking network applications on Linux. It leverages C++ coroutines to provide a clean, synchronous-looking API for asynchronous operations across two execution models: readiness (`epoll`) and completion (`io_uring`).
+**kmx-aio** is a modern, high-performance C++26 asynchronous I/O and protocol library for Linux. C++
+coroutines give it a clean, synchronous-looking API that reaches from raw transports up through TLS,
+HTTP/2 and HTTP/3 to industrial and automotive stacks — OPC UA, Modbus, KNXnet/IP, SOME/IP and AVB —
+across three execution models: readiness (`epoll`), completion (`io_uring`) and GPU (CUDA).
+
+## Requirements
+
+| | |
+| :--- | :--- |
+| **OS** | Linux. The library is built directly on `epoll`, `io_uring`, `timerfd`, V4L2 and AF_XDP; there is no portability layer. |
+| **Compiler** | **GCC 16 or Clang 23** at the least — earlier releases do not implement the C++26 features the library is written against, and Ubuntu 24.04's stock GCC 13.3 does not recognise `-std=c++26` at all. See [Setup](documentation/setup.md). |
+| **Kernel** | 5.10+ for the completion model. The readiness model needs no more than `epoll`. |
+| **Build** | [qbs](https://qbs.io) |
+
+Everything past the networking core is **off by default** behind a `project.enable_*` gate. See
+[Setup](documentation/setup.md) for the dependencies each one pulls in and
+[Build](documentation/build.md#feature-defines) for the gates themselves.
 
 ## Key Features
 
@@ -90,7 +106,8 @@ Quick reference that groups features by domain and highlights only their applica
 
 Quick reference showing which APIs are available in each execution model:
 
-⚙ — Feature-gated (requires `project.enable_*:true`; off by default)
+✅ available · ❌ not available in that model · — outside both I/O models ·
+⚙ feature-gated (requires `project.enable_*:true`; off by default)
 
 | Feature | Readiness (epoll) | Completion (io_uring) | ⚙ | Notes |
 | :--- | :---: | :---: | :---: | :--- |
@@ -101,7 +118,7 @@ Quick reference showing which APIs are available in each execution model:
 | [**Timers**](documentation/features/timers.md) | ✅ | ✅ | | Readiness: timerfd + epoll; Completion: io_uring timeout ops |
 | [**AF_XDP Packets**](documentation/features/af-xdp.md) | ❌ | ✅ | ⚙ | Kernel-bypass; eBPF filtering; UMEM ring management |
 | [**AVB/IEEE 802.1**](documentation/features/avb.md) | ✅ | ✅ | ⚙ | Shared generic stack; readiness/completion aliases; sample-validated |
-| [**GPU / CUDA**](documentation/features/gpu-cuda.md) | ❌ | ✅ | ⚙ | Async CUDA event completion; thread-per-core pinning |
+| [**GPU / CUDA**](documentation/features/gpu-cuda.md) | — | — | ⚙ | Neither: `gpu::executor` is an execution model of its own. Async CUDA event completion; thread-per-core pinning |
 | [**HFT Order Router**](documentation/features/hft-order-router.md) | ❌ | ✅ | ⚙ | Sample demo; `kmx::aio::channel` with CPU pinning |
 | [**HTTP/2**](documentation/features/http2.md) | ✅ | ✅ | ⚙ | Full codec + ALPN; no executor affinity |
 | [**HTTP/3**](documentation/features/quic-http3.md) | ✅ | ✅ | ⚙ | HTTP/3 codec and message layer over QUIC |
@@ -114,7 +131,11 @@ Quick reference showing which APIs are available in each execution model:
 | [**SPDK Block I/O**](documentation/features/spdk.md) | ❌ | ✅ | ⚙ | NVMe, generic bdev; DPDK-backed |
 | [**V4L2 Capture**](documentation/features/v4l2.md) | ✅ | ✅ | | No gate of its own; rides on whichever executor backend is enabled |
 
-This table says which model a feature *works* in. For how the two compare where both are available,
+This table says which I/O model a feature *works* in. `gpu::executor` is listed for completeness but
+sits outside both: it drives CUDA event completion on its own worker threads, reusing the same
+`task<T>`, `spawn()` and `executor_base` machinery rather than running inside an `io_uring` loop.
+
+For how the two I/O models compare where both are available,
 `kmx-aio-benchmark` runs one scenario body on each executor and prints them side by side - see
 [Benchmarking](documentation/benchmarking.md#epoll-against-io_uring).
 

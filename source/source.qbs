@@ -36,9 +36,13 @@ Project {
     property bool enable_opc_ua: full || all || false
     property bool opc_ua_vendored: true
     property bool enable_modbus: full || all || false
+    // The KNX secure and keyring surfaces are part of the KNX product and have no gate of their own.
+    // They used to: enable_knx_secure and enable_knx_keyring defined KMX_AIO_FEATURE_KNX_SECURE and
+    // KMX_AIO_FEATURE_KNX_KEYRING, which nothing anywhere read, while knx.qbs globbed secure.cpp and
+    // keyring.cpp in unconditionally - so the two properties selected nothing and the release gate that
+    // set them built the same binary as a plain enable_knx:true. A gate that compiles the same code
+    // either way is worse than no gate: it reads as coverage of a configuration that was never built.
     property bool enable_knx: full || all || false
-    property bool enable_knx_secure: enable_knx && (full || all || false)
-    property bool enable_knx_keyring: enable_knx_secure && (full || all || false)
     property string opc_ua_prefix: sourceDirectory + "/../output/open62541/install-local"
     property bool enable_someip: full || all || false
     property bool someip_vendored: true
@@ -87,10 +91,6 @@ Project {
             macros.push("KMX_AIO_FEATURE_MODBUS");
         if (enable_knx)
             macros.push("KMX_AIO_FEATURE_KNX");
-        if (enable_knx_secure)
-            macros.push("KMX_AIO_FEATURE_KNX_SECURE");
-        if (enable_knx_keyring)
-            macros.push("KMX_AIO_FEATURE_KNX_KEYRING");
         if (enable_someip)
             macros.push("KMX_AIO_FEATURE_SOMEIP");
         if (enable_cuda)

@@ -169,6 +169,22 @@ namespace kmx::aio::readiness::v4l2
             std::size_t length {};
         };
 
+        /// @brief An opened capture device, or why it could not be opened.
+        using expected_fd = std::expected<file_descriptor, kmx::aio::error_code>;
+        /// @brief A complete set of mapped driver buffers, or why they could not be mapped.
+        using expected_mmap_buffers = std::expected<std::vector<mmap_buffer>, kmx::aio::error_code>;
+
+        /// @brief Opens the device node and checks it can capture video by streaming.
+        [[nodiscard]] static expected_fd open_capture_device(const capture_config& cfg) noexcept;
+        /// @brief Negotiates the pixel format, frame size and rate, rewriting @p cfg to what was granted.
+        [[nodiscard]] static std::expected<void, kmx::aio::error_code> negotiate_format(int fd, capture_config& cfg) noexcept;
+        /// @brief Requests the driver's buffers and maps every one of them into this process.
+        [[nodiscard]] static expected_mmap_buffers map_buffers(int fd, capture_config& cfg) noexcept;
+        /// @brief Hands every buffer to the driver so streaming has somewhere to deliver into.
+        [[nodiscard]] static std::expected<void, kmx::aio::error_code> enqueue_buffers(int fd, std::uint32_t count) noexcept;
+        /// @brief Releases every mapping in @p buffers.
+        static void unmap_all(std::vector<mmap_buffer>& buffers) noexcept;
+
         /// @brief Constructs a streaming capture from resources @ref create has already acquired.
         /// @param exec    The executor the device descriptor is registered with.
         /// @param fd      The opened capture device.

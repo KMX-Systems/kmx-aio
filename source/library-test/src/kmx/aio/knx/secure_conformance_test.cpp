@@ -142,6 +142,8 @@ namespace kmx::aio::test::knx::secure_conformance_test
                 return error::malformed_frame;
             if (value == "unsupported_service")
                 return error::unsupported_service;
+            if (value == "secure_unsupported")
+                return error::secure_unsupported;
             if (value == "invalid_configuration")
                 return error::invalid_configuration;
             if (value == "invalid_length")
@@ -149,6 +151,68 @@ namespace kmx::aio::test::knx::secure_conformance_test
             if (value == "sequence_error")
                 return error::sequence_error;
             return std::nullopt;
+        }
+
+        /// @brief Indicates whether a line carries a vector rather than a comment or the header row.
+        [[nodiscard]] bool is_data_line(const std::string_view trimmed)
+        {
+            return !trimmed.empty() && !trimmed.starts_with('#') && !trimmed.starts_with("case_id\t");
+        }
+
+        /// @brief Fills in the fields only a vector expected to decode successfully carries.
+        /// @param fields The row's fields.
+        /// @param line_number The row's line, for the message when a field cannot be read.
+        /// @param value The case being built.
+        /// @return Nothing, or what was wrong with the row.
+        [[nodiscard]] std::expected<void, std::string> parse_positive_fields(const std::vector<std::string>& fields,
+                                                                             const std::size_t line_number,
+                                                                             conformance_case& value)
+        {
+            const auto selected = parse_profile(fields[1u]);
+            const auto sequence = parse_u64(fields[2u]);
+            const auto payload = decode_hex(fields[3u]);
+            if (!selected.has_value() || !sequence.has_value() || !payload.has_value())
+                return std::unexpected("invalid positive vector fields at line " + std::to_string(line_number));
+
+            value.selected = *selected;
+            value.sequence = *sequence;
+            value.payload = *payload;
+            return {};
+        }
+
+        /// @brief Reads one vector row.
+        /// @param line The row, tabs and all.
+        /// @param line_number The row's line, for the message when it cannot be read.
+        /// @return The case, or what was wrong with the row.
+        [[nodiscard]] std::expected<conformance_case, std::string> parse_case(const std::string& line,
+                                                                              const std::size_t line_number)
+        {
+            auto fields = split_tsv(line);
+            if (fields.size() == 5u)
+                fields.emplace_back("");
+            if (fields.size() != 6u)
+                return std::unexpected("invalid field count at secure conformance line " + std::to_string(line_number));
+
+            conformance_case value {};
+            value.case_id = trim(fields[0u]);
+            const auto expected = parse_error(fields[5u]);
+            if (!trim(fields[5u]).empty() && !expected.has_value())
+                return std::unexpected("unknown expected error at line " + std::to_string(line_number));
+            value.expected_error = expected;
+
+            const auto wire = decode_hex(fields[4u]);
+            if (!wire.has_value())
+                return std::unexpected("invalid wire hex at line " + std::to_string(line_number));
+            value.wire = *wire;
+
+            // A vector that expects an error carries only the octets that provoke it; the decoded fields
+            // beside them are meaningful only for the vectors that are supposed to succeed.
+            if (value.expected_error.has_value())
+                return value;
+
+            if (const auto parsed = parse_positive_fields(fields, line_number, value); !parsed.has_value())
+                return std::unexpected(parsed.error());
+            return value;
         }
 
         [[nodiscard]] std::expected<std::vector<conformance_case>, std::string> parse_cases(
@@ -166,45 +230,13 @@ namespace kmx::aio::test::knx::secure_conformance_test
                 ++line_number;
                 if (!line.empty() && (line.back() == '\r'))
                     line.pop_back();
-
-                const auto trimmed = trim(line);
-                if (trimmed.empty() || trimmed.starts_with('#'))
-                    continue;
-                if (trimmed.starts_with("case_id\t"))
+                if (!is_data_line(trim(line)))
                     continue;
 
-                auto fields = split_tsv(line);
-                if (fields.size() == 5u)
-                    fields.emplace_back("");
-                if (fields.size() != 6u)
-                    return std::unexpected("invalid field count at secure conformance line " + std::to_string(line_number));
-
-                conformance_case value {};
-                value.case_id = trim(fields[0u]);
-                const auto expected = parse_error(fields[5u]);
-                if (!trim(fields[5u]).empty() && !expected.has_value())
-                    return std::unexpected("unknown expected error at line " + std::to_string(line_number));
-                value.expected_error = expected;
-
-                const auto wire = decode_hex(fields[4u]);
-                if (!wire.has_value())
-                    return std::unexpected("invalid wire hex at line " + std::to_string(line_number));
-                value.wire = *wire;
-
-                if (!value.expected_error.has_value())
-                {
-                    const auto selected = parse_profile(fields[1u]);
-                    const auto sequence = parse_u64(fields[2u]);
-                    const auto payload = decode_hex(fields[3u]);
-                    if (!selected.has_value() || !sequence.has_value() || !payload.has_value())
-                        return std::unexpected("invalid positive vector fields at line " + std::to_string(line_number));
-
-                    value.selected = *selected;
-                    value.sequence = *sequence;
-                    value.payload = *payload;
-                }
-
-                cases.push_back(std::move(value));
+                auto value = parse_case(line, line_number);
+                if (!value.has_value())
+                    return std::unexpected(value.error());
+                cases.push_back(std::move(*value));
             }
 
             if (cases.empty())
