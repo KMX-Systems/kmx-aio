@@ -1,0 +1,5 @@
+# Keys for the calimero-server side of run-secure-tunnelling-interop.sh. Calimero hashes each password as it loads it;
+# the in-tree client derives the same keys from the same passwords, which are xknx's test fixture passwords.
+device.pwd=trustme
+user[1].pwd=management
+user[2].pwd=secret

@@ -32,6 +32,10 @@
 *.spv
 *.bg
 
+# Python bytecode
+__pycache__/
+*.py[cod]
+
 # IDEs, build and other folders
 .cmake/
 .idea/
@@ -43,3 +47,6 @@ default/
 debug/
 output/
 tsan/
+
+# Local copies of interoperability run logs. The interop scripts write them to output/interop/captures/, and CI uploads them.
+documentation/features/knx/interoperability/captures/

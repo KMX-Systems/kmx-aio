@@ -14,14 +14,36 @@ namespace kmx::aio::readiness::knx
         co_return result;
     }
 
+    /// @brief Sends a group's traffic out of the interface it was joined on, when one is named.
+    /// @param fd The socket.
+    /// @param interface_index The interface; zero leaves the choice to the kernel's multicast route.
+    /// @return Nothing, or the reason the interface could not be selected.
+    /// @note Without it the membership and the sends part ways: a group joined on the bus interface would still
+    ///       be written to whichever interface the multicast route names.
+    [[nodiscard]] static expected_void_t select_multicast_interface(const int fd, const std::uint32_t interface_index) noexcept
+    {
+        if (interface_index == 0u)
+            return {};
+#if defined(__linux__)
+        ip_mreqn request {};
+        request.imr_ifindex = static_cast<int>(interface_index);
+        if (::setsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF, &request, sizeof(request)) < 0)
+            return std::unexpected(error_from_errno());
+        return {};
+#else
+        return std::unexpected(kmx::aio::knx::make_error_code(kmx::aio::knx::error::invalid_configuration));
+#endif
+    }
+
     /// @brief Prepares a socket to share a multicast port with the other listeners on this host.
     /// @param fd The socket.
-    /// @param port The port the group is served on.
+    /// @param configuration The port, interface and loopback choice.
     /// @return Nothing, or the reason the socket could not be prepared.
     /// @details Several KNX applications on one host listen to the same group and port, so the address is
-    ///          shared rather than owned. Loopback is turned off because a sender otherwise hears its own
-    ///          multicast back and would report its own traffic as received.
-    [[nodiscard]] static expected_void_t prepare_multicast_socket(const int fd, const std::uint16_t port) noexcept
+    ///          shared rather than owned. Loopback stays off unless the configuration asks for it, so that a
+    ///          lone sender does not hear its own multicast back.
+    [[nodiscard]] static expected_void_t prepare_multicast_socket(const int fd,
+                                                                  const kmx::aio::knx::multicast_group_configuration& configuration) noexcept
     {
         const int reuse = 1;
         if (::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0)
@@ -30,13 +52,15 @@ namespace kmx::aio::readiness::knx
         static_cast<void>(::setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse)));
 #endif
 
-        const int loop = 0;
+        const int loop = configuration.loopback ? 1 : 0;
         static_cast<void>(::setsockopt(fd, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop)));
+        if (const auto selected = select_multicast_interface(fd, configuration.interface_index); !selected.has_value())
+            return selected;
 
         sockaddr_in local {};
         local.sin_family = AF_INET;
         local.sin_addr.s_addr = htonl(INADDR_ANY);
-        local.sin_port = htons(port);
+        local.sin_port = htons(configuration.port);
         if (::bind(fd, reinterpret_cast<const sockaddr*>(&local), sizeof(local)) < 0)
         {
             // Already bound, or bound by another listener on the same port: neither prevents the
@@ -84,7 +108,7 @@ namespace kmx::aio::readiness::knx
         if (fd < 0)
             return std::unexpected(error_from_errno(EBADF));
 
-        if (const auto prepared = prepare_multicast_socket(fd, configuration.port); !prepared.has_value())
+        if (const auto prepared = prepare_multicast_socket(fd, configuration); !prepared.has_value())
             return prepared;
         return add_multicast_membership(fd, make_multicast_address(configuration.group), configuration.interface_index);
     }

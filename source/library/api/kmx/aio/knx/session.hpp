@@ -129,6 +129,9 @@ namespace kmx::aio::knx
             request_packet_.clear();
             connect_packet_.clear();
             last_deadline_ms_ = 0u;
+            heartbeat_outstanding_ = false;
+            heartbeat_deadline_ms_ = 0u;
+            control_endpoint_ = hpai {};
         }
 
         /// @brief Returns where the session is in its lifecycle.
@@ -173,6 +176,21 @@ namespace kmx::aio::knx
         /// @brief Returns how often a supervisor should send a heartbeat.
         [[nodiscard]] constexpr std::uint32_t heartbeat_interval_ms() const noexcept { return config_.heartbeat_interval_ms; }
 
+        /// @brief Selects the rules of KNXnet/IP over TCP, or those of KNXnet/IP over UDP.
+        /// @details A stream already delivers every frame once and in order, so under its rules:
+        ///          - no TUNNELLING_ACK is sent or awaited: a request is complete once prepared, and the send sequence
+        ///            still advances;
+        ///          - the peer's sequence numbers are not checked;
+        ///          - a connect or a disconnect is attempted once, since resending it on the same connection gains nothing.
+        /// @note Kept by @ref reset: it describes the transport, which a reset does not change.
+        constexpr void use_stream_rules(const bool stream) noexcept { stream_ = stream; }
+
+        /// @brief Indicates whether the rules of KNXnet/IP over TCP apply.
+        [[nodiscard]] constexpr bool stream_rules() const noexcept { return stream_; }
+
+        /// @brief Indicates whether a heartbeat sent without waiting still has no answer.
+        [[nodiscard]] constexpr bool heartbeat_outstanding() const noexcept { return heartbeat_outstanding_; }
+
         /// @brief Returns the deadline the outstanding exchange was given, on the caller's clock.
         /// @note Compare against it with @ref expired or @ref connect_expired rather than directly; those
         ///       account for the counter wrapping.
@@ -197,6 +215,7 @@ namespace kmx::aio::knx
         constexpr void shutdown() noexcept
         {
             pending_ = false;
+            heartbeat_outstanding_ = false;
             state_ = session_state::closed;
             request_packet_.clear();
             connect_packet_.clear();
@@ -271,7 +290,8 @@ namespace kmx::aio::knx
         /// @retval kmx::aio::knx::error::shutdown The session is closing or closed.
         /// @retval kmx::aio::knx::error::sequence_error @p channel_id is zero.
         /// @note The ordinary way to send. The sequence number is allocated here, so a caller never picks
-        ///       one itself.
+        ///       one itself. Under @ref use_stream_rules the request is complete once prepared: nothing is retained
+        ///       for a retry, and nothing is left outstanding.
         [[nodiscard]] std::expected<std::uint8_t, std::error_code> prepare_request_packet(const span_uint8_t packet,
                                                                                           const std::uint8_t channel_id,
                                                                                           const cspan_uint8_t cemi_bytes,
@@ -286,6 +306,8 @@ namespace kmx::aio::knx
         [[nodiscard]] expected_void_t prepare_retry_packet(const span_uint8_t packet) const noexcept;
 
         /// @brief Encodes a CONNECTIONSTATE_REQUEST for the established channel.
+        /// @details The request names the control endpoint the connect named - the TCP HPAI over a stream. After
+        ///          @ref start_connect_raw, whose endpoints are not read back, it names the route-back HPAI.
         /// @param packet The destination octets.
         /// @return Nothing, or the reason it could not be prepared.
         /// @retval kmx::aio::knx::error::shutdown The session is not connected.
@@ -294,6 +316,7 @@ namespace kmx::aio::knx
         [[nodiscard]] expected_void_t prepare_connectionstate_request_packet(const span_uint8_t packet) const noexcept;
 
         /// @brief Encodes a DISCONNECT_REQUEST and enters @ref session_state::closing.
+        /// @details The request carries the control endpoint, as @ref prepare_connectionstate_request_packet does.
         /// @param packet The destination octets.
         /// @return Nothing, or the reason it could not be prepared.
         /// @retval kmx::aio::knx::error::shutdown The session is already closed.
@@ -395,7 +418,7 @@ namespace kmx::aio::knx
         ///       acknowledgement - but its payload must not be delivered a second time.
         [[nodiscard]] constexpr bool duplicate_indication(const tunnelling_request_frame& request) const noexcept
         {
-            return (state_ == session_state::connected) && (request.channel_id == channel_id_) && incoming_sequence_valid_ &&
+            return !stream_ && (state_ == session_state::connected) && (request.channel_id == channel_id_) && incoming_sequence_valid_ &&
                    (request.sequence_number == last_incoming_sequence_);
         }
 
@@ -406,7 +429,7 @@ namespace kmx::aio::knx
         ///       out of order with respect to.
         [[nodiscard]] constexpr bool out_of_order_indication(const tunnelling_request_frame& request) const noexcept
         {
-            return incoming_sequence_valid_ && (request.sequence_number != next_incoming_sequence_);
+            return !stream_ && incoming_sequence_valid_ && (request.sequence_number != next_incoming_sequence_);
         }
 
         /// @brief Records that traffic was seen, deferring the inactivity timeout.
@@ -485,6 +508,26 @@ namespace kmx::aio::knx
         /// @retval kmx::aio::knx::error::heartbeat_failed The limit has been reached; the session is now
         ///         closed.
         [[nodiscard]] expected_void_t on_connectionstate_timeout() noexcept;
+
+        /// @brief Records that a CONNECTIONSTATE_REQUEST went out with nothing waiting for its answer.
+        /// @param deadline_ms When the answer is due, on the caller's clock.
+        /// @details Whatever receive is running applies the answer, which clears this; @ref check_heartbeat counts the
+        ///          heartbeat as failed if @p deadline_ms passes first. A heartbeat sent while one is outstanding keeps
+        ///          the earlier deadline, so a silent peer is noticed on schedule.
+        constexpr void note_heartbeat_sent(const std::uint32_t deadline_ms) noexcept
+        {
+            if (heartbeat_outstanding_)
+                return;
+            heartbeat_outstanding_ = true;
+            heartbeat_deadline_ms_ = deadline_ms;
+        }
+
+        /// @brief Counts an unanswered heartbeat as failed once its deadline has passed.
+        /// @param now_ms The current time on the caller's clock.
+        /// @return Nothing while no heartbeat is overdue.
+        /// @retval kmx::aio::knx::error::connection_failed The heartbeat went unanswered, under the failure limit.
+        /// @retval kmx::aio::knx::error::heartbeat_failed The failure limit has been reached; the session is now closed.
+        [[nodiscard]] expected_void_t check_heartbeat(std::uint32_t now_ms) noexcept;
 
         /// @brief Decodes a TUNNELLING_ACK datagram and applies it.
         /// @param packet The received datagram.
@@ -602,6 +645,11 @@ namespace kmx::aio::knx
         byte_buffer_t request_packet_ {};
         byte_buffer_t connect_packet_ {};
         std::uint32_t last_deadline_ms_ {};
+        bool stream_ {};
+        bool heartbeat_outstanding_ {};
+        std::uint32_t heartbeat_deadline_ms_ {};
+        /// @brief The control endpoint the connect named, which heartbeats and disconnects carry.
+        hpai control_endpoint_ {};
     };
 }
 #endif // KMX_AIO_FEATURE_KNX

@@ -21,6 +21,7 @@
         #include <array>
         #include <cstdint>
         #include <expected>
+        #include <optional>
         #include <span>
         #include <system_error>
     #endif
@@ -31,26 +32,48 @@
 
 namespace kmx::aio::knx
 {
-    /// @brief The status a server reports in a connection response.
+    /// @brief The status a server reports in a connection, connection state or disconnect response.
     /// @details Every value but @ref connect_status::no_error is a refusal, and each says which part of the
     ///          request the server could not honour, so a client can tell a retryable condition - the
     ///          server being full - from a request it must change before asking again.
+    ///
+    ///          The values are the KNXnet/IP error codes, and they are not consecutive. They used to be
+    ///          numbered 0x21 to 0x26 in declaration order, which matched no peer: this library's client
+    ///          and server agreed with each other while every real interface read "no more connections"
+    ///          as E_DATA_CONNECTION. Only the three common codes sit below 0x21.
+    /// @reference KNX System Specifications, 03/08/02 "Core", error codes.
     enum class connect_status : std::uint8_t
     {
-        /// @brief The request was accepted.
+        /// @brief E_NO_ERROR: the request was accepted.
         no_error = 0x00u,
-        /// @brief The host protocol named in an HPAI is not one the server supports.
-        host_protocol_type = 0x21u,
-        /// @brief The KNXnet/IP protocol version is not supported.
-        version_not_supported = 0x22u,
-        /// @brief The sequence number is out of step; the channel is no longer usable.
-        sequence_number = 0x23u,
-        /// @brief The server does not offer the requested connection type.
-        connection_type = 0x24u,
-        /// @brief The connection type is offered, but not with the requested options.
-        connection_option = 0x25u,
-        /// @brief The server has no free channel; retryable once another client disconnects.
-        no_more_connections = 0x26u,
+        /// @brief E_HOST_PROTOCOL_TYPE: the host protocol named in an HPAI is not one the server supports.
+        host_protocol_type = 0x01u,
+        /// @brief E_VERSION_NOT_SUPPORTED: the KNXnet/IP protocol version is not supported.
+        version_not_supported = 0x02u,
+        /// @brief E_SEQUENCE_NUMBER: the sequence number is out of step.
+        sequence_number = 0x04u,
+        /// @brief E_CONNECTION_ID: the server has no active connection with the channel named.
+        connection_id = 0x21u,
+        /// @brief E_CONNECTION_TYPE: the server does not offer the requested connection type.
+        connection_type = 0x22u,
+        /// @brief E_CONNECTION_OPTION: the connection type is offered, but not with the requested options.
+        connection_option = 0x23u,
+        /// @brief E_NO_MORE_CONNECTIONS: the server has no free channel; retryable once another client leaves.
+        no_more_connections = 0x24u,
+        /// @brief E_NO_MORE_UNIQUE_CONNECTIONS: no individual address is left to give a new tunnel.
+        no_more_unique_connections = 0x25u,
+        /// @brief E_DATA_CONNECTION: the server detected an error on the connection's data endpoint.
+        data_connection = 0x26u,
+        /// @brief E_KNX_CONNECTION: the server detected an error on its connection to the KNX bus.
+        knx_connection = 0x27u,
+        /// @brief E_AUTHORISATION_ERROR: the client is not authorised for the requested connection.
+        authorisation_error = 0x28u,
+        /// @brief E_TUNNELLING_LAYER: the server does not offer the requested tunnelling layer.
+        tunnelling_layer = 0x29u,
+        /// @brief E_NO_TUNNELLING_ADDRESS: the individual address the client asked for is not available.
+        no_tunnelling_address = 0x2Du,
+        /// @brief E_CONNECTION_IN_USE: the individual address the client asked for is already in use.
+        connection_in_use = 0x2Eu,
     };
 
     /// @brief An IPv4 address and UDP port, in host order.
@@ -147,6 +170,8 @@ namespace kmx::aio::knx
     };
 
     /// @brief A CONNECT_REQUEST for a tunnelling connection.
+    /// @details Both endpoints use one host protocol. Over TCP both are the TCP HPAI - protocol `0x02` with address and
+    ///          port zero - because the connection the request arrives on already says where the client is.
     struct connect_request_frame
     {
         /// @brief Where to send the connection management exchanges.
@@ -155,6 +180,10 @@ namespace kmx::aio::knx
         hpai data_endpoint {};
         /// @brief The KNX layer to tunnel at; link layer unless a monitor or raw connection is wanted.
         std::uint8_t knx_layer = 0x02u;
+        /// @brief The individual address to tunnel under, which picks the tunnelling slot on an interface offering
+        ///        several; the interface chooses when empty.
+        /// @details Sent in the six-octet extended CRI when set, and the four-octet CRI is sent otherwise.
+        std::optional<individual_address> requested_address {};
     };
 
     /// @brief A CONNECT_REQUEST for a device management connection.
@@ -198,10 +227,13 @@ namespace kmx::aio::knx
     /// @brief A CONNECTIONSTATE_REQUEST: the heartbeat that keeps a channel from being reaped.
     /// @note A server drops a channel it has heard nothing on; this is what a client sends to say it is
     ///       still there when it has no traffic of its own to send.
+    /// @details Sixteen octets on the wire: the channel, a reserved octet, and the control endpoint the answer goes to.
     struct connectionstate_request_frame
     {
         /// @brief The channel being asked about.
         std::uint8_t channel_id {};
+        /// @brief Where the answer goes: the client's control endpoint, the route-back HPAI, or the TCP HPAI over TCP.
+        hpai control_endpoint {};
     };
 
     /// @brief The answer to a CONNECTIONSTATE_REQUEST.
@@ -215,10 +247,13 @@ namespace kmx::aio::knx
 
     /// @brief A DISCONNECT_REQUEST, closing a channel.
     /// @note Either peer may send it; a server does so to reclaim a channel that has gone quiet.
+    /// @details Sixteen octets on the wire, laid out as a CONNECTIONSTATE_REQUEST is.
     struct disconnect_request_frame
     {
         /// @brief The channel being closed.
         std::uint8_t channel_id {};
+        /// @brief Where the answer goes: the sender's control endpoint, the route-back HPAI, or the TCP HPAI over TCP.
+        hpai control_endpoint {};
     };
 
     /// @brief The answer to a DISCONNECT_REQUEST.
@@ -258,12 +293,20 @@ namespace kmx::aio::knx
         inline constexpr std::size_t ipv6_connect_response_body_size = 26u;
         /// @brief Structure length of the tunnelling connection request and response information blocks.
         inline constexpr std::uint8_t connection_information_size = 0x04u;
+        /// @brief Structure length of the extended tunnelling connection request information block, which adds the
+        ///        requested individual address.
+        inline constexpr std::uint8_t extended_connection_information_size = 0x06u;
+        /// @brief Body size of a tunnelling CONNECT_REQUEST carrying the extended CRI.
+        inline constexpr std::size_t extended_connect_request_body_size = connect_request_body_size + 2u;
         /// @brief Structure length of a device management connection information block.
         /// @details A management connection names no layer and no address, so its block is the structure
         ///          length and the connection type and nothing else.
         inline constexpr std::uint8_t management_information_size = 0x02u;
         /// @brief Body size of a device management CONNECT_REQUEST: two HPAIs and a two-octet CRI.
         inline constexpr std::size_t management_connect_request_body_size = (2u * hpai_size) + management_information_size;
+        /// @brief Body of a CONNECTIONSTATE_REQUEST or a DISCONNECT_REQUEST: the channel, a reserved octet, and the
+        ///        control endpoint HPAI.
+        inline constexpr std::size_t control_request_body_size = 2u + hpai_size;
         /// @brief Body size of a device management CONNECT_RESPONSE: channel, status, HPAI and a CRD.
         inline constexpr std::size_t management_connect_response_body_size = 2u + hpai_size + management_information_size;
         /// @brief Connection type code of a tunnelling connection.

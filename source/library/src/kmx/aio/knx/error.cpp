@@ -69,7 +69,7 @@ namespace kmx::aio::knx
             }
 
             /// @copydoc framing_message
-            /// @brief Names the errors raised by the application layer and by KNX Secure.
+            /// @brief Names the errors raised by the application layer.
             [[nodiscard]] static constexpr std::string_view application_message(const error value) noexcept
             {
                 switch (value)
@@ -86,8 +86,36 @@ namespace kmx::aio::knx
                         return "KNX datapoint type is unsupported";
                     case error::value_out_of_range:
                         return "KNX datapoint value is out of range";
+                    default:
+                        return {};
+                }
+            }
+
+            /// @copydoc framing_message
+            /// @brief Names the errors raised by KNX Secure.
+            /// @note None of these texts names a key, a sequence number or anything else taken from a frame.
+            [[nodiscard]] static constexpr std::string_view security_message(const error value) noexcept
+            {
+                switch (value)
+                {
                     case error::secure_unsupported:
                         return "KNX Secure profile or cryptographic operation is unsupported";
+                    case error::secure_authentication_failed:
+                        return "KNX Secure message authentication failed";
+                    case error::secure_replay:
+                        return "KNX Secure frame is a replay or outside its acceptance window";
+                    case error::secure_session_rejected:
+                        return "KNX Secure session authentication was rejected";
+                    case error::secure_session_closed:
+                        return "KNX Secure session is closed";
+                    case error::secure_key_missing:
+                        return "KNX Secure key is not configured for this frame";
+                    case error::secure_frame_required:
+                        return "KNX Secure requires this frame to be secured";
+                    case error::keyring_signature_invalid:
+                        return "KNX keyring signature is invalid or the password is wrong";
+                    case error::crypto_failure:
+                        return "KNX cryptographic backend failure";
                     default:
                         return {};
                 }
@@ -101,6 +129,8 @@ namespace kmx::aio::knx
                 if (const auto text = session_message(value); !text.empty())
                     return std::string {text};
                 if (const auto text = application_message(value); !text.empty())
+                    return std::string {text};
+                if (const auto text = security_message(value); !text.empty())
                     return std::string {text};
                 return "unknown KNX error";
             }

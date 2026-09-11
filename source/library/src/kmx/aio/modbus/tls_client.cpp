@@ -7,14 +7,16 @@
     #include <kmx/aio/modbus/frame.hpp>
     #include <kmx/aio/readiness/basic_types.hpp>
     #include <kmx/aio/readiness/executor.hpp>
+    #include <kmx/aio/readiness/tcp/connect.hpp>
     #include <kmx/aio/readiness/tcp/stream.hpp>
     #include <kmx/aio/readiness/tls/stream.hpp>
 
-    #include <netinet/tcp.h>
+    #include <netinet/in.h>
     #include <openssl/ssl.h>
     #include <sys/socket.h>
 
     #include <cstdint>
+    #include <cstring>
     #include <optional>
     #include <utility>
 
@@ -24,7 +26,6 @@ namespace kmx::aio::modbus
     using async_result = task_returning_expected_void_t;
     using async_register_result = task<std::expected<register_values, std::error_code>>;
     using async_coil_result = task<std::expected<coil_values, std::error_code>>;
-    using async_fd_result = task<file_descriptor::expected_t>;
 
     struct tls_client::impl: detail::client_ops<tls_client::impl, readiness::tls::stream>
     {
@@ -91,45 +92,6 @@ namespace kmx::aio::modbus
             return ctx;
         }
 
-        [[nodiscard]] async_fd_result prepare_socket() noexcept(false)
-        {
-            // Create non-blocking TCP socket
-            auto fd_result = file_descriptor::create_socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
-            if (!fd_result)
-                co_return std::unexpected(make_error_code(error::connection_failed));
-
-            auto fd = std::move(*fd_result);
-
-            const int one = 1;
-            ::setsockopt(fd.get(), IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
-
-            if (auto r = exec_.register_fd(fd.get()); !r)
-                co_return std::unexpected(make_error_code(error::connection_failed));
-
-            co_return fd;
-        }
-
-        [[nodiscard]] async_result perform_connect_and_verify(file_descriptor& fd, const auto& ip) noexcept(false)
-        {
-            // Initiate non-blocking connect
-            const auto connect_result = fd.connect(ip, config_.port);
-            const bool in_progress = !connect_result && (connect_result.error() == std::error_code(EINPROGRESS, std::generic_category()));
-
-            if (!connect_result && !in_progress)
-                co_return std::unexpected(make_error_code(error::connection_failed));
-
-            if (in_progress)
-                if (!co_await exec_.wait_io(fd.get(), readiness::event_type::write))
-                    co_return std::unexpected(to_std_error_code(error_code::operation_cancelled));
-
-            int so_error {};
-            ::socklen_t so_len {sizeof(so_error)};
-            if (((::getsockopt(fd.get(), SOL_SOCKET, SO_ERROR, &so_error, &so_len) != 0) || (so_error != 0)))
-                co_return std::unexpected(make_error_code(error::connection_failed));
-
-            co_return expected_void_t();
-        }
-
         [[nodiscard]] async_result perform_tls_handshake(readiness::tls::stream& tls_stream) noexcept(false)
         {
             if (!tls_config_.sni_hostname.empty())
@@ -170,25 +132,22 @@ namespace kmx::aio::modbus
             if (!ipv4::parse_address(config_.host, ip_storage))
                 co_return std::unexpected(make_error_code(error::invalid_configuration));
 
-            const auto ip = ipv4::make_address(ip_storage);
+            sockaddr_in address {};
+            address.sin_family = AF_INET;
+            address.sin_port = htons(config_.port);
+            std::memcpy(&address.sin_addr.s_addr, ip_storage.data(), ip_storage.size());
 
-            // Prepare socket (create, configure, register)
-            auto fd_result = co_await prepare_socket();
-            if (!fd_result)
-                co_return std::unexpected(fd_result.error());
-
-            auto fd = std::move(*fd_result);
-
-            // Perform non-blocking connect and verify
-            auto connect_result = co_await perform_connect_and_verify(fd, ip);
-            if (!connect_result)
+            // Create, register and connect the socket. As in the plain client, a cancelled wait keeps its own error and
+            // every other failure is reported as a failed connection.
+            auto connected = co_await readiness::tcp::connect(exec_, reinterpret_cast<const sockaddr*>(&address), sizeof(address));
+            if (!connected)
             {
-                exec_.unregister_fd(fd.get());
-                co_return std::unexpected(connect_result.error());
+                const auto cancelled = connected.error() == to_std_error_code(error_code::operation_cancelled);
+                co_return std::unexpected(cancelled ? connected.error() : make_error_code(error::connection_failed));
             }
 
             // Wrap TCP stream in TLS stream and perform handshake
-            readiness::tcp::stream tcp_stream {exec_, std::move(fd)};
+            readiness::tcp::stream tcp_stream {exec_, std::move(*connected)};
             readiness::tls::stream tls_stream {std::move(tcp_stream), ssl_ctx_};
 
             auto tls_result = co_await perform_tls_handshake(tls_stream);

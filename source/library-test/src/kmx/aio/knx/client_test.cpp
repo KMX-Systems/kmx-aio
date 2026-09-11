@@ -30,23 +30,6 @@ namespace kmx::aio::test::knx::client_test
         return test_now_ms;
     }
 
-    class passthrough_secure_provider final: public secure::provider
-    {
-    public:
-        [[nodiscard]] std::expected<std::vector<std::uint8_t>, std::error_code> protect(
-            const std::span<const std::uint8_t> packet, const std::uint64_t) noexcept override
-        {
-            return std::vector<std::uint8_t>(packet.begin(), packet.end());
-        }
-
-        [[nodiscard]] std::expected<std::vector<std::uint8_t>, std::error_code> unprotect(
-            const std::span<const std::uint8_t> packet, const std::uint64_t) noexcept override
-        {
-            return std::vector<std::uint8_t>(packet.begin(), packet.end());
-        }
-    };
-
-
     class loopback_transport final: public test::knx::recording_transport
     {
     public:
@@ -65,7 +48,6 @@ namespace kmx::aio::test::knx::client_test
         bool ipv6_connect {};
         bool data_peer_as_control {};
         bool hold_receive {};
-        std::uint64_t secure_response_sequence = 1u;
         completion::executor* wait_executor {};
         std::uint16_t advertised_data_port = 3672u;
         std::uint32_t last_receive_deadline {};
@@ -124,63 +106,6 @@ namespace kmx::aio::test::knx::client_test
             return response;
         }
 
-        /// @brief Wraps one plain frame in this stand-in server's secure envelope.
-        /// @param selected The profile the request arrived under.
-        /// @param inner The frame to wrap.
-        /// @return The wrapped frame, or why it could not be encoded.
-        [[nodiscard]] response_result wrap(const secure::profile selected, std::vector<std::uint8_t> inner)
-        {
-            secure::packet wrapped {
-                .selected = selected,
-                .sequence = secure_response_sequence++,
-                .payload = std::move(inner),
-            };
-            std::vector<std::uint8_t> response(
-                frame::communication_header_size + secure::secure_packet_header_size + wrapped.payload.size(), 0u);
-            if (const auto encoded = secure::encode_secure_packet(response, wrapped); !encoded.has_value())
-                return std::unexpected(encoded.error());
-            return response;
-        }
-
-        /// @brief Answers a wrapped request with a wrapped acknowledgement.
-        /// @return The wrapped acknowledgement, or an empty vector when the wrapped frame was itself an
-        ///         acknowledgement and so ends the exchange.
-        [[nodiscard]] response_result make_secure_response(const cspan_uint8_t packet)
-        {
-            const auto secure_packet = secure::decode_secure_packet(packet);
-            if (!secure_packet.has_value())
-                return std::unexpected(secure_packet.error());
-
-            const auto decoded = decode_datagram(secure_packet->payload);
-            if (!decoded.has_value())
-                return std::unexpected(decoded.error());
-            if (decoded->service_type == frame::tunnelling_ack_service)
-            {
-                ack_received = true;
-                return std::vector<std::uint8_t> {};
-            }
-            if (decoded->service_type != frame::tunnelling_request_service)
-                return std::unexpected(make_error_code(error::unsupported_service));
-
-            const auto* request = std::get_if<tunnelling_request_frame>(&decoded->payload);
-            if (request == nullptr)
-                return std::unexpected(make_error_code(error::malformed_frame));
-
-            auto inner = make_tunnelling_ack_for(*request);
-            if (!inner.has_value())
-                return std::unexpected(inner.error());
-            return wrap(secure_packet->selected, std::move(*inner));
-        }
-
-        [[nodiscard]] static response_result make_tunnelling_ack_for(const tunnelling_request_frame& request)
-        {
-            std::vector<std::uint8_t> ack(10u, 0u);
-            if (const auto encoded = frame::encode_tunnelling_ack_packet(ack, request.channel_id, request.sequence_number);
-                !encoded.has_value())
-                return std::unexpected(encoded.error());
-            return ack;
-        }
-
         [[nodiscard]] static response_result make_disconnect_response(const cspan_uint8_t packet)
         {
             const auto request = connection::decode_disconnect_request_packet(packet);
@@ -203,7 +128,7 @@ namespace kmx::aio::test::knx::client_test
             std::vector<std::uint8_t> response(8u, 0u);
             const connectionstate_response_frame value {
                 request->channel_id,
-                heartbeat_failure ? connect_status::connection_type : connect_status::no_error,
+                heartbeat_failure ? connect_status::knx_connection : connect_status::no_error,
             };
             if (const auto result = connection::encode_connectionstate_response_packet(response, value); !result.has_value())
                 return std::unexpected(result.error());
@@ -219,8 +144,6 @@ namespace kmx::aio::test::knx::client_test
                     return make_connect_response();
                 case frame::tunnelling_request_service:
                     return make_tunnelling_ack(packet);
-                case secure::secure_service:
-                    return make_secure_response(packet);
                 case connection::disconnect_request_service:
                     return make_disconnect_response(packet);
                 case connection::connectionstate_request_service:
@@ -303,22 +226,8 @@ namespace kmx::aio::test::knx::client_test
         [[nodiscard]] static bool from_data_peer(const std::vector<std::uint8_t>& response) noexcept
         {
             const auto header = frame::decode_communication_header(response);
-            if (!header.has_value())
-                return false;
-            if ((header->service_type == frame::tunnelling_ack_service) ||
-                (header->service_type == frame::tunnelling_request_service))
-                return true;
-            if (header->service_type != secure::secure_service)
-                return false;
-
-            // A wrapped frame travels on whichever channel the frame inside it belongs to.
-            const auto secure_packet = secure::decode_secure_packet(response);
-            if (!secure_packet.has_value())
-                return false;
-
-            const auto decoded = decode_datagram(secure_packet->payload);
-            return decoded.has_value() && ((decoded->service_type == frame::tunnelling_ack_service) ||
-                                           (decoded->service_type == frame::tunnelling_request_service));
+            return header.has_value() && ((header->service_type == frame::tunnelling_ack_service) ||
+                                          (header->service_type == frame::tunnelling_request_service));
         }
 
         /// @brief Adjusts the peer to the endpoint a particular response would really have come from.
@@ -617,69 +526,6 @@ namespace kmx::aio::test::knx::client_test
             transport.advertised_data_port = 3673u;
             reconnected = (co_await client.connect(request)).has_value() && client.state() == session_state::connected &&
                           (co_await client.send(sample_cemi)).has_value();
-            executor.stop();
-        }
-
-        /// @brief Connects and sends, then looks through what the transport was handed for a Secure wrapper.
-        task<void> detect_secure_wrapped_send(loopback_transport& transport, tunnelling_client& client, bool& secured_send,
-                                              completion::executor& executor) noexcept(false)
-        {
-            if (!(co_await client.connect(detail::loopback_connect_request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-
-            if (!(co_await client.send(sample_cemi)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-
-            for (const auto& packet: transport.sent_packets())
-            {
-                const auto header = frame::decode_communication_header(packet);
-                if (!header.has_value())
-                    continue;
-                if (header->service_type == secure::secure_service)
-                {
-                    secured_send = true;
-                    break;
-                }
-            }
-            executor.stop();
-        }
-
-        /// @brief Connects, feeds the transport a Secure-wrapped indication, and reads the cEMI back out.
-        task<void> receive_secure_wrapped_indication(secure::provider& provider, loopback_transport& transport, tunnelling_client& client,
-                                                     bool& received_secure, completion::executor& executor) noexcept(false)
-        {
-            if (!(co_await client.connect(detail::loopback_connect_request)).has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-
-            std::array<std::uint8_t, sample_tunnelling_packet_size> indication_packet {};
-            const auto encoded_indication =
-                frame::encode_tunnelling_request_packet(indication_packet, client.channel_id(), 0u, sample_cemi);
-            if (!encoded_indication.has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-
-            const auto secure_packet =
-                secure::protect_packet(provider, secure::profile::data_secure, {indication_packet.data(), indication_packet.size()}, 77u);
-            if (!secure_packet.has_value())
-            {
-                executor.stop();
-                co_return;
-            }
-            transport.enqueue(*secure_packet);
-
-            const auto cemi = co_await client.receive_cemi();
-            received_secure = cemi.has_value() && (*cemi == std::vector<std::uint8_t>(sample_cemi.begin(), sample_cemi.end()));
             executor.stop();
         }
 
@@ -1247,106 +1093,6 @@ namespace kmx::aio::test::knx::client_test
         CHECK(rejected);
     }
 
-    TEST_CASE("knx tunnelling client rejects Secure without a provider", "[knx][client][secure][unit]")
-    {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client {
-            transport,
-            peer,
-            sizeof(peer),
-            {},
-            nullptr,
-            secure::configuration {
-                .selected = secure::profile::data_secure,
-                .replay = secure::replay_policy::reject,
-                .key = {1u},
-            },
-            nullptr,
-        };
-        bool rejected {};
-        completion::executor executor;
-        auto run = [&]() -> task<void>
-        {
-            const auto result = co_await client.connect(detail::loopback_connect_request);
-            rejected = !result.has_value() && result.error() == make_error_code(error::secure_unsupported);
-            executor.stop();
-        };
-        executor.spawn(run());
-        executor.run();
-        CHECK(rejected);
-    }
-
-    TEST_CASE("knx client exposes explicit Secure payload transforms", "[knx][client][secure][unit]")
-    {
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client {transport, peer, sizeof(peer)};
-        const std::array<std::uint8_t, 2u> payload {4u, 5u};
-        const auto plain = client.protect_payload(payload, 3u);
-        REQUIRE(plain.has_value());
-        CHECK(*plain == std::vector<std::uint8_t> {4u, 5u});
-        const auto restored = client.unprotect_payload(*plain, 3u);
-        REQUIRE(restored.has_value());
-        CHECK(*restored == std::vector<std::uint8_t> {4u, 5u});
-    }
-
-    TEST_CASE("knx secure client wraps outgoing tunnelling packets", "[knx][client][secure][integration]")
-    {
-        passthrough_secure_provider provider {};
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client {
-            transport,
-            peer,
-            sizeof(peer),
-            {},
-            nullptr,
-            secure::configuration {
-                .selected = secure::profile::data_secure,
-                .replay = secure::replay_policy::reject,
-                .key = {1u},
-            },
-            &provider,
-        };
-
-        bool secured_send {};
-        completion::executor executor;
-
-        executor.spawn(detail::detect_secure_wrapped_send(transport, client, secured_send, executor));
-        executor.run();
-        CHECK(secured_send);
-    }
-
-    TEST_CASE("knx secure client receives secure-wrapped indications", "[knx][client][secure][integration]")
-    {
-        passthrough_secure_provider provider {};
-        loopback_transport transport;
-        sockaddr_storage peer {};
-        tunnelling_client client {
-            transport,
-            peer,
-            sizeof(peer),
-            {},
-            nullptr,
-            secure::configuration {
-                .selected = secure::profile::data_secure,
-                .replay = secure::replay_policy::accept_within_window,
-                .replay_window = 32u,
-                .key = {1u},
-            },
-            &provider,
-        };
-
-        bool received_secure {};
-        completion::executor executor;
-
-        executor.spawn(detail::receive_secure_wrapped_indication(provider, transport, client, received_secure, executor));
-        executor.run();
-        CHECK(received_secure);
-        CHECK(transport.ack_received);
-    }
-
     TEST_CASE("knx tunnelling client rejects a truncated configured IPv4 peer", "[knx][client][unit]")
     {
         loopback_transport transport;
@@ -1865,8 +1611,8 @@ namespace kmx::aio::test::knx::client_test
     TEST_CASE_METHOD(detail::loopback_client_fixture, "knx tunnelling client does not expose disconnect control as cEMI",
                      "[knx][client][unit]")
     {
-        const std::array<std::uint8_t, 8u> disconnect {
-            0x06u, 0x10u, 0x02u, 0x09u, 0x00u, 0x08u, 0x03u, 0x00u,
+        const std::array<std::uint8_t, 16u> disconnect {
+            0x06u, 0x10u, 0x02u, 0x09u, 0x00u, 0x10u, 0x03u, 0x00u, 0x08u, 0x01u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u,
         };
         bool rejected {};
         spawn_and_run(detail::reject_disconnect_control_as_cemi(transport, client, disconnect, rejected, executor));

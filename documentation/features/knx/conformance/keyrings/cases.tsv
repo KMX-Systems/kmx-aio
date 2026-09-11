@@ -1,6 +1,0 @@
-case_id	keyring_file	device_id	key_id	use_decryptor	expected_key_hex	expected_error
-clear_line_2	reference-clear.knxkeys	line-2	ops	false	ffeeddccbbaa99887766554433221100
-encrypted_secure_a	reference-encrypted.knxkeys	secure-a	ops	true	00112233445566778899aabbccddeeff
-encrypted_secure_b	reference-encrypted.knxkeys	secure-b	ops	true	fedcba98765432100123456789abcdef
-encrypted_without_decryptor	reference-encrypted.knxkeys	secure-a	ops	false		secure_unsupported
-malformed_document	malformed.knxkeys	broken	ops	true		malformed_frame

@@ -151,20 +151,24 @@ namespace kmx::aio::knx
         }
     }
 
-    /// @brief Decodes the secure envelope services.
+    /// @brief Decodes the KNX IP Secure services: SECURE_WRAPPER, the four session services, and TIMER_NOTIFY.
     [[nodiscard]] static optional_datagram_result_t decode_secure_service(const std::uint16_t service,
                                                                           const cspan_uint8_t packet) noexcept
     {
         switch (service)
         {
-            case secure::secure_service:
-                return as_datagram(service, packet, secure::decode_secure_packet);
-            // Named rather than left to the unknown-service arm, so a peer that really does speak KNX
-            // Secure is reported as an unsupported *profile* instead of an unknown service. Without this
-            // case the reject in decode_secure_packet is unreachable from the receive path, because
-            // nothing routes 0x0950 there once this build's own envelope moved off it.
-            case secure::knx_secure_wrapper_service:
-                return datagram_result_t {std::unexpected(make_error_code(error::secure_unsupported))};
+            case secure::secure_wrapper_service:
+                return as_datagram(service, packet, secure::decode_secure_wrapper_packet);
+            case secure::session_request_service:
+                return as_datagram(service, packet, secure::decode_session_request_packet);
+            case secure::session_response_service:
+                return as_datagram(service, packet, secure::decode_session_response_packet);
+            case secure::session_authenticate_service:
+                return as_datagram(service, packet, secure::decode_session_authenticate_packet);
+            case secure::session_status_service:
+                return as_datagram(service, packet, secure::decode_session_status_packet);
+            case secure::timer_notify_service:
+                return as_datagram(service, packet, secure::decode_timer_notify_packet);
             default:
                 return {};
         }
@@ -348,7 +352,7 @@ namespace kmx::aio::knx
         }
     }
 
-    /// @brief Encodes the connectionless routing services and the secure envelope.
+    /// @brief Encodes the connectionless routing services.
     [[nodiscard]] static optional_expected_void_t encode_routing_service(const std::uint16_t service,
                                                                          const span_uint8_t packet,
                                                                          const datagram& value) noexcept
@@ -361,8 +365,30 @@ namespace kmx::aio::knx
                 return encode_payload<routing::lost_message>(packet, value, routing::encode_lost_message_packet);
             case routing::busy_service:
                 return encode_payload<routing::busy>(packet, value, routing::encode_busy_packet);
-            case secure::secure_service:
-                return encode_payload<secure::packet>(packet, value, secure::encode_secure_packet);
+            default:
+                return {};
+        }
+    }
+
+    /// @brief Encodes the KNX IP Secure services this build decodes.
+    [[nodiscard]] static optional_expected_void_t encode_secure_service(const std::uint16_t service,
+                                                                        const span_uint8_t packet,
+                                                                        const datagram& value) noexcept
+    {
+        switch (service)
+        {
+            case secure::secure_wrapper_service:
+                return encode_payload<secure::secure_wrapper_frame>(packet, value, secure::encode_secure_wrapper_packet);
+            case secure::session_request_service:
+                return encode_payload<secure::session_request_frame>(packet, value, secure::encode_session_request_packet);
+            case secure::session_response_service:
+                return encode_payload<secure::session_response_frame>(packet, value, secure::encode_session_response_packet);
+            case secure::session_authenticate_service:
+                return encode_payload<secure::session_authenticate_frame>(packet, value, secure::encode_session_authenticate_packet);
+            case secure::session_status_service:
+                return encode_payload<secure::session_status_frame>(packet, value, secure::encode_session_status_packet);
+            case secure::timer_notify_service:
+                return encode_payload<secure::timer_notify_frame>(packet, value, secure::encode_timer_notify_packet);
             default:
                 return {};
         }
@@ -371,6 +397,8 @@ namespace kmx::aio::knx
     expected_void_t encode_datagram(const span_uint8_t packet, const datagram& value) noexcept
     {
         const auto service = value.service_type;
+        if (const auto encoded = encode_secure_service(service, packet, value); encoded.has_value())
+            return *encoded;
         if (const auto encoded = encode_discovery_service(service, packet, value); encoded.has_value())
             return *encoded;
         if (const auto encoded = encode_connection_service(service, packet, value); encoded.has_value())

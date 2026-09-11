@@ -4,7 +4,6 @@
 #include <kmx/aio/knx/dib.hpp>
 #include <kmx/aio/knx/discovery.hpp>
 #include <kmx/aio/knx/routing.hpp>
-#include <kmx/aio/knx/secure.hpp>
 
 #include <algorithm>
 #include <array>
@@ -264,7 +263,7 @@ namespace kmx::aio::test::knx::dib_test
         CHECK(dib::family_of(frame::tunnelling_request_service).value() == dib::service_family::tunnelling);
         CHECK(dib::family_of(frame::tunnelling_feature_get_service).value() == dib::service_family::tunnelling);
         CHECK(dib::family_of(routing::indication_service).value() == dib::service_family::routing);
-        CHECK(dib::family_of(secure::knx_secure_wrapper_service).value() == dib::service_family::security);
+        CHECK(dib::family_of(0x0950u).value() == dib::service_family::security); // SECURE_WRAPPER
         CHECK(dib::family_of(0xFF00u).error() == error::unsupported_service);
     }
 }

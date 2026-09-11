@@ -7,6 +7,9 @@ on:
       - main
       - master
   workflow_dispatch:
+  schedule:
+    # Nightly, for the interoperability job; the other jobs run on every schedule too.
+    - cron: "17 2 * * *"
 
 jobs:
   knx-matrix-and-release-gates:
@@ -38,13 +41,6 @@ jobs:
           mkdir -p output/ci-logs/knx
           bash script/feature/knx/run-release-gates.sh | tee output/ci-logs/knx/release-gates.log
 
-      - name: Run KNX secure and keyring conformance suites
-        run: |
-          set -euo pipefail
-          mkdir -p output/ci-logs/knx
-          bash script/feature/knx/run-secure-conformance.sh | tee output/ci-logs/knx/secure-conformance.log
-          bash script/feature/knx/run-keyring-conformance.sh | tee output/ci-logs/knx/keyring-conformance.log
-
       - name: Validate vendor interoperability import bundle
         run: |
           set -euo pipefail
@@ -54,7 +50,7 @@ jobs:
       - name: Verify and render KNX interoperability evidence
         run: |
           set -euo pipefail
-          bash script/feature/knx/interoperability-matrix.sh verify
+          bash script/feature/knx/interoperability-matrix.sh verify-release
           bash script/feature/knx/interoperability-matrix.sh render
 
       - name: Upload KNX evidence artifacts
@@ -65,18 +61,50 @@ jobs:
             documentation/features/knx/interoperability/evidence.tsv
             documentation/features/knx/interoperability/matrix.md
             documentation/features/knx/interoperability/vendor-results.tsv
-            documentation/features/knx/conformance/secure-profile-vectors.tsv
-            documentation/features/knx/conformance/keyrings/cases.tsv
-            documentation/features/knx/conformance/keyrings/passwords.tsv
             output/ci-logs/knx/matrix.log
             output/ci-logs/knx/release-gates.log
-            output/ci-logs/knx/secure-conformance.log
-            output/ci-logs/knx/keyring-conformance.log
             output/ci-logs/knx/vendor-interop-validate.log
+
+  # The KNX Secure suites on both TLS backends. The script fails when no test binary was built, which a failed
+  # BoringSSL bootstrap would otherwise hide behind a successful exit.
+  knx-secure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [openssl, boringssl]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qbs liburing-dev libssl-dev catch2
+
+      - name: Make the default toolchain build-capable
+        run: |
+          bash script/ci/setup-default-toolchain.sh
+
+      - name: Build and run the KNX Secure suites
+        run: |
+          set -euo pipefail
+          mkdir -p output/ci-logs/knx
+          bash script/feature/knx/run-secure-suites.sh ${{ matrix.backend }} | tee output/ci-logs/knx/secure-${{ matrix.backend }}.log
+
+      - name: Upload the KNX Secure log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: knx-secure-${{ matrix.backend }}-log
+          path: output/ci-logs/knx/secure-${{ matrix.backend }}.log
 
   # The half of the suite that builds real clients over real sockets, run instrumented. Kept as its own
   # job rather than folded into the gates above: the sanitizer build is a separate output tree and must not
-  # replace the plain binary the release gates measure.
+  # replace the plain binary the release gates measure. The KNX unit and integration runs take every KNX tag, the
+  # secure, keyring, TCP and Data Secure suites included.
   knx-sanitizers:
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -109,3 +137,99 @@ jobs:
         with:
           name: knx-sanitizer-log
           path: output/ci-logs/knx/sanitizers.log
+
+  # The concurrency cases - secure routing, the stream client, the TCP server, and the secure server with several
+  # clients and a quiet bus on two threads - are what this run is for.
+  knx-thread-sanitizer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qbs liburing-dev libssl-dev catch2
+
+      - name: Make the default toolchain build-capable
+        run: |
+          bash script/ci/setup-default-toolchain.sh
+
+      - name: Run KNX unit and integration tests under ThreadSanitizer
+        run: |
+          set -euo pipefail
+          mkdir -p output/ci-logs/knx
+          KMX_ENABLE_KNX=true \
+          KMX_ENABLE_READINESS=true \
+          KMX_ENABLE_COMPLETION=true \
+            bash script/run-sanitizer-tests.sh tsan | tee output/ci-logs/knx/thread-sanitizer.log
+
+      - name: Upload ThreadSanitizer log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: knx-thread-sanitizer-log
+          path: output/ci-logs/knx/thread-sanitizer.log
+
+  # Against the pinned external peers, on demand and nightly: they are downloaded, and a peer's own release process
+  # is outside this repository's control, so a pull request is not held to them.
+  knx-interop:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qbs liburing-dev libssl-dev catch2 python3-venv
+
+      - name: Make the default toolchain build-capable
+        run: |
+          bash script/ci/setup-default-toolchain.sh
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install the pinned peers
+        run: |
+          bash script/feature/knx/interop/install-peers.sh
+
+      - name: Build the test binary
+        run: |
+          set -euo pipefail
+          mkdir -p output/ci-logs/knx
+          bash script/feature/knx/run-secure-suites.sh openssl | tee output/ci-logs/knx/interop-build.log
+
+      - name: Run the interoperability exchanges
+        env:
+          KMX_BUILD_ROOT: output/knx-secure-openssl
+        run: |
+          set -uo pipefail
+          status=0
+          run() { echo "==> $*"; "$@" || status=1; }
+          run bash script/feature/knx/interop/run-secure-routing-interop.sh xknx
+          run bash script/feature/knx/interop/run-secure-routing-interop.sh calimero
+          run bash script/feature/knx/interop/run-tcp-tunnelling-interop.sh calimero
+          run bash script/feature/knx/interop/run-tcp-tunnelling-interop.sh xknx
+          run bash script/feature/knx/interop/run-secure-tunnelling-interop.sh calimero
+          run bash script/feature/knx/interop/run-secure-tunnelling-interop.sh xknx
+          run bash script/feature/knx/interop/run-data-secure-interop.sh routing xknx
+          run bash script/feature/knx/interop/run-data-secure-interop.sh routing calimero
+          run bash script/feature/knx/interop/run-data-secure-interop.sh tunnel
+          exit "$status"
+
+      - name: Upload interoperability captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: knx-interop-captures
+          path: output/interop/captures/

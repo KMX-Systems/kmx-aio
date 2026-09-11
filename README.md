@@ -122,7 +122,7 @@ Quick reference showing which APIs are available in each execution model:
 | [**HFT Order Router**](documentation/features/hft-order-router.md) | ❌ | ✅ | ⚙ | Sample demo; `kmx::aio::channel` with CPU pinning |
 | [**HTTP/2**](documentation/features/http2.md) | ✅ | ✅ | ⚙ | Full codec + ALPN; no executor affinity |
 | [**HTTP/3**](documentation/features/quic-http3.md) | ✅ | ✅ | ⚙ | HTTP/3 codec and message layer over QUIC |
-| [**KNXnet/IP**](documentation/features/knx.md) | ✅ | ✅ | ⚙ | In-tree codec, cEMI and datapoint types; tunnelling client over an injected transport |
+| [**KNXnet/IP**](documentation/features/knx.md) | ✅ | ✅ | ⚙ | In-tree codec, cEMI and datapoint types; tunnelling client and server over UDP and TCP, routing; KNX IP Secure tunnelling and routing, KNX Data Secure and ETS keyrings, checked against xknx and Calimero |
 | [**Modbus**](documentation/features/modbus.md) | ✅ | ❌ | ⚙ | Readiness-model Modbus TCP + Modbus/TLS client/server APIs |
 | [**OPC UA**](documentation/features/opc-ua.md) | ✅ | ✅ | ⚙ | Backend-neutral facade; open62541 backend; completion-driven progression |
 | [**OpenOnload**](documentation/features/openonload.md) | ✅ | ❌ | ⚙ | Zero-copy extensions; headers-only; gracefully disabled when absent |

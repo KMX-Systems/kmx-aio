@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <memory>
 #include <netinet/in.h>
 #include <vector>
 
@@ -298,6 +299,25 @@ namespace kmx::aio::test::knx::routing_client_test
         CHECK(transport.joined);
         REQUIRE(value.stop().has_value());
         CHECK(!transport.joined);
+    }
+
+    TEST_CASE("knx gateway reports which of its halves are secure", "[knx][gateway][unit]")
+    {
+        loopback_routing_transport transport;
+        const gateway plain {transport};
+        CHECK(!plain.server_secured());
+        CHECK(!plain.router_secured());
+
+        // Keys are checked when a half starts, not when it is built, so empty ones do here.
+        static constexpr secure::serial_number_t serial {0x00u, 0xFAu, 0x12u, 0x34u, 0x56u, 0x78u};
+        auto server_security = std::make_shared<secure::server_configuration>();
+        server_security->serial_number = serial;
+        secure::routing_configuration routing_security {};
+        routing_security.serial_number = serial;
+        const gateway secured {transport, server_config {.secure = std::move(server_security)}, routing::multicast_configuration {},
+                               std::move(routing_security)};
+        CHECK(secured.server_secured());
+        CHECK(secured.router_secured());
     }
 
     TEST_CASE("knx routing client sends indication after start", "[knx][routing][integration]")

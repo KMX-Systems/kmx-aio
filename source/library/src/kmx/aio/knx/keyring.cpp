@@ -1,257 +1,451 @@
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/knx/keyring.hpp>
 
-#include <optional>
+#include <kmx/aio/knx/error.hpp>
+#include <kmx/aio/knx/secure/common.hpp>
+#include <kmx/aio/knx/secure/detail/keyring_format.hpp>
 
-#include <vector>
+#include <algorithm>
+#include <charconv>
+#include <span>
+#include <utility>
 
 namespace kmx::aio::knx::keyring
 {
-    [[nodiscard]] static constexpr int hex_value(const char value) noexcept
+    using secure::detail::find_attribute;
+    using secure::detail::xml_event;
+    using secure::detail::xml_events_t;
+
+    /// @brief What decrypting a keyring value needs.
+    struct decrypt_context
     {
-        if ((value >= '0') && (value <= '9'))
-            return value - '0';
-        if ((value >= 'a') && (value <= 'f'))
-            return value - 'a' + 10;
-        if ((value >= 'A') && (value <= 'F'))
-            return value - 'A' + 10;
-        return -1;
+        const secure::detail::crypto_backend& backend;
+        const secure::secret_key& password_hash;
+        secure::detail::block_t iv {};
+    };
+
+    [[nodiscard]] static std::unexpected<std::error_code> malformed() noexcept
+    {
+        return std::unexpected(make_error_code(error::malformed_frame));
     }
 
-    /// @brief Indicates whether a character is XML whitespace.
-    [[nodiscard]] static constexpr bool is_xml_space(const char value) noexcept
+    /// @brief Parses a decimal number no greater than @p maximum.
+    template <typename Unsigned>
+    [[nodiscard]] static std::optional<Unsigned> parse_unsigned(const std::string_view text, const Unsigned maximum) noexcept
     {
-        return (value == ' ') || (value == '\t') || (value == '\n') || (value == '\r');
+        Unsigned value {};
+        const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
+        if (text.empty() || (parsed.ec != std::errc {}) || (parsed.ptr != (text.data() + text.size())) || (value > maximum))
+            return {};
+        return value;
     }
 
-    /// @brief Returns the offset of the first non-whitespace character at or after @p cursor.
-    [[nodiscard]] static constexpr std::size_t skip_xml_spaces(const std::string_view text, std::size_t cursor) noexcept
+    /// @brief Reads a required individual address attribute.
+    [[nodiscard]] static std::expected<individual_address, std::error_code> read_individual(const xml_event& event,
+                                                                                            const std::string_view name) noexcept
     {
-        while ((cursor < text.size()) && is_xml_space(text[cursor]))
-            ++cursor;
-        return cursor;
+        const auto* const text = find_attribute(event, name);
+        const auto parsed = (text == nullptr) ? std::expected<individual_address, error> {std::unexpected(error::malformed_frame)} :
+                                                individual_address::parse(*text);
+        if (!parsed.has_value())
+            return malformed();
+        return *parsed;
     }
 
-    /// @brief Indicates whether an attribute name starting at @p offset begins a name rather than ending one.
-    /// @details Without this, a search for "key" would also match the tail of "encrypted-key".
-    [[nodiscard]] static constexpr bool starts_attribute(const std::string_view element, const std::size_t offset) noexcept
+    /// @brief Moves a read value into a list, or reports why it could not be read.
+    template <typename Value>
+    [[nodiscard]] static expected_void_t append(std::vector<Value>& destination,
+                                                std::expected<Value, std::error_code>&& read) noexcept(false)
     {
-        return (offset == 0u) || (element[offset - 1u] == '<') || is_xml_space(element[offset - 1u]);
+        if (!read.has_value())
+            return std::unexpected(read.error());
+        destination.push_back(std::move(*read));
+        return {};
     }
 
-    [[nodiscard]] static std::string_view attribute_value(
-        const std::string_view element, const std::string_view name) noexcept
+    /// @brief Decrypts an optional password attribute into @p destination; an absent attribute leaves it empty.
+    [[nodiscard]] static expected_void_t read_password(const xml_event& event, const std::string_view name, const decrypt_context& context,
+                                                       secure::secret_string& destination) noexcept(false)
     {
-        std::size_t search_offset {};
-        while (true)
-        {
-            const auto name_offset = element.find(name, search_offset);
-            if (name_offset == std::string_view::npos)
-                return {};
-
-            auto cursor = skip_xml_spaces(element, name_offset + name.size());
-            const bool valid_suffix = (cursor < element.size()) && (element[cursor] == '=');
-            if (!starts_attribute(element, name_offset) || !valid_suffix)
-            {
-                search_offset = name_offset + 1u;
-                continue;
-            }
-
-            cursor = skip_xml_spaces(element, cursor + 1u);
-
-            if (cursor >= element.size())
-                return {};
-            if ((element[cursor] != '"') && (element[cursor] != '\''))
-                return {};
-
-            const auto quote = element[cursor];
-            const auto value_start = cursor + 1u;
-            const auto value_end = element.find(quote, value_start);
-            if (value_end == std::string_view::npos)
-                return {};
-            return element.substr(value_start, value_end - value_start);
-        }
-    }
-
-    [[nodiscard]] static key_result_t decode_hex_key(const std::string_view key_text) noexcept
-    {
-        if (key_text.size() != key_size * 2u)
-            return std::unexpected(error::malformed_frame);
-
-        key_t result {};
-        for (std::size_t index = 0u; index < key_size; ++index)
-        {
-            const auto high = hex_value(key_text[index * 2u]);
-            const auto low = hex_value(key_text[index * 2u + 1u]);
-            if ((high < 0) || (low < 0))
-                return std::unexpected(error::malformed_frame);
-            result[index] = static_cast<std::uint8_t>((high << 4) | low);
-        }
-
-        return result;
-    }
-
-    /// @brief A decoded hex blob, or the error explaining why the text was not valid hex.
-    using blob_result_t = std::expected<byte_buffer_t, error>;
-
-    [[nodiscard]] static blob_result_t decode_hex_blob(const std::string_view text) noexcept
-    {
-        if (text.empty() || ((text.size() % 2u) != 0u))
-            return std::unexpected(error::malformed_frame);
-
-        byte_buffer_t result(text.size() / 2u, 0u);
-        for (std::size_t index = 0u; index < result.size(); ++index)
-        {
-            const auto high = hex_value(text[index * 2u]);
-            const auto low = hex_value(text[index * 2u + 1u]);
-            if ((high < 0) || (low < 0))
-                return std::unexpected(error::malformed_frame);
-            result[index] = static_cast<std::uint8_t>((high << 4) | low);
-        }
-
-        return result;
-    }
-
-    key_record_result_t parse(const std::string_view document) noexcept
-    {
-        return parse_selected(document, {}, {}, nullptr);
-    }
-
-    /// @brief A key read from one element, nothing when this element is not the one to use.
-    using optional_key_record_result_t = std::optional<key_record_result_t>;
-
-    /// @brief Rejects a document that is not a keyring, or that could expand an XML entity.
-    /// @details A DOCTYPE or ENTITY declaration is an expansion attack surface a keyring never needs.
-    [[nodiscard]] static bool safe_keyring_document(const std::string_view document) noexcept
-    {
-        return (document.find("<!DOCTYPE") == std::string_view::npos) &&
-               (document.find("<!ENTITY") == std::string_view::npos) && (document.find("<Key") != std::string_view::npos);
-    }
-
-    /// @brief Finds the next `<Key>` element at or after @p cursor, advancing it past what was found.
-    /// @param document The keyring document.
-    /// @param cursor Where to search from; left past the element, or at the end when there is none.
-    /// @return The element including its brackets, an empty view when there is none, or why one is malformed.
-    [[nodiscard]] static std::expected<std::string_view, error> next_key_element(const std::string_view document,
-                                                                                 std::size_t& cursor) noexcept
-    {
-        const auto start = document.find("<Key", cursor);
-        if (start == std::string_view::npos)
-        {
-            cursor = document.size();
-            return std::string_view {};
-        }
-
-        const auto end = document.find('>', start);
-        if (end == std::string_view::npos)
-            return std::unexpected(error::malformed_frame);
-        // A '<' before the '>' means the element never closed, which a keyring's flat elements never do.
-        const auto nested_tag = document.find('<', start + 1u);
-        if ((nested_tag != std::string_view::npos) && (nested_tag < end))
-            return std::unexpected(error::malformed_frame);
-
-        cursor = end + 1u;
-        return document.substr(start, end - start + 1u);
-    }
-
-    /// @brief Indicates whether an element is the one the caller asked for; an empty filter matches all.
-    [[nodiscard]] static bool element_selected(const std::string_view element_device_id, const std::string_view element_key_id,
-                                                const std::string_view device_id, const std::string_view key_id) noexcept
-    {
-        return (device_id.empty() || (element_device_id == device_id)) && (key_id.empty() || (element_key_id == key_id));
-    }
-
-    /// @brief Decrypts the encrypted key an element carries.
-    /// @param element The element, for the password id beside the key.
-    /// @param encrypted_key The encrypted key's hex text.
-    /// @param element_device_id The device id to carry into the result.
-    /// @param key_decryptor The decryptor to use; never null here.
-    /// @return The record, or why it could not be produced.
-    [[nodiscard]] static key_record_result_t decrypt_element_key(const std::string_view element,
-                                                                 const std::string_view encrypted_key,
-                                                                 const std::string_view element_device_id,
-                                                                 decryptor& key_decryptor) noexcept
-    {
-        const auto encoded_blob = decode_hex_blob(encrypted_key);
-        if (!encoded_blob.has_value())
-            return std::unexpected(encoded_blob.error());
-
-        const auto password_id = attribute_value(element, "password-id");
-        const auto decrypted = key_decryptor.decrypt_key(encoded_blob.value(), password_id);
+        const auto* const encoded = find_attribute(event, name);
+        if (encoded == nullptr)
+            return {};
+        auto decrypted = secure::detail::decrypt_keyring_password(context.backend, *encoded, context.password_hash, context.iv);
         if (!decrypted.has_value())
             return std::unexpected(decrypted.error());
-
-        key_record result {};
-        result.key = *decrypted;
-        result.device_id = element_device_id;
-        return result;
+        destination = std::move(*decrypted);
+        return {};
     }
 
-    /// @brief Reads the key one element carries, in the clear or encrypted.
-    /// @param element The element to read.
-    /// @param element_device_id The device id to carry into the result.
-    /// @param key_decryptor The decryptor for an encrypted key, or null when none is available.
-    /// @param matched_encrypted Set when an encrypted key was seen that could not be decrypted here.
-    /// @return The record, nothing when the search should go on, or why the element could not be read.
-    [[nodiscard]] static optional_key_record_result_t key_from_element(const std::string_view element,
-                                                                       const std::string_view element_device_id,
-                                                                       decryptor* const key_decryptor,
-                                                                       bool& matched_encrypted) noexcept
+    /// @brief Decrypts a required key attribute into @p destination.
+    [[nodiscard]] static expected_void_t read_key(const xml_event& event, const std::string_view name, const decrypt_context& context,
+                                                  secure::secret_key& destination) noexcept(false)
     {
-        if (const auto clear_key = attribute_value(element, "key"); !clear_key.empty())
-        {
-            const auto decoded_key = decode_hex_key(clear_key);
-            if (!decoded_key.has_value())
-                return key_record_result_t {std::unexpected(decoded_key.error())};
+        const auto* const encoded = find_attribute(event, name);
+        if (encoded == nullptr)
+            return malformed();
+        auto decrypted = secure::detail::decrypt_keyring_key(context.backend, *encoded, context.password_hash, context.iv);
+        if (!decrypted.has_value())
+            return std::unexpected(decrypted.error());
+        destination = std::move(*decrypted);
+        return {};
+    }
 
-            key_record result {};
-            result.key = *decoded_key;
-            result.device_id = element_device_id;
-            return key_record_result_t {result};
+    [[nodiscard]] static std::expected<backbone, std::error_code> read_backbone(const xml_event& event,
+                                                                                const decrypt_context& context) noexcept(false)
+    {
+        backbone value {};
+        if (const auto key = read_key(event, "Key", context, value.key); !key.has_value())
+            return std::unexpected(key.error());
+        if (const auto* const address = find_attribute(event, "MulticastAddress");
+            (address != nullptr) && !ipv4::parse_address(*address, value.multicast_address))
+            return malformed();
+        if (const auto* const latency = find_attribute(event, "Latency"); latency != nullptr)
+        {
+            const auto parsed = parse_unsigned<std::uint16_t>(*latency, 0xFFFFu);
+            if (!parsed.has_value())
+                return malformed();
+            value.latency_ms = *parsed;
         }
-
-        const auto encrypted_key = attribute_value(element, "encrypted-key");
-        if (encrypted_key.empty())
-            return key_record_result_t {std::unexpected(error::malformed_frame)};
-
-        matched_encrypted = true;
-        // Left for a later element rather than failed on: another may carry its key in the clear.
-        if (key_decryptor == nullptr)
-            return {};
-        return decrypt_element_key(element, encrypted_key, element_device_id, *key_decryptor);
+        return value;
     }
 
-    key_record_result_t parse_selected(
-        const std::string_view document,
-        const std::string_view device_id,
-        const std::string_view key_id,
-        decryptor* const key_decryptor) noexcept
+    [[nodiscard]] static std::optional<interface_type> interface_type_of(const std::string_view text) noexcept
     {
-        if (document.empty() || (document.size() > max_document_size))
-            return std::unexpected(error::invalid_length);
-        if (!safe_keyring_document(document))
-            return std::unexpected(error::malformed_frame);
+        if (text == "Tunneling")
+            return interface_type::tunnelling;
+        if (text == "USB")
+            return interface_type::usb;
+        if (text == "Backbone")
+            return interface_type::backbone;
+        return {};
+    }
 
-        bool matched_encrypted {};
-        std::size_t cursor {};
-        while (true)
+    /// @brief Reads an interface's type, address, host and user id.
+    [[nodiscard]] static expected_void_t read_interface_identity(const xml_event& event, interface_entry& value) noexcept
+    {
+        const auto* const type = find_attribute(event, "Type");
+        const auto parsed_type = (type == nullptr) ? std::optional<interface_type> {} : interface_type_of(*type);
+        const auto address = read_individual(event, "IndividualAddress");
+        if (!parsed_type.has_value() || !address.has_value())
+            return malformed();
+        value.type = *parsed_type;
+        value.address = *address;
+        if (find_attribute(event, "Host") != nullptr)
         {
-            const auto element = next_key_element(document, cursor);
-            if (!element.has_value())
-                return std::unexpected(element.error());
-            if (element->empty())
-                break;
+            const auto host = read_individual(event, "Host");
+            if (!host.has_value())
+                return malformed();
+            value.host = *host;
+        }
+        if (const auto* const user = find_attribute(event, "UserID"); user != nullptr)
+        {
+            value.user_id = parse_unsigned<std::uint8_t>(*user, 127u);
+            if (!value.user_id.has_value())
+                return malformed();
+        }
+        return {};
+    }
 
-            const auto element_device_id = attribute_value(*element, "device-id");
-            if (!element_selected(element_device_id, attribute_value(*element, "key-id"), device_id, key_id))
+    [[nodiscard]] static std::expected<interface_entry, std::error_code> read_interface(const xml_event& event,
+                                                                                        const decrypt_context& context) noexcept(false)
+    {
+        interface_entry value {};
+        if (const auto identity = read_interface_identity(event, value); !identity.has_value())
+            return std::unexpected(identity.error());
+        if (const auto password = read_password(event, "Password", context, value.user_password); !password.has_value())
+            return std::unexpected(password.error());
+        if (const auto authentication = read_password(event, "Authentication", context, value.device_authentication);
+            !authentication.has_value())
+            return std::unexpected(authentication.error());
+        return value;
+    }
+
+    /// @brief Reads a required group address attribute.
+    [[nodiscard]] static std::expected<group_address, std::error_code> read_group_address(const xml_event& event) noexcept
+    {
+        const auto* const text = find_attribute(event, "Address");
+        const auto parsed =
+            (text == nullptr) ? std::expected<group_address, error> {std::unexpected(error::malformed_frame)} : group_address::parse(*text);
+        if (!parsed.has_value())
+            return malformed();
+        return *parsed;
+    }
+
+    [[nodiscard]] static std::expected<group_senders, std::error_code> read_group_senders(const xml_event& event) noexcept(false)
+    {
+        group_senders value {};
+        const auto address = read_group_address(event);
+        if (!address.has_value())
+            return std::unexpected(address.error());
+        value.address = *address;
+
+        const auto* const senders = find_attribute(event, "Senders");
+        for (std::string_view rest = (senders == nullptr) ? std::string_view {} : std::string_view {*senders}; !rest.empty();)
+        {
+            const auto space = rest.find(' ');
+            const auto token = rest.substr(0u, space);
+            rest = (space == std::string_view::npos) ? std::string_view {} : rest.substr(space + 1u);
+            if (token.empty())
                 continue;
-            if (auto found = key_from_element(*element, element_device_id, key_decryptor, matched_encrypted); found.has_value())
-                return *found;
+            const auto sender = individual_address::parse(token);
+            if (!sender.has_value())
+                return malformed();
+            value.senders.push_back(*sender);
         }
+        return value;
+    }
 
-        // A keyring whose only match was encrypted names the missing decryptor, not a malformed document.
-        if (matched_encrypted && (key_decryptor == nullptr))
-            return std::unexpected(error::secure_unsupported);
-        return std::unexpected(error::malformed_frame);
+    [[nodiscard]] static std::expected<group_key, std::error_code> read_group_key(const xml_event& event,
+                                                                                  const decrypt_context& context) noexcept(false)
+    {
+        group_key value {};
+        const auto address = read_group_address(event);
+        if (!address.has_value())
+            return std::unexpected(address.error());
+        value.address = *address;
+        if (const auto key = read_key(event, "Key", context, value.key); !key.has_value())
+            return std::unexpected(key.error());
+        return value;
+    }
+
+    [[nodiscard]] static std::expected<device, std::error_code> read_device(const xml_event& event,
+                                                                            const decrypt_context& context) noexcept(false)
+    {
+        device value {};
+        const auto address = read_individual(event, "IndividualAddress");
+        if (!address.has_value())
+            return std::unexpected(address.error());
+        value.address = *address;
+        if (find_attribute(event, "ToolKey") != nullptr)
+            if (const auto key = read_key(event, "ToolKey", context, value.tool_key); !key.has_value())
+                return std::unexpected(key.error());
+        if (const auto password = read_password(event, "ManagementPassword", context, value.management_password); !password.has_value())
+            return std::unexpected(password.error());
+        if (const auto authentication = read_password(event, "Authentication", context, value.authentication); !authentication.has_value())
+            return std::unexpected(authentication.error());
+        if (const auto* const sequence = find_attribute(event, "SequenceNumber"); sequence != nullptr)
+        {
+            const auto parsed = parse_unsigned<std::uint64_t>(*sequence, secure::max_sequence);
+            if (!parsed.has_value())
+                return malformed();
+            value.sequence_number = *parsed;
+        }
+        return value;
+    }
+
+    /// @brief Reads one element below the root, by where it sits; anything unmodelled is signed but ignored.
+    [[nodiscard]] static expected_void_t read_element(document& value, const std::span<const std::string_view> path, const xml_event& event,
+                                                      const decrypt_context& context) noexcept(false)
+    {
+        if ((path.size() == 2u) && (path[1u] == "Backbone"))
+        {
+            auto read = read_backbone(event, context);
+            if (!read.has_value())
+                return std::unexpected(read.error());
+            value.backbone_entry = std::move(*read);
+            return {};
+        }
+        if ((path.size() == 2u) && (path[1u] == "Interface"))
+            return append(value.interfaces, read_interface(event, context));
+        if ((path.size() == 3u) && (path[1u] == "Interface") && (path[2u] == "Group"))
+            return append(value.interfaces.back().groups, read_group_senders(event));
+        if ((path.size() == 3u) && (path[1u] == "GroupAddresses") && (path[2u] == "Group"))
+            return append(value.group_keys, read_group_key(event, context));
+        if ((path.size() == 3u) && (path[1u] == "Devices") && (path[2u] == "Device"))
+            return append(value.devices, read_device(event, context));
+        return {};
+    }
+
+    [[nodiscard]] static document_result_t read_document(const xml_events_t& events, const decrypt_context& context) noexcept(false)
+    {
+        document value {};
+        std::vector<std::string_view> path {};
+        for (const auto& event: events)
+        {
+            if (event.kind == secure::detail::xml_event_kind::end)
+            {
+                path.pop_back();
+                continue;
+            }
+            path.push_back(event.name);
+            if (const auto read = read_element(value, path, event, context); !read.has_value())
+                return std::unexpected(read.error());
+        }
+        return value;
+    }
+
+    document_result_t load(const std::string_view xml, const std::string_view password) noexcept(false)
+    {
+        if (xml.empty() || (xml.size() > max_document_size))
+            return std::unexpected(make_error_code(error::invalid_length));
+        const auto hash = secure::derive_keyring_password_hash(password);
+        if (!hash.has_value())
+            return std::unexpected(hash.error());
+        return load(xml, *hash);
+    }
+
+    document_result_t load(const std::string_view xml, const secure::secret_key& password_hash) noexcept(false)
+    {
+        if (xml.empty() || (xml.size() > max_document_size))
+            return std::unexpected(make_error_code(error::invalid_length));
+        const auto events = secure::detail::read_xml(xml);
+        if (!events.has_value())
+            return std::unexpected(events.error());
+        const auto* const created = events->empty() ? nullptr : find_attribute(events->front(), "Created");
+        if ((created == nullptr) || (events->front().name != "Keyring"))
+            return malformed();
+
+        // The signature is checked before anything is decrypted, so a wrong password and an altered document
+        // are reported the same way and neither reaches the decryption below.
+        const auto& backend = secure::detail::evp_backend();
+        if (const auto verified = secure::detail::verify_keyring_signature(backend, *events, password_hash); !verified.has_value())
+            return std::unexpected(verified.error());
+        const auto iv = secure::detail::keyring_initialisation_vector(backend, *created);
+        if (!iv.has_value())
+            return std::unexpected(iv.error());
+
+        auto value = read_document(*events, decrypt_context {backend, password_hash, *iv});
+        if (!value.has_value())
+            return value;
+        const auto* const project = find_attribute(events->front(), "Project");
+        const auto* const created_by = find_attribute(events->front(), "CreatedBy");
+        value->project = (project == nullptr) ? std::string {} : *project;
+        value->created_by = (created_by == nullptr) ? std::string {} : *created_by;
+        value->created = *created;
+        return value;
+    }
+
+    const interface_entry* document::find_interface(const individual_address address) const noexcept
+    {
+        const auto found = std::ranges::find(interfaces, address, &interface_entry::address);
+        return (found == interfaces.end()) ? nullptr : &*found;
+    }
+
+    const device* document::find_device(const individual_address address) const noexcept
+    {
+        const auto found = std::ranges::find(devices, address, &device::address);
+        return (found == devices.end()) ? nullptr : &*found;
+    }
+
+    const group_key* document::find_group_key(const group_address address) const noexcept
+    {
+        const auto found = std::ranges::find(group_keys, address, &group_key::address);
+        return (found == group_keys.end()) ? nullptr : &*found;
+    }
+
+    [[nodiscard]] static std::unexpected<std::error_code> refuse(const error reason) noexcept
+    {
+        return std::unexpected(make_error_code(reason));
+    }
+
+    /// @brief Indicates whether an interface carries everything a secure tunnel needs.
+    [[nodiscard]] static bool tunnel_credentials_present(const interface_entry* const tunnel) noexcept
+    {
+        return (tunnel != nullptr) && (tunnel->type == interface_type::tunnelling) && tunnel->user_id.has_value() &&
+               (*tunnel->user_id != 0u) && !tunnel->user_password.empty() && !tunnel->device_authentication.empty();
+    }
+
+    secure::tunnelling_credentials_result_t credentials_for(const document& value, const individual_address tunnel_address,
+                                                            const secure::serial_number_t& serial_number) noexcept
+    {
+        // Both refusals come before the derivations, which are where the time goes.
+        if (!secure::valid_serial_number(serial_number))
+            return refuse(error::invalid_configuration);
+        const auto* const tunnel = value.find_interface(tunnel_address);
+        if (!tunnel_credentials_present(tunnel))
+            return refuse(error::secure_key_missing);
+
+        auto user_password_key = secure::derive_user_password_key(tunnel->user_password.view());
+        auto device_authentication_code = user_password_key.has_value() ?
+                                              secure::derive_device_authentication_code(tunnel->device_authentication.view()) :
+                                              secure::secret_key_result_t {std::unexpected(user_password_key.error())};
+        if (!device_authentication_code.has_value())
+            return std::unexpected(device_authentication_code.error());
+
+        secure::tunnelling_credentials credentials {};
+        credentials.user_id = *tunnel->user_id;
+        credentials.user_password_key = std::move(*user_password_key);
+        credentials.device_authentication_code = std::move(*device_authentication_code);
+        credentials.serial_number = serial_number;
+        return credentials;
+    }
+
+    secure::routing_configuration_result_t routing_configuration_for(const document& value,
+                                                                     const secure::serial_number_t& serial_number) noexcept
+    {
+        if (!secure::valid_serial_number(serial_number))
+            return refuse(error::invalid_configuration);
+        if (!value.backbone_entry.has_value())
+            return refuse(error::secure_key_missing);
+
+        secure::routing_configuration configuration {};
+        configuration.backbone_key = value.backbone_entry->key.clone();
+        configuration.multicast_address = value.backbone_entry->multicast_address;
+        configuration.latency_tolerance_ms = value.backbone_entry->latency_ms;
+        configuration.serial_number = serial_number;
+        return configuration;
+    }
+
+    /// @brief Returns every tunnelling slot on @p host that carries what a secure tunnel needs, in document order.
+    [[nodiscard]] static std::vector<const interface_entry*> hosted_tunnels(const document& value, const individual_address host) noexcept(false)
+    {
+        std::vector<const interface_entry*> hosted {};
+        for (const auto& tunnel: value.interfaces)
+        {
+            if (tunnel_credentials_present(&tunnel) && tunnel.host.has_value() && (*tunnel.host == host))
+                hosted.push_back(&tunnel);
+        }
+        return hosted;
+    }
+
+    /// @brief Adds a tunnelling slot to the server's users: a new user, or one more tunnel address of a user it has.
+    [[nodiscard]] static expected_void_t add_tunnel(secure::server_configuration& configuration, const std::span<const interface_entry* const> hosted,
+                                                    const interface_entry& tunnel) noexcept(false)
+    {
+        const auto user = std::ranges::find(configuration.users, *tunnel.user_id, &secure::tunnelling_user::user_id);
+        if (user != configuration.users.end())
+        {
+            // One user id is one password: a second slot under it has to carry the same one.
+            const auto first = std::ranges::find_if(hosted, [&tunnel](const interface_entry* const other) noexcept { return other->user_id == tunnel.user_id; });
+            if ((*first)->user_password.view() != tunnel.user_password.view())
+                return refuse(error::invalid_configuration);
+            user->tunnel_addresses.push_back(tunnel.address);
+            return {};
+        }
+        auto password_key = secure::derive_user_password_key(tunnel.user_password.view());
+        if (!password_key.has_value())
+            return std::unexpected(password_key.error());
+        configuration.users.push_back(
+            secure::tunnelling_user {.user_id = *tunnel.user_id, .password_key = std::move(*password_key), .tunnel_addresses = {tunnel.address}});
+        return {};
+    }
+
+    secure::server_configuration_result_t server_configuration_for(const document& value, const individual_address host,
+                                                                   const secure::serial_number_t& serial_number) noexcept(false)
+    {
+        if (!secure::valid_serial_number(serial_number))
+            return refuse(error::invalid_configuration);
+        const auto hosted = hosted_tunnels(value, host);
+        if (hosted.empty())
+            return refuse(error::secure_key_missing);
+        // One device has one device authentication code; slots that disagree describe no device that can exist.
+        const auto& device_code = hosted.front()->device_authentication;
+        if (std::ranges::any_of(hosted, [&device_code](const interface_entry* const tunnel) noexcept
+                                { return tunnel->device_authentication.view() != device_code.view(); }))
+            return refuse(error::invalid_configuration);
+
+        secure::server_configuration configuration {};
+        auto derived = secure::derive_device_authentication_code(device_code.view());
+        if (!derived.has_value())
+            return std::unexpected(derived.error());
+        configuration.device_authentication_code = std::move(*derived);
+        configuration.serial_number = serial_number;
+        for (const auto* const tunnel: hosted)
+        {
+            if (const auto added = add_tunnel(configuration, hosted, *tunnel); !added.has_value())
+                return std::unexpected(added.error());
+        }
+        return configuration;
     }
 }

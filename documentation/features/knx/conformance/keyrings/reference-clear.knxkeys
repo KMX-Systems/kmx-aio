@@ -1,4 +1,0 @@
-<Keyring version="1">
-  <Key device-id="line-1" key-id="ops" key="00112233445566778899aabbccddeeff" />
-  <Key device-id="line-2" key-id="ops" key="ffeeddccbbaa99887766554433221100" />
-</Keyring>

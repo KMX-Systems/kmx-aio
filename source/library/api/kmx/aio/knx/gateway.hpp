@@ -10,6 +10,11 @@
 /// Forwarding between the two halves is deliberately left to the application. What a gateway should filter
 /// and what it should relay is an installation's policy, not a protocol rule, and a wrapper that guessed
 /// would have to be worked around rather than used.
+///
+/// Either half may be secure: a server built with @ref kmx::aio::knx::server_config::secure, and a router built with a
+/// @ref kmx::aio::knx::routing::secure_configuration. The gateway reports which halves are, so a forwarding policy can
+/// refuse to relay what arrived on a secured half onto one that is not. KNX Data Secure APDUs cross either half untouched:
+/// the gateway holds no group keys, and neither half opens them.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
@@ -17,10 +22,13 @@
     #ifndef PCH
         #include <expected>
         #include <system_error>
+        #include <utility>
     #endif
 
     #include <kmx/aio/task.hpp>
     #include <kmx/aio/knx/routing.hpp>
+    #include <kmx/aio/knx/secure/common.hpp>
+    #include <kmx/aio/knx/secure/entropy.hpp>
     #include <kmx/aio/knx/server.hpp>
 
 namespace kmx::aio::knx
@@ -33,12 +41,29 @@ namespace kmx::aio::knx
         /// @param transport The executor-bound UDP transport both halves drive.
         /// @param server The tunnelling server's configuration.
         /// @param routing The multicast group the routing half joins.
+        /// @throws std::bad_alloc when the server's secure sessions cannot be allocated.
         /// @note Both halves share the transport, so the endpoint has to be one that can carry unicast
         ///       tunnelling traffic and the multicast group at once.
         gateway(datagram_transport& transport,
                 server_config server = {},
-                routing::multicast_configuration routing = {}) noexcept:
-            server_(transport, server), router_(transport, routing) {}
+                routing::multicast_configuration routing = {}) noexcept(false):
+            server_(transport, std::move(server)), router_(transport, routing) {}
+
+        /// @brief Creates a gateway whose routing half is KNX IP Secure.
+        /// @param transport The executor-bound UDP transport both halves drive.
+        /// @param server The tunnelling server's configuration; set @ref server_config::secure for secure tunnelling, which
+        ///        is served over TCP by @ref generic_server::serve_connection.
+        /// @param routing The multicast group the routing half joins.
+        /// @param secure_routing The backbone key, latency tolerance and serial number of the routing half.
+        /// @param clock_ms The clock both halves' secure state runs on; the steady clock when null.
+        /// @param entropy Where both halves draw keys, message tags and delays from;
+        ///        @ref kmx::aio::knx::secure::system_entropy when null. Must outlive the gateway.
+        /// @throws std::bad_alloc when either half's secure state cannot be allocated.
+        gateway(datagram_transport& transport, server_config server, routing::multicast_configuration routing,
+                routing::secure_configuration secure_routing, secure::monotonic_ms_function clock_ms = nullptr,
+                secure::entropy_source* entropy = nullptr) noexcept(false):
+            server_(transport, std::move(server), nullptr, clock_ms, entropy),
+            router_(transport, routing, std::move(secure_routing), clock_ms, entropy) {}
 
         /// @brief Brings both halves up: resets the server's channels, then joins the multicast group.
         /// @return Nothing, or the first error either half reported.
@@ -74,6 +99,12 @@ namespace kmx::aio::knx
 
         /// @brief Returns the routing half, for sending and receiving multicast indications.
         [[nodiscard]] routing::client& router() noexcept { return router_; }
+
+        /// @brief Indicates whether the tunnelling half is KNX IP Secure.
+        [[nodiscard]] bool server_secured() const noexcept { return server_.secured(); }
+
+        /// @brief Indicates whether the routing half is KNX IP Secure.
+        [[nodiscard]] bool router_secured() const noexcept { return router_.secured(); }
 
     private:
         generic_server server_;

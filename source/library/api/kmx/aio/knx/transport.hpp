@@ -60,7 +60,7 @@ namespace kmx::aio::knx
         return true;
     }
 
-    /// @brief The multicast group a routing endpoint joins, and the interface it joins it on.
+    /// @brief The multicast group a routing endpoint joins, and the interface it joins it on and sends on.
     /// @details The defaults are the KNXnet/IP system setup: 224.0.23.12 on port 3671. A KNX installation
     ///          that segments its routing traffic overrides the group; a multi-homed host has to name the
     ///          interface as well, because the kernel's default route is rarely the one the bus is on.
@@ -71,8 +71,14 @@ namespace kmx::aio::knx
         ipv4::storage_t group {224u, 0u, 23u, 12u};
         /// @brief The UDP port to join on.
         std::uint16_t port = 3671u;
-        /// @brief The index of the interface to join on; zero lets the kernel choose.
+        /// @brief The index of the interface to join the group on and to send its traffic out of; zero lets the
+        ///        kernel choose both.
         std::uint32_t interface_index {};
+        /// @brief Whether other listeners on this host hear what this endpoint sends to the group.
+        /// @details Off by default. Turn it on when another KNX application on the same host shares the group -
+        ///          ETS, xknx, a second router - or to exchange routing traffic over the loopback interface. The
+        ///          routing client recognises its own traffic when the group reflects it back, either way.
+        bool loopback {};
     };
 
     /// @brief Socket-independent asynchronous UDP contract used by the KNX session layer.
@@ -134,6 +140,23 @@ namespace kmx::aio::knx
         {
             return std::unexpected(std::make_error_code(std::errc::operation_not_supported));
         }
+
+        /// @brief Opens the connection a stream transport runs over.
+        /// @return A task yielding nothing, or the reason the connection could not be opened.
+        /// @note A datagram transport has nothing to open, and this default succeeds.
+        [[nodiscard]] virtual task_returning_expected_void_t open() noexcept(false)
+        {
+            co_return expected_void_t {};
+        }
+
+        /// @brief Closes the connection a stream transport runs over; any wait on it ends.
+        /// @note A datagram transport has nothing to close, and this default does nothing.
+        virtual void close() noexcept {}
+
+        /// @brief Indicates whether frames travel on a byte stream rather than one per datagram.
+        /// @details A stream transport - KNXnet/IP over TCP - selects the TCP rules of KNXnet/IP: TCP HPAIs, no
+        ///          TUNNELLING_ACK sent or awaited, and a heartbeat kept.
+        [[nodiscard]] virtual bool stream_oriented() const noexcept { return false; }
     };
 }
 #endif // KMX_AIO_FEATURE_KNX

@@ -12,14 +12,19 @@ required_profiles=(
     "Tunnelling, no Secure"
     "Routing indication/control"
     "Client <-> in-tree server"
-    "IP Secure"
-    "Data Secure"
+    "ETS keyring"
+    "IP Secure routing"
+    "Tunnelling over TCP"
+    "IP Secure tunnelling (client)"
+    "IP Secure tunnelling (server)"
+    "Data Secure group"
 )
 
 usage() {
     cat <<'EOF'
 Usage:
   interoperability-matrix.sh verify
+  interoperability-matrix.sh verify-release
   interoperability-matrix.sh render
   interoperability-matrix.sh record --profile <value> --peer <value> --transport <value> --result <pending|passing|failing|skipped> [--capture <value>] [--notes <value>]
   interoperability-matrix.sh import --file <path> [--dry-run]
@@ -88,6 +93,34 @@ verify_matrix() {
     done
 
     echo "Interoperability evidence verification passed"
+}
+
+# What a release needs beyond a well-formed matrix: every required profile has a passing row, or else every row it has
+# is skipped and says why. A profile resting on failing or pending rows alone does not ship.
+verify_release() {
+    verify_matrix
+
+    declare -A passing=()
+    declare -A unexplained=()
+    local profile peer transport result capture notes updated_utc
+    while IFS=$'\x1f' read -r profile peer transport result capture notes updated_utc; do
+        case "$result" in
+            passing) passing["$profile"]=1 ;;
+            skipped) [[ -n "$notes" ]] || unexplained["$profile"]=1 ;;
+            *) unexplained["$profile"]=1 ;;
+        esac
+    done < <(awk -F '\t' 'NR > 1 { print $1 "\037" $2 "\037" $3 "\037" $4 "\037" $5 "\037" $6 "\037" $7 }' "$evidence_file")
+
+    local required
+    local status=0
+    for required in "${required_profiles[@]}"; do
+        if [[ -z "${passing[$required]:-}" && -n "${unexplained[$required]:-}" ]]; then
+            echo "Required profile has no passing row and no explained skip: $required" >&2
+            status=1
+        fi
+    done
+    ((status == 0)) || exit 1
+    echo "Release interoperability evidence verification passed"
 }
 
 render_matrix() {
@@ -284,6 +317,9 @@ command="${1:-}"
 case "$command" in
     verify)
         verify_matrix
+        ;;
+    verify-release)
+        verify_release
         ;;
     render)
         render_matrix

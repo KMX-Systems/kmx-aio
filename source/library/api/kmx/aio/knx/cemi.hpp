@@ -159,6 +159,8 @@ namespace kmx::aio::knx
         property_description_read = 0x3D8u,
         /// @brief A_PropertyDescription_Response — the answer to a property description read.
         property_description_response = 0x3D9u,
+        /// @brief A_SecureService — a KNX Data Secure APDU; see `kmx/aio/knx/data_secure.hpp`.
+        secure_service = 0x3F1u,
     };
 
     /// @brief An application protocol data unit payload.

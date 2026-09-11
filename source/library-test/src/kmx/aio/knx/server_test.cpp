@@ -95,6 +95,19 @@ namespace kmx::aio::test::knx::server_test
             cancelled = !result.has_value() && result.error() == make_error_code(error::shutdown);
             executor.stop();
         }
+
+        /// @brief Serves @p count datagrams and counts how many of them failed with @p expected.
+        task<void> serve_counting(generic_server& server, const std::size_t count, const std::error_code expected,
+                                  std::size_t& matched, completion::executor& executor) noexcept(false)
+        {
+            for (std::size_t index {}; index < count; ++index)
+            {
+                const auto result = co_await server.serve_once();
+                if (!result.has_value() && (result.error() == expected))
+                    ++matched;
+            }
+            executor.stop();
+        }
     } // namespace detail
 
     TEST_CASE("knx server allocates channel and handles tunnelling lifecycle", "[knx][server][integration]")
@@ -218,6 +231,38 @@ namespace kmx::aio::test::knx::server_test
         CHECK(server.active_channels() == 1u);
         REQUIRE(server.shutdown().has_value());
         CHECK(server.active_channels() == 0u);
+    }
+
+    // A heartbeat or a disconnect naming a channel the server does not hold is answered, not ignored:
+    // E_CONNECTION_ID is what makes a client whose channel was reclaimed reconnect at once instead of after
+    // three unanswered heartbeats.
+    TEST_CASE("knx server answers an unknown channel with E_CONNECTION_ID", "[knx][server][unit]")
+    {
+        server_transport transport;
+        generic_server server {transport};
+
+        std::array<std::uint8_t, 16u> heartbeat {};
+        REQUIRE(connection::encode_connectionstate_request_packet(heartbeat, connectionstate_request_frame {7u}).has_value());
+        transport.incoming.emplace_back(heartbeat.begin(), heartbeat.end());
+        std::array<std::uint8_t, 16u> disconnect {};
+        REQUIRE(connection::encode_disconnect_request_packet(disconnect, disconnect_request_frame {7u}).has_value());
+        transport.incoming.emplace_back(disconnect.begin(), disconnect.end());
+
+        std::size_t refused {};
+        completion::executor executor;
+        executor.spawn(detail::serve_counting(server, 2u, make_error_code(error::sequence_error), refused, executor));
+        executor.run();
+
+        CHECK(refused == 2u);
+        CHECK(server.active_channels() == 0u);
+        REQUIRE(transport.sent_packets().size() == 2u);
+        const auto heartbeat_response = connection::decode_connectionstate_response_packet(transport.sent_packets()[0u]);
+        REQUIRE(heartbeat_response.has_value());
+        CHECK(heartbeat_response->channel_id == 7u);
+        CHECK(heartbeat_response->status == connect_status::connection_id);
+        const auto disconnect_response = connection::decode_disconnect_response_packet(transport.sent_packets()[1u]);
+        REQUIRE(disconnect_response.has_value());
+        CHECK(disconnect_response->status == connect_status::connection_id);
     }
 
     TEST_CASE("knx server accepts an IPv6 CONNECT request", "[knx][server][integration][ipv6]")
@@ -586,27 +631,27 @@ namespace kmx::aio::test::knx::server_test
         server_transport transport;
         generic_server server {transport};
         std::array<std::uint8_t, frame::communication_header_size + connection::connect_request_body_size> request {};
+        // A raw tunnel is a layer the codec carries and this server does not serve, so the request decodes and
+        // is refused with E_TUNNELLING_LAYER rather than dropped as malformed.
         REQUIRE(connection::encode_connect_request_packet(request, connect_request_frame {
                                                                   hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3671u}, 0x01u},
                                                                   hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3672u}, 0x01u},
-                                                                  0x01u,
+                                                                  connection::tunnel_raw_layer,
                                                               })
                     .has_value());
         transport.incoming.emplace_back(request.begin(), request.end());
-                                                            completion::executor executor;
-                                                            auto run = [&]() -> task<void>
-                                                            {
-                                                                static_cast<void>(co_await server.serve_once());
-                                                                executor.stop();
-                                                            };
-                                                            executor.spawn(run());
-                                                            executor.run();
 
+        std::size_t refused {};
+        completion::executor executor;
+        executor.spawn(detail::serve_counting(server, 1u, make_error_code(error::unsupported_connection_type), refused, executor));
+        executor.run();
+
+        CHECK(refused == 1u);
         REQUIRE(transport.sent_packets().size() == 1u);
         const auto response = connection::decode_connect_response_packet(transport.sent_packets().front());
         REQUIRE(response.has_value());
         CHECK(response->channel_id == 0u);
-        CHECK(response->status == connect_status::connection_type);
+        CHECK(response->status == connect_status::tunnelling_layer);
         CHECK(server.active_channels() == 0u);
     }
 

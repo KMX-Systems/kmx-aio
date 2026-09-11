@@ -30,6 +30,7 @@ namespace kmx::aio::knx
         if (!prepared.has_value())
             return std::unexpected(prepared.error());
 
+        control_endpoint_ = request.control_endpoint;
         state_ = session_state::connecting;
         connect_retries_ = 0u;
         last_deadline_ms_ = deadline_ms;
@@ -44,6 +45,8 @@ namespace kmx::aio::knx
         if ((packet.size() < frame::communication_header_size) || (packet.size() > frame::max_datagram_size))
             return std::unexpected(make_error_code(error::invalid_length));
         connect_packet_.assign(packet.begin(), packet.end());
+        // The octets are taken as given and never read back, so heartbeats name the route-back endpoint.
+        control_endpoint_ = hpai {};
         state_ = session_state::connecting;
         connect_retries_ = 0u;
         last_deadline_ms_ = deadline_ms;
@@ -72,11 +75,14 @@ namespace kmx::aio::knx
         if ((channel_id == 0u) || (channel_id > 0xFFu) || (sequence > 0xFFu))
             return std::unexpected(make_error_code(error::sequence_error));
 
-        pending_ = true;
-        state_ = session_state::waiting_ack;
         channel_id_ = static_cast<std::uint8_t>(channel_id);
         expected_sequence_ = static_cast<std::uint8_t>(sequence);
         next_sequence_ = static_cast<std::uint8_t>(expected_sequence_ + 1u);
+        // Over a stream nothing acknowledges a request: it is complete once sent, and only the counter moves on.
+        if (stream_)
+            return {};
+        pending_ = true;
+        state_ = session_state::waiting_ack;
         last_deadline_ms_ = deadline_ms;
         return {};
     }
@@ -109,8 +115,10 @@ namespace kmx::aio::knx
         if (!encoded.has_value())
             return std::unexpected(encoded.error());
 
+        // A request is retained only to be resent, and nothing is resent over a stream.
         const auto encoded_length = static_cast<std::size_t>((static_cast<std::uint16_t>(packet[4u]) << 8u) | packet[5u]);
-        request_packet_.assign(packet.begin(), packet.begin() + encoded_length);
+        if (!stream_)
+            request_packet_.assign(packet.begin(), packet.begin() + encoded_length);
 
         const auto started = begin_request(channel_id, sequence, deadline_ms);
         if (!started.has_value())
@@ -136,8 +144,8 @@ namespace kmx::aio::knx
         if (state_ != session_state::connected)
             return std::unexpected(make_error_code(error::shutdown));
 
-        return connection::encode_connectionstate_request_packet(packet,
-                                                                 connectionstate_request_frame {static_cast<std::uint8_t>(channel_id_)});
+        return connection::encode_connectionstate_request_packet(
+            packet, connectionstate_request_frame {static_cast<std::uint8_t>(channel_id_), control_endpoint_});
     }
 
     expected_void_t tunnelling_session::prepare_disconnect_request_packet(const span_uint8_t packet) noexcept
@@ -148,7 +156,7 @@ namespace kmx::aio::knx
             return std::unexpected(make_error_code(error::invalid_configuration));
 
         const auto encoded =
-            connection::encode_disconnect_request_packet(packet, disconnect_request_frame {static_cast<std::uint8_t>(channel_id_)});
+            connection::encode_disconnect_request_packet(packet, disconnect_request_frame {static_cast<std::uint8_t>(channel_id_), control_endpoint_});
         if (!encoded.has_value())
             return std::unexpected(encoded.error());
 
@@ -162,7 +170,7 @@ namespace kmx::aio::knx
         if (state_ != session_state::closing)
             return std::unexpected(make_error_code(error::invalid_configuration));
         ++disconnect_retries_;
-        if (disconnect_retries_ > config_.max_retries)
+        if (stream_ || (disconnect_retries_ > config_.max_retries))
         {
             state_ = session_state::closed;
             return std::unexpected(make_error_code(error::timeout));
@@ -341,7 +349,7 @@ namespace kmx::aio::knx
             return std::unexpected(make_error_code(error::invalid_configuration));
 
         ++connect_retries_;
-        if (connect_retries_ > config_.max_retries)
+        if (stream_ || (connect_retries_ > config_.max_retries))
         {
             state_ = session_state::closed;
             connect_packet_.clear();
@@ -358,6 +366,7 @@ namespace kmx::aio::knx
             return std::unexpected(make_error_code(error::invalid_configuration));
         if (response.channel_id != channel_id_)
             return std::unexpected(make_error_code(error::sequence_error));
+        heartbeat_outstanding_ = false;
         if (response.status != connect_status::no_error)
         {
             if (heartbeat_failures_ < 0xFFu)
@@ -395,6 +404,14 @@ namespace kmx::aio::knx
             return std::unexpected(make_error_code(error::heartbeat_failed));
         }
         return std::unexpected(make_error_code(error::connection_failed));
+    }
+
+    expected_void_t tunnelling_session::check_heartbeat(const std::uint32_t now_ms) noexcept
+    {
+        if (!heartbeat_outstanding_ || (static_cast<std::int32_t>(now_ms - heartbeat_deadline_ms_) < 0))
+            return {};
+        heartbeat_outstanding_ = false;
+        return on_connectionstate_timeout();
     }
 
     expected_void_t tunnelling_session::on_ack_packet(const cspan_uint8_t packet) noexcept

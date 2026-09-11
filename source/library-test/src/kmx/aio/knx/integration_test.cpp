@@ -351,7 +351,7 @@ namespace kmx::aio::test::knx::integration
             transport,
             peer_binding.address,
             peer_binding.length,
-            tunnelling_config {.max_retries = 0u, .ack_timeout_ms = 50u},
+            tunnelling_config {.max_retries = 0u, .ack_timeout_ms = 50u, .connect_timeout_ms = 50u},
         };
         bool timed_out {};
         auto run = [&]() -> task<void>
@@ -428,7 +428,7 @@ namespace kmx::aio::test::knx::integration
             transport,
             reinterpret_cast<const sockaddr*>(&peer_address),
             sizeof(peer_address),
-            tunnelling_config {.max_retries = 0u, .ack_timeout_ms = 50u},
+            tunnelling_config {.max_retries = 0u, .ack_timeout_ms = 50u, .connect_timeout_ms = 50u},
         };
         bool timed_out {};
 

@@ -149,7 +149,7 @@ namespace kmx::aio::test::knx::datagram_test
         const auto disconnect_response = decode_datagram(disconnect_packet);
         REQUIRE(disconnect_response.has_value());
         CHECK(std::get<disconnect_response_frame>(disconnect_response->payload).status ==
-              connect_status::connection_type);
+              connect_status::no_more_connections);
     }
 
     TEST_CASE("knx datagram dispatches IPv6 CONNECT frames", "[knx][datagram][integration]")

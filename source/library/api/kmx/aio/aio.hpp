@@ -123,7 +123,6 @@
     #include <kmx/aio/knx/gateway.hpp>
     #include <kmx/aio/knx/keyring.hpp>
     #include <kmx/aio/knx/routing.hpp>
-    #include <kmx/aio/knx/secure.hpp>
     #include <kmx/aio/knx/server.hpp>
     #include <kmx/aio/knx/session.hpp>
     #include <kmx/aio/knx/transport.hpp>

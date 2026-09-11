@@ -66,6 +66,25 @@ namespace kmx::aio::knx
         value_out_of_range,
         /// @brief A requested KNX Secure profile or cryptographic operation is unavailable.
         secure_unsupported,
+        /// @brief A message authentication code did not verify.
+        /// @note Every verification failure reports this one value, whichever part of the frame was wrong.
+        secure_authentication_failed,
+        /// @brief An authenticated sequence number or timer value is outside the acceptance rule, or repeats
+        ///        one already accepted.
+        secure_replay,
+        /// @brief The peer refused to authenticate a secure session.
+        secure_session_rejected,
+        /// @brief The secure session was closed by the peer, or timed out.
+        secure_session_closed,
+        /// @brief No key is configured for the group address, sender or user a frame names, or the sender
+        ///        is not allowed to send to that group.
+        secure_key_missing,
+        /// @brief An unencrypted frame arrived for a service the connection requires to be secured.
+        secure_frame_required,
+        /// @brief A keyring's signature does not verify: the password is wrong, or the document was altered.
+        keyring_signature_invalid,
+        /// @brief The cryptographic backend reported a failure.
+        crypto_failure,
     };
 
     /// @brief Returns the error category that names KNX errors.

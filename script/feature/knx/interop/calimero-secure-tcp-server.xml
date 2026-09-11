@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    calimero-server configuration for the kmx-aio KNX IP Secure tunnelling interoperability test.
+
+    One service container on the loopback interface, in front of a virtual TP1 line, requiring secure device management
+    and secure tunnelling. The key file gives the device authentication code, the management user (1) and the tunnelling
+    user (2), who tunnels under 1.1.240. Calimero refuses a friendly name over 30 characters, and refuses secure tunnelling
+    without secure device management. run-secure-tunnelling-interop.sh substitutes @PORT@ and @KEYFILE@.
+-->
+<knxServer name="kmx-secure-interop" friendlyName="kmx-aio secure interop">
+  <discovery activate="false" listenNetIf="lo" outgoingNetIf="lo"/>
+  <serviceContainer activate="true" routing="false" networkMonitoring="false" udpPort="@PORT@" listenNetIf="lo"
+                    keyfile="@KEYFILE@" securedServices="devmgmt,tunneling">
+    <knxAddress type="individual">1.1.0</knxAddress>
+    <knxSubnet type="virtual" medium="tp1">virtual</knxSubnet>
+    <tunnelingUsers>
+      <user id="2">
+        <knxAddress type="individual">1.1.240</knxAddress>
+      </user>
+    </tunnelingUsers>
+    <additionalAddresses>
+      <knxAddress type="individual">1.1.240</knxAddress>
+    </additionalAddresses>
+  </serviceContainer>
+</knxServer>

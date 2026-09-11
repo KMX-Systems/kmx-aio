@@ -276,7 +276,7 @@ namespace kmx::aio::test::knx::session_test
 
         const std::array<std::uint8_t, 8u> packet { 0x06u, 0x10u, 0x02u, 0x0Au,
                                                     0x00u, 0x08u, 0x03u, 0x00u };
-            std::array<std::uint8_t, 8u> disconnect_request {};
+            std::array<std::uint8_t, 16u> disconnect_request {};
             REQUIRE(session.prepare_disconnect_request_packet(disconnect_request).has_value());
         REQUIRE(session.on_disconnect_response_packet(packet).has_value());
         CHECK(session.state() == session_state::closed);
@@ -291,7 +291,7 @@ namespace kmx::aio::test::knx::session_test
 
         const std::array<std::uint8_t, 8u> packet { 0x06u, 0x10u, 0x02u, 0x0Au,
                                                     0x00u, 0x08u, 0x04u, 0x00u };
-        std::array<std::uint8_t, 8u> disconnect_request {};
+        std::array<std::uint8_t, 16u> disconnect_request {};
         REQUIRE(session.prepare_disconnect_request_packet(disconnect_request).has_value());
         const auto result = session.on_disconnect_response_packet(packet);
         REQUIRE(!result.has_value());
@@ -396,7 +396,7 @@ namespace kmx::aio::test::knx::session_test
     TEST_CASE("knx session prepares heartbeat only while connected", "[knx][session][integration]")
     {
         tunnelling_session session;
-        std::array<std::uint8_t, 8u> packet {};
+        std::array<std::uint8_t, 16u> packet {};
 
         const auto before_connect = session.prepare_connectionstate_request_packet(packet);
         REQUIRE(!before_connect.has_value());
@@ -407,7 +407,11 @@ namespace kmx::aio::test::knx::session_test
         REQUIRE(session.prepare_connectionstate_request_packet(packet).has_value());
         CHECK(packet[2] == 0x02u);
         CHECK(packet[3] == 0x07u);
+        CHECK(packet[5] == 16u);
         CHECK(packet[6] == 3u);
+        // A session connected without a request of its own names the route-back endpoint.
+        CHECK(packet[8] == 8u);
+        CHECK(packet[9] == 0x01u);
     }
 
     TEST_CASE("knx session accepts a successful heartbeat response", "[knx][session][integration]")
@@ -427,7 +431,7 @@ namespace kmx::aio::test::knx::session_test
         REQUIRE(session.on_connect_response(connect_response_frame { 3u, connect_status::no_error, {} }).has_value());
 
         const auto failed = session.on_connectionstate_response(
-            connectionstate_response_frame { 3u, connect_status::connection_type });
+            connectionstate_response_frame { 3u, connect_status::knx_connection });
         REQUIRE(!failed.has_value());
         CHECK(failed.error() == make_error_code(error::connection_failed));
         CHECK(session.state() == session_state::connected);
@@ -631,7 +635,7 @@ namespace kmx::aio::test::knx::session_test
         tunnelling_session session;
         REQUIRE(session.on_connect_response(connect_response_frame { 3u, connect_status::no_error, {} }).has_value());
 
-        std::array<std::uint8_t, 8u> request_packet {};
+        std::array<std::uint8_t, 16u> request_packet {};
         REQUIRE(connection::encode_connectionstate_request_packet(
                     request_packet, connectionstate_request_frame { 3u }).has_value());
         REQUIRE(session.dispatch_session_datagram(request_packet, 400u).has_value());
@@ -698,7 +702,7 @@ namespace kmx::aio::test::knx::session_test
         tunnelling_session session;
         REQUIRE(session.on_connect_response(connect_response_frame { 3u, connect_status::no_error, {} }).has_value());
 
-        std::array<std::uint8_t, 8u> request_packet {};
+        std::array<std::uint8_t, 16u> request_packet {};
         REQUIRE(connection::encode_disconnect_request_packet(
                     request_packet, disconnect_request_frame { 3u }).has_value());
         REQUIRE(session.dispatch_session_datagram(request_packet, 500u).has_value());
@@ -717,7 +721,7 @@ namespace kmx::aio::test::knx::session_test
     {
         tunnelling_session session;
         REQUIRE(session.on_connect_response(connect_response_frame { 3u, connect_status::no_error, {} }).has_value());
-        std::array<std::uint8_t, 8u> request_packet {};
+        std::array<std::uint8_t, 16u> request_packet {};
         REQUIRE(session.prepare_disconnect_request_packet(request_packet).has_value());
 
         std::array<std::uint8_t, 8u> response_packet {};
@@ -910,7 +914,7 @@ namespace kmx::aio::test::knx::session_test
         tunnelling_session disconnect_session;
         REQUIRE(disconnect_session.on_connect_response(
             connect_response_frame { 3u, connect_status::no_error, {} }).has_value());
-        std::array<std::uint8_t, 8u> disconnect_packet {};
+        std::array<std::uint8_t, 16u> disconnect_packet {};
         REQUIRE(disconnect_session.prepare_disconnect_request_packet(disconnect_packet).has_value());
         const std::array<std::uint8_t, 8u> response {
             0x06u, 0x10u, 0x02u, 0x0Au, 0x00u, 0x08u, 0x03u, 0x00u,
@@ -987,7 +991,7 @@ namespace kmx::aio::test::knx::session_test
         REQUIRE(session.begin_request(3u, 5u, 100u).has_value());
         REQUIRE(session.on_ack(3u, 5u).has_value());
 
-        std::array<std::uint8_t, 8u> request_packet {};
+        std::array<std::uint8_t, 16u> request_packet {};
         REQUIRE(session.prepare_disconnect_request_packet(request_packet).has_value());
         CHECK(session.state() == session_state::closing);
         CHECK(request_packet[2] == 0x02u);

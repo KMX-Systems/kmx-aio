@@ -25,7 +25,9 @@
     #include <kmx/aio/knx/discovery.hpp>
     #include <kmx/aio/knx/frame.hpp>
     #include <kmx/aio/knx/routing.hpp>
-    #include <kmx/aio/knx/secure.hpp>
+    #include <kmx/aio/knx/secure/session.hpp>
+    #include <kmx/aio/knx/secure/timer_notify.hpp>
+    #include <kmx/aio/knx/secure/wrapper.hpp>
 
 namespace kmx::aio::knx
 {
@@ -54,11 +56,16 @@ namespace kmx::aio::knx
         routing::indication,
         routing::lost_message,
         routing::busy,
-        secure::packet,
         tunnelling_request_frame,
         tunnelling_ack_frame,
         device_configuration_frame,
-        tunnelling_feature_frame>;
+        tunnelling_feature_frame,
+        secure::secure_wrapper_frame,
+        secure::session_request_frame,
+        secure::session_response_frame,
+        secure::session_authenticate_frame,
+        secure::session_status_frame,
+        secure::timer_notify_frame>;
 
     /// @brief One decoded KNXnet/IP datagram: the service it announced, and the frame it carried.
     /// @details Both are kept because they are not quite redundant. Several services decode to the same
@@ -83,6 +90,8 @@ namespace kmx::aio::knx
     /// @return The decoded datagram, or the reason the octets could not be read.
     /// @retval kmx::aio::knx::error::unsupported_service The header was well formed but names a service
     ///         this build does not model.
+    /// @note The KNX IP Secure services - SECURE_WRAPPER, the four session services and TIMER_NOTIFY - are decoded like
+    ///       any other, and decoding authenticates none of them.
     [[nodiscard]] datagram_result_t decode_datagram(cspan_uint8_t packet) noexcept;
 
     /// @brief Encodes one KNXnet/IP datagram, header included.
