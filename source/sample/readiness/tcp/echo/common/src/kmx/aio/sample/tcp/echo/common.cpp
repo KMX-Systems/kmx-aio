@@ -1,16 +1,20 @@
+/// @file src/kmx/aio/sample/tcp/echo/common.cpp
+/// @brief Echo sample helpers: a seeded, mutex-guarded random ASCII buffer generator and B/KB/MB/GB/TB formatting.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/tcp/echo/common.hpp>
+#ifndef PCH
+    #include <array>
+    #include <chrono>
+    #include <format>
+    #include <mutex>
+    #include <random>
+    #include <string_view>
+#endif
 
-#include <array>
-#include <chrono>
-#include <format>
-#include <mutex>
-#include <random>
-#include <string_view>
-
-namespace kmx::aio::sample::common
+namespace kmx::aio::sample::tcp::echo::common
 {
     /// @brief Seeds a generator from the system entropy source, falling back to the clock.
-    static std::mt19937 make_seeded_generator()
+    [[nodiscard]] static std::mt19937 make_seeded_generator()
     {
         try
         {
@@ -57,4 +61,4 @@ namespace kmx::aio::sample::common
 
         return std::format("{:.2f} {}", value, units[unit_index]);
     }
-} // namespace kmx::aio::sample::common
+}

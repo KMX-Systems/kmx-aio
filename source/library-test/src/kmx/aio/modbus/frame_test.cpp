@@ -1,12 +1,16 @@
+/// @file src/kmx/aio/modbus/frame_test.cpp
+/// @brief Unit tests for Modbus TCP MBAP header and request and response PDU encoding and decoding.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
-#include <kmx/aio/modbus/error.hpp>
 #include <kmx/aio/modbus/frame.hpp>
+#ifndef PCH
+    #include <kmx/aio/modbus/error.hpp>
 
-#include <array>
-#include <cstdint>
-#include <vector>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <array>
+    #include <cstdint>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::modbus::frame_test
 {
@@ -327,4 +331,4 @@ namespace kmx::aio::test::modbus::frame_test
         CHECK(result.error() == make_error_code(error::exception_response));
     }
 
-} // namespace kmx::aio::test::modbus::frame_test
+}

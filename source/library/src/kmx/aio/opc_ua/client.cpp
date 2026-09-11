@@ -1,21 +1,26 @@
+/// @file src/kmx/aio/opc_ua/client.cpp
+/// @brief The compiled body of the OPC UA client facade over open62541's asynchronous read, write and call services.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/opc_ua/client.hpp>
-#include <kmx/aio/opc_ua/error.hpp>
-#include <kmx/aio/opc_ua/open62541_compat.hpp>
-#include <kmx/aio/opc_ua/pending_outcome_awaiter.hpp>
+#ifndef PCH
+    #include <kmx/aio/opc_ua/detail/pending_outcome_awaiter.hpp>
+    #include <kmx/aio/opc_ua/error.hpp>
+    #include <kmx/aio/opc_ua/open62541_compat.hpp>
 
-#include <chrono>
-#include <memory>
-#include <optional>
-#include <unordered_map>
-#include <utility>
-#include <vector>
+    #include <chrono>
+    #include <cstdint>
+    #include <memory>
+    #include <optional>
+    #include <unordered_map>
+    #include <utility>
+    #include <vector>
+#endif
 
 namespace kmx::aio::opc_ua
 {
     namespace client_internal
     {
-        enum class lifecycle_state
+        enum class lifecycle_state : std::uint8_t
         {
             idle,
             connecting,
@@ -23,7 +28,7 @@ namespace kmx::aio::opc_ua
             disconnecting,
         };
 
-        enum class status_context
+        enum class status_context : std::uint8_t
         {
             connect,
             runtime,
@@ -84,10 +89,8 @@ namespace kmx::aio::opc_ua
         void resume_pending_continuations(HandleContainer& handles)
         {
             for (const coroutine_handle_t handle: handles)
-            {
                 if (handle)
                     handle.resume();
-            }
             handles.clear();
         }
 
@@ -243,7 +246,7 @@ namespace kmx::aio::opc_ua
                 .output_arguments = std::move(outputs),
             });
         }
-    } // namespace client_internal
+    }
 
     struct client::impl
     {
@@ -510,8 +513,8 @@ namespace kmx::aio::opc_ua
     }
 
 #if !defined(KMX_AIO_FEATURE_OPC_UA)
-    void client::__kmx_test_set_next_request_statuses(const std::uint32_t read_status, const std::uint32_t write_status,
-                                                      const std::uint32_t call_status) noexcept
+    void client::test_set_next_request_statuses(const std::uint32_t read_status, const std::uint32_t write_status,
+                                                const std::uint32_t call_status) noexcept
     {
         if (impl_->native_client == nullptr)
             return;
@@ -522,4 +525,4 @@ namespace kmx::aio::opc_ua
     }
 #endif
 
-} // namespace kmx::aio::opc_ua
+}

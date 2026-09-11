@@ -1,40 +1,54 @@
-/// @file kmx/aio/knx/data_secure_interop_test.cpp
-/// @brief KNX Data Secure group communication against external peers: over KNX IP Secure routing with xknx or Calimero,
-///        and through a tunnel with xknx.
-/// @details script/feature/knx/interop/run-data-secure-interop.sh starts the peer and passes its port in
+/// @file src/kmx/aio/knx/data_secure_interop_test.cpp
+/// @brief KNX Data Secure group communication against external peers.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+/// @details Runs over KNX IP Secure routing with xknx or Calimero, and through a tunnel with xknx.
+/// script/feature/knx/interop/run-data-secure-interop.sh starts the peer and passes its port in
 /// KMX_KNX_INTEROP_PORT; without it each case is skipped. Both ends key themselves from the vendored keyring.knxkeys, whose
 /// one group key secures 1/1/1, and whose interfaces list 1.1.1 and 1.1.12 as each other's senders on it. The in-tree side
 /// is 1.1.12, and the peer is 1.1.1. One secured switch-on travels to 1/1/1 and one secured switch-off comes back.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/knx/tcp_server.hpp>
+    #include <kmx/aio/completion/knx/udp_transport.hpp>
+    #include <kmx/aio/completion/timer.hpp>
+    #include <kmx/aio/completion/udp/endpoint.hpp>
+    #include <kmx/aio/knx/cemi.hpp>
+    #include <kmx/aio/knx/cemi_frame.hpp>
+    #include <kmx/aio/knx/data_secure.hpp>
+    #include <kmx/aio/knx/data_secure/context.hpp>
+    #include <kmx/aio/knx/dpt.hpp>
+    #include <kmx/aio/knx/dpt/payload.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/generic_server.hpp>
+    #include <kmx/aio/knx/group_address.hpp>
+    #include <kmx/aio/knx/individual_address.hpp>
+    #include <kmx/aio/knx/keyring.hpp>
+    #include <kmx/aio/knx/keyring/document.hpp>
+    #include <kmx/aio/knx/routing.hpp>
+    #include <kmx/aio/knx/routing/client.hpp>
+    #include <kmx/aio/knx/secure/common.hpp>
+    #include <kmx/aio/knx/server.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/aio/test/knx/secure_vectors.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/knx/tcp_server.hpp>
-#include <kmx/aio/completion/knx/udp_transport.hpp>
-#include <kmx/aio/completion/timer.hpp>
-#include <kmx/aio/completion/udp/endpoint.hpp>
-#include <kmx/aio/knx/cemi.hpp>
-#include <kmx/aio/knx/data_secure.hpp>
-#include <kmx/aio/knx/dpt.hpp>
-#include <kmx/aio/knx/keyring.hpp>
-#include <kmx/aio/knx/routing.hpp>
-#include <kmx/aio/knx/server.hpp>
-#include <kmx/aio/test/knx/secure_vectors.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <array>
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
-#include <cstdint>
-#include <cstdlib>
-#include <fstream>
-#include <iterator>
-#include <mutex>
-#include <net/if.h>
-#include <netinet/in.h>
-#include <stop_token>
-#include <string>
-#include <thread>
+    #include <array>
+    #include <atomic>
+    #include <chrono>
+    #include <condition_variable>
+    #include <cstdint>
+    #include <cstdlib>
+    #include <fstream>
+    #include <iterator>
+    #include <mutex>
+    #include <stop_token>
+    #include <string>
+    #include <thread>
+    #include <net/if.h>
+    #include <netinet/in.h>
+#endif
 
 namespace kmx::aio::test::knx::data_secure_interop_test
 {
@@ -77,7 +91,7 @@ namespace kmx::aio::test::knx::data_secure_interop_test
         }
 
         /// @brief The in-tree side's Data Secure configuration, from the keyring: the key of 1/1/1, and xknx as its sender.
-        [[nodiscard]] ds::configuration data_secure_configuration(const kn::keyring::document& keyring) noexcept(false)
+        [[nodiscard]] ds::configuration local_configuration(const kn::keyring::document& keyring) noexcept(false)
         {
             auto configuration = ds::configuration_for(keyring, local_address);
             REQUIRE(configuration.has_value());
@@ -90,8 +104,11 @@ namespace kmx::aio::test::knx::data_secure_interop_test
             const auto value = kn::dpt::encode<1u>(on);
             REQUIRE(value.has_value());
             std::array<std::uint8_t, kn::cemi::max_l_data_size> message {};
-            const auto size = kn::cemi::encode(message, code, source, kn::group_address {secured_group}, kn::apci::group_value_write,
-                                               value->apdu(), kn::l_data_options {});
+            const auto size = kn::cemi::encode(message, {.code = code,
+                                                         .source = source,
+                                                         .destination = kn::group_address {secured_group}.value(),
+                                                         .service = kn::apci::group_value_write,
+                                                         .payload = value->apdu()});
             REQUIRE(size.has_value());
             return byte_buffer_t(message.begin(), message.begin() + static_cast<std::ptrdiff_t>(*size));
         }
@@ -160,6 +177,7 @@ namespace kmx::aio::test::knx::data_secure_interop_test
                 state.received += received.has_value() ? 1u : 0u;
                 state.answered = received.has_value() && switch_from(received->cemi, peer_address, false);
             }
+
             executor.stop();
         }
 
@@ -199,18 +217,28 @@ namespace kmx::aio::test::knx::data_secure_interop_test
             ended = true;
         }
 
-        /// @brief Waits for the exchange to finish and xknx to close its tunnel, then stops the server and the executor.
-        task<void> await_peer(completion::executor& executor, kn::generic_server& server, completion::knx::tcp_server& tcp,
-                              device_outcome& observed, const std::atomic_bool& serving_ended)
+        /// @brief The loop, the server and its accept loop an exchange with the external peer runs on.
+        struct server_side
         {
-            completion::timer pause {executor};
-            while (!observed.answered || (server.active_channels() != 0u) || (tcp.connections() != 0u))
+            /// @brief The loop, which the exchange stops once it is over.
+            completion::executor& executor;
+            /// @brief The server the peer tunnels through.
+            kn::generic_server& server;
+            /// @brief The accept loop serving the server.
+            completion::knx::tcp_server& tcp;
+        };
+
+        /// @brief Waits for the exchange to finish and xknx to close its tunnel, then stops the server and the executor.
+        task<void> await_peer(const server_side side, device_outcome& observed, const std::atomic_bool& serving_ended)
+        {
+            completion::timer pause {side.executor};
+            while (!observed.answered || (side.server.active_channels() != 0u) || (side.tcp.connections() != 0u))
                 static_cast<void>(co_await pause.wait(std::chrono::milliseconds {20}));
             observed.released = true;
-            tcp.stop();
+            side.tcp.stop();
             while (!serving_ended)
                 static_cast<void>(co_await pause.wait(std::chrono::milliseconds {5}));
-            executor.stop();
+            side.executor.stop();
         }
     }
 
@@ -224,7 +252,7 @@ namespace kmx::aio::test::knx::data_secure_interop_test
         const auto keyring = detail::load_keyring();
         auto settings = kn::keyring::routing_configuration_for(keyring, detail::serial);
         REQUIRE(settings.has_value());
-        ds::context context {detail::data_secure_configuration(keyring)};
+        ds::context context {detail::local_configuration(keyring)};
         const kr::multicast_configuration group {.group = settings->multicast_address,
                                                  .port = static_cast<std::uint16_t>(std::stoul(port)),
                                                  .interface_index =
@@ -234,7 +262,7 @@ namespace kmx::aio::test::knx::data_secure_interop_test
         auto endpoint = completion::udp::endpoint::create(executor, AF_INET);
         REQUIRE(endpoint.has_value());
         completion::knx::udp_transport transport {*endpoint};
-        kr::client router {transport, group, std::move(*settings)};
+        kr::client router {transport, group, {.settings = std::move(*settings)}};
         router.use_data_secure(&context);
         REQUIRE(router.start().has_value());
 
@@ -261,7 +289,7 @@ namespace kmx::aio::test::knx::data_secure_interop_test
             SKIP("KMX_KNX_INTEROP_PORT is unset: script/feature/knx/interop/run-data-secure-interop.sh starts xknx and sets it");
 
         const auto keyring = detail::load_keyring();
-        ds::context context {detail::data_secure_configuration(keyring)};
+        ds::context context {detail::local_configuration(keyring)};
         completion::executor executor;
         // The server passes Data Secure through untouched, and gives xknx's tunnel the address the keyring trusts.
         kn::generic_server server {kn::server_config {.first_assigned_address = detail::peer_address}};
@@ -274,7 +302,7 @@ namespace kmx::aio::test::knx::data_secure_interop_test
         REQUIRE(tcp.listen().has_value());
         std::atomic_bool serving_ended {};
         executor.spawn(detail::run_server(tcp, serving_ended));
-        executor.spawn(detail::await_peer(executor, server, tcp, observed, serving_ended));
+        executor.spawn(detail::await_peer({executor, server, tcp}, observed, serving_ended));
         detail::run_bounded(executor, detail::time_limit());
 
         const auto counters = context.counters();

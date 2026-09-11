@@ -1,67 +1,27 @@
-/// @file aio/readiness/v4l2/capture.cpp
+/// @file src/kmx/aio/readiness/v4l2/capture.cpp
 /// @brief Async V4L2 video capture — readiness (epoll) model implementation.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/readiness/v4l2/capture.hpp>
+#ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/error_code.hpp>
+    #include <kmx/aio/file_descriptor.hpp>
+    #include <kmx/aio/readiness/basic_types.hpp>
+    #include <kmx/aio/readiness/v4l2/frame_view.hpp>
 
-#include <cerrno>
-#include <cstring>
-#include <fcntl.h>
-#include <sys/ioctl.h>
-#include <sys/mman.h>
-
-#include <linux/videodev2.h>
-
-#include <kmx/aio/basic_types.hpp>
-#include <kmx/aio/error_code.hpp>
-#include <kmx/logger.hpp>
+    #include <cerrno>
+    #include <cstddef>
+    #include <cstdint>
+    #include <utility>
+    #include <vector>
+    #include <fcntl.h>
+    #include <linux/videodev2.h>
+    #include <sys/ioctl.h>
+    #include <sys/mman.h>
+#endif
 
 namespace kmx::aio::readiness::v4l2
 {
-    // frame_view
-
-    frame_view::frame_view(const fd_t device_fd, const std::uint32_t index, const std::byte* const ptr, const std::size_t length,
-                           frame_metadata metadata, std::weak_ptr<void> device_lifetime) noexcept:
-        device_fd_(device_fd),
-        index_(index),
-        ptr_(ptr),
-        length_(length),
-        metadata_(metadata),
-        device_lifetime_(std::move(device_lifetime))
-    {
-    }
-
-    frame_view::frame_view(frame_view&& other) noexcept:
-        device_fd_(other.device_fd_),
-        index_(other.index_),
-        ptr_(other.ptr_),
-        length_(other.length_),
-        metadata_(other.metadata_),
-        device_lifetime_(std::move(other.device_lifetime_)),
-        active_(std::exchange(other.active_, false))
-    {
-    }
-
-    frame_view::~frame_view() noexcept
-    {
-        if (!active_ || device_lifetime_.expired())
-            return;
-
-        ::v4l2_buffer buf {};
-        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        buf.memory = V4L2_MEMORY_MMAP;
-        buf.index = index_;
-
-        if (::ioctl(device_fd_, VIDIOC_QBUF, &buf) < 0)
-            // Best-effort: log but do not throw from a destructor.
-        kmx::logger::log(kmx::logger::level::warn, std::source_location::current(), "VIDIOC_QBUF failed for buffer {}: {}", index_,
-                         std::strerror(errno));
-    }
-
-    cspan_byte_t frame_view::data() const noexcept
-    {
-        return {ptr_, metadata_.bytes_used};
-    }
-
     // capture — private constructor
 
     capture::capture(executor& exec, file_descriptor&& fd, capture_config cfg, std::vector<mmap_buffer> buffers) noexcept:
@@ -172,6 +132,7 @@ namespace kmx::aio::readiness::v4l2
 
             buffers.push_back({ptr, buf.length});
         }
+
         return buffers;
     }
 
@@ -187,6 +148,7 @@ namespace kmx::aio::readiness::v4l2
             if (::ioctl(fd, VIDIOC_QBUF, &buf) < 0)
                 return std::unexpected(kmx::aio::from_errno(errno));
         }
+
         return {};
     }
 
@@ -205,7 +167,10 @@ namespace kmx::aio::readiness::v4l2
             return std::unexpected(buffers.error());
 
         const auto fail = [&buffers](const kmx::aio::error_code ec) noexcept
-        { unmap_all(*buffers); return std::unexpected(ec); };
+        {
+            unmap_all(*buffers);
+            return std::unexpected(ec);
+        };
 
         if (const auto queued = enqueue_buffers(raw_fd, cfg.buffer_count); !queued.has_value())
             return fail(queued.error());
@@ -240,7 +205,7 @@ namespace kmx::aio::readiness::v4l2
         if (fd_.is_valid() && streaming_)
         {
             const int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-            (void) ::ioctl(fd_.get(), VIDIOC_STREAMOFF, &type);
+            static_cast<void>(::ioctl(fd_.get(), VIDIOC_STREAMOFF, &type));
         }
 
         unmap_buffers();
@@ -312,10 +277,15 @@ namespace kmx::aio::readiness::v4l2
                 .fourcc = config_.format.fourcc,
             };
 
-            co_return frame_view {
-                fd_.get(), buf.index, static_cast<const std::byte*>(mapped.ptr), mapped.length, meta, device_lifetime_,
-            };
+            co_return frame_view {frame_view::dequeued_buffer {
+                .device_fd = fd_.get(),
+                .index = buf.index,
+                .ptr = static_cast<const std::byte*>(mapped.ptr),
+                .length = mapped.length,
+                .metadata = meta,
+                .device_lifetime = device_lifetime_,
+            }};
         }
     }
 
-} // namespace kmx::aio::readiness::v4l2
+}

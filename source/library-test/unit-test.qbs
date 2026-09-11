@@ -80,7 +80,10 @@ CppApplication {
         }
 
         if (!project.enable_avb)
+        {
             files.push("src/kmx/aio/avb/**/*.cpp");
+            files.push("src/kmx/aio/sample/avb/**/*.cpp");
+        }
 
         if (!project.enable_http2)
             files.push("src/kmx/aio/http2/**/*.cpp");
@@ -98,7 +101,7 @@ CppApplication {
             files.push("src/kmx/aio/integration/pillar_2_integration_test.cpp");
             files.push("src/kmx/aio/integration/quic_readiness_echo_smoke_test.cpp");
             files.push("src/kmx/aio/integration/quic_http3_smoke_test.cpp");
-            files.push("src/kmx/aio/v4l2/readiness_*.cpp");
+            files.push("src/kmx/aio/sample/v4l2/capture/*.cpp");
         }
 
         if (!project.enable_quic)

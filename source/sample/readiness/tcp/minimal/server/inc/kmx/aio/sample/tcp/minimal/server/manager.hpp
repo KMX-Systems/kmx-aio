@@ -1,12 +1,15 @@
+/// @file inc/kmx/aio/sample/tcp/minimal/server/manager.hpp
+/// @brief Readiness-model minimal TCP server sample manager: echoes each client message with an ECHO prefix.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <kmx/aio/readiness/executor.hpp>
     #include <kmx/aio/readiness/tcp/stream.hpp>
     #include <kmx/logger.hpp>
-    #include <unistd.h>
 
     #include <atomic>
     #include <memory>
+    #include <unistd.h>
 #endif
 
 namespace kmx::aio::sample::tcp::minimal::server
@@ -37,7 +40,7 @@ namespace kmx::aio::sample::tcp::minimal::server
     public:
         explicit manager(config config = {}): config_(std::move(config)) {}
 
-        const metric_data& metrics() const noexcept { return metrics_; }
+        [[nodiscard]] const metric_data& metrics() const noexcept { return metrics_; }
 
         /// @brief Run the server
         [[nodiscard]] bool run() noexcept(false);
@@ -62,4 +65,4 @@ namespace kmx::aio::sample::tcp::minimal::server
         static inline std::atomic<readiness::executor*> g_executor_ptr {};
     };
 
-} // namespace kmx::aio::sample::tcp::minimal::server
+}

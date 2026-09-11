@@ -1,45 +1,31 @@
-/// @file aio/benchmark/harness.cpp
+/// @file src/kmx/aio/benchmark/harness.cpp
+/// @brief Benchmark harness implementation: sample statistics, and table, comparison and JSON reports.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/benchmark/harness.hpp>
+#ifndef PCH
+    #include <kmx/aio/benchmark/detail/driver.hpp>
+    #include <kmx/aio/benchmark/detail/pair_sides.hpp>
+    #include <kmx/aio/benchmark/registry.hpp>
+    #include <kmx/aio/task.hpp>
 
-#include <algorithm>
-#include <cmath>
-#include <coroutine>
-#include <cstdio>
-#include <exception>
-#include <format>
-#include <print>
-#include <string>
-#include <string_view>
+    #include <algorithm>
+    #include <chrono>
+    #include <cmath>
+    #include <coroutine>
+    #include <cstddef>
+    #include <cstdio>
+    #include <format>
+    #include <print>
+    #include <string>
+    #include <string_view>
+    #include <vector>
+#endif
 
 namespace kmx::aio::benchmark
 {
     namespace detail
     {
-        /// @brief Detached driver coroutine used to await a task from ordinary code.
-        struct driver
-        {
-            struct promise_type
-            {
-                driver get_return_object() noexcept { return driver {std::coroutine_handle<promise_type>::from_promise(*this)}; }
-                std::suspend_always initial_suspend() const noexcept { return {}; }
-
-                struct final_awaiter
-                {
-                    bool await_ready() const noexcept { return false; }
-                    void await_suspend(std::coroutine_handle<promise_type> h) const noexcept { h.destroy(); }
-                    void await_resume() const noexcept {}
-                };
-
-                final_awaiter final_suspend() const noexcept { return {}; }
-                void unhandled_exception() noexcept { std::terminate(); }
-                void return_void() const noexcept {}
-            };
-
-            std::coroutine_handle<promise_type> handle;
-        };
-
-        static driver make_driver(task<void> t) noexcept(false)
+        [[nodiscard]] static driver make_driver(task<void> t) noexcept(false)
         {
             co_await t;
         }
@@ -52,65 +38,11 @@ namespace kmx::aio::benchmark
         /// @param count The number of samples, which must not be zero.
         /// @param fraction The percentile, as a fraction of one.
         /// @return The index into the sorted samples.
-        static std::size_t rank_index(const std::size_t count, const double fraction) noexcept
+        [[nodiscard]] static std::size_t rank_index(const std::size_t count, const double fraction) noexcept
         {
             const auto rank = static_cast<std::size_t>(std::ceil(fraction * static_cast<double>(count)));
             return (rank == 0u) ? 0u : std::min(rank - 1u, count - 1u);
         }
-    } // namespace detail
-
-    void registry::add(const std::string_view name, const case_fn_t run) noexcept(false)
-    {
-        cases_.push_back(case_entry {name, run});
-    }
-
-    void registry::add_paired(const std::string_view key, const execution_model model, const std::string_view name,
-                              const case_fn_t run) noexcept(false)
-    {
-        cases_.push_back(case_entry {name, run, key, model});
-
-        // The scenario is listed the first time either side mentions it, so the comparison keeps the
-        // order the cases were registered in whichever side got there first.
-        for (const auto& item: pairs_)
-            if (item.key == key)
-                return;
-
-        pairs_.push_back(pair_entry {key, {}});
-    }
-
-    void registry::describe_pair(const std::string_view key, const std::string_view description) noexcept(false)
-    {
-        for (auto& item: pairs_)
-            if (item.key == key)
-            {
-                item.description = description;
-                return;
-            }
-
-        pairs_.push_back(pair_entry {key, description});
-    }
-
-    void registry::describe(const std::string_view group, const std::string_view description) noexcept(false)
-    {
-        groups_.push_back(group_entry {group, description});
-    }
-
-    std::string_view registry::description(const std::string_view group) const noexcept
-    {
-        for (const auto& item: groups_)
-            if (item.name == group)
-                return item.description;
-
-        return {};
-    }
-
-    std::string_view registry::pair_description(const std::string_view key) const noexcept
-    {
-        for (const auto& item: pairs_)
-            if (item.key == key)
-                return item.description;
-
-        return {};
     }
 
     std::size_t scaled(const std::size_t base, const double scale) noexcept
@@ -203,7 +135,7 @@ namespace kmx::aio::benchmark
         /// @brief Number of terminal cells a UTF-8 string occupies.
         /// @param text The text to measure.
         /// @return The character count, which is not the byte count once a unit like "µs" is spelled properly.
-        static std::size_t width_of(const std::string_view text) noexcept
+        [[nodiscard]] static std::size_t width_of(const std::string_view text) noexcept
         {
             std::size_t width {};
             for (const auto c: text)
@@ -217,7 +149,7 @@ namespace kmx::aio::benchmark
         /// @param width The field width.
         /// @return The padded text.
         /// @throws std::bad_alloc if the result cannot be stored.
-        static std::string right(const std::string_view text, const std::size_t width) noexcept(false)
+        [[nodiscard]] static std::string right(const std::string_view text, const std::size_t width) noexcept(false)
         {
             const auto used = width_of(text);
             std::string out((used < width) ? (width - used) : 0u, ' ');
@@ -230,7 +162,7 @@ namespace kmx::aio::benchmark
         /// @param width The field width.
         /// @return The padded text.
         /// @throws std::bad_alloc if the result cannot be stored.
-        static std::string left(const std::string_view text, const std::size_t width) noexcept(false)
+        [[nodiscard]] static std::string left(const std::string_view text, const std::size_t width) noexcept(false)
         {
             const auto used = width_of(text);
             std::string out {text};
@@ -243,7 +175,7 @@ namespace kmx::aio::benchmark
         /// @param width How many times to repeat it.
         /// @return The run.
         /// @throws std::bad_alloc if the result cannot be stored.
-        static std::string run_of(const char fill, const std::size_t width) noexcept(false)
+        [[nodiscard]] static std::string run_of(const char fill, const std::size_t width) noexcept(false)
         {
             return std::string(width, fill);
         }
@@ -260,7 +192,7 @@ namespace kmx::aio::benchmark
         /// @param precision Digits after the decimal point. Negative is read as zero, as printf does.
         /// @return The formatted figure.
         /// @throws std::bad_alloc if the result cannot be stored.
-        static std::string fixed(const double value, const int precision) noexcept(false)
+        [[nodiscard]] static std::string fixed(const double value, const int precision) noexcept(false)
         {
             switch (precision)
             {
@@ -312,7 +244,7 @@ namespace kmx::aio::benchmark
         /// @param ns The figure, in nanoseconds.
         /// @return The formatted figure, e.g. "24.2 ns" or "4.93 µs".
         /// @throws std::bad_alloc if the result cannot be stored.
-        static std::string duration_text(const double ns) noexcept(false)
+        [[nodiscard]] static std::string duration_text(const double ns) noexcept(false)
         {
             auto value = ns;
             std::string_view unit = "ns";
@@ -335,7 +267,7 @@ namespace kmx::aio::benchmark
         /// @param per_second Operations per second.
         /// @return The formatted rate, e.g. "41.3 M/s".
         /// @throws std::bad_alloc if the result cannot be stored.
-        static std::string rate_text(const double per_second) noexcept(false)
+        [[nodiscard]] static std::string rate_text(const double per_second) noexcept(false)
         {
             auto value = per_second;
             std::string_view prefix {};
@@ -363,7 +295,7 @@ namespace kmx::aio::benchmark
         /// @param value The count.
         /// @return The grouped count, e.g. "20,000,000".
         /// @throws std::bad_alloc if the result cannot be stored.
-        static std::string count_text(const std::size_t value) noexcept(false)
+        [[nodiscard]] static std::string count_text(const std::size_t value) noexcept(false)
         {
             const auto digits = std::format("{}", value);
             std::string out {};
@@ -383,7 +315,7 @@ namespace kmx::aio::benchmark
         /// @param width The note column width.
         /// @return The lines, in order. Empty when the note is empty.
         /// @throws std::bad_alloc if the lines cannot be stored.
-        static std::vector<std::string_view> wrapped(std::string_view note, const std::size_t width) noexcept(false)
+        [[nodiscard]] static std::vector<std::string_view> wrapped(std::string_view note, const std::size_t width) noexcept(false)
         {
             std::vector<std::string_view> lines {};
             while (!note.empty())
@@ -407,7 +339,7 @@ namespace kmx::aio::benchmark
         /// @brief The part of a case name before the '/', or nothing when it has none.
         /// @param name The registered case name.
         /// @return The group name.
-        static std::string_view group_of(const std::string_view name) noexcept
+        [[nodiscard]] static std::string_view group_of(const std::string_view name) noexcept
         {
             const auto pos = name.find('/');
             return (pos == std::string_view::npos) ? std::string_view {} : name.substr(0u, pos);
@@ -416,12 +348,12 @@ namespace kmx::aio::benchmark
         /// @brief The part of a case name after the '/', which is what the row shows.
         /// @param name The registered case name.
         /// @return The case name without its group.
-        static std::string_view case_of(const std::string_view name) noexcept
+        [[nodiscard]] static std::string_view case_of(const std::string_view name) noexcept
         {
             const auto pos = name.find('/');
             return (pos == std::string_view::npos) ? name : name.substr(pos + 1u);
         }
-    } // namespace detail
+    }
 
     namespace detail
     {
@@ -451,6 +383,7 @@ namespace kmx::aio::benchmark
                 out.name = std::max(out.name, case_of(item.name).size() + row_indent);
                 out.note = std::max(out.note, item.note.size());
             }
+
             out.note = std::min(out.note, note_width_cap);
 
             auto header = left("case", out.name);
@@ -575,7 +508,7 @@ namespace kmx::aio::benchmark
         /// @brief The figure a comparison row quotes for one side.
         /// @param item The result to read.
         /// @return The median where the case sampled each operation, the mean where it timed a whole loop.
-        static double quoted_ns(const result& item) noexcept
+        [[nodiscard]] static double quoted_ns(const result& item) noexcept
         {
             return item.has_distribution ? item.p50_ns : item.mean_ns;
         }
@@ -586,7 +519,8 @@ namespace kmx::aio::benchmark
         /// @param model The side wanted.
         /// @return The result, or nullptr when that side did not run - it was filtered out, or the
         ///         model is not in this build.
-        static const result* side_of(const std::vector<result>& results, const std::string_view key, const execution_model model) noexcept
+        [[nodiscard]] static const result* side_of(const std::vector<result>& results, const std::string_view key,
+                                                   const execution_model model) noexcept
         {
             for (const auto& item: results)
                 if ((item.pair_key == key) && (item.model == model))
@@ -600,7 +534,7 @@ namespace kmx::aio::benchmark
         /// @param completion_ns The io_uring figure.
         /// @return The change as a signed percentage, negative where io_uring is the faster of the two.
         /// @throws std::bad_alloc if the result cannot be stored.
-        static std::string delta_text(const double readiness_ns, const double completion_ns) noexcept(false)
+        [[nodiscard]] static std::string delta_text(const double readiness_ns, const double completion_ns) noexcept(false)
         {
             if (readiness_ns <= 0.0)
                 return "-";
@@ -640,7 +574,7 @@ namespace kmx::aio::benchmark
             return {};
         }
 
-        static std::string json_escaped(const std::string_view text) noexcept(false)
+        [[nodiscard]] static std::string json_escaped(const std::string_view text) noexcept(false)
         {
             std::string out {};
             out.reserve(text.size());
@@ -659,7 +593,7 @@ namespace kmx::aio::benchmark
         /// @brief Names an execution model for the JSON output.
         /// @param model The model.
         /// @return Its name.
-        static std::string_view model_name(const execution_model model) noexcept
+        [[nodiscard]] static std::string_view model_name(const execution_model model) noexcept
         {
             switch (model)
             {
@@ -673,25 +607,10 @@ namespace kmx::aio::benchmark
 
             return "none";
         }
-    } // namespace detail
+    }
 
     namespace detail
     {
-        /// @brief The two sides of one scenario, either of which may be absent.
-        struct pair_sides
-        {
-            /// @brief The epoll side, or null when it was not run.
-            const result* readiness {};
-            /// @brief The io_uring side, or null when it was not run.
-            const result* completion {};
-
-            /// @brief Whether both sides ran to completion.
-            [[nodiscard]] bool both_ran() const noexcept
-            {
-                return (readiness != nullptr) && (completion != nullptr) && !readiness->skipped && !completion->skipped;
-            }
-        };
-
         /// @brief Finds both sides of one scenario among the results.
         [[nodiscard]] pair_sides sides_of(const std::vector<result>& results, const std::string_view key)
         {
@@ -703,8 +622,7 @@ namespace kmx::aio::benchmark
         /// @param reg The registry naming the pairings.
         /// @param out Receives the widths.
         /// @return The pairings to print; empty when a filter selected none of them.
-        [[nodiscard]] std::vector<const pair_entry*> present_pairs(const std::vector<result>& results, const registry& reg,
-                                                                   layout& out)
+        [[nodiscard]] std::vector<const pair_entry*> present_pairs(const std::vector<result>& results, const registry& reg, layout& out)
         {
             std::vector<const pair_entry*> present {};
             out.name = 8u;
@@ -724,6 +642,7 @@ namespace kmx::aio::benchmark
                     if ((side != nullptr) && side->skipped)
                         out.note = std::max(out.note, side->note.size());
             }
+
             out.note = std::min(out.note, note_width_cap);
             return present;
         }
@@ -790,8 +709,7 @@ namespace kmx::aio::benchmark
             // A delta is only meaningful with two figures in hand, and only when both quote the same
             // kind of figure - a median against a whole-loop mean would be a number with no meaning.
             const auto comparable = sides.both_ran() && (sides.readiness->has_distribution == sides.completion->has_distribution);
-            add_column(line,
-                       comparable ? delta_text(quoted_ns(*sides.readiness), quoted_ns(*sides.completion)) : std::string {"-"},
+            add_column(line, comparable ? delta_text(quoted_ns(*sides.readiness), quoted_ns(*sides.completion)) : std::string {"-"},
                        delta_width);
 
             const auto operations = comparison_operations(sides);
@@ -886,4 +804,4 @@ namespace kmx::aio::benchmark
         std::fflush(out);
     }
 
-} // namespace kmx::aio::benchmark
+}

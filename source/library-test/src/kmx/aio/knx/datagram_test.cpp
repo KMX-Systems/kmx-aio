@@ -1,11 +1,15 @@
+/// @file src/kmx/aio/knx/datagram_test.cpp
+/// @brief Unit tests for typed KNXnet/IP datagram dispatch and encoding across tunnelling, connection and routing.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
 #include <kmx/aio/knx/datagram.hpp>
-#include <kmx/aio/test/knx/telegram.hpp>
+#ifndef PCH
+    #include <kmx/aio/test/knx/telegram.hpp>
 
-#include <array>
-#include <cstdint>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <array>
+    #include <cstdint>
+#endif
 
 namespace kmx::aio::test::knx::datagram_test
 {
@@ -28,8 +32,8 @@ namespace kmx::aio::test::knx::datagram_test
     TEST_CASE("knx datagram dispatcher returns typed connection request", "[knx][datagram][integration]")
     {
         const connect_request_frame request {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .data_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3672u }, 0x01u },
+            .control_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3671u}, 0x01u},
+            .data_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3672u}, 0x01u},
         };
         std::array<std::uint8_t, 26u> packet {};
         REQUIRE(connection::encode_connect_request_packet(packet, request).has_value());
@@ -44,7 +48,7 @@ namespace kmx::aio::test::knx::datagram_test
 
     TEST_CASE("knx datagram dispatcher rejects unknown services after header validation", "[knx][datagram][unit]")
     {
-        const std::array<std::uint8_t, 6u> packet { 0x06u, 0x10u, 0x7Fu, 0xFFu, 0x00u, 0x06u };
+        const std::array<std::uint8_t, 6u> packet {0x06u, 0x10u, 0x7Fu, 0xFFu, 0x00u, 0x06u};
         const auto decoded = decode_datagram(packet);
         REQUIRE(!decoded.has_value());
         CHECK(decoded.error() == make_error_code(error::unsupported_service));
@@ -67,7 +71,7 @@ namespace kmx::aio::test::knx::datagram_test
     {
         const datagram value {
             .service_type = connection::disconnect_response_service,
-            .payload = disconnect_response_frame { 4u, connect_status::no_error },
+            .payload = disconnect_response_frame {4u, connect_status::no_error},
         };
         std::array<std::uint8_t, 8u> packet {};
         REQUIRE(encode_datagram(packet, value).has_value());
@@ -100,7 +104,7 @@ namespace kmx::aio::test::knx::datagram_test
     {
         const datagram value {
             .service_type = frame::tunnelling_request_service,
-            .payload = tunnelling_request_frame { .channel_id = 2u, .sequence_number = 8u },
+            .payload = tunnelling_request_frame {.channel_id = 2u, .sequence_number = 8u},
         };
         std::array<std::uint8_t, sample_tunnelling_packet_size> packet {};
 
@@ -132,7 +136,7 @@ namespace kmx::aio::test::knx::datagram_test
     {
         const datagram heartbeat {
             .service_type = connection::connectionstate_request_service,
-            .payload = connectionstate_request_frame { 4u },
+            .payload = connectionstate_request_frame {4u},
         };
         std::array<std::uint8_t, 8u> heartbeat_packet {};
         REQUIRE(encode_response_datagram(heartbeat_packet, heartbeat).has_value());
@@ -142,14 +146,13 @@ namespace kmx::aio::test::knx::datagram_test
 
         const datagram disconnect {
             .service_type = connection::disconnect_request_service,
-            .payload = disconnect_request_frame { 4u },
+            .payload = disconnect_request_frame {4u},
         };
         std::array<std::uint8_t, 8u> disconnect_packet {};
         REQUIRE(encode_response_datagram(disconnect_packet, disconnect, 0x24u).has_value());
         const auto disconnect_response = decode_datagram(disconnect_packet);
         REQUIRE(disconnect_response.has_value());
-        CHECK(std::get<disconnect_response_frame>(disconnect_response->payload).status ==
-              connect_status::no_more_connections);
+        CHECK(std::get<disconnect_response_frame>(disconnect_response->payload).status == connect_status::no_more_connections);
     }
 
     TEST_CASE("knx datagram dispatches IPv6 CONNECT frames", "[knx][datagram][integration]")
@@ -171,10 +174,11 @@ namespace kmx::aio::test::knx::datagram_test
     TEST_CASE("knx datagram dispatches IPv6 SEARCH frames", "[knx][datagram][integration]")
     {
         const discovery::ipv6_search_request_frame request {
-            .discovery_endpoint = ipv6_hpai {
-                ipv6_endpoint {{0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u}, 3671u},
-                0x01u,
-            },
+            .discovery_endpoint =
+                ipv6_hpai {
+                    ipv6_endpoint {{0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u}, 3671u},
+                    0x01u,
+                },
         };
         std::array<std::uint8_t, 26u> packet {};
         REQUIRE(discovery::encode_ipv6_search_request_packet(packet, request).has_value());
@@ -218,7 +222,7 @@ namespace kmx::aio::test::knx::datagram_test
     {
         const datagram response {
             .service_type = frame::tunnelling_ack_service,
-            .payload = tunnelling_ack_frame { 2u, 8u, 0u },
+            .payload = tunnelling_ack_frame {2u, 8u, 0u},
         };
         std::array<std::uint8_t, 10u> packet {};
         const auto result = encode_response_datagram(packet, response);

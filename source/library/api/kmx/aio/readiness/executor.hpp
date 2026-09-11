@@ -1,25 +1,35 @@
-/// @file aio/readiness/executor.hpp
+/// @file api/kmx/aio/readiness/executor.hpp
 /// @brief Readiness-model executor using epoll for event notification.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_READINESS)
     #ifndef PCH
-        #include <atomic>
-        #include <deque>
-        #include <expected>
-        #include <memory>
-        #include <mutex>
-        #include <sys/epoll.h>
-        #include <sys/socket.h>
-        #include <unordered_map>
-        #include <unordered_set>
-
+        #include <kmx/aio/basic_types.hpp>
         #include <kmx/aio/executor_base.hpp>
+        #include <kmx/aio/file_descriptor.hpp>
+        #include <kmx/aio/promise_base.hpp>
         #include <kmx/aio/readiness/basic_types.hpp>
         #include <kmx/aio/readiness/descriptor/epoll.hpp>
+        #include <kmx/aio/readiness/statistics.hpp>
         #include <kmx/aio/scheduler.hpp>
         #include <kmx/aio/task.hpp>
+
+        #include <compare>
+        #include <coroutine>
+        #include <cstddef>
+        #include <cstdint>
+        #include <deque>
+        #include <exception>
+        #include <expected>
+        #include <functional>
+        #include <memory>
+        #include <mutex>
+        #include <stop_token>
+        #include <unordered_map>
+        #include <unordered_set>
+        #include <sys/epoll.h>
+        #include <sys/socket.h>
     #endif
 
 namespace kmx::aio::readiness
@@ -78,30 +88,6 @@ namespace kmx::aio::readiness
         resumption_mode resumption = resumption_mode::scheduler; ///< Where ready coroutines continue.
     };
 
-    /// @brief Statistics for epoll operations and executor performance.
-    struct statistics
-    {
-        /// @brief Number of descriptors registered since the last reset.
-        std::atomic_uint64_t total_registrations {};
-        /// @brief Number of descriptors unregistered since the last reset.
-        std::atomic_uint64_t total_unregistrations {};
-        /// @brief Number of `epoll_wait` calls issued since the last reset.
-        std::atomic_uint64_t total_epoll_waits {};
-        /// @brief Number of events reaped from `epoll_wait` since the last reset.
-        std::atomic_uint64_t total_events_received {};
-        /// @brief Number of `epoll_wait` calls that returned without an event.
-        std::atomic_uint64_t timeout_count {};
-        /// @brief Number of failed epoll operations since the last reset.
-        std::atomic_uint64_t error_count {};
-        /// @brief Number of root tasks handed to @ref executor::spawn since the last reset.
-        std::atomic_uint64_t total_tasks_spawned {};
-        /// @brief Number of spawned root tasks that have run to completion.
-        std::atomic_uint64_t total_tasks_completed {};
-
-        /// @brief Reset all statistics counters.
-        void reset() noexcept;
-    };
-
     /// @brief Readiness execution engine handling epoll I/O and task scheduling.
     class executor: public executor_base, public std::enable_shared_from_this<executor>
     {
@@ -144,14 +130,17 @@ namespace kmx::aio::readiness
                 // before the handle is resumed, and read only after that resumption.
                 bool cancelled {};
 
-                bool await_ready() const noexcept { return false; }
+                [[nodiscard]] bool await_ready() const noexcept { return false; }
 
                 // Subscription might throw (e.g. allocation in map), so await_suspend is noexcept(false).
                 // Returning false resumes the coroutine without suspending, which is what happens when
                 // the descriptor was already cancelled: deciding that inside subscribe(), under the lock
                 // cancellation itself takes, is what stops a cancel that lands between the caller's own
                 // check and this subscription from being lost.
-                bool await_suspend(coroutine_handle_t h) noexcept(false) { return exec.subscribe(fd, type, h, &cancelled); }
+                bool await_suspend(coroutine_handle_t h) noexcept(false)
+                {
+                    return exec.subscribe({fd, type}, {.handle = h, .cancelled = &cancelled});
+                }
 
                 [[nodiscard]] bool await_resume() const noexcept { return !cancelled; }
             };
@@ -159,8 +148,7 @@ namespace kmx::aio::readiness
             return io_awaiter {*this, fd, type};
         }
 
-        [[nodiscard]] auto wait_io_until(const fd_t fd, const event_type type,
-                                         const std::uint32_t deadline_ms) noexcept
+        [[nodiscard]] auto wait_io_until(const fd_t fd, const event_type type, const std::uint32_t deadline_ms) noexcept
         {
             struct io_awaiter
             {
@@ -171,15 +159,15 @@ namespace kmx::aio::readiness
                 bool cancelled {};
                 bool timed_out {};
 
-                bool await_ready() const noexcept { return false; }
+                [[nodiscard]] bool await_ready() const noexcept { return false; }
                 bool await_suspend(coroutine_handle_t h) noexcept(false)
                 {
-                    return exec.subscribe(fd, type, h, &cancelled, &timed_out, deadline_ms);
+                    return exec.subscribe({fd, type},
+                                          {.handle = h, .cancelled = &cancelled, .timed_out = &timed_out, .deadline_ms = deadline_ms});
                 }
                 [[nodiscard]] wait_status await_resume() const noexcept
                 {
-                    return timed_out ? wait_status::timed_out
-                                     : (cancelled ? wait_status::cancelled : wait_status::ready);
+                    return timed_out ? wait_status::timed_out : (cancelled ? wait_status::cancelled : wait_status::ready);
                 }
             };
 
@@ -283,18 +271,29 @@ namespace kmx::aio::readiness
         ///        worker - and therefore cannot join the I/O thread.
         [[nodiscard]] bool on_owned_thread() const noexcept;
 
-        /// @brief Registers a coroutine to be resumed when @p type fires on @p fd.
+        /// @brief A coroutine suspended in wait_io(), and the flags telling it why it was resumed.
+        struct waiter
+        {
+            /// @brief The suspended coroutine to resume.
+            coroutine_handle_t handle;
+            /// @brief Points into the awaiter's frame; set before resuming a cancelled wait.
+            bool* cancelled;
+            /// @brief Points into the awaiter's frame; set before resuming a wait whose deadline passed. Null when
+            ///        the awaiter has no such flag.
+            bool* timed_out {};
+            /// @brief The monotonic millisecond stamp at which the wait expires, or zero for a wait without a deadline.
+            std::uint32_t deadline_ms {};
+        };
+
+        /// @brief Registers a coroutine to be resumed when the event of @p key fires on its descriptor.
         /// @details Refuses the subscription when the descriptor is already cancelled, so a cancel landing
         ///          between the caller's own check and this call cannot be lost.
-        /// @param fd        The descriptor to wait on.
-        /// @param type      The event to wait for.
-        /// @param handle    The coroutine to resume once the event fires.
-        /// @param cancelled Flag in the awaiting coroutine's frame, set when the wait is cancelled.
+        /// @param key   The descriptor to wait on and the event to wait for.
+        /// @param entry The coroutine to resume once the event fires, and the flags in its frame reporting
+        ///              a cancelled or timed-out wait.
         /// @return `false` when the descriptor is already cancelled and the caller must not suspend.
         /// @throws std::bad_alloc If the subscription map could not grow.
-        [[nodiscard]] bool subscribe(const fd_t fd, const event_type type, coroutine_handle_t handle,
-                                     bool* const cancelled, bool* const timed_out = nullptr,
-                                     std::uint32_t deadline_ms = 0u) noexcept(false);
+        [[nodiscard]] bool subscribe(const event_key key, const waiter& entry) noexcept(false);
 
         // Resumes every waiter on fd, flagging each as cancelled first.
         // @param remember Keep the descriptor marked so a subscription arriving afterwards is refused
@@ -357,14 +356,14 @@ namespace kmx::aio::readiness
 
                 /// @brief Suspends before the body runs, so the caller decides when to start it.
                 /// @return An always-suspending awaiter.
-                std::suspend_always initial_suspend() const noexcept { return {}; }
+                [[nodiscard]] std::suspend_always initial_suspend() const noexcept { return {}; }
 
                 /// @brief Final awaiter that destroys the coroutine frame instead of resuming anyone.
                 struct final_awaiter
                 {
                     /// @brief Never completes synchronously, so @ref await_suspend always runs.
                     /// @return Always `false`.
-                    bool await_ready() const noexcept { return false; }
+                    [[nodiscard]] bool await_ready() const noexcept { return false; }
                     /// @brief Destroys the finished coroutine frame.
                     /// @param h The handle of the coroutine that just completed.
                     void await_suspend(std::coroutine_handle<promise_type> h) const noexcept { h.destroy(); }
@@ -376,7 +375,7 @@ namespace kmx::aio::readiness
 
                 /// @brief Returns the awaiter that tears the frame down.
                 /// @return The @ref final_awaiter.
-                final_awaiter final_suspend() const noexcept { return {}; }
+                [[nodiscard]] final_awaiter final_suspend() const noexcept { return {}; }
                 // LCOV_EXCL_LINE: reaching this ends the process, so no test can take it and return.
                 // execute_task() catches std::exception around the whole body, which leaves only a
                 // throw of something not derived from it - and there is no sane way to continue from
@@ -411,18 +410,6 @@ namespace kmx::aio::readiness
         ///       noticing a stop when its wait times out, exactly as it did before.
         file_descriptor wake_fd_;
 
-        /// @brief A coroutine suspended in wait_io(), and the flag telling it why it was resumed.
-        /// @brief A coroutine suspended in wait_io(), and the flag telling it why it was resumed.
-        struct waiter
-        {
-            /// @brief The suspended coroutine to resume.
-            coroutine_handle_t handle;
-            /// @brief Points into the awaiter's frame; set before resuming a cancelled wait.
-            bool* cancelled;
-            bool* timed_out {};
-            std::uint32_t deadline_ms {};
-        };
-
         /// @brief Waiters parked on each (descriptor, event) pair, in arrival order.
         std::unordered_map<event_key, std::deque<waiter>, event_key_hash> subscribers_;
 
@@ -440,5 +427,5 @@ namespace kmx::aio::readiness
         mutable statistics metrics_;
     };
 
-} // namespace kmx::aio::readiness
+}
 #endif // KMX_AIO_FEATURE_READINESS

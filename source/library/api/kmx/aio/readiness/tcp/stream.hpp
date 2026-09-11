@@ -1,15 +1,15 @@
-/// @file aio/readiness/tcp/stream.hpp
+/// @file api/kmx/aio/readiness/tcp/stream.hpp
 /// @brief Readiness-model TCP stream using epoll-based async I/O.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_READINESS)
     #ifndef PCH
-        #include <span>
-
         #include <kmx/aio/readiness/executor.hpp>
         #include <kmx/aio/readiness/io_base.hpp>
         #include <kmx/aio/task.hpp>
+
+        #include <span>
     #endif
 
 namespace kmx::aio::readiness::tcp
@@ -46,5 +46,5 @@ namespace kmx::aio::readiness::tcp
         task_returning_expected_void_t write_all(cspan_char_t buffer) noexcept(false);
     };
 
-} // namespace kmx::aio::readiness::tcp
+}
 #endif // KMX_AIO_FEATURE_READINESS

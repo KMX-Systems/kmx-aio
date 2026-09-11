@@ -1,16 +1,20 @@
+/// @file src/kmx/aio/sample/avb/talker/manager.cpp
+/// @brief Completion-model AVB talker sample manager: gPTP sync, SRP advertise, paced AM824 transmit loop and statistics.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/avb/talker/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/avb/avtp/am824.hpp>
+    #include <kmx/aio/completion/avb/eth_socket.hpp>
+    #include <kmx/aio/completion/timer.hpp>
+    #include <kmx/logger.hpp>
 
-#include <algorithm>
-#include <chrono>
-#include <csignal>
-#include <print>
-#include <source_location>
-#include <vector>
-
-#include <kmx/aio/avb/avtp/am824.hpp>
-#include <kmx/aio/completion/avb/eth_socket.hpp>
-#include <kmx/aio/completion/timer.hpp>
-#include <kmx/logger.hpp>
+    #include <algorithm>
+    #include <chrono>
+    #include <csignal>
+    #include <print>
+    #include <source_location>
+    #include <vector>
+#endif
 
 namespace kmx::aio::sample::avb::talker
 {
@@ -202,4 +206,4 @@ namespace kmx::aio::sample::avb::talker
 
         kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "Signal {} received, stopping AVB talker.", signum);
     }
-} // namespace kmx::aio::sample::avb::talker
+}

@@ -1,25 +1,26 @@
-/// @file avb/avtp/am824.cpp
+/// @file src/kmx/aio/avb/avtp/am824.cpp
 /// @brief AM824/AVTP framing helpers for AVB talker/listener samples.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-
 #include <kmx/aio/avb/avtp/am824.hpp>
-#include <kmx/aio/basic_types.hpp>
-#include <kmx/aio/error_code.hpp>
+#ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/error_code.hpp>
 
-#include <cerrno>
-#include <cstring>
+    #include <cerrno>
+    #include <cstring>
+#endif
 
 namespace kmx::aio::avb::avtp
 {
-    [[nodiscard]] std::uint32_t to_avtp_timestamp_32(const avb_timestamp_t tai_ns) noexcept
+    [[nodiscard]] std::uint32_t to_timestamp_32(const tai_timestamp_t tai_ns) noexcept
     {
         return static_cast<std::uint32_t>(tai_ns & 0xFFFF'FFFFu);
     }
 
-    [[nodiscard]] avb_timestamp_t expand_avtp_timestamp_32(const std::uint32_t ts32, const avb_timestamp_t reference_ns) noexcept
+    [[nodiscard]] tai_timestamp_t expand_timestamp_32(const std::uint32_t ts32, const tai_timestamp_t reference_ns) noexcept
     {
         const auto hi = reference_ns & 0xFFFF'FFFF'0000'0000ULL;
-        avb_timestamp_t candidate = hi | static_cast<avb_timestamp_t>(ts32);
+        tai_timestamp_t candidate = hi | static_cast<tai_timestamp_t>(ts32);
         if (candidate + 0x8000'0000ULL < reference_ns)
             candidate += 0x1'0000'0000ULL;
         else if (candidate > reference_ns + 0x8000'0000ULL)
@@ -29,7 +30,7 @@ namespace kmx::aio::avb::avtp
 
     [[nodiscard]] std::expected<std::vector<std::byte>, std::error_code> build_am824_frame(const stream_id_t& stream_id,
                                                                                            const std::uint8_t sequence_num,
-                                                                                           const avb_timestamp_t presentation_time_ns,
+                                                                                           const tai_timestamp_t presentation_time_ns,
                                                                                            cspan_byte_t payload) noexcept
     {
         if (payload.size() > 0xFFFFu)
@@ -48,7 +49,7 @@ namespace kmx::aio::avb::avtp
         out[10] = static_cast<std::byte>(stream_id.unique_id >> 8u);
         out[11] = static_cast<std::byte>(stream_id.unique_id & 0xFFu);
 
-        const std::uint32_t ts32 = to_avtp_timestamp_32(presentation_time_ns);
+        const std::uint32_t ts32 = to_timestamp_32(presentation_time_ns);
         out[12] = static_cast<std::byte>((ts32 >> 24u) & 0xFFu);
         out[13] = static_cast<std::byte>((ts32 >> 16u) & 0xFFu);
         out[14] = static_cast<std::byte>((ts32 >> 8u) & 0xFFu);
@@ -98,4 +99,4 @@ namespace kmx::aio::avb::avtp
         out.payload = frame.subspan(header_size, payload_len);
         return out;
     }
-} // namespace kmx::aio::avb::avtp
+}

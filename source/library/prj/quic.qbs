@@ -23,9 +23,13 @@ StaticLibrary {
             "../api/kmx/aio/quic/**.hpp",
             "../api/kmx/aio/completion/quic/**.hpp",
             "../inc/kmx/aio/quic/**.hpp",
-            // The transport's only translation unit: the stream read/write bodies, plus server ALPN
-            // selection, which is BoringSSL's job rather than lsquic's and which a server handshake
+            "../inc/kmx/aio/quic/detail/**.hpp",
+            // The transport's translation units: the endpoint, byte buffer and stream bodies, plus server
+            // ALPN selection, which is BoringSSL's job rather than lsquic's and which a server handshake
             // fails without.
+            "../src/kmx/aio/quic/basic_endpoint.cpp",
+            "../src/kmx/aio/quic/byte_buffer.cpp",
+            "../src/kmx/aio/quic/stream.cpp",
             "../src/kmx/aio/quic/transport.cpp",
         ];
 

@@ -1,12 +1,14 @@
-/// @file aio/channel_backpressure_test.cpp
+/// @file src/kmx/aio/channel_backpressure_test.cpp
 /// @brief Unit tests for channel backpressure watermark and credit behavior.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#ifndef PCH
+    #include <kmx/aio/channel.hpp>
 
-#include <catch2/catch_test_macros.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <kmx/aio/channel.hpp>
-
-#include <atomic>
-#include <thread>
+    #include <atomic>
+    #include <thread>
+#endif
 
 namespace kmx::aio::test::channel_backpressure_test
 {
@@ -40,7 +42,7 @@ namespace kmx::aio::test::channel_backpressure_test
             if (first.has_value() && second.has_value())
                 consumer_done.store(true, std::memory_order_release);
         }
-    } // namespace detail
+    }
 
     TEST_CASE("channel occupancy tracks push/pop", "[channel][backpressure]")
     {
@@ -222,4 +224,4 @@ namespace kmx::aio::test::channel_backpressure_test
             REQUIRE(ch.try_push(5));
         }
     }
-} // namespace kmx::aio::test::channel_backpressure_test
+}

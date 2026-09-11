@@ -1,4 +1,4 @@
-/// @file aio/buffer/view/item.hpp
+/// @file api/kmx/aio/buffer/view/item.hpp
 /// @brief Non-owning view over a contiguous memory region, in a writable and a read-only flavor.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -85,4 +85,4 @@ namespace kmx::aio::buffer::view
     /// @details Describes the source region of a write. Converts implicitly from writable.
     using readable = item<const std::byte>;
 
-} // namespace kmx::aio::buffer::view
+}

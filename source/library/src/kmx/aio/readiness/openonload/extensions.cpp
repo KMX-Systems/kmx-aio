@@ -1,21 +1,26 @@
-/// @file kmx/aio/readiness/openonload/extensions.cpp
+/// @file src/kmx/aio/readiness/openonload/extensions.cpp
 /// @brief The compiled body of the OpenOnload acceleration entry points.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/readiness/openonload/extensions.hpp>
+#ifndef PCH
+    #include <kmx/aio/error_code.hpp>
+#endif
 
 namespace kmx::aio::readiness::openonload
 {
-    bool initialize_runtime_stack(const char* stack_name) noexcept
+    expected_void_t initialize_runtime_stack(const char* stack_name) noexcept
     {
 #if KMX_AIO_OPENONLOAD_EXTENSIONS_AVAILABLE
         // Reserve a unique accelerated stack name and instruct all threads
         // to map to it when manipulating sockets bypassing the kernel stack.
-        int rc = ::onload_set_stackname(ONLOAD_ALL_THREADS, ONLOAD_SCOPE_PROCESS, stack_name);
-        return rc == 0;
+        if (::onload_set_stackname(ONLOAD_ALL_THREADS, ONLOAD_SCOPE_PROCESS, stack_name) != 0)
+            return std::unexpected(to_std_error_code(error_code::openonload_init_failed));
+
+        return {};
 #else
-        (void) stack_name;
-        // Without extensions, fallback to relying on LD_PRELOAD behavior safely.
-        return false;
+        static_cast<void>(stack_name);
+        // Without the extensions the name cannot be set; sockets still accelerate through LD_PRELOAD.
+        return std::unexpected(std::make_error_code(std::errc::function_not_supported));
 #endif
     }
 
@@ -26,7 +31,7 @@ namespace kmx::aio::readiness::openonload
         // ONLOAD_FD_STAT_OOF or positive structural index means accelerated hardware path.
         return (stat == ONLOAD_FD_STAT_OOF) || (stat > 0);
 #else
-        (void) fd;
+        static_cast<void>(fd);
         return false; // Cannot reliably compute without onload_ext link
 #endif
     }
@@ -65,8 +70,8 @@ namespace kmx::aio::readiness::openonload
         // Implicit release of Onload network buffers upon returning since onload_zc_keep() is not invoked.
         return total_copied;
 #else
-        (void) fd;
-        (void) buffer;
+        static_cast<void>(fd);
+        static_cast<void>(buffer);
         return std::unexpected(std::make_error_code(std::errc::function_not_supported));
 #endif
     }
@@ -103,8 +108,8 @@ namespace kmx::aio::readiness::openonload
 
         return to_copy;
 #else
-        (void) fd;
-        (void) buffer;
+        static_cast<void>(fd);
+        static_cast<void>(buffer);
         return std::unexpected(std::make_error_code(std::errc::function_not_supported));
 #endif
     }

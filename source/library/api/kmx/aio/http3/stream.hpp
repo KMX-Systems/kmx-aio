@@ -1,4 +1,4 @@
-/// @file aio/http3/stream.hpp
+/// @file api/kmx/aio/http3/stream.hpp
 /// @brief HTTP/3 stream definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -85,5 +85,5 @@ namespace kmx::aio::http3
         /// @brief True once the remote receive side is closed.
         bool recv_closed_ {false};
     };
-} // namespace kmx::aio::http3
+}
 #endif // KMX_AIO_FEATURE_HTTP3

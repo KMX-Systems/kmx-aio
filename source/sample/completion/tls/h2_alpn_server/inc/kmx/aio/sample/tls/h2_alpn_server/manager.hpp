@@ -1,3 +1,6 @@
+/// @file inc/kmx/aio/sample/tls/h2_alpn_server/manager.hpp
+/// @brief Completion-model TLS server sample manager that selects HTTP/2 via ALPN.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <kmx/aio/completion/executor.hpp>
@@ -69,4 +72,4 @@ namespace kmx::aio::sample::tls::h2_alpn_server
         static inline std::atomic<kmx::aio::completion::executor*> g_executor_ptr {};
     };
 
-} // namespace kmx::aio::sample::tls::h2_alpn_server
+}

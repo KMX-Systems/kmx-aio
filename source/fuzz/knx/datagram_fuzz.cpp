@@ -1,22 +1,24 @@
 /// @file fuzz/knx/datagram_fuzz.cpp
 /// @brief libFuzzer target for the KNXnet/IP datagram decoder, and the KNX IP Secure checks behind it.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details Every input goes through `decode_datagram`, which dispatches to every codec a datagram can reach: discovery,
 ///          connection management, tunnelling, routing, SECURE_WRAPPER, TIMER_NOTIFY and the SESSION_* frames. What
 ///          decodes is taken further. A wrapper is opened, a TIMER_NOTIFY verified and a SESSION_RESPONSE checked under
 ///          a fixed key, so the MAC and decryption paths run on mutated fields too. A datagram that decodes has to encode
 ///          again, and its encoding has to decode. Built and run by script/feature/knx/run-fuzz.sh.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/knx/datagram.hpp>
-#include <kmx/aio/knx/frame.hpp>
-#include <kmx/aio/knx/secure/session.hpp>
-#include <kmx/aio/knx/secure/timer_notify.hpp>
-#include <kmx/aio/knx/secure/wrapper.hpp>
+#ifndef PCH
+    #include <kmx/aio/knx/datagram.hpp>
+    #include <kmx/aio/knx/frame.hpp>
+    #include <kmx/aio/knx/secure/session.hpp>
+    #include <kmx/aio/knx/secure/timer_notify.hpp>
+    #include <kmx/aio/knx/secure/wrapper.hpp>
 
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <cstdlib>
-#include <variant>
+    #include <array>
+    #include <cstddef>
+    #include <cstdint>
+    #include <cstdlib>
+    #include <variant>
+#endif
 
 namespace kmx::aio::fuzz::knx::datagram_fuzz
 {
@@ -34,11 +36,12 @@ namespace kmx::aio::fuzz::knx::datagram_fuzz
     /// @brief Runs the KNX IP Secure check a decoded frame calls for; the verdict does not matter, only that it is reached.
     static void check(const kn::datagram& value) noexcept
     {
-        if (const auto* const wrapper = std::get_if<ks::secure_wrapper_frame>(&value.payload))
+        if (const auto* const wrapper = std::get_if<ks::wrapper_frame>(&value.payload))
         {
             std::array<std::uint8_t, kn::frame::max_datagram_size> plain {};
             static_cast<void>(ks::open_wrapper(plain, fixed_key(), *wrapper));
         }
+
         if (const auto* const notify = std::get_if<ks::timer_notify_frame>(&value.payload))
             static_cast<void>(ks::verify_timer_notify(fixed_key(), *notify));
         if (const auto* const response = std::get_if<ks::session_response_frame>(&value.payload))
@@ -67,5 +70,6 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, const std::size_
         target::check(*decoded);
         target::round_trip(*decoded);
     }
+
     return 0;
 }

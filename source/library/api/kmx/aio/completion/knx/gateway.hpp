@@ -1,11 +1,12 @@
-/// @file aio/completion/knx/gateway.hpp
+/// @file api/kmx/aio/completion/knx/gateway.hpp
 /// @brief Completion-facing KNX gateway alias.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_COMPLETION) && defined(KMX_AIO_FEATURE_KNX)
-
-    #include <kmx/aio/knx/gateway.hpp>
+    #ifndef PCH
+        #include <kmx/aio/knx/gateway.hpp>
+    #endif
 
 namespace kmx::aio::completion::knx
 {

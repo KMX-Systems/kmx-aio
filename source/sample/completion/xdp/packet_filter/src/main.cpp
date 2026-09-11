@@ -1,13 +1,17 @@
-#include <atomic>
-#include <exception>
-#include <memory>
-#include <source_location>
-#include <string>
+/// @file src/main.cpp
+/// @brief Entry point of the completion-model AF_XDP packet filter sample: parses interface and queue, runs the filter.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/sample/xdp/packet_filter/manager.hpp>
+    #include <kmx/logger.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/logger.hpp>
-
-#include <kmx/aio/sample/xdp/packet_filter/manager.hpp>
+    #include <atomic>
+    #include <exception>
+    #include <memory>
+    #include <source_location>
+    #include <string>
+#endif
 
 int main(int argc, const char* argv[]) noexcept
 {
@@ -26,7 +30,7 @@ int main(int argc, const char* argv[]) noexcept
         kmx::aio::completion::executor exec;
         auto ok = std::make_shared<std::atomic_bool>(false);
 
-        exec.spawn(kmx::aio::sample::xdp::packet_filter::run_packet_filter(exec, ok, std::string(argv[1]), queue_id));
+        exec.spawn(kmx::aio::sample::xdp::packet_filter::run(exec, ok, std::string(argv[1]), queue_id));
         exec.run();
 
         return ok->load(std::memory_order_relaxed) ? 0 : 1;

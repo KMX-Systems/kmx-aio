@@ -1,12 +1,13 @@
-/// @file kmx/aio/knx/secure/session_link.cpp
+/// @file src/kmx/aio/knx/secure/session_link.cpp
 /// @brief The compiled body of the server session link.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/knx/secure/session_link.hpp>
+#ifndef PCH
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/frame.hpp>
 
-#include <kmx/aio/knx/error.hpp>
-#include <kmx/aio/knx/frame.hpp>
-
-#include <array>
+    #include <array>
+#endif
 
 namespace kmx::aio::knx::secure
 {

@@ -1,13 +1,18 @@
-#include <kmx/aio/sample/common/cli_parse.hpp>
-#include <kmx/aio/sample/gpu/image_processing/manager.hpp>
+/// @file src/main.cpp
+/// @brief Entry point of the GPU image-processing sample: parses device, frame and GPU options and runs the manager.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#ifndef PCH
+    #include <kmx/aio/sample/common/cli_parse.hpp>
+    #include <kmx/aio/sample/gpu/image_processing/manager.hpp>
 
-#include <cstdint>
-#include <exception>
-#include <iostream>
-#include <limits>
-#include <string_view>
-#include <unordered_map>
-#include <utility>
+    #include <cstdint>
+    #include <exception>
+    #include <iostream>
+    #include <limits>
+    #include <string_view>
+    #include <unordered_map>
+    #include <utility>
+#endif
 
 namespace kmx::aio::sample::gpu::image_processing::detail
 {
@@ -23,7 +28,7 @@ namespace kmx::aio::sample::gpu::image_processing::detail
                      "  --help                  Show this help\n";
     }
 
-    bool parse_gpu_device_option(const char* value, std::int16_t& out)
+    [[nodiscard]] bool parse_cuda_device_option(const char* value, std::int16_t& out)
     {
         std::uint64_t tmp {};
         if (!kmx::aio::sample::common::parse_unsigned_u64_cstr(value, tmp))
@@ -36,9 +41,9 @@ namespace kmx::aio::sample::gpu::image_processing::detail
         return true;
     }
 
-    bool parse_args(const int argc, char* argv[], kmx::aio::sample::gpu::image_processing::config& cfg, bool& help_requested)
+    [[nodiscard]] bool parse_args(const int argc, char* argv[], kmx::aio::sample::gpu::image_processing::config& cfg, bool& help_requested)
     {
-        enum class option_kind
+        enum class option_kind : std::uint8_t
         {
             device,
             max_frames,
@@ -101,7 +106,7 @@ namespace kmx::aio::sample::gpu::image_processing::detail
                         return false;
                     break;
                 case option_kind::gpu_device:
-                    if (!parse_gpu_device_option(value, cfg.gpu_device))
+                    if (!parse_cuda_device_option(value, cfg.gpu_device))
                         return false;
                     break;
                 default:
@@ -112,7 +117,7 @@ namespace kmx::aio::sample::gpu::image_processing::detail
 
         return true;
     }
-} // namespace kmx::aio::sample::gpu::image_processing::detail
+}
 
 int main(const int argc, char* argv[]) noexcept
 {

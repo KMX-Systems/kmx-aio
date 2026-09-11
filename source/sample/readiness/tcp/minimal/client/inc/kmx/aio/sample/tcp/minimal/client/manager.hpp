@@ -1,17 +1,20 @@
+/// @file inc/kmx/aio/sample/tcp/minimal/client/manager.hpp
+/// @brief Readiness-model minimal TCP client sample manager: many workers each send one message and read the reply.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
-    #include <arpa/inet.h>
-    #include <fcntl.h>
     #include <kmx/aio/file_descriptor.hpp>
     #include <kmx/aio/readiness/executor.hpp>
     #include <kmx/aio/readiness/tcp/stream.hpp>
     #include <kmx/aio/task.hpp>
     #include <kmx/logger.hpp>
-    #include <sys/socket.h>
 
     #include <atomic>
     #include <chrono>
     #include <expected>
+    #include <arpa/inet.h>
+    #include <fcntl.h>
+    #include <sys/socket.h>
 #endif
 
 namespace kmx::aio::sample::tcp::minimal::client
@@ -43,7 +46,7 @@ namespace kmx::aio::sample::tcp::minimal::client
     public:
         explicit manager(config config = {}): config_(std::move(config)) {}
 
-        const metric_data& metrics() const noexcept { return metrics_; }
+        [[nodiscard]] const metric_data& metrics() const noexcept { return metrics_; }
 
         /// @brief Run the stress test.
         /// @return true when all requests succeed; otherwise false.

@@ -1,4 +1,4 @@
-/// @file aio/basic_channel.hpp
+/// @file api/kmx/aio/basic_channel.hpp
 /// @brief Element-type independent core of the SPSC channel: ring indices and backpressure.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -157,4 +157,4 @@ namespace kmx::aio
         alignas(cache_line_size) atomic_size_t tail_ {};
     };
 
-} // namespace kmx::aio
+}

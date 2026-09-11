@@ -1,12 +1,16 @@
-#include <kmx/aio/completion/timer.hpp>
+/// @file src/kmx/aio/sample/v4l2/completion_capture/manager.cpp
+/// @brief Completion-model V4L2 capture sample manager: capture and stats coroutines sharing one io_uring executor.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/v4l2/completion_capture/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/timer.hpp>
+    #include <kmx/aio/error_code.hpp>
 
-#include <chrono>
-#include <csignal>
-#include <print>
-#include <source_location>
-
-#include <kmx/aio/error_code.hpp>
+    #include <chrono>
+    #include <csignal>
+    #include <print>
+    #include <source_location>
+#endif
 
 namespace kmx::aio::sample::v4l2::completion_capture
 {
@@ -110,6 +114,7 @@ namespace kmx::aio::sample::v4l2::completion_capture
                                      "Too many consecutive errors. Aborting capture loop.");
                     break;
                 }
+
                 continue;
             }
 
@@ -166,4 +171,4 @@ namespace kmx::aio::sample::v4l2::completion_capture
         kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "Signal {} received, stopping capture.", signum);
     }
 
-} // namespace kmx::aio::sample::v4l2::completion_capture
+}

@@ -1,13 +1,13 @@
+/// @file inc/kmx/aio/sample/tcp/echo/client/manager.hpp
+/// @brief Readiness-model TCP echo client sample manager: concurrent connection stress test with live stats.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
-    #include <arpa/inet.h>
-    #include <fcntl.h>
     #include <kmx/aio/file_descriptor.hpp>
     #include <kmx/aio/readiness/executor.hpp>
     #include <kmx/aio/readiness/tcp/stream.hpp>
     #include <kmx/aio/task.hpp>
     #include <kmx/logger.hpp>
-    #include <sys/socket.h>
 
     #include <atomic>
     #include <chrono>
@@ -16,6 +16,9 @@
     #include <stop_token>
     #include <thread>
     #include <unordered_map>
+    #include <arpa/inet.h>
+    #include <fcntl.h>
+    #include <sys/socket.h>
 #endif
 
 namespace kmx::aio::sample::tcp::echo::client
@@ -50,7 +53,7 @@ namespace kmx::aio::sample::tcp::echo::client
     public:
         explicit manager(config config = {}): config_(std::move(config)) {}
 
-        const metric_data& metrics() const noexcept { return metrics_; }
+        [[nodiscard]] const metric_data& metrics() const noexcept { return metrics_; }
 
         /// @brief Run the stress test.
         /// @return true when all requests succeed; otherwise false.

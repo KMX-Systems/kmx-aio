@@ -1,13 +1,18 @@
-#include <kmx/aio/sample/tcp/echo/common.hpp>
+/// @file src/kmx/aio/sample/tcp/echo_uring/server/manager.cpp
+/// @brief Completion-model TCP echo server: accept loop, fixed-buffer client read/write, live stats UI and signal shutdown.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/tcp/echo_uring/server/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/sample/tcp/echo/common.hpp>
 
-#include <algorithm>
-#include <csignal>
-#include <iostream>
-#include <span>
-#include <sys/socket.h>
-#include <thread>
-#include <vector>
+    #include <algorithm>
+    #include <csignal>
+    #include <iostream>
+    #include <span>
+    #include <thread>
+    #include <vector>
+    #include <sys/socket.h>
+#endif
 
 namespace kmx::aio::sample::tcp::echo_uring::server
 {
@@ -87,7 +92,7 @@ namespace kmx::aio::sample::tcp::echo_uring::server
             ui_thread_.join();
         }
 
-        (void) executor_->unregister_buffers();
+        static_cast<void>(executor_->unregister_buffers());
         print_metrics();
         return metrics_.errors == 0u;
     }
@@ -289,8 +294,8 @@ namespace kmx::aio::sample::tcp::echo_uring::server
             std::cout << "Live Uring Connection Stats\n";
             std::cout << "────────────────────────────────────────────────────────────────────────\n";
             std::cout << std::format("Server Totals: TX {} | RX {} | EC {} | Active {} | Total {}\n",
-                                     ::kmx::aio::sample::common::format_bytes(bytes_sent),
-                                     ::kmx::aio::sample::common::format_bytes(bytes_recv), errors, active_conn, total_conn);
+                                     ::kmx::aio::sample::tcp::echo::common::format_bytes(bytes_sent),
+                                     ::kmx::aio::sample::tcp::echo::common::format_bytes(bytes_recv), errors, active_conn, total_conn);
             std::cout << std::flush;
 
             std::this_thread::sleep_for(250ms);
@@ -332,4 +337,4 @@ namespace kmx::aio::sample::tcp::echo_uring::server
         }
     }
 
-} // namespace kmx::aio::sample::tcp::echo_uring::server
+}

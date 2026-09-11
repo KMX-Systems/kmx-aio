@@ -1,21 +1,23 @@
-/// @file aio/integration/completion_core_pinning_test.cpp
+/// @file src/kmx/aio/integration/completion_core_pinning_test.cpp
 /// @brief Integration test for completion executor core pinning parity.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/timer.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/aio/test/system_probe.hpp>
 
-#include <catch2/catch_test_macros.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/timer.hpp>
-#include <kmx/aio/task.hpp>
-#include <kmx/aio/test/system_probe.hpp>
-
-#include <atomic>
-#include <chrono>
-#include <expected>
-#include <memory>
-#include <pthread.h>
-#include <sched.h>
-#include <system_error>
-#include <thread>
+    #include <atomic>
+    #include <chrono>
+    #include <expected>
+    #include <memory>
+    #include <system_error>
+    #include <thread>
+    #include <pthread.h>
+    #include <sched.h>
+#endif
 
 namespace kmx::aio::test::integration::completion_core_pinning_test
 {
@@ -25,7 +27,7 @@ namespace kmx::aio::test::integration::completion_core_pinning_test
     {
         timer tmr {exec};
         auto wait_res = co_await tmr.wait(std::chrono::milliseconds(500));
-        (void) wait_res;
+        static_cast<void>(wait_res);
         co_return;
     }
 
@@ -69,8 +71,9 @@ namespace kmx::aio::test::integration::completion_core_pinning_test
                 if (runner.joinable())
                 {
                     runner.detach();
-                    (void) exec_holder.release(); // Leak intentionally: the thread is still running.
+                    static_cast<void>(exec_holder.release()); // Leak intentionally: the thread is still running.
                 }
+
                 return;
             }
 
@@ -97,12 +100,13 @@ namespace kmx::aio::test::integration::completion_core_pinning_test
             if (runner.joinable())
             {
                 runner.detach();
-                (void) exec_holder.release(); // Leak intentionally: the thread is still running.
+                static_cast<void>(exec_holder.release()); // Leak intentionally: the thread is still running.
             }
+
             FAIL("completion pinning test timeout: executor did not stop after affinity confirmation");
         }
 
         if (runner.joinable())
             runner.join();
     }
-} // namespace kmx::aio::test::integration::completion_core_pinning_test
+}

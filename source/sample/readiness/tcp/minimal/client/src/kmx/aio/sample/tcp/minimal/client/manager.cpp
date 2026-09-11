@@ -1,5 +1,10 @@
-#include <kmx/aio/error_code.hpp>
+/// @file src/kmx/aio/sample/tcp/minimal/client/manager.cpp
+/// @brief Readiness-model minimal TCP client: a non-blocking connect and one request/reply per worker, then a summary.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/tcp/minimal/client/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/error_code.hpp>
+#endif
 
 namespace kmx::aio::sample::tcp::minimal::client
 {
@@ -195,4 +200,4 @@ namespace kmx::aio::sample::tcp::minimal::client
         std::println("╚════════════════════════════════════════╝");
     }
 
-} // namespace kmx::aio::sample::tcp::minimal::client
+}

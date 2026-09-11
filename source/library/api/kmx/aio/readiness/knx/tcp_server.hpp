@@ -1,5 +1,6 @@
-/// @file aio/readiness/knx/tcp_server.hpp
+/// @file api/kmx/aio/readiness/knx/tcp_server.hpp
 /// @brief Readiness accept loop for KNXnet/IP over TCP: one serving task per connection.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// A @ref kmx::aio::knx::generic_server serves each TCP connection through
 /// @ref kmx::aio::knx::generic_server::serve_connection. This loop listens, accepts, wraps every connection in a
@@ -11,24 +12,24 @@
 /// unbounded wait: the listening socket is registered edge-triggered, and a connection that arrives between a refused
 /// accept and that wait raises no edge the wait can see. Here the wait is bounded and the socket asked again after it.
 /// @note The server and this loop must outlive the executor's run, since every connection task refers to both.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_READINESS) && defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/file_descriptor.hpp>
+        #include <kmx/aio/ipv4.hpp>
+        #include <kmx/aio/knx/generic_server.hpp>
+        #include <kmx/aio/knx/server.hpp>
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/task.hpp>
+
         #include <atomic>
         #include <cstddef>
         #include <cstdint>
         #include <stop_token>
         #include <sys/socket.h>
     #endif
-
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/file_descriptor.hpp>
-    #include <kmx/aio/ipv4.hpp>
-    #include <kmx/aio/knx/server.hpp>
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/task.hpp>
 
 namespace kmx::aio::readiness::knx
 {

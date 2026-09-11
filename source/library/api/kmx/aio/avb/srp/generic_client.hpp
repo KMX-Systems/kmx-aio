@@ -1,0 +1,86 @@
+/// @file api/kmx/aio/avb/srp/generic_client.hpp
+/// @brief Public API for the IEEE 802.1Qat SRP (MSRP) stream reservation client.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#pragma once
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_AVB)
+    #ifndef PCH
+        #include <kmx/aio/avb/avb_types.hpp>
+        #include <kmx/aio/avb/srp/messages.hpp>
+        #include <kmx/aio/task.hpp>
+
+        #include <chrono>
+        #include <expected>
+        #include <memory>
+        #include <string_view>
+        #include <system_error>
+    #endif
+
+namespace kmx::aio::avb::srp
+{
+    /// @brief IEEE 802.1Qat SRP stream reservation client.
+    ///
+    /// Implements the MSRP Talker and Listener roles:
+    ///  - **Talker**: periodically advertises a stream; switches withdraw on demand.
+    ///  - **Listener**: monitors incoming Talker Advertise PDUs for a desired stream
+    ///                  and replies with a Listener Ready declaration.
+    ///
+    /// @note Requires CAP_NET_RAW and an AVB-capable switch for end-to-end reservation.
+    ///       On a single-host loopback configuration the SRP PDUs are still exchanged
+    ///       between end-stations even without a managed switch.
+    ///
+    /// @example
+    /// @code
+    ///   srp::client srp(*exec);
+    ///   co_await srp.start("eth0");
+    ///
+    ///   // Talker role: reserve bandwidth for this stream
+    ///   srp::stream_descriptor desc { ... };
+    ///   co_await srp.advertise(desc);
+    ///
+    ///   // Listener role: wait for a talker and subscribe
+    ///   co_await srp.subscribe(desc.stream_id);
+    /// @endcode
+    template <typename Executor>
+    class generic_client
+    {
+    public:
+        /// @brief Creates an SRP client bound to an executor.
+        explicit generic_client(Executor& exec) noexcept;
+        /// @brief Releases SRP client resources.
+        ~generic_client() noexcept;
+
+        /// @brief Non-copyable.
+        generic_client(const generic_client&) = delete;
+        /// @brief Non-copyable.
+        generic_client& operator=(const generic_client&) = delete;
+        /// @brief Movable.
+        generic_client(generic_client&&) noexcept = default;
+        /// @brief Movable.
+        generic_client& operator=(generic_client&&) noexcept = default;
+
+        /// @brief Bind to a NIC and start receiving MSRP frames.
+        ///        Spawns the receive loop and domain advertisement.
+        [[nodiscard]] task_returning_expected_void_t start(const std::string_view iface) noexcept(false);
+
+        /// @brief **Talker**: advertise a stream and periodically re-declare it.
+        ///        Returns once the first declaration is sent.
+        [[nodiscard]] task_returning_expected_void_t advertise(const stream_descriptor& desc) noexcept(false);
+
+        /// @brief **Listener**: wait until a Talker Advertise for the given stream_id
+        ///        is received, then send a Listener Ready declaration.
+        ///        Suspends until the talker is found or timeout expires.
+        [[nodiscard]] task<std::expected<stream_descriptor, std::error_code>> subscribe(
+            const stream_id_t& stream_id, std::chrono::milliseconds timeout = std::chrono::seconds(5)) noexcept(false);
+
+        /// @brief **Talker / Listener**: withdraw a previously advertised or subscribed stream.
+        [[nodiscard]] task_returning_expected_void_t withdraw(const stream_id_t& stream_id) noexcept(false);
+
+    private:
+        /// @brief Opaque implementation state for the SRP client.
+        struct state;
+        /// @brief Owned implementation state shared by public operations.
+        std::unique_ptr<state> state_;
+    };
+}
+#endif // KMX_AIO_FEATURE_AVB

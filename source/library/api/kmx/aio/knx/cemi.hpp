@@ -1,5 +1,6 @@
-/// @file aio/knx/cemi.hpp
+/// @file api/kmx/aio/knx/cemi.hpp
 /// @brief Common External Message Interface (cEMI) L_Data encoding and decoding.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// cEMI is the medium-independent frame the KNXnet/IP services carry: a tunnelling request is a KNXnet/IP
 /// header wrapped around exactly one cEMI message. This header implements the L_Data messages, which are
@@ -26,212 +27,25 @@
 /// that back onto the buffer it was decoded from.
 /// @reference KNX System Specifications, Volume 3/6/3 "EMI/IMI", cEMI L_Data.
 /// @reference KNX System Specifications, Volume 3/3/7 "Application Layer", APCI codes.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/knx/apdu_payload.hpp>
+        #include <kmx/aio/knx/cemi_frame.hpp>
+        #include <kmx/aio/knx/error.hpp>
+        #include <kmx/aio/knx/group_address.hpp>
+        #include <kmx/aio/knx/individual_address.hpp>
+        #include <kmx/aio/knx/property_frame.hpp>
+
         #include <cstdint>
         #include <expected>
         #include <span>
     #endif
 
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/knx/address.hpp>
-    #include <kmx/aio/knx/error.hpp>
-
 namespace kmx::aio::knx
 {
-    /// @brief cEMI message codes.
-    /// @note The three L_Data codes are the only ones this build encodes or decodes; the remaining
-    ///       entries exist so a received message can be named in a log instead of being reported as a
-    ///       malformed frame.
-    enum class cemi_message_code : std::uint8_t
-    {
-        /// @brief L_Busmon.ind — a bus monitor frame.
-        l_busmon_ind = 0x2Bu,
-        /// @brief L_Raw.req — a raw medium frame.
-        l_raw_req = 0x10u,
-        /// @brief L_Raw.ind — a raw medium frame.
-        l_raw_ind = 0x2Du,
-        /// @brief L_Raw.con — a raw medium confirmation.
-        l_raw_con = 0x2Fu,
-        /// @brief L_Data.req — a link layer request, client to interface.
-        l_data_req = 0x11u,
-        /// @brief L_Data.con — the interface's confirmation of a request it sent to the bus.
-        l_data_con = 0x2Eu,
-        /// @brief L_Data.ind — a link layer indication, interface to client.
-        l_data_ind = 0x29u,
-        /// @brief L_Poll_Data.req — a polling request.
-        l_poll_data_req = 0x13u,
-        /// @brief L_Poll_Data.con — a polling confirmation.
-        l_poll_data_con = 0x25u,
-        /// @brief M_PropRead.req — a device management property read.
-        m_prop_read_req = 0xFCu,
-        /// @brief M_PropRead.con — a device management property read response.
-        m_prop_read_con = 0xFBu,
-        /// @brief M_PropWrite.req — a device management property write.
-        m_prop_write_req = 0xF6u,
-        /// @brief M_PropWrite.con — a device management property write response.
-        m_prop_write_con = 0xF5u,
-        /// @brief M_PropInfo.ind — an unsolicited device management indication.
-        m_prop_info_ind = 0xF7u,
-        /// @brief M_Reset.req — a device management reset request.
-        m_reset_req = 0xF1u,
-        /// @brief M_Reset.ind — a device management reset indication.
-        m_reset_ind = 0xF0u,
-    };
-
-    /// @brief Telegram priority, control field 1 bits 3..2.
-    enum class priority : std::uint8_t
-    {
-        /// @brief System priority — reserved for management traffic.
-        system = 0u,
-        /// @brief Normal priority.
-        normal = 1u,
-        /// @brief Urgent priority — alarms.
-        urgent = 2u,
-        /// @brief Low priority — the default for ordinary group traffic.
-        low = 3u,
-    };
-
-    /// @brief How the destination address of an L_Data frame is to be read.
-    enum class address_type : std::uint8_t
-    {
-        /// @brief The destination is one device — point-to-point communication.
-        individual = 0u,
-        /// @brief The destination is a group — the usual case.
-        group = 1u,
-    };
-
-    /// @brief Application layer service identifiers, as ten-bit APCI values.
-    /// @note Most services are identified by their upper four bits alone, and the lower six bits then
-    ///       belong to the service's own parameter or compact value. The two codes @ref
-    ///       kmx::aio::knx::cemi::apci_escape_user and @ref kmx::aio::knx::cemi::apci_escape_management
-    ///       are the exception: under those, all ten bits name the service.
-    enum class apci : std::uint16_t
-    {
-        /// @brief A_GroupValue_Read — ask the group for its current value.
-        group_value_read = 0x000u,
-        /// @brief A_GroupValue_Response — the answer to a read.
-        group_value_response = 0x040u,
-        /// @brief A_GroupValue_Write — set the group's value.
-        group_value_write = 0x080u,
-        /// @brief A_IndividualAddress_Write — assign an individual address in programming mode.
-        individual_address_write = 0x0C0u,
-        /// @brief A_IndividualAddress_Read — ask devices in programming mode for their address.
-        individual_address_read = 0x100u,
-        /// @brief A_IndividualAddress_Response — the answer to an individual address read.
-        individual_address_response = 0x140u,
-        /// @brief A_ADC_Read — read an analogue-to-digital converter channel.
-        adc_read = 0x180u,
-        /// @brief A_ADC_Response — the answer to an ADC read.
-        adc_response = 0x1C0u,
-        /// @brief A_Memory_Read — read device memory.
-        memory_read = 0x200u,
-        /// @brief A_Memory_Response — the answer to a memory read.
-        memory_response = 0x240u,
-        /// @brief A_Memory_Write — write device memory.
-        memory_write = 0x280u,
-        /// @brief A_UserMemory_Read — read user memory.
-        user_memory_read = 0x2C0u,
-        /// @brief A_UserMemory_Response — the answer to a user memory read.
-        user_memory_response = 0x2C1u,
-        /// @brief A_UserMemory_Write — write user memory.
-        user_memory_write = 0x2C2u,
-        /// @brief A_UserManufacturerInfo_Read — read the manufacturer information block.
-        user_manufacturer_info_read = 0x2C5u,
-        /// @brief A_UserManufacturerInfo_Response — the answer to a manufacturer information read.
-        user_manufacturer_info_response = 0x2C6u,
-        /// @brief A_DeviceDescriptor_Read — read a device descriptor.
-        device_descriptor_read = 0x300u,
-        /// @brief A_DeviceDescriptor_Response — the answer to a device descriptor read.
-        device_descriptor_response = 0x340u,
-        /// @brief A_Restart — restart the device.
-        restart = 0x380u,
-        /// @brief A_PropertyValue_Read — read an interface object property.
-        property_value_read = 0x3D5u,
-        /// @brief A_PropertyValue_Response — the answer to a property read.
-        property_value_response = 0x3D6u,
-        /// @brief A_PropertyValue_Write — write an interface object property.
-        property_value_write = 0x3D7u,
-        /// @brief A_PropertyDescription_Read — read a property description.
-        property_description_read = 0x3D8u,
-        /// @brief A_PropertyDescription_Response — the answer to a property description read.
-        property_description_response = 0x3D9u,
-        /// @brief A_SecureService — a KNX Data Secure APDU; see `kmx/aio/knx/data_secure.hpp`.
-        secure_service = 0x3F1u,
-    };
-
-    /// @brief An application protocol data unit payload.
-    /// @details A KNX APDU carries its value either in the six spare bits of the APCI octet — the compact
-    ///          form every one-bit and four-bit datapoint uses — or in whole octets after it. The two are
-    ///          different encodings of the same field, and which one applies follows from the datapoint
-    ///          type rather than from the value, so the choice is made here and never guessed at.
-    /// @warning The extended form is a view. The octets it names must outlive every encode call that uses
-    ///          it; nothing is copied.
-    class apdu_payload
-    {
-    public:
-        /// @brief Largest number of payload octets an APDU can carry.
-        /// @details The data length field is one octet and counts the APDU minus its first octet.
-        static constexpr std::size_t max_octets = 254u;
-        /// @brief Mask of the bits a compact payload occupies in the APCI octet.
-        static constexpr std::uint8_t compact_mask = 0x3Fu;
-
-        /// @brief Creates the compact payload with value zero, as used by A_GroupValue_Read.
-        constexpr apdu_payload() noexcept = default;
-
-        /// @brief Creates a compact payload carried inside the APCI octet.
-        /// @param value The six-bit value; higher bits are discarded.
-        /// @return The payload.
-        [[nodiscard]] static constexpr apdu_payload compact(const std::uint8_t value) noexcept
-        {
-            apdu_payload result {};
-            result.compact_value_ = static_cast<std::uint8_t>(value & compact_mask);
-            return result;
-        }
-
-        /// @brief Creates a payload carried in whole octets after the APCI octet.
-        /// @param octets The payload octets; borrowed, not copied.
-        /// @return The payload, or `error::payload_too_large` when it exceeds @ref max_octets.
-        /// @note An empty octet span yields the compact payload with value zero, because an APDU always
-        ///       carries at least the APCI octet and therefore has no zero-length form.
-        [[nodiscard]] static constexpr std::expected<apdu_payload, error> extended(const cspan_uint8_t octets) noexcept
-        {
-            if (octets.size() > max_octets)
-                return std::unexpected(error::payload_too_large);
-            if (octets.empty())
-                return apdu_payload {};
-
-            apdu_payload result {};
-            result.octets_ = octets;
-            result.compacted_ = false;
-            return result;
-        }
-
-        /// @brief Indicates whether the value sits in the six spare bits of the APCI octet.
-        [[nodiscard]] constexpr bool compacted() const noexcept { return compacted_; }
-        /// @brief Returns the six-bit value; zero unless the payload is compact.
-        [[nodiscard]] constexpr std::uint8_t compact_value() const noexcept { return compact_value_; }
-        /// @brief Returns the payload octets; empty unless the payload is extended.
-        [[nodiscard]] constexpr cspan_uint8_t octets() const noexcept { return octets_; }
-
-        /// @brief Returns the wire data length field: the APDU octet count minus one.
-        [[nodiscard]] constexpr std::uint8_t data_length() const noexcept
-        {
-            return compacted_ ? std::uint8_t {1u} : static_cast<std::uint8_t>(octets_.size() + 1u);
-        }
-
-    private:
-        /// @brief The borrowed payload octets of an extended payload.
-        cspan_uint8_t octets_ {};
-        /// @brief The six-bit value of a compact payload.
-        std::uint8_t compact_value_ {};
-        /// @brief Whether the value sits in the APCI octet.
-        bool compacted_ {true};
-    };
-
     /// @brief The link layer flags of an outgoing L_Data frame.
     /// @details The defaults produce the control fields `0xBC` and `0xE0` that every interface expects
     ///          from a tunnelling client: standard frame, repetition allowed, broadcast, low priority,
@@ -251,177 +65,6 @@ namespace kmx::aio::knx
         bool repeat {true};
         /// @brief Whether the frame is a domain broadcast rather than a system broadcast.
         bool broadcast {true};
-    };
-
-    /// @brief A decoded cEMI L_Data message.
-    /// @details Trivially copyable and self-contained apart from the payload, which is named by offset and
-    ///          size so that copying a decoded frame can never leave a dangling view behind.
-    struct cemi_frame
-    {
-        /// @brief The message code.
-        cemi_message_code message_code {cemi_message_code::l_data_ind};
-        /// @brief The length of the additional information block, usually zero.
-        std::uint8_t additional_info_length {};
-        /// @brief Control field 1 — frame type, repeat, broadcast, priority, acknowledge, confirm.
-        std::uint8_t control_field_1 {};
-        /// @brief Control field 2 — address type, hop count, extended frame format.
-        std::uint8_t control_field_2 {};
-        /// @brief The sending device.
-        individual_address source {};
-        /// @brief The raw destination address; read it with @ref group_destination or @ref individual_destination.
-        std::uint16_t destination {};
-        /// @brief The wire data length field: the APDU octet count minus one.
-        std::uint8_t data_length {};
-        /// @brief The transport layer control bits of the first APDU octet.
-        std::uint8_t transport_control {};
-        /// @brief The application layer service.
-        apci application_service {};
-        /// @brief The six-bit value of a compact APDU; zero for an extended one.
-        std::uint8_t compact_value {};
-        /// @brief The offset of the payload octets within the decoded buffer; zero for a compact APDU.
-        std::uint16_t payload_offset {};
-        /// @brief The number of payload octets; zero for a compact APDU.
-        std::uint16_t payload_size {};
-
-        /// @brief Bit mask of the frame type flag in control field 1.
-        static constexpr std::uint8_t standard_frame_mask = 0x80u;
-        /// @brief Bit mask of the repeat flag in control field 1.
-        static constexpr std::uint8_t repeat_mask = 0x20u;
-        /// @brief Bit mask of the broadcast flag in control field 1.
-        static constexpr std::uint8_t broadcast_mask = 0x10u;
-        /// @brief Bit mask of the priority field in control field 1.
-        static constexpr std::uint8_t priority_mask = 0x0Cu;
-        /// @brief Bit mask of the acknowledge request flag in control field 1.
-        static constexpr std::uint8_t acknowledge_mask = 0x02u;
-        /// @brief Bit mask of the confirm flag in control field 1.
-        static constexpr std::uint8_t confirm_mask = 0x01u;
-        /// @brief Bit mask of the address type flag in control field 2.
-        static constexpr std::uint8_t address_type_mask = 0x80u;
-        /// @brief Bit mask of the hop count field in control field 2.
-        static constexpr std::uint8_t hop_count_mask = 0x70u;
-        /// @brief Bit mask of the extended frame format field in control field 2.
-        static constexpr std::uint8_t extended_format_mask = 0x0Fu;
-
-        /// @brief Indicates whether the frame is a standard rather than an extended one.
-        [[nodiscard]] constexpr bool standard_frame() const noexcept { return (control_field_1 & standard_frame_mask) != 0u; }
-        /// @brief Returns control field 1 bit 5 as sent.
-        /// @note For an L_Data.ind a cleared bit marks a frame that is a repetition of an earlier one.
-        [[nodiscard]] constexpr bool repeat_flag() const noexcept { return (control_field_1 & repeat_mask) != 0u; }
-        /// @brief Indicates whether an L_Data.ind is a repetition of an earlier frame.
-        [[nodiscard]] constexpr bool repetition() const noexcept { return !repeat_flag(); }
-        /// @brief Indicates whether the frame is a domain broadcast rather than a system broadcast.
-        [[nodiscard]] constexpr bool broadcast() const noexcept { return (control_field_1 & broadcast_mask) != 0u; }
-        /// @brief Returns the telegram priority.
-        [[nodiscard]] constexpr priority telegram_priority() const noexcept
-        {
-            return static_cast<priority>((control_field_1 & priority_mask) >> 2u);
-        }
-        /// @brief Indicates whether a link layer acknowledgement was requested.
-        [[nodiscard]] constexpr bool acknowledge_requested() const noexcept { return (control_field_1 & acknowledge_mask) != 0u; }
-        /// @brief Indicates whether a confirmation reports an error.
-        /// @note Only meaningful on an L_Data.con.
-        [[nodiscard]] constexpr bool confirm_error() const noexcept { return (control_field_1 & confirm_mask) != 0u; }
-        /// @brief Returns how the destination address is to be read.
-        [[nodiscard]] constexpr knx::address_type address_type() const noexcept
-        {
-            return ((control_field_2 & address_type_mask) != 0u) ? knx::address_type::group : knx::address_type::individual;
-        }
-        /// @brief Returns the remaining routing hops, 0..7.
-        [[nodiscard]] constexpr std::uint8_t hop_count() const noexcept
-        {
-            return static_cast<std::uint8_t>((control_field_2 & hop_count_mask) >> 4u);
-        }
-        /// @brief Returns the extended frame format field, zero for a standard frame.
-        [[nodiscard]] constexpr std::uint8_t extended_frame_format() const noexcept
-        {
-            return static_cast<std::uint8_t>(control_field_2 & extended_format_mask);
-        }
-        /// @brief Indicates whether the destination is a group address.
-        [[nodiscard]] constexpr bool group_addressed() const noexcept { return address_type() == knx::address_type::group; }
-        /// @brief Returns the destination read as a group address.
-        [[nodiscard]] constexpr group_address group_destination() const noexcept { return group_address {destination}; }
-        /// @brief Returns the destination read as an individual address.
-        [[nodiscard]] constexpr individual_address individual_destination() const noexcept { return individual_address {destination}; }
-        /// @brief Indicates whether the value sits in the six spare bits of the APCI octet.
-        [[nodiscard]] constexpr bool compact() const noexcept { return payload_size == 0u; }
-        /// @brief Indicates whether the APDU is an unnumbered data packet, which is what group traffic uses.
-        [[nodiscard]] constexpr bool unnumbered() const noexcept { return (transport_control & 0xC0u) == 0u; }
-        /// @brief Indicates whether the APDU belongs to a numbered point-to-point connection.
-        [[nodiscard]] constexpr bool numbered() const noexcept { return (transport_control & 0xC0u) == 0x40u; }
-        /// @brief Returns the transport layer sequence number of a numbered APDU, 0..15.
-        [[nodiscard]] constexpr std::uint8_t sequence_number() const noexcept
-        {
-            return static_cast<std::uint8_t>((transport_control & 0x3Cu) >> 2u);
-        }
-
-        /// @brief Maps the payload back onto the buffer the frame was decoded from.
-        /// @param bytes The very buffer that was decoded; a different one yields an empty payload.
-        /// @return The payload octets, empty for a compact APDU.
-        [[nodiscard]] constexpr cspan_uint8_t payload(const cspan_uint8_t bytes) const noexcept
-        {
-            if ((payload_size == 0u) || ((static_cast<std::size_t>(payload_offset) + payload_size) > bytes.size()))
-                return {};
-
-            return bytes.subspan(payload_offset, payload_size);
-        }
-    };
-
-    /// @brief One cEMI device management property service.
-    /// @details The device management half of cEMI: the messages that read and write the interface object
-    ///          properties of a device, carried by DEVICE_CONFIGURATION_REQUEST rather than by tunnelling.
-    ///          Its shape has nothing in common with L_Data - no addresses, no APCI - which is why it is a
-    ///          separate frame type rather than a variant of @ref kmx::aio::knx::cemi_frame.
-    ///
-    /// Wire layout, all fields big-endian:
-    ///
-    /// | Offset | Size | Field |
-    /// | :--- | :--- | :--- |
-    /// | 0 | 1 | message code |
-    /// | 1 | 2 | interface object type |
-    /// | 3 | 1 | object instance |
-    /// | 4 | 1 | property id |
-    /// | 5 | 2 | element count in the high four bits, start index in the low twelve |
-    /// | 7 | n | the property data, absent from a read request |
-    /// @reference KNX System Specifications, Volume 3/6/3 "EMI/IMI", cEMI device management.
-    struct property_frame
-    {
-        /// @brief The message code.
-        cemi_message_code message_code = cemi_message_code::m_prop_read_req;
-        /// @brief The interface object type.
-        std::uint16_t object_type {};
-        /// @brief Which instance of that object type, counted from one.
-        std::uint8_t object_instance {};
-        /// @brief The property identifier.
-        std::uint8_t property_id {};
-        /// @brief How many elements the service names; zero in a confirmation reports an error.
-        std::uint8_t element_count {};
-        /// @brief The first element, counted from one; zero names the element count itself.
-        std::uint16_t start_index {};
-        /// @brief Offset of the property data within the buffer this frame was decoded from.
-        std::uint16_t data_offset {};
-        /// @brief Size of the property data.
-        std::uint16_t data_size {};
-
-        /// @brief Indicates whether a confirmation reports a failure.
-        /// @details A confirmation with no elements carries a one-octet error code instead of data, which
-        ///          is the only way a device management service reports that it refused the request.
-        [[nodiscard]] constexpr bool failed() const noexcept
-        {
-            return ((message_code == cemi_message_code::m_prop_read_con) ||
-                    (message_code == cemi_message_code::m_prop_write_con)) &&
-                   (element_count == 0u);
-        }
-
-        /// @brief Returns the property data, mapped onto the buffer this frame was decoded from.
-        /// @param bytes The very buffer it was decoded from.
-        /// @return The data octets, empty when the message carries none.
-        [[nodiscard]] constexpr cspan_uint8_t data(const cspan_uint8_t bytes) const noexcept
-        {
-            if ((data_size == 0u) || ((static_cast<std::size_t>(data_offset) + data_size) > bytes.size()))
-                return {};
-
-            return bytes.subspan(data_offset, data_size);
-        }
     };
 
     /// @brief cEMI encode and decode operations.
@@ -513,8 +156,7 @@ namespace kmx::aio::knx
         /// @param value The service to encode; its data offset and size are ignored.
         /// @param data The property data; empty for a read request.
         /// @return The number of octets written, or the reason the message could not be encoded.
-        [[nodiscard]] constexpr std::expected<std::size_t, error> encode_property(const span_uint8_t dest,
-                                                                                  const property_frame& value,
+        [[nodiscard]] constexpr std::expected<std::size_t, error> encode_property(const span_uint8_t dest, const property_frame& value,
                                                                                   const cspan_uint8_t data = {}) noexcept
         {
             if (!is_property_service(value.message_code))
@@ -542,38 +184,44 @@ namespace kmx::aio::knx
             return size;
         }
 
+        /// @brief The run of property elements a device management service reads or writes.
+        struct property_selector
+        {
+            /// @brief The interface object type.
+            std::uint16_t object_type {};
+            /// @brief Which instance of that type, counted from one.
+            std::uint8_t object_instance {};
+            /// @brief The property.
+            std::uint8_t property_id {};
+            /// @brief How many elements the service covers.
+            std::uint8_t element_count {1u};
+            /// @brief The first element, counted from one.
+            std::uint16_t start_index {1u};
+        };
+
         /// @brief Encodes an M_PropRead.req.
         /// @param dest The buffer to write into.
-        /// @param object_type The interface object type.
-        /// @param object_instance Which instance of that type, counted from one.
-        /// @param property_id The property to read.
-        /// @param element_count How many elements to read.
-        /// @param start_index The first element, counted from one.
+        /// @param property The interface object, its instance, the property and the elements to read.
         /// @return The number of octets written, or the reason it could not be encoded.
-        [[nodiscard]] constexpr std::expected<std::size_t, error> encode_property_read(
-            const span_uint8_t dest, const std::uint16_t object_type, const std::uint8_t object_instance,
-            const std::uint8_t property_id, const std::uint8_t element_count = 1u, const std::uint16_t start_index = 1u) noexcept
+        [[nodiscard]] constexpr std::expected<std::size_t, error> encode_property_read(const span_uint8_t dest,
+                                                                                       const property_selector& property) noexcept
         {
-            return encode_property(dest, property_frame {cemi_message_code::m_prop_read_req, object_type, object_instance, property_id,
-                                                          element_count, start_index});
+            return encode_property(dest, property_frame {cemi_message_code::m_prop_read_req, property.object_type, property.object_instance,
+                                                         property.property_id, property.element_count, property.start_index});
         }
 
         /// @brief Encodes an M_PropWrite.req.
         /// @param dest The buffer to write into.
-        /// @param object_type The interface object type.
-        /// @param object_instance Which instance of that type, counted from one.
-        /// @param property_id The property to write.
+        /// @param property The interface object, its instance, the property and the elements the value covers.
         /// @param data The value to write.
-        /// @param element_count How many elements the value covers.
-        /// @param start_index The first element, counted from one.
         /// @return The number of octets written, or the reason it could not be encoded.
-        [[nodiscard]] constexpr std::expected<std::size_t, error> encode_property_write(
-            const span_uint8_t dest, const std::uint16_t object_type, const std::uint8_t object_instance,
-            const std::uint8_t property_id, const cspan_uint8_t data, const std::uint8_t element_count = 1u,
-            const std::uint16_t start_index = 1u) noexcept
+        [[nodiscard]] constexpr std::expected<std::size_t, error> encode_property_write(const span_uint8_t dest,
+                                                                                        const property_selector& property,
+                                                                                        const cspan_uint8_t data) noexcept
         {
-            return encode_property(dest, property_frame {cemi_message_code::m_prop_write_req, object_type, object_instance, property_id,
-                                                          element_count, start_index},
+            return encode_property(dest,
+                                   property_frame {cemi_message_code::m_prop_write_req, property.object_type, property.object_instance,
+                                                   property.property_id, property.element_count, property.start_index},
                                    data);
         }
 
@@ -621,6 +269,7 @@ namespace kmx::aio::knx
                 decoded.data_offset = static_cast<std::uint16_t>(property_header_size);
                 decoded.data_size = static_cast<std::uint16_t>(data_size);
             }
+
             return decoded;
         }
 
@@ -669,41 +318,52 @@ namespace kmx::aio::knx
             return value;
         }
 
+        /// @brief One L_Data message to encode: who sends it where, the service it carries, and how the link layer treats it.
+        struct l_data_message
+        {
+            /// @brief The message code; must be one of the L_Data codes.
+            cemi_message_code code {cemi_message_code::l_data_req};
+            /// @brief The sending device; a tunnelling client may leave this unset and let the interface substitute its own
+            ///        address.
+            individual_address source {};
+            /// @brief The raw destination address.
+            std::uint16_t destination {};
+            /// @brief How the destination address is to be read.
+            knx::address_type destination_type {knx::address_type::group};
+            /// @brief The application layer service.
+            apci service {};
+            /// @brief The application payload.
+            apdu_payload payload {};
+            /// @brief The link layer flags.
+            l_data_options options {};
+        };
+
         /// @brief Writes the octets of one L_Data message into a buffer already known to be large enough.
         /// @param dest The buffer to write into.
-        /// @param code The message code.
-        /// @param source The sending device.
-        /// @param destination The raw destination address.
-        /// @param destination_type How the destination address is to be read.
-        /// @param service The application layer service.
-        /// @param payload The application payload.
-        /// @param options The link layer flags.
+        /// @param message The message.
         /// @param data_length The wire data length field, as the payload reported it.
         /// @note Every bound is the caller's to check; nothing here rejects anything.
-        constexpr void write_l_data(const span_uint8_t dest, const cemi_message_code code, const individual_address source,
-                                    const std::uint16_t destination, const knx::address_type destination_type,
-                                    const apci service, const apdu_payload& payload, const l_data_options& options,
-                                    const std::uint8_t data_length) noexcept
+        constexpr void write_l_data(const span_uint8_t dest, const l_data_message& message, const std::uint8_t data_length) noexcept
         {
-            const auto raw_service = static_cast<std::uint16_t>(service);
-            dest[0u] = static_cast<std::uint8_t>(code);
+            const auto raw_service = static_cast<std::uint16_t>(message.service);
+            dest[0u] = static_cast<std::uint8_t>(message.code);
             dest[1u] = 0u;
-            dest[2u] = make_control_field_1(options, data_length);
-            dest[3u] = make_control_field_2(destination_type, options.hop_count);
-            dest[4u] = static_cast<std::uint8_t>(source.value() >> 8u);
-            dest[5u] = static_cast<std::uint8_t>(source.value() & 0xFFu);
-            dest[6u] = static_cast<std::uint8_t>(destination >> 8u);
-            dest[7u] = static_cast<std::uint8_t>(destination & 0xFFu);
+            dest[2u] = make_control_field_1(message.options, data_length);
+            dest[3u] = make_control_field_2(message.destination_type, message.options.hop_count);
+            dest[4u] = static_cast<std::uint8_t>(message.source.value() >> 8u);
+            dest[5u] = static_cast<std::uint8_t>(message.source.value() & 0xFFu);
+            dest[6u] = static_cast<std::uint8_t>(message.destination >> 8u);
+            dest[7u] = static_cast<std::uint8_t>(message.destination & 0xFFu);
             dest[8u] = data_length;
             dest[9u] = static_cast<std::uint8_t>(tpci_unnumbered_data | ((raw_service >> 8u) & 0x03u));
             dest[10u] = static_cast<std::uint8_t>(raw_service & 0xFFu);
 
             // A compact APDU rides in the low six bits of the service octet; anything longer follows it.
-            if (payload.compacted())
-                dest[10u] = static_cast<std::uint8_t>(dest[10u] | payload.compact_value());
+            if (message.payload.compacted())
+                dest[10u] = static_cast<std::uint8_t>(dest[10u] | message.payload.compact_value());
             else
             {
-                const auto octets = payload.octets();
+                const auto octets = message.payload.octets();
                 for (std::size_t i {}; i < octets.size(); ++i)
                     dest[min_l_data_size + i] = octets[i];
             }
@@ -711,86 +371,51 @@ namespace kmx::aio::knx
 
         /// @brief Encodes one cEMI L_Data message.
         /// @param dest The buffer to write into.
-        /// @param code The message code; must be one of the L_Data codes.
-        /// @param source The sending device; a tunnelling client may leave this unset and let the
-        ///        interface substitute its own address.
-        /// @param destination The raw destination address.
-        /// @param destination_type How the destination address is to be read.
-        /// @param service The application layer service.
-        /// @param payload The application payload.
-        /// @param options The link layer flags.
+        /// @param message The message; its code must be one of the L_Data codes.
         /// @return The number of octets written, or the reason the message could not be encoded.
-        [[nodiscard]] constexpr std::expected<std::size_t, error> encode(const span_uint8_t dest, const cemi_message_code code,
-                                                                         const individual_address source, const std::uint16_t destination,
-                                                                         const knx::address_type destination_type, const apci service,
-                                                                         const apdu_payload& payload,
-                                                                         const l_data_options& options = {}) noexcept
+        [[nodiscard]] constexpr std::expected<std::size_t, error> encode(const span_uint8_t dest, const l_data_message& message) noexcept
         {
-            if (!is_l_data(code))
+            if (!is_l_data(message.code))
                 return std::unexpected(error::unsupported_message_code);
-            if (payload.octets().size() > apdu_payload::max_octets)
+            if (message.payload.octets().size() > apdu_payload::max_octets)
                 return std::unexpected(error::payload_too_large);
-            if (options.hop_count > 0x07u)
+            if (message.options.hop_count > 0x07u)
                 return std::unexpected(error::invalid_configuration);
 
-            const auto data_length = payload.data_length();
+            const auto data_length = message.payload.data_length();
             const auto size = encoded_size(0u, data_length);
             if (dest.size() < size)
                 return std::unexpected(error::invalid_length);
 
-            write_l_data(dest, code, source, destination, destination_type, service, payload, options, data_length);
+            write_l_data(dest, message, data_length);
             return size;
         }
 
-        /// @brief Encodes one cEMI L_Data message addressed to a group.
-        /// @param dest The buffer to write into.
-        /// @param code The message code; must be one of the L_Data codes.
-        /// @param source The sending device.
-        /// @param destination The destination group.
-        /// @param service The application layer service.
-        /// @param payload The application payload.
-        /// @param options The link layer flags.
-        /// @return The number of octets written, or the reason the message could not be encoded.
-        [[nodiscard]] constexpr std::expected<std::size_t, error> encode(const span_uint8_t dest, const cemi_message_code code,
-                                                                         const individual_address source, const group_address destination,
-                                                                         const apci service, const apdu_payload& payload,
-                                                                         const l_data_options& options = {}) noexcept
+        /// @brief One group telegram to encode: the group, the value, the sender and the link layer flags.
+        struct group_telegram
         {
-            return encode(dest, code, source, destination.value(), knx::address_type::group, service, payload, options);
-        }
-
-        /// @brief Encodes one cEMI L_Data message addressed to a single device.
-        /// @param dest The buffer to write into.
-        /// @param code The message code; must be one of the L_Data codes.
-        /// @param source The sending device.
-        /// @param destination The destination device.
-        /// @param service The application layer service.
-        /// @param payload The application payload.
-        /// @param options The link layer flags.
-        /// @return The number of octets written, or the reason the message could not be encoded.
-        [[nodiscard]] constexpr std::expected<std::size_t, error> encode(const span_uint8_t dest, const cemi_message_code code,
-                                                                         const individual_address source,
-                                                                         const individual_address destination, const apci service,
-                                                                         const apdu_payload& payload,
-                                                                         const l_data_options& options = {}) noexcept
-        {
-            return encode(dest, code, source, destination.value(), knx::address_type::individual, service, payload, options);
-        }
+            /// @brief The destination group.
+            group_address destination {};
+            /// @brief The value, as encoded by the datapoint layer.
+            apdu_payload payload {};
+            /// @brief The sending device; unset lets the interface substitute its own address.
+            individual_address source {};
+            /// @brief The link layer flags.
+            l_data_options options {};
+        };
 
         /// @brief Encodes an A_GroupValue_Write request.
         /// @param dest The buffer to write into.
-        /// @param destination The destination group.
-        /// @param payload The value to write.
-        /// @param source The sending device; unset lets the interface substitute its own address.
-        /// @param options The link layer flags.
+        /// @param telegram The group to write to, the value to write, the sender and the link layer flags.
         /// @return The number of octets written, or the reason the message could not be encoded.
         [[nodiscard]] constexpr std::expected<std::size_t, error> encode_group_value_write(const span_uint8_t dest,
-                                                                                           const group_address destination,
-                                                                                           const apdu_payload& payload,
-                                                                                           const individual_address source = {},
-                                                                                           const l_data_options& options = {}) noexcept
+                                                                                           const group_telegram& telegram) noexcept
         {
-            return encode(dest, cemi_message_code::l_data_req, source, destination, apci::group_value_write, payload, options);
+            return encode(dest, l_data_message {.source = telegram.source,
+                                                .destination = telegram.destination.value(),
+                                                .service = apci::group_value_write,
+                                                .payload = telegram.payload,
+                                                .options = telegram.options});
         }
 
         /// @brief Encodes an A_GroupValue_Read request.
@@ -804,23 +429,23 @@ namespace kmx::aio::knx
                                                                                           const individual_address source = {},
                                                                                           const l_data_options& options = {}) noexcept
         {
-            return encode(dest, cemi_message_code::l_data_req, source, destination, apci::group_value_read, apdu_payload {}, options);
+            return encode(dest,
+                          l_data_message {
+                              .source = source, .destination = destination.value(), .service = apci::group_value_read, .options = options});
         }
 
         /// @brief Encodes an A_GroupValue_Response.
         /// @param dest The buffer to write into.
-        /// @param destination The destination group.
-        /// @param payload The value to report.
-        /// @param source The sending device; unset lets the interface substitute its own address.
-        /// @param options The link layer flags.
+        /// @param telegram The group the response belongs to, the value to report, the sender and the link layer flags.
         /// @return The number of octets written, or the reason the message could not be encoded.
         [[nodiscard]] constexpr std::expected<std::size_t, error> encode_group_value_response(const span_uint8_t dest,
-                                                                                              const group_address destination,
-                                                                                              const apdu_payload& payload,
-                                                                                              const individual_address source = {},
-                                                                                              const l_data_options& options = {}) noexcept
+                                                                                              const group_telegram& telegram) noexcept
         {
-            return encode(dest, cemi_message_code::l_data_req, source, destination, apci::group_value_response, payload, options);
+            return encode(dest, l_data_message {.source = telegram.source,
+                                                .destination = telegram.destination.value(),
+                                                .service = apci::group_value_response,
+                                                .payload = telegram.payload,
+                                                .options = telegram.options});
         }
 
         /// @brief Reads the message code of a cEMI message without decoding it.

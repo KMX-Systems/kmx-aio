@@ -1,17 +1,21 @@
+/// @file src/kmx/aio/modbus/client_unit_test.cpp
+/// @brief Unit tests for the Modbus TCP request/response exchange over a mock stream on the readiness executor.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
 #if defined(KMX_AIO_FEATURE_MODBUS)
-    #include <kmx/aio/modbus/detail/session.hpp>
-    #include <kmx/aio/modbus/frame.hpp>
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/task.hpp>
-    #include <kmx/aio/test/modbus/mock_stream.hpp>
+    #ifndef PCH
+        #include <kmx/aio/modbus/detail/session.hpp>
+        #include <kmx/aio/modbus/frame.hpp>
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/task.hpp>
+        #include <kmx/aio/test/modbus/mock_stream.hpp>
 
-    #include <array>
-    #include <cstdint>
-    #include <optional>
-    #include <vector>
+        #include <catch2/catch_test_macros.hpp>
+
+        #include <array>
+        #include <cstdint>
+        #include <optional>
+        #include <vector>
+    #endif
 
 namespace kmx::aio::test::modbus::client_unit_test
 {
@@ -32,10 +36,10 @@ namespace kmx::aio::test::modbus::client_unit_test
 
     // Helper: run a coroutine in the readiness executor and get its result
     template <typename T>
-    [[nodiscard]] static std::optional<T> run_task(std::shared_ptr<readiness::executor>& exec, task<std::expected<T, std::error_code>> coro)
+    [[nodiscard]] static std::optional<T> run_task(std::shared_ptr<readiness::executor>& exec, task<expected_t<T>> coro)
     {
-        std::optional<std::expected<T, std::error_code>> result;
-        auto await_result = [&result, exec](task<std::expected<T, std::error_code>> t) -> task<void> { result.emplace(co_await t); };
+        std::optional<expected_t<T>> result;
+        auto await_result = [&result, exec](task<expected_t<T>> t) -> task<void> { result.emplace(co_await t); };
         exec->spawn(await_result(std::move(coro)));
         exec->run();
         if (result && result->has_value())
@@ -320,5 +324,5 @@ namespace kmx::aio::test::modbus::client_unit_test
         REQUIRE(result.has_value());
     }
 
-} // namespace kmx::aio::test::modbus::client_unit_test
+}
 #endif // KMX_AIO_FEATURE_MODBUS

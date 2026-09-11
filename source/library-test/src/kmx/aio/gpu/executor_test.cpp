@@ -1,19 +1,21 @@
-/// @file aio/gpu/executor_test.cpp
+/// @file src/kmx/aio/gpu/executor_test.cpp
 /// @brief Integration test for GPU executor, streams, and events.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
 #include <kmx/aio/gpu/executor.hpp>
-#include <kmx/aio/gpu/stream.hpp>
+#ifndef PCH
+    #include <kmx/aio/gpu/stream.hpp>
+
+    #include <catch2/catch_test_macros.hpp>
+#endif
 
 namespace kmx::aio::test::gpu::executor_test
 {
     namespace detail
     {
         /// @brief Simple GPU task that co_awaits an event.
-        kmx::aio::task<int> gpu_work(std::shared_ptr<kmx::aio::gpu::executor> exec)
+        kmx::aio::task<int> record_and_await(std::shared_ptr<kmx::aio::gpu::executor> exec)
         {
-            (void) exec;
+            static_cast<void>(exec);
 
             // Create a stream for GPU work.
             auto stream = std::make_unique<kmx::aio::gpu::stream>();
@@ -27,7 +29,7 @@ namespace kmx::aio::test::gpu::executor_test
             co_return 42;
         }
 
-    } // namespace detail
+    }
 
     TEST_CASE("GPU executor initializes with configuration", "[gpu][executor]")
     {
@@ -84,7 +86,7 @@ namespace kmx::aio::test::gpu::executor_test
         const auto stats_before = exec->get_statistics().total_tasks_spawned.load();
 
         // Spawn a GPU task (doesn't actually run without calling run()).
-        exec->spawn(detail::gpu_work(exec));
+        exec->spawn(detail::record_and_await(exec));
 
         const auto stats_after = exec->get_statistics().total_tasks_spawned.load();
         REQUIRE(stats_after == stats_before + 1u);
@@ -108,8 +110,8 @@ namespace kmx::aio::test::gpu::executor_test
         auto exec = std::make_shared<kmx::aio::gpu::executor>();
 
         // Spawn a few tasks to increment statistics.
-        exec->spawn(detail::gpu_work(exec));
-        exec->spawn(detail::gpu_work(exec));
+        exec->spawn(detail::record_and_await(exec));
+        exec->spawn(detail::record_and_await(exec));
 
         const auto& stats = exec->get_statistics();
         REQUIRE(stats.total_tasks_spawned.load() == 2u);
@@ -130,4 +132,4 @@ namespace kmx::aio::test::gpu::executor_test
         exec->stop();
     }
 
-} // namespace kmx::aio::test::gpu::executor_test
+}

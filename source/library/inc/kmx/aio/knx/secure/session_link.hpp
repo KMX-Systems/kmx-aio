@@ -1,5 +1,6 @@
-/// @file kmx/aio/knx/secure/session_link.hpp
+/// @file inc/kmx/aio/knx/secure/session_link.hpp
 /// @brief One KNX IP Secure session of a tunnelling server, presented as the transport its tunnel answers on.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// A secure server receives on the connection and opens every wrapper in its connection loop, then hands what a wrapper
 /// carried to the tunnelling code as though it had arrived on this transport. Whatever that code answers is sent here,
@@ -8,18 +9,18 @@
 ///
 /// A link only sends: the connection loop does the receiving, and @ref kmx::aio::knx::secure::session_link::receive
 /// refuses. Once the session has ended every send reports @ref kmx::aio::knx::error::secure_session_closed.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/async_mutex.hpp>
+        #include <kmx/aio/knx/datagram_transport.hpp>
+        #include <kmx/aio/knx/secure/server_session_table.hpp>
+        #include <kmx/aio/knx/secure/session.hpp>
+        #include <kmx/aio/knx/transport.hpp>
+
         #include <cstdint>
     #endif
-
-    #include <kmx/aio/async_mutex.hpp>
-    #include <kmx/aio/knx/secure/server_session_table.hpp>
-    #include <kmx/aio/knx/secure/session.hpp>
-    #include <kmx/aio/knx/transport.hpp>
 
 namespace kmx::aio::knx::secure
 {

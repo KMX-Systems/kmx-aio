@@ -1,11 +1,15 @@
+/// @file src/kmx/aio/sample/tls/h2_alpn_client/manager.cpp
+/// @brief Completion-model TLS h2 ALPN client: negotiates h2, exchanges the HTTP/2 preface and SETTINGS, then sends a GET.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/tls/h2_alpn_client/manager.hpp>
-
-#include <array>
-#include <csignal>
-#include <span>
-#include <sys/socket.h>
-#include <thread>
-#include <vector>
+#ifndef PCH
+    #include <array>
+    #include <csignal>
+    #include <span>
+    #include <thread>
+    #include <vector>
+    #include <sys/socket.h>
+#endif
 
 namespace kmx::aio::sample::tls::h2_alpn_client
 {
@@ -75,7 +79,7 @@ namespace kmx::aio::sample::tls::h2_alpn_client
 
     task<void> manager::worker(const std::uint32_t worker_id, std::shared_ptr<connection_stats> stats) noexcept(false)
     {
-        (void) stats;
+        static_cast<void>(stats);
         try
         {
             auto stream_result = co_await async_connect();

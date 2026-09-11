@@ -1,13 +1,14 @@
-/// @file kmx/aio/knx/secure/client_session.cpp
+/// @file src/kmx/aio/knx/secure/client_session.cpp
 /// @brief The compiled body of the KNX IP Secure client session.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/knx/secure/client_session.hpp>
+#ifndef PCH
+    #include <kmx/aio/knx/error.hpp>
 
-#include <kmx/aio/knx/error.hpp>
-
-#include <algorithm>
-#include <array>
-#include <utility>
+    #include <algorithm>
+    #include <array>
+    #include <utility>
+#endif
 
 namespace kmx::aio::knx::secure
 {
@@ -113,23 +114,25 @@ namespace kmx::aio::knx::secure
             note_unencrypted();
             return refuse(error::secure_frame_required);
         }
+
         return fail(make_error_code(error::secure_session_rejected));
     }
 
-    expected_size_t client_session::authenticate_wrapper(const secure_wrapper_frame& wrapper, const span_uint8_t destination) noexcept
+    expected_size_t client_session::authenticate_wrapper(const wrapper_frame& wrapper, const span_uint8_t destination) noexcept
     {
         if (session_key_.empty() || (wrapper.session_id != session_id_))
         {
             note_unauthenticated();
             return refuse(error::secure_authentication_failed);
         }
+
         const auto opened = open_wrapper(destination, session_key_, wrapper);
         if (!opened.has_value() && (opened.error() == make_error_code(error::secure_authentication_failed)))
             note_unauthenticated();
         return opened;
     }
 
-    expected_void_t client_session::admit(const secure_wrapper_frame& wrapper, const span_uint8_t plain) noexcept
+    expected_void_t client_session::admit(const wrapper_frame& wrapper, const span_uint8_t plain) noexcept
     {
         // With the MAC verified the sequence number can be believed, and it has to move forward (P2).
         const auto sequence = decode_sequence(wrapper.sequence);
@@ -139,17 +142,19 @@ namespace kmx::aio::knx::secure
             detail::cleanse(plain);
             return refuse(error::secure_replay);
         }
+
         if (const auto header = check_wrapped_frame(plain); !header.has_value())
         {
             ++counters_.refused_services;
             detail::cleanse(plain);
             return std::unexpected(header.error());
         }
+
         last_received_sequence_ = sequence;
         return {};
     }
 
-    opened_frame_result_t client_session::open(const secure_wrapper_frame& wrapper, const span_uint8_t destination,
+    opened_frame_result_t client_session::open(const wrapper_frame& wrapper, const span_uint8_t destination,
                                                const std::uint64_t now_ms) noexcept
     {
         const auto opened = authenticate_wrapper(wrapper, destination);
@@ -174,6 +179,7 @@ namespace kmx::aio::knx::secure
             ++counters_.refused_services;
             return refuse(error::unsupported_service);
         }
+
         if (phase_ == client_session_phase::authenticating)
         {
             if (status->status != session_status::authentication_success)
@@ -182,6 +188,7 @@ namespace kmx::aio::knx::secure
             ++counters_.sessions_opened;
             return opened_frame {plain.size(), false};
         }
+
         // Established: a keep-alive only proves the session alive, and an end of any kind ends it.
         const auto ended = (status->status == session_status::close) || (status->status == session_status::timeout) ||
                            (status->status == session_status::unauthenticated);

@@ -1,22 +1,24 @@
+/// @file src/kmx/aio/modbus/client.cpp
+/// @brief The compiled body of the Modbus TCP client, running over a readiness TCP stream.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/modbus/client.hpp>
-
-#include <kmx/aio/error_code.hpp>
 #if defined(KMX_AIO_FEATURE_MODBUS)
-    #include <kmx/aio/modbus/detail/client_ops.hpp>
-    #include <kmx/aio/modbus/frame.hpp>
-    #include <kmx/aio/readiness/basic_types.hpp>
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/readiness/tcp/connect.hpp>
-    #include <kmx/aio/readiness/tcp/stream.hpp>
+    #ifndef PCH
+        #include <kmx/aio/error_code.hpp>
+        #include <kmx/aio/modbus/detail/client_ops.hpp>
+        #include <kmx/aio/modbus/frame.hpp>
+        #include <kmx/aio/readiness/basic_types.hpp>
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/readiness/tcp/connect.hpp>
+        #include <kmx/aio/readiness/tcp/stream.hpp>
 
-    #include <netinet/in.h>
-    #include <sys/socket.h>
-
-    #include <cstdint>
-    #include <cstring>
-    #include <optional>
-    #include <utility>
+        #include <cstdint>
+        #include <cstring>
+        #include <optional>
+        #include <utility>
+        #include <netinet/in.h>
+        #include <sys/socket.h>
+    #endif
 
 namespace kmx::aio::modbus
 {
@@ -159,5 +161,5 @@ namespace kmx::aio::modbus
         return impl_->stream_.has_value();
     }
 
-} // namespace kmx::aio::modbus
+}
 #endif // KMX_AIO_FEATURE_MODBUS

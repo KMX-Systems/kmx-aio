@@ -1,85 +1,39 @@
-/// @file aio/benchmark/readiness_cases.cpp
+/// @file src/kmx/aio/benchmark/readiness_cases.cpp
 /// @brief Readiness-executor (epoll) benchmarks.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/benchmark/cases.hpp>
-
+#include <kmx/aio/benchmark/readiness_cases.hpp>
 #if defined(KMX_AIO_FEATURE_READINESS)
+    #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/benchmark/feature/catalogue.hpp>
+        #include <kmx/aio/benchmark/feature/readiness_backend.hpp>
+        #include <kmx/aio/benchmark/feature/scenarios.hpp>
+        #include <kmx/aio/benchmark/feature/watchdog.hpp>
+        #include <kmx/aio/benchmark/harness.hpp>
+        #include <kmx/aio/benchmark/registry.hpp>
+        #include <kmx/aio/readiness/basic_types.hpp>
+        #include <kmx/aio/readiness/descriptor/epoll.hpp>
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/task.hpp>
 
-    #include <atomic>
-    #include <cerrno>
-    #include <chrono>
-    #include <memory>
-    #include <string>
-    #include <sys/socket.h>
-    #include <thread>
-    #include <unistd.h>
-    #include <vector>
-
-    #include <kmx/aio/benchmark/feature/scenarios.hpp>
-    #include <kmx/aio/readiness/descriptor/epoll.hpp>
-    #include <kmx/aio/readiness/executor.hpp>
+        #include <atomic>
+        #include <cerrno>
+        #include <chrono>
+        #include <cstddef>
+        #include <memory>
+        #include <span>
+        #include <string>
+        #include <thread>
+        #include <vector>
+        #include <sys/epoll.h>
+        #include <sys/socket.h>
+        #include <unistd.h>
+    #endif
 
 namespace kmx::aio::benchmark
 {
     namespace readiness_detail
     {
-        /// @brief Stops an executor that has not finished within a deadline, so a hang cannot stall a run.
-        class watchdog
-        {
-        public:
-            explicit watchdog(std::shared_ptr<readiness::executor> exec, const std::chrono::seconds limit) noexcept(false):
-                thread_([this, exec = std::move(exec), limit]() noexcept { watch(*exec, limit); })
-            {
-            }
-
-            ~watchdog() noexcept
-            {
-                done_.store(true, std::memory_order_release);
-                done_.notify_all();
-            }
-
-            [[nodiscard]] bool expired() const noexcept { return expired_.load(std::memory_order_relaxed); }
-
-        private:
-            /// @brief Stops @p exec if the run has not finished by the deadline.
-            /// @param exec The executor to stop.
-            /// @param limit How long to wait before stopping it.
-            void watch(readiness::executor& exec, const std::chrono::seconds limit) noexcept
-            {
-                if (!done_.wait_until(false, std::chrono::steady_clock::now() + limit))
-                {
-                    expired_.store(true, std::memory_order_relaxed);
-                    exec.stop();
-                }
-            }
-
-            /// @brief Waits until the flag is set or the deadline passes.
-            struct flag
-            {
-                std::atomic_bool value {};
-
-                void store(const bool v, const std::memory_order order) noexcept { value.store(v, order); }
-                void notify_all() noexcept { value.notify_all(); }
-
-                [[nodiscard]] bool wait_until(const bool old, const std::chrono::steady_clock::time_point deadline) noexcept
-                {
-                    while (value.load(std::memory_order_acquire) == old)
-                    {
-                        if (std::chrono::steady_clock::now() >= deadline)
-                            return false;
-
-                        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-                    }
-
-                    return true;
-                }
-            };
-
-            flag done_ {};
-            std::atomic_bool expired_ {};
-            std::jthread thread_;
-        };
-
         /// @brief Reads one byte, suspending on the executor whenever the descriptor is not ready.
         /// @return True on success, false when the wait was cancelled or the peer went away.
         static task<bool> read_byte(readiness::executor& exec, const fd_t fd) noexcept(false)
@@ -142,9 +96,9 @@ namespace kmx::aio::benchmark
         {
             co_return;
         }
-    } // namespace readiness_detail
+    }
 
-    static result measure_readiness_rtt(std::string name, const std::size_t iterations, const readiness::resumption_mode mode)
+    [[nodiscard]] static result measure_readiness_rtt(std::string name, const std::size_t iterations, const readiness::resumption_mode mode)
     {
         int fd[2] {-1, -1};
         if (::socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0, fd) != 0)
@@ -166,7 +120,7 @@ namespace kmx::aio::benchmark
         exec->spawn(readiness_detail::ping_side(*exec, fd[0], iterations, samples));
 
         {
-            const readiness_detail::watchdog guard {exec, std::chrono::seconds(60)};
+            const feature::watchdog guard {[exec]() noexcept { exec->stop(); }, std::chrono::seconds(60)};
             exec->run();
         }
 
@@ -176,7 +130,7 @@ namespace kmx::aio::benchmark
         return from_samples(std::move(name), samples);
     }
 
-    static result bench_readiness_rtt_scheduler(const double scale)
+    [[nodiscard]] static result bench_readiness_rtt_scheduler(const double scale)
     {
         auto out =
             measure_readiness_rtt("readiness/socketpair_rtt (scheduler)", scaled(20'000u, scale), readiness::resumption_mode::scheduler);
@@ -192,7 +146,7 @@ namespace kmx::aio::benchmark
     ///          inline_on_io_thread is the readiness setting that does the same. Left at the default,
     ///          this side would additionally pay a scheduler hand-off per wake-up and the comparison
     ///          would report that hand-off as though it were the cost of epoll.
-    static result bench_readiness_rtt_inline(const double scale)
+    [[nodiscard]] static result bench_readiness_rtt_inline(const double scale)
     {
         using scenario = feature::catalogue::socketpair_rtt_scenario;
 
@@ -206,7 +160,7 @@ namespace kmx::aio::benchmark
     ///          The difference is the buffer: the vector overload hands back a vector resized to the
     ///          number of events received, so the next call grows it again - and growing it
     ///          value-initializes what it adds.
-    static result measure_wait_events(std::string name, const std::size_t iterations, const bool use_span)
+    [[nodiscard]] static result measure_wait_events(std::string name, const std::size_t iterations, const bool use_span)
     {
         int fd[2] {-1, -1};
         if (::socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0, fd) != 0)
@@ -232,12 +186,10 @@ namespace kmx::aio::benchmark
 
         const auto start = clock_t::now();
         for (std::size_t i {}; i != iterations; ++i)
-        {
             if (use_span)
                 keep(epoll_fd.wait_events(std::span(buffer), 0).value_or(0u));
             else
                 keep(epoll_fd.wait_events(buffer, max_events, 0).has_value());
-        }
 
         const auto elapsed = clock_t::now() - start;
         ::close(fd[0]);
@@ -245,21 +197,21 @@ namespace kmx::aio::benchmark
         return from_total(std::move(name), iterations, elapsed);
     }
 
-    static result bench_wait_events_vector(const double scale)
+    [[nodiscard]] static result bench_wait_events_vector(const double scale)
     {
         auto out = measure_wait_events("readiness/epoll wait_events (vector, 1024 slots)", scaled(500'000u, scale), false);
         out.note = "resizes the vector down to the event count, so the next wait zeroes the buffer again";
         return out;
     }
 
-    static result bench_wait_events_span(const double scale)
+    [[nodiscard]] static result bench_wait_events_span(const double scale)
     {
         auto out = measure_wait_events("readiness/epoll wait_events (span, 1024 slots)", scaled(500'000u, scale), true);
         out.note = "waits into a buffer the loop keeps; what the event loop now uses";
         return out;
     }
 
-    static result bench_readiness_stop(const double scale)
+    [[nodiscard]] static result bench_readiness_stop(const double scale)
     {
         // What a caller waits for between asking an idle executor to stop and getting its thread back.
         // The loop is parked in epoll_wait when the request arrives, so this measures how it learns of
@@ -292,7 +244,7 @@ namespace kmx::aio::benchmark
         return out;
     }
 
-    static result bench_readiness_spawn(const double scale)
+    [[nodiscard]] static result bench_readiness_spawn(const double scale)
     {
         const auto iterations = scaled(100'000u, scale);
         auto exec = std::make_shared<readiness::executor>(readiness::executor_config {.thread_count = 1u, .timeout_ms = 10u});
@@ -309,7 +261,7 @@ namespace kmx::aio::benchmark
         return out;
     }
 
-    static result bench_readiness_tcp_echo_1(const double scale)
+    [[nodiscard]] static result bench_readiness_tcp_echo_1(const double scale)
     {
         using scenario = feature::catalogue::tcp_echo_scenario;
 
@@ -317,7 +269,7 @@ namespace kmx::aio::benchmark
                                                                  scaled(scenario::single_rounds, scale), scenario::payload_size);
     }
 
-    static result bench_readiness_tcp_echo_many(const double scale)
+    [[nodiscard]] static result bench_readiness_tcp_echo_many(const double scale)
     {
         using scenario = feature::catalogue::tcp_echo_scenario;
 
@@ -327,7 +279,7 @@ namespace kmx::aio::benchmark
                          "round trips spread over 64 connections, timed first start to last finish");
     }
 
-    static result bench_readiness_tcp_throughput_small(const double scale)
+    [[nodiscard]] static result bench_readiness_tcp_throughput_small(const double scale)
     {
         using scenario = feature::catalogue::tcp_throughput_scenario;
 
@@ -337,7 +289,7 @@ namespace kmx::aio::benchmark
                          "streamed one way; the sender never waits, so this is the cost of getting one block through");
     }
 
-    static result bench_readiness_tcp_throughput_medium(const double scale)
+    [[nodiscard]] static result bench_readiness_tcp_throughput_medium(const double scale)
     {
         using scenario = feature::catalogue::tcp_throughput_scenario;
 
@@ -347,7 +299,7 @@ namespace kmx::aio::benchmark
                          "streamed one way; the sender never waits, so this is the cost of getting one block through");
     }
 
-    static result bench_readiness_tcp_throughput_large(const double scale)
+    [[nodiscard]] static result bench_readiness_tcp_throughput_large(const double scale)
     {
         using scenario = feature::catalogue::tcp_throughput_scenario;
 
@@ -357,7 +309,7 @@ namespace kmx::aio::benchmark
                          "streamed one way; the sender never waits, so this is the cost of getting one block through");
     }
 
-    static result bench_readiness_tcp_accept(const double scale)
+    [[nodiscard]] static result bench_readiness_tcp_accept(const double scale)
     {
         using scenario = feature::catalogue::tcp_accept_scenario;
 
@@ -365,7 +317,7 @@ namespace kmx::aio::benchmark
                          "connections brought all the way up, as a rate: both ends share one loop");
     }
 
-    static result bench_readiness_udp_echo(const double scale)
+    [[nodiscard]] static result bench_readiness_udp_echo(const double scale)
     {
         using scenario = feature::catalogue::udp_echo_scenario;
 
@@ -373,7 +325,7 @@ namespace kmx::aio::benchmark
                                                                  scenario::payload_size);
     }
 
-    static result bench_readiness_timer(const double scale)
+    [[nodiscard]] static result bench_readiness_timer(const double scale)
     {
         using scenario = feature::catalogue::timer_scenario;
 
@@ -411,7 +363,7 @@ namespace kmx::aio::benchmark
                        bench_readiness_timer);
     }
 
-} // namespace kmx::aio::benchmark
+}
 
 #else
 
@@ -421,6 +373,6 @@ namespace kmx::aio::benchmark
     {
         // The readiness model is not part of this build.
     }
-} // namespace kmx::aio::benchmark
+}
 
 #endif

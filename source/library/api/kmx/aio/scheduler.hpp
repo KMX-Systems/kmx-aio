@@ -1,4 +1,5 @@
-/// @file aio/scheduler.hpp
+/// @file api/kmx/aio/scheduler.hpp
+/// @brief Thread-pool scheduler that runs submitted callables on a fixed set of worker threads.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
@@ -70,4 +71,4 @@ namespace kmx::aio
         std::condition_variable idle_cv_;
     };
 
-} // namespace kmx::aio
+}

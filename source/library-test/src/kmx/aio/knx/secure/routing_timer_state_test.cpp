@@ -1,11 +1,15 @@
+/// @file src/kmx/aio/knx/secure/routing_timer_state_test.cpp
+/// @brief Unit tests for the KNX IP Secure routing timer: synchronisation, latency window, duplicates and notify delays.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
 #include <kmx/aio/knx/secure/routing_timer_state.hpp>
-#include <kmx/aio/test/knx/secure_vectors.hpp>
+#ifndef PCH
+    #include <kmx/aio/test/knx/secure_vectors/scripted_entropy.hpp>
 
-#include <cstdint>
-#include <memory>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <cstdint>
+    #include <memory>
+#endif
 
 namespace kmx::aio::test::knx::secure::routing_timer_state_test
 {
@@ -30,11 +34,11 @@ namespace kmx::aio::test::knx::secure::routing_timer_state_test
         }
 
         /// @brief A timer that synchronised to one hour at time zero, from the answer to its own request.
-        [[nodiscard]] std::unique_ptr<ks::routing_timer_state> synchronised_timer(scripted_entropy& entropy) noexcept(false)
+        [[nodiscard]] std::unique_ptr<ks::routing_timer_state> synchronised_by_answer(scripted_entropy& entropy) noexcept(false)
         {
             auto timer = std::make_unique<ks::routing_timer_state>(1000u, own_serial, 256u, entropy);
             entropy.tag(0xABCDu);
-            (void) timer->begin_synchronisation(0u);
+            static_cast<void>(timer->begin_synchronisation(0u));
             timer->on_timer_notify(0u, frame(one_hour_ms, own_serial, 0xABCDu));
             REQUIRE(timer->synchronised());
             return timer;
@@ -45,12 +49,12 @@ namespace kmx::aio::test::knx::secure::routing_timer_state_test
                                                                           const std::uint16_t cache = 256u) noexcept(false)
         {
             auto timer = std::make_unique<ks::routing_timer_state>(1000u, own_serial, cache, entropy);
-            (void) timer->begin_synchronisation(0u);
+            static_cast<void>(timer->begin_synchronisation(0u));
             REQUIRE(!timer->take_due_notify(3'300u).has_value());
             REQUIRE(timer->timekeeper());
             return timer;
         }
-    } // namespace detail
+    }
 
     TEST_CASE("knx secure routing timer synchronises from the answer to its own request", "[knx][secure][routing][unit]")
     {
@@ -84,7 +88,7 @@ namespace kmx::aio::test::knx::secure::routing_timer_state_test
     {
         detail::scripted_entropy entropy {};
         ks::routing_timer_state timer {1000u, detail::own_serial, 256u, entropy};
-        (void) timer.begin_synchronisation(0u);
+        static_cast<void>(timer.begin_synchronisation(0u));
         CHECK(!timer.take_due_notify(3'299u).has_value());
         CHECK(!timer.synchronised());
         CHECK(!timer.take_due_notify(3'300u).has_value());
@@ -102,7 +106,7 @@ namespace kmx::aio::test::knx::secure::routing_timer_state_test
     TEST_CASE("knx secure routing timer accepts wrappers inside the latency window", "[knx][secure][routing][unit]")
     {
         detail::scripted_entropy entropy {};
-        const auto timer = detail::synchronised_timer(entropy);
+        const auto timer = detail::synchronised_by_answer(entropy);
         std::uint64_t now = 5u;
         auto local = timer->timer_value(now);
 
@@ -145,7 +149,7 @@ namespace kmx::aio::test::knx::secure::routing_timer_state_test
     TEST_CASE("knx secure routing timer drops exact duplicates without touching its schedule", "[knx][secure][routing][unit]")
     {
         detail::scripted_entropy entropy {};
-        const auto timer = detail::synchronised_timer(entropy);
+        const auto timer = detail::synchronised_by_answer(entropy);
         const auto local = timer->timer_value(3u);
         const auto original = detail::frame(local, detail::other_serial, 0x0042u);
         CHECK(timer->on_wrapper(3u, original) == verdict::accepted);
@@ -179,7 +183,7 @@ namespace kmx::aio::test::knx::secure::routing_timer_state_test
         detail::scripted_entropy entropy {};
         ks::routing_timer_state timer {1000u, detail::own_serial, 256u, entropy};
         CHECK(timer.on_wrapper(0u, detail::frame(0u)) == verdict::unsynchronised);
-        (void) timer.begin_synchronisation(0u);
+        static_cast<void>(timer.begin_synchronisation(0u));
         CHECK(timer.on_wrapper(0u, detail::frame(0u)) == verdict::unsynchronised);
         CHECK(timer.counters().replays == 2u);
     }
@@ -213,7 +217,7 @@ namespace kmx::aio::test::knx::secure::routing_timer_state_test
     TEST_CASE("knx secure routing timer stamps outgoing wrappers", "[knx][secure][routing][unit]")
     {
         detail::scripted_entropy entropy {};
-        const auto timer = detail::synchronised_timer(entropy);
+        const auto timer = detail::synchronised_by_answer(entropy);
 
         // E9: sending restarts the periodic notify...
         CHECK(timer->on_outgoing_wrapper(50u) == detail::one_hour_ms + 50u);
@@ -221,7 +225,7 @@ namespace kmx::aio::test::knx::secure::routing_timer_state_test
 
         // ...but never postpones an update that is due.
         CHECK(timer->on_wrapper(60u, detail::frame(0u)) == verdict::outdated);
-        (void) timer->on_outgoing_wrapper(70u);
+        static_cast<void>(timer->on_outgoing_wrapper(70u));
         CHECK(timer->next_deadline_ms() == 60u + detail::follower_update_min_ms);
     }
 
@@ -229,7 +233,7 @@ namespace kmx::aio::test::knx::secure::routing_timer_state_test
     {
         detail::scripted_entropy entropy {};
         ks::routing_timer_state timer {1000u, detail::own_serial, 256u, entropy};
-        (void) timer.begin_synchronisation(0u);
+        static_cast<void>(timer.begin_synchronisation(0u));
 
         // A timekeeper's periodic notify: 10 000 to 10 300 ms. A draw of 300 is the longest; 301 wraps to the shortest.
         entropy.delay(300u);

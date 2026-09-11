@@ -1,3 +1,6 @@
+/// @file src/kmx/aio/exception.cpp
+/// @brief Out-of-line key function that anchors the vtable of the library exception base class.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/exception.hpp>
 
 namespace kmx::aio

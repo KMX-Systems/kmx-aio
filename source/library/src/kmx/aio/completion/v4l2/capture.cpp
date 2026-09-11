@@ -1,67 +1,27 @@
-/// @file aio/completion/v4l2/capture.cpp
+/// @file src/kmx/aio/completion/v4l2/capture.cpp
 /// @brief Async V4L2 video capture — completion (io_uring) model implementation.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/completion/v4l2/capture.hpp>
+#ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/completion/v4l2/frame_view.hpp>
+    #include <kmx/aio/error_code.hpp>
+    #include <kmx/aio/file_descriptor.hpp>
 
-#include <cerrno>
-#include <cstring>
-#include <fcntl.h>
-#include <sys/ioctl.h>
-#include <sys/mman.h>
-
-#include <linux/videodev2.h>
-#include <poll.h>
-
-#include <kmx/aio/basic_types.hpp>
-#include <kmx/aio/error_code.hpp>
-#include <kmx/logger.hpp>
+    #include <cerrno>
+    #include <cstddef>
+    #include <cstdint>
+    #include <utility>
+    #include <vector>
+    #include <fcntl.h>
+    #include <linux/videodev2.h>
+    #include <poll.h>
+    #include <sys/ioctl.h>
+    #include <sys/mman.h>
+#endif
 
 namespace kmx::aio::completion::v4l2
 {
-    // frame_view
-
-    frame_view::frame_view(const fd_t device_fd, const std::uint32_t index, const std::byte* const ptr, const std::size_t length,
-                           frame_metadata metadata, std::weak_ptr<void> device_lifetime) noexcept:
-        device_fd_(device_fd),
-        index_(index),
-        ptr_(ptr),
-        length_(length),
-        metadata_(metadata),
-        device_lifetime_(std::move(device_lifetime))
-    {
-    }
-
-    frame_view::frame_view(frame_view&& other) noexcept:
-        device_fd_(other.device_fd_),
-        index_(other.index_),
-        ptr_(other.ptr_),
-        length_(other.length_),
-        metadata_(other.metadata_),
-        device_lifetime_(std::move(other.device_lifetime_)),
-        active_(std::exchange(other.active_, false))
-    {
-    }
-
-    frame_view::~frame_view() noexcept
-    {
-        if (!active_ || device_lifetime_.expired())
-            return;
-
-        ::v4l2_buffer buf {};
-        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        buf.memory = V4L2_MEMORY_MMAP;
-        buf.index = index_;
-
-        if (::ioctl(device_fd_, VIDIOC_QBUF, &buf) < 0)
-            kmx::logger::log(kmx::logger::level::warn, std::source_location::current(), "VIDIOC_QBUF failed for buffer {}: {}", index_,
-                             std::strerror(errno));
-    }
-
-    cspan_byte_t frame_view::data() const noexcept
-    {
-        return {ptr_, metadata_.bytes_used};
-    }
-
     // capture — private constructor
 
     capture::capture(executor& exec, file_descriptor&& fd, capture_config cfg, mmap_buffers buffers) noexcept:
@@ -133,7 +93,7 @@ namespace kmx::aio::completion::v4l2
         auto& timeperframe = parm.parm.capture.timeperframe;
         timeperframe.numerator = cfg.fps.numerator;
         timeperframe.denominator = cfg.fps.denominator;
-        (void) ::ioctl(device_fd, VIDIOC_S_PARM, &parm);
+        static_cast<void>(::ioctl(device_fd, VIDIOC_S_PARM, &parm));
         return {};
     }
 
@@ -162,6 +122,7 @@ namespace kmx::aio::completion::v4l2
 
             buffers.push_back({ptr, buf.length});
         }
+
         return buffers;
     }
 
@@ -327,9 +288,14 @@ namespace kmx::aio::completion::v4l2
             .fourcc = config_.format.fourcc,
         };
 
-        return frame_view {
-            fd_.get(), buf.index, static_cast<const std::byte*>(mapped.ptr), mapped.length, meta, device_lifetime_,
-        };
+        return frame_view {frame_view::dequeued_buffer {
+            .device_fd = fd_.get(),
+            .index = buf.index,
+            .ptr = static_cast<const std::byte*>(mapped.ptr),
+            .length = mapped.length,
+            .metadata = meta,
+            .device_lifetime = device_lifetime_,
+        }};
     }
 
     capture::frame_result capture::next_frame() noexcept(false)
@@ -358,4 +324,4 @@ namespace kmx::aio::completion::v4l2
         }
     }
 
-} // namespace kmx::aio::completion::v4l2
+}

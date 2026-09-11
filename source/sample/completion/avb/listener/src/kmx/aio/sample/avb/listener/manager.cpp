@@ -1,15 +1,19 @@
+/// @file src/kmx/aio/sample/avb/listener/manager.cpp
+/// @brief Completion-model AVB listener sample manager: gPTP sync, SRP subscribe, AM824 receive loop and statistics.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/avb/listener/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/avb/avtp/am824.hpp>
+    #include <kmx/aio/completion/avb/eth_socket.hpp>
+    #include <kmx/aio/completion/timer.hpp>
+    #include <kmx/aio/sample/avb/manager_model.hpp>
+    #include <kmx/logger.hpp>
 
-#include <chrono>
-#include <csignal>
-#include <print>
-#include <source_location>
-
-#include <kmx/aio/avb/avtp/am824.hpp>
-#include <kmx/aio/completion/avb/eth_socket.hpp>
-#include <kmx/aio/completion/timer.hpp>
-#include <kmx/aio/sample/avb/manager_model.hpp>
-#include <kmx/logger.hpp>
+    #include <chrono>
+    #include <csignal>
+    #include <print>
+    #include <source_location>
+#endif
 
 namespace kmx::aio::sample::avb::listener
 {
@@ -149,9 +153,9 @@ namespace kmx::aio::sample::avb::listener
             metrics_.frames_parsed.fetch_add(1u, mem_order);
 
             const auto reference = clock_->now();
-            const auto presentation_ts = kmx::aio::avb::avtp::expand_avtp_timestamp_32(parse->avtp_timestamp_32, reference);
+            const auto presentation_ts = kmx::aio::avb::avtp::expand_timestamp_32(parse->avtp_timestamp_32, reference);
 
-            const kmx::aio::avb::avb_timestamp_t abs_jitter = kmx::aio::sample::avb::abs_diff_u64(rx_ts, presentation_ts);
+            const kmx::aio::avb::tai_timestamp_t abs_jitter = kmx::aio::sample::avb::abs_diff_u64(rx_ts, presentation_ts);
             metrics_.jitter_abs_sum_ns.fetch_add(abs_jitter, mem_order);
 
             auto cur_max = metrics_.jitter_abs_max_ns.load(mem_order);
@@ -213,4 +217,4 @@ namespace kmx::aio::sample::avb::listener
 
         kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "Signal {} received, stopping AVB listener.", signum);
     }
-} // namespace kmx::aio::sample::avb::listener
+}

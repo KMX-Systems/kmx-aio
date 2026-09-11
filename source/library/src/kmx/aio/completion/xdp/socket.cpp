@@ -1,19 +1,21 @@
-/// @file aio/completion/xdp/socket.cpp
+/// @file src/kmx/aio/completion/xdp/socket.cpp
 /// @brief AF_XDP completion socket implementation scaffold.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/completion/xdp/socket.hpp>
-#include <kmx/aio/error_code.hpp>
+#ifndef PCH
+    #include <kmx/aio/error_code.hpp>
 
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <deque>
-#include <mutex>
-#include <net/if.h>
-#include <unordered_map>
-#include <unordered_set>
-#include <utility>
-#include <vector>
+    #include <cstddef>
+    #include <cstdint>
+    #include <cstring>
+    #include <deque>
+    #include <mutex>
+    #include <unordered_map>
+    #include <unordered_set>
+    #include <utility>
+    #include <vector>
+    #include <net/if.h>
+#endif
 
 #if defined(KMX_AIO_FEATURE_AF_XDP)
     #if __has_include(<xdp/xsk.h>)
@@ -42,7 +44,7 @@ namespace kmx::aio::completion::xdp
     }
 
 #if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
-    [[nodiscard]] constexpr error_code map_xdp_error(const int ret) noexcept
+    [[nodiscard]] constexpr error_code map_setup_error(const int ret) noexcept
     {
         const int err = ret < 0 ? -ret : ret;
         switch (err)
@@ -94,7 +96,7 @@ namespace kmx::aio::completion::xdp
 #if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
 
     template <typename state_t>
-    void recycle_completion_frames(state_t& st) noexcept
+    void recycle_sent_frames(state_t& st) noexcept
     {
         std::uint32_t idx {};
         const std::uint32_t count = xsk_ring_cons__peek(&st.comp, st.config.comp_ring_size, &idx);
@@ -243,7 +245,7 @@ namespace kmx::aio::completion::xdp
 
         const int umem_rc = xsk_umem__create(&state.umem, state.umem_area.get(), state.umem_size, &state.fill, &state.comp, &umem_cfg);
         if (umem_rc != 0)
-            return std::unexpected(to_std_error_code(map_xdp_error(umem_rc)));
+            return std::unexpected(to_std_error_code(map_setup_error(umem_rc)));
 
         return {};
     }
@@ -268,7 +270,7 @@ namespace kmx::aio::completion::xdp
         const int xsk_rc =
             xsk_socket__create(&state.xsk, interface_name.c_str(), state_config.queue_id, state.umem, &state.rx, &state.tx, &sock_cfg);
         if (xsk_rc != 0)
-            return std::unexpected(to_std_error_code(map_xdp_error(xsk_rc)));
+            return std::unexpected(to_std_error_code(map_setup_error(xsk_rc)));
 
         return {};
     }
@@ -295,7 +297,7 @@ namespace kmx::aio::completion::xdp
         if (xsk_ring_prod__needs_wakeup(&state.tx))
         {
             state.stats.wakeups_triggered++;
-            (void) ::sendto(xsk_socket__fd(state.xsk), nullptr, 0, MSG_DONTWAIT, nullptr, 0);
+            static_cast<void>(::sendto(xsk_socket__fd(state.xsk), nullptr, 0, MSG_DONTWAIT, nullptr, 0));
         }
 
         return {};
@@ -303,7 +305,7 @@ namespace kmx::aio::completion::xdp
 
     expected_void_t socket::send_via_af_xdp_backend(state& state, cspan_byte_t data) noexcept
     {
-        recycle_completion_frames(state);
+        recycle_sent_frames(state);
 
         if (state.free_frame_addrs.empty())
         {
@@ -356,7 +358,7 @@ namespace kmx::aio::completion::xdp
             return std::unexpected(initialized.error());
 
 #if !defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
-            // Graceful fallback keeps API behavior deterministic on hosts without AF_XDP support.
+        // Graceful fallback keeps API behavior deterministic on hosts without AF_XDP support.
 #endif
         return out;
     }
@@ -364,7 +366,7 @@ namespace kmx::aio::completion::xdp
 #if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
     socket::expected_frame socket::receive_via_af_xdp_backend(state& state) noexcept
     {
-        recycle_completion_frames(state);
+        recycle_sent_frames(state);
         refill_fill_ring(state);
 
         std::uint32_t idx {};
@@ -463,7 +465,7 @@ namespace kmx::aio::completion::xdp
             if (state_->rx_inflight.erase(addr) > 0u)
                 state_->free_frame_addrs.push_back(addr);
 
-            recycle_completion_frames(*state_);
+            recycle_sent_frames(*state_);
             refill_fill_ring(*state_);
             return;
         }
@@ -479,13 +481,11 @@ namespace kmx::aio::completion::xdp
 
 #if defined(KMX_AIO_AF_XDP_HEADERS_AVAILABLE)
         if (state_->af_xdp_backend_enabled)
-        {
             if (xsk_ring_prod__needs_wakeup(&state_->fill))
             {
                 state_->stats.wakeups_triggered++;
-                (void) ::recvfrom(xsk_socket__fd(state_->xsk), nullptr, 0, MSG_DONTWAIT, nullptr, nullptr);
+                static_cast<void>(::recvfrom(xsk_socket__fd(state_->xsk), nullptr, 0, MSG_DONTWAIT, nullptr, nullptr));
             }
-        }
 #endif
     }
 
@@ -516,4 +516,4 @@ namespace kmx::aio::completion::xdp
         return state_->stats;
     }
 
-} // namespace kmx::aio::completion::xdp
+}

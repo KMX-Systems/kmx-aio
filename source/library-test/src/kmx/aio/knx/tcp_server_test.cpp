@@ -1,33 +1,38 @@
-/// @file kmx/aio/knx/tcp_server_test.cpp
+/// @file src/kmx/aio/knx/tcp_server_test.cpp
 /// @brief KNXnet/IP tunnelling over TCP end to end: the in-tree client against the in-tree server, on both pillars.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details Real loopback connections throughout. The client opens its tunnel over a TCP transport, the server's accept
 /// loop serves the connection on a task of its own, and frames cross both ways with a heartbeat between them. Then the
 /// tunnel ends - politely, or by its connection going away - and the server has to hand the channel back either way.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/knx/tcp_server.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/knx/tcp_server.hpp>
-#include <kmx/aio/completion/knx/tcp_transport.hpp>
-#include <kmx/aio/completion/timer.hpp>
-#include <kmx/aio/knx/client.hpp>
-#include <kmx/aio/knx/server.hpp>
-#include <kmx/aio/test/knx/telegram.hpp>
-#if defined(KMX_AIO_FEATURE_READINESS)
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/readiness/knx/tcp_server.hpp>
-    #include <kmx/aio/readiness/knx/tcp_transport.hpp>
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/knx/tcp_transport.hpp>
+    #include <kmx/aio/completion/timer.hpp>
+    #include <kmx/aio/knx/generic_server.hpp>
+    #include <kmx/aio/knx/server.hpp>
+    #include <kmx/aio/knx/tunnelling_client.hpp>
+    #include <kmx/aio/test/knx/telegram.hpp>
+
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <algorithm>
+    #include <atomic>
+    #include <chrono>
+    #include <cstdint>
+    #include <memory>
+    #include <mutex>
+    #include <thread>
+    #include <vector>
+    #include <netinet/in.h>
+
+    #if defined(KMX_AIO_FEATURE_READINESS)
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/readiness/knx/tcp_server.hpp>
+        #include <kmx/aio/readiness/knx/tcp_transport.hpp>
+    #endif
 #endif
-
-#include <algorithm>
-#include <atomic>
-#include <chrono>
-#include <cstdint>
-#include <memory>
-#include <mutex>
-#include <netinet/in.h>
-#include <thread>
-#include <vector>
 
 namespace kmx::aio::test::knx::tcp_server_test
 {
@@ -137,10 +142,8 @@ namespace kmx::aio::test::knx::tcp_server_test
                 co_return;
             std::size_t sent {};
             for (std::size_t index {}; index < frames; ++index)
-            {
                 if ((co_await client.send(sample_cemi)).has_value())
                     ++sent;
-            }
             const auto disconnected = co_await client.disconnect();
             if ((sent == frames) && disconnected.has_value())
                 completed.fetch_add(1u);
@@ -148,7 +151,7 @@ namespace kmx::aio::test::knx::tcp_server_test
 
         /// @brief Runs an accept loop, then records that it ended.
         template <typename Server>
-        task<void> run_server(Server& tcp, std::atomic_bool& ended)
+        task<void> run_accept_loop(Server& tcp, std::atomic_bool& ended)
         {
             static_cast<void>(co_await tcp.serve());
             ended = true;
@@ -172,6 +175,7 @@ namespace kmx::aio::test::knx::tcp_server_test
                     return false;
                 std::this_thread::sleep_for(std::chrono::milliseconds {5});
             }
+
             return true;
         }
 
@@ -186,6 +190,7 @@ namespace kmx::aio::test::knx::tcp_server_test
                 completion::timer timer {executor};
                 static_cast<void>(co_await timer.wait(std::chrono::milliseconds {5}));
             }
+
             co_return true;
         }
 
@@ -224,7 +229,7 @@ namespace kmx::aio::test::knx::tcp_server_test
 
         auto run = [&]() -> task<void>
         {
-            executor.spawn(detail::run_server(tcp, serving_ended));
+            executor.spawn(detail::run_accept_loop(tcp, serving_ended));
             co_await detail::run_tunnel(transport, address, server, observed);
             released = co_await detail::settle(executor, [&]() { return (server.active_channels() == 0u) && (tcp.connections() == 0u); });
             tcp.stop();
@@ -254,7 +259,7 @@ namespace kmx::aio::test::knx::tcp_server_test
 
         auto run = [&]() -> task<void>
         {
-            executor.spawn(detail::run_server(tcp, serving_ended));
+            executor.spawn(detail::run_accept_loop(tcp, serving_ended));
             co_await detail::abandon_tunnel(transport, address, server, observed);
             released = co_await detail::settle(executor, [&]() { return (server.active_channels() == 0u) && (tcp.connections() == 0u); });
             tcp.stop();
@@ -285,7 +290,7 @@ namespace kmx::aio::test::knx::tcp_server_test
         std::atomic_bool serving_ended {};
         std::atomic_size_t finished {};
 
-        executor->spawn(detail::run_server(tcp, serving_ended));
+        executor->spawn(detail::run_accept_loop(tcp, serving_ended));
         executor->spawn(detail::counted(detail::run_tunnel(transport, address, server, observed), finished));
         std::jthread runner([executor]() { executor->run(); });
         CHECK(detail::wait_until([&]() { return finished.load() == 1u; }));
@@ -310,7 +315,7 @@ namespace kmx::aio::test::knx::tcp_server_test
         std::atomic_bool serving_ended {};
         std::atomic_size_t finished {};
 
-        executor->spawn(detail::run_server(tcp, serving_ended));
+        executor->spawn(detail::run_accept_loop(tcp, serving_ended));
         executor->spawn(detail::counted(detail::abandon_tunnel(transport, address, server, observed), finished));
         std::jthread runner([executor]() { executor->run(); });
         CHECK(detail::wait_until([&]() { return finished.load() == 1u; }));
@@ -344,13 +349,14 @@ namespace kmx::aio::test::knx::tcp_server_test
         std::atomic_size_t finished {};
         std::atomic_bool serving_ended {};
 
-        executor->spawn(detail::run_server(tcp, serving_ended));
+        executor->spawn(detail::run_accept_loop(tcp, serving_ended));
         for (std::size_t index {}; index < clients; ++index)
         {
             transports.push_back(
                 std::make_unique<readiness::knx::tcp_transport>(*executor, reinterpret_cast<const sockaddr*>(&address), sizeof(address)));
             executor->spawn(detail::counted(detail::run_burst(*transports.back(), address, frames, completed), finished));
         }
+
         std::jthread runner([executor]() { executor->run(); });
         CHECK(detail::wait_until([&]() { return finished.load() == clients; }));
         CHECK(detail::wait_until([&]() { return (server.active_channels() == 0u) && (tcp.connections() == 0u); }));

@@ -1,27 +1,29 @@
-/// @file aio/completion/spdk/device.cpp
+/// @file src/kmx/aio/completion/spdk/device.cpp
 /// @brief Completion-model SPDK device implementation scaffold.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/completion/spdk/device.hpp>
-#include <kmx/aio/completion/spdk/runtime.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/spdk/runtime.hpp>
+    #include <kmx/aio/error_code.hpp>
 
-#include <cstddef>
-#include <cstring>
-#include <kmx/aio/error_code.hpp>
-#include <limits>
-#include <mutex>
-#include <new>
-#include <vector>
+    #include <cstddef>
+    #include <cstring>
+    #include <limits>
+    #include <mutex>
+    #include <new>
+    #include <vector>
 
-#if defined(KMX_AIO_FEATURE_SPDK)
-    #include <spdk/bdev.h>
-    #include <spdk/thread.h>
+    #if defined(KMX_AIO_FEATURE_SPDK)
+        #include <spdk/bdev.h>
+        #include <spdk/thread.h>
+    #endif
 #endif
 
 namespace kmx::aio::completion::spdk
 {
 #if defined(KMX_AIO_FEATURE_SPDK)
 
-    struct io_completion
+    struct io_outcome
     {
         std::atomic_bool done {false};
         bool success {};
@@ -29,9 +31,9 @@ namespace kmx::aio::completion::spdk
 
     void on_bdev_io_complete(spdk_bdev_io* bdev_io, const bool success, void* cb_arg) noexcept
     {
-        auto* completion = static_cast<io_completion*>(cb_arg);
-        completion->success = success;
-        completion->done.store(true, std::memory_order_release);
+        auto* outcome = static_cast<io_outcome*>(cb_arg);
+        outcome->success = success;
+        outcome->done.store(true, std::memory_order_release);
         spdk_bdev_free_io(bdev_io);
     }
 
@@ -50,12 +52,12 @@ namespace kmx::aio::completion::spdk
         if (!thread)
             return std::unexpected(to_std_error_code(error_code::spdk_queue_pair_failed));
 
-        io_completion completion {};
-        const int submit_rc = submit(&completion);
+        io_outcome outcome {};
+        const int submit_rc = submit(&outcome);
         if (submit_rc != 0)
             return std::unexpected(to_std_error_code(error_code::spdk_io_submit_failed));
 
-        while (!completion.done.load(std::memory_order_acquire))
+        while (!outcome.done.load(std::memory_order_acquire))
         {
             const int poll_rc = spdk_thread_poll(thread, 0u, 0u);
             if (poll_rc < 0)
@@ -64,7 +66,7 @@ namespace kmx::aio::completion::spdk
             std::this_thread::yield();
         }
 
-        if (!completion.success)
+        if (!outcome.success)
             return std::unexpected(to_std_error_code(error_code::spdk_io_completion_failed));
 
         return expected_void_t {};
@@ -196,7 +198,7 @@ namespace kmx::aio::completion::spdk
         {
             spdk_thread_exit(state.io_thread);
             while (!spdk_thread_is_exited(state.io_thread))
-                (void) spdk_thread_poll(state.io_thread, 0u, 0u);
+                static_cast<void>(spdk_thread_poll(state.io_thread, 0u, 0u));
             spdk_thread_destroy(state.io_thread);
         }
 
@@ -265,9 +267,10 @@ namespace kmx::aio::completion::spdk
                 co_return std::unexpected(to_std_error_code(error_code::invalid_argument));
 
             const auto op_result = submit_and_wait(state_->io_thread,
-                                                   [&](io_completion* completion) noexcept {
+                                                   [&](io_outcome* outcome) noexcept
+                                                   {
                                                        return spdk_bdev_read_blocks(state_->bdev_desc, state_->io_channel, out.data(), lba,
-                                                                                    num_blocks, on_bdev_io_complete, completion);
+                                                                                    num_blocks, on_bdev_io_complete, outcome);
                                                    });
 
             if (!op_result)
@@ -314,10 +317,10 @@ namespace kmx::aio::completion::spdk
 
             const auto op_result =
                 submit_and_wait(state_->io_thread,
-                                [&](io_completion* completion) noexcept
+                                [&](io_outcome* outcome) noexcept
                                 {
                                     return spdk_bdev_write_blocks(state_->bdev_desc, state_->io_channel, const_cast<std::byte*>(in.data()),
-                                                                  lba, num_blocks, on_bdev_io_complete, completion);
+                                                                  lba, num_blocks, on_bdev_io_complete, outcome);
                                 });
 
             if (!op_result)
@@ -352,11 +355,9 @@ namespace kmx::aio::completion::spdk
             spdk_set_thread(state_->io_thread);
 
             const std::uint64_t total_blocks = state_->actual_block_count;
-            const auto op_result = submit_and_wait(state_->io_thread,
-                                                   [&](io_completion* completion) noexcept {
-                                                       return spdk_bdev_flush_blocks(state_->bdev_desc, state_->io_channel, 0u,
-                                                                                     total_blocks, on_bdev_io_complete, completion);
-                                                   });
+            const auto op_result = submit_and_wait(
+                state_->io_thread, [&](io_outcome* outcome) noexcept
+                { return spdk_bdev_flush_blocks(state_->bdev_desc, state_->io_channel, 0u, total_blocks, on_bdev_io_complete, outcome); });
 
             if (!op_result)
                 co_return std::unexpected(op_result.error());
@@ -380,4 +381,4 @@ namespace kmx::aio::completion::spdk
 #endif
     }
 
-} // namespace kmx::aio::completion::spdk
+}

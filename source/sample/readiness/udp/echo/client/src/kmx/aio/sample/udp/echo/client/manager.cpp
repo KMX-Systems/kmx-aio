@@ -1,13 +1,17 @@
-#include <kmx/aio/readiness/udp/endpoint.hpp>
-#include <kmx/aio/readiness/udp/socket.hpp>
+/// @file src/kmx/aio/sample/udp/echo/client/manager.cpp
+/// @brief Readiness-model UDP echo client: per-worker send/receive loops over UDP endpoints and a results summary.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/udp/echo/client/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/readiness/udp/endpoint.hpp>
+    #include <kmx/aio/readiness/udp/socket.hpp>
 
-#include <sys/socket.h>
-
-#include <print>
-#include <source_location>
-#include <span>
-#include <vector>
+    #include <print>
+    #include <source_location>
+    #include <span>
+    #include <vector>
+    #include <sys/socket.h>
+#endif
 
 namespace kmx::aio::sample::udp::echo::client
 {

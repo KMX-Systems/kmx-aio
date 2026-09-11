@@ -1,5 +1,6 @@
-/// @file kmx/aio/knx/secure/client_session.hpp
+/// @file inc/kmx/aio/knx/secure/client_session.hpp
 /// @brief The client side of a KNX IP Secure tunnelling session, without I/O.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// Opens the session - SESSION_REQUEST, a verified SESSION_RESPONSE, SESSION_AUTHENTICATE under the new key, and the
 /// server's SESSION_STATUS - then seals every frame the client sends and opens every wrapper it receives. It never sends
@@ -11,25 +12,24 @@
 /// carries changes the session (P2). A session never outlives its key: beginning again after it closed draws a fresh
 /// key pair, and the sequence starts again at zero (P3).
 /// @reference KNX System Specifications, 03/08/09 "KNXnet/IP Security"; xknx 3.20.0 `SecureSession`.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/knx/connection.hpp>
+        #include <kmx/aio/knx/secure/common.hpp>
+        #include <kmx/aio/knx/secure/credentials.hpp>
+        #include <kmx/aio/knx/secure/entropy_source.hpp>
+        #include <kmx/aio/knx/secure/session.hpp>
+        #include <kmx/aio/knx/secure/wrapper.hpp>
+
         #include <cstddef>
         #include <cstdint>
         #include <expected>
         #include <optional>
         #include <system_error>
     #endif
-
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/knx/connection.hpp>
-    #include <kmx/aio/knx/secure/common.hpp>
-    #include <kmx/aio/knx/secure/credentials.hpp>
-    #include <kmx/aio/knx/secure/entropy.hpp>
-    #include <kmx/aio/knx/secure/session.hpp>
-    #include <kmx/aio/knx/secure/wrapper.hpp>
 
 namespace kmx::aio::knx::secure
 {
@@ -124,8 +124,7 @@ namespace kmx::aio::knx::secure
         /// @retval kmx::aio::knx::error::secure_session_closed The server closed the session, or reported it timed out
         ///         or unauthenticated; the session is closed.
         /// @note A refused wrapper is counted and changes nothing else.
-        [[nodiscard]] opened_frame_result_t open(const secure_wrapper_frame& wrapper, span_uint8_t destination,
-                                                 std::uint64_t now_ms) noexcept;
+        [[nodiscard]] opened_frame_result_t open(const wrapper_frame& wrapper, span_uint8_t destination, std::uint64_t now_ms) noexcept;
 
         /// @brief Seals a tunnel datagram under the next sequence number.
         /// @param plain_frame The complete datagram.
@@ -186,9 +185,9 @@ namespace kmx::aio::knx::secure
         [[nodiscard]] expected_size_t authenticate(const session_response_frame& response, span_uint8_t destination,
                                                    std::uint64_t now_ms) noexcept;
         /// @brief Checks a wrapper's session id and MAC and decrypts it, counting a failure.
-        [[nodiscard]] expected_size_t authenticate_wrapper(const secure_wrapper_frame& wrapper, span_uint8_t destination) noexcept;
+        [[nodiscard]] expected_size_t authenticate_wrapper(const wrapper_frame& wrapper, span_uint8_t destination) noexcept;
         /// @brief Admits an authenticated datagram: a forward sequence number and a service that may be wrapped.
-        [[nodiscard]] expected_void_t admit(const secure_wrapper_frame& wrapper, span_uint8_t plain) noexcept;
+        [[nodiscard]] expected_void_t admit(const wrapper_frame& wrapper, span_uint8_t plain) noexcept;
         /// @brief Applies a SESSION_STATUS, or hands tunnel traffic back.
         [[nodiscard]] opened_frame_result_t apply(cspan_uint8_t plain) noexcept;
         /// @brief Seals @p plain_frame under the next sequence number, whatever the phase.

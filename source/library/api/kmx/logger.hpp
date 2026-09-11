@@ -1,6 +1,10 @@
+/// @file api/kmx/logger.hpp
+/// @brief Minimal noexcept logger: severity levels and a std::format log() writing to stdout or stderr.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <array>
+    #include <cstdint>
     #include <cstring>
     #include <format>
     #include <print>
@@ -10,7 +14,7 @@
 namespace kmx::logger
 {
     /// @brief Severity of a log record, in increasing order.
-    enum class level
+    enum class level : std::uint8_t
     {
         /// @brief Diagnostic detail useful only while debugging.
         debug,
@@ -23,7 +27,7 @@ namespace kmx::logger
     };
 
     /// @brief Internal helper to format log levels as a single char using std::array.
-    constexpr char level_to_char(const level l) noexcept
+    [[nodiscard]] constexpr char level_to_char(const level l) noexcept
     {
         static constexpr std::array<char, static_cast<std::size_t>(level::error) + 2u> chars {
             'D', // debug
@@ -77,4 +81,4 @@ namespace kmx::logger
         // LCOV_EXCL_STOP
     }
 
-} // namespace logger
+}

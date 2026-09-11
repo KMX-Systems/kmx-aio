@@ -1,21 +1,33 @@
-/// @file kmx/aio/knx/routing_data_secure_test.cpp
+/// @file src/kmx/aio/knx/routing_data_secure_test.cpp
 /// @brief KNX Data Secure applied by a routing client: what it puts on the group, and what it takes off it.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details A loopback transport stands in for the multicast group. The sender is keyed as xknx's first Data Secure vector
 /// was, so the indication it sends has to carry exactly the frame xknx secured.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/knx/data_secure.hpp>
+    #include <kmx/aio/knx/data_secure/context.hpp>
+    #include <kmx/aio/knx/data_secure/sequence_store.hpp>
+    #include <kmx/aio/knx/datagram_transport.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/group_address.hpp>
+    #include <kmx/aio/knx/individual_address.hpp>
+    #include <kmx/aio/knx/keyring/document.hpp>
+    #include <kmx/aio/knx/routing.hpp>
+    #include <kmx/aio/knx/routing/client.hpp>
+    #include <kmx/aio/knx/transport.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/aio/test/knx/secure_vectors.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/knx/data_secure.hpp>
-#include <kmx/aio/knx/error.hpp>
-#include <kmx/aio/knx/routing.hpp>
-#include <kmx/aio/test/knx/secure_vectors.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <algorithm>
-#include <cstdint>
-#include <deque>
-#include <netinet/in.h>
-#include <vector>
+    #include <algorithm>
+    #include <cstdint>
+    #include <deque>
+    #include <string_view>
+    #include <vector>
+    #include <netinet/in.h>
+#endif
 
 namespace kmx::aio::test::knx::routing_data_secure_test
 {
@@ -99,7 +111,7 @@ namespace kmx::aio::test::knx::routing_data_secure_test
         }
 
         /// @brief A ROUTING_INDICATION carrying @p cemi.
-        [[nodiscard]] std::vector<std::uint8_t> routing_packet(const cspan_uint8_t cemi)
+        [[nodiscard]] std::vector<std::uint8_t> indication_packet(const cspan_uint8_t cemi)
         {
             const auto length = static_cast<std::uint16_t>(6u + cemi.size());
             std::vector<std::uint8_t> packet {
@@ -132,7 +144,7 @@ namespace kmx::aio::test::knx::routing_data_secure_test
         {
             sent = (co_await sender.send_indication(kn::routing::indication {.cemi_bytes = plain})).has_value();
             // An unsecured telegram to the secured group comes first; it is refused and read past.
-            receiving_group.enqueue(detail::routing_packet(plain));
+            receiving_group.enqueue(detail::indication_packet(plain));
             receiving_group.enqueue(sending_group.last_sent);
             const auto indication = co_await receiver.receive_indication();
             if (indication.has_value())
@@ -143,7 +155,7 @@ namespace kmx::aio::test::knx::routing_data_secure_test
         executor.run();
 
         CHECK(sent);
-        CHECK(sending_group.last_sent == detail::routing_packet(sv::hex(detail::secured_cemi)));
+        CHECK(sending_group.last_sent == detail::indication_packet(sv::hex(detail::secured_cemi)));
         CHECK(received == plain);
         CHECK(receiving_context.counters().unencrypted_refused == 1u);
     }

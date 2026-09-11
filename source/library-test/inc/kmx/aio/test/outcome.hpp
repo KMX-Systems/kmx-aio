@@ -1,18 +1,18 @@
-/// @file aio/test/outcome.hpp
+/// @file inc/kmx/aio/test/outcome.hpp
 /// @brief Result-capture shapes for tests that drive an asynchronous operation.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details A coroutine cannot hand its result back to the TEST_CASE that spawned it by returning, so
 ///          the test gives it somewhere to write instead and inspects that afterwards. These are the
 ///          three shapes the suite needs; they are deliberately kept apart rather than merged, because
 ///          which one is correct depends on whether the writer and the reader are the same thread.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
+
     #include <atomic>
     #include <cstddef>
     #include <optional>
     #include <system_error>
-
-    #include <kmx/aio/basic_types.hpp>
 #endif
 
 namespace kmx::aio::test
@@ -66,4 +66,4 @@ namespace kmx::aio::test
         bool completed {};            ///< Whether the coroutine ran to completion at all.
     };
 
-} // namespace kmx::aio::test
+}

@@ -1,10 +1,10 @@
-/// @file aio/buffer/pool.hpp
+/// @file api/kmx/aio/buffer/pool.hpp
 /// @brief Fixed-capacity buffer pool with RAII-based ownership and zero-copy semantics.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <kmx/aio/buffer/handle.hpp>
-    #include <kmx/aio/exception.hpp>
+    #include <kmx/aio/runtime_error.hpp>
 
     #include <array>
     #include <atomic>
@@ -191,9 +191,7 @@ namespace kmx::aio::buffer
         // call to terminate.
         T* buffer = slot_to_ptr(acquired_slot);
         if constexpr (std::is_nothrow_default_constructible_v<T>)
-        {
             new (buffer) T();
-        }
         else
         {
             try
@@ -246,4 +244,4 @@ namespace kmx::aio::buffer
         // Decrement allocated count
         allocated_count_.fetch_sub(1, std::memory_order_release);
     }
-} // namespace kmx::aio::buffer
+}

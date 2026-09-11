@@ -1,24 +1,26 @@
-/// @file aio/integration/pillar_2_integration_test.cpp
+/// @file src/kmx/aio/integration/pillar_2_integration_test.cpp
 /// @brief Integration matrix for Pillar 2 TLS/ALPN API parity.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#ifndef PCH
+    #include <kmx/aio/completion/tls/stream.hpp>
+    #include <kmx/aio/readiness/tls/stream.hpp>
 
-#include <catch2/catch_test_macros.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <kmx/aio/completion/tls/stream.hpp>
-#include <kmx/aio/readiness/tls/stream.hpp>
-
-#include <array>
-#include <concepts>
-#include <cstdint>
-#include <expected>
-#include <string_view>
-#include <system_error>
-#include <vector>
+    #include <array>
+    #include <concepts>
+    #include <cstdint>
+    #include <expected>
+    #include <string_view>
+    #include <system_error>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::integration::pillar_2_integration_test
 {
     template <typename Stream>
-    concept alpn_api_surface = requires(Stream s, std::span<const std::uint8_t> p) {
+    concept alpn_api_surface = requires(Stream s, std::span<const std::uint8_t> p)
+    {
         { s.set_alpn_protocols(p) } -> std::same_as<expected_void_t>;
         { s.selected_alpn() } -> std::convertible_to<std::string_view>;
     };
@@ -77,4 +79,4 @@ namespace kmx::aio::test::integration::pillar_2_integration_test
             REQUIRE(result.error() == std::make_error_code(std::errc::invalid_argument));
         }
     }
-} // namespace kmx::aio::test::integration::pillar_2_integration_test
+}

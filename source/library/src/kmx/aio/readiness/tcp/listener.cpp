@@ -1,13 +1,14 @@
-/// @file aio/readiness/tcp/listener.cpp
+/// @file src/kmx/aio/readiness/tcp/listener.cpp
+/// @brief Readiness-model TCP listener: bind, listen and epoll-driven async accept.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/readiness/tcp/listener.hpp>
-#include <kmx/aio/exception.hpp>
+#ifndef PCH
+    #include <kmx/aio/error_code.hpp>
+    #include <kmx/aio/system_error.hpp>
+    #include <kmx/logger.hpp>
 
-#include <kmx/aio/error_code.hpp>
-
-#include <kmx/logger.hpp>
-
-#include <netinet/in.h>
+    #include <netinet/in.h>
+#endif
 
 namespace kmx::aio::readiness::tcp
 {
@@ -74,4 +75,4 @@ namespace kmx::aio::readiness::tcp
             co_return std::unexpected(accept_res.error());
         }
     }
-} // namespace kmx::aio::readiness::tcp
+}

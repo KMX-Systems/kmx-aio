@@ -1,14 +1,15 @@
-/// @file aio/readiness/descriptor/epoll.hpp
+/// @file api/kmx/aio/readiness/descriptor/epoll.hpp
+/// @brief Readiness-model RAII epoll descriptor with type-safe add, modify, remove and wait operations.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_READINESS)
     #ifndef PCH
-        #include <span>
-        #include <vector>
-
         #include <kmx/aio/file_descriptor.hpp>
         #include <kmx/aio/readiness/basic_types.hpp>
+
+        #include <span>
+        #include <vector>
     #endif
 
 namespace kmx::aio::readiness::descriptor
@@ -85,5 +86,5 @@ namespace kmx::aio::readiness::descriptor
         [[nodiscard]] std::expected<std::vector<epoll_event>, std::error_code> wait_events(const int max_events,
                                                                                            const int timeout_ms = -1) noexcept;
     };
-} // namespace kmx::aio::descriptor
+}
 #endif // KMX_AIO_FEATURE_READINESS

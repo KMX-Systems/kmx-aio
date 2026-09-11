@@ -1,4 +1,5 @@
-/// @file aio/basic_channel.cpp
+/// @file src/kmx/aio/basic_channel.cpp
+/// @brief The compiled body of the SPSC channel core: slot acquisition, publication and backpressure.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/basic_channel.hpp>
 
@@ -181,4 +182,4 @@ namespace kmx::aio
         return current;
     }
 
-} // namespace kmx::aio
+}

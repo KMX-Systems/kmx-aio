@@ -1,18 +1,22 @@
+/// @file src/kmx/aio/knx/secure/wrapper_test.cpp
+/// @brief Unit tests for the KNX IP Secure wrapper: sealing and opening against AN159 and xknx, and refused frames.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
-#include <kmx/aio/knx/datagram.hpp>
-#include <kmx/aio/knx/error.hpp>
-#include <kmx/aio/knx/secure/detail/wrapper_crypto.hpp>
-#include <kmx/aio/knx/secure/timer_notify.hpp>
 #include <kmx/aio/knx/secure/wrapper.hpp>
-#include <kmx/aio/test/knx/secure_vectors.hpp>
+#ifndef PCH
+    #include <kmx/aio/knx/datagram.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/secure/detail/wrapper_crypto.hpp>
+    #include <kmx/aio/knx/secure/timer_notify.hpp>
+    #include <kmx/aio/test/knx/secure_vectors.hpp>
 
-#include <algorithm>
-#include <array>
-#include <cstdint>
-#include <span>
-#include <variant>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <algorithm>
+    #include <array>
+    #include <cstdint>
+    #include <span>
+    #include <variant>
+#endif
 
 namespace kmx::aio::test::knx::secure::wrapper_test
 {
@@ -51,7 +55,7 @@ namespace kmx::aio::test::knx::secure::wrapper_test
             an159_example example {};
             auto wire = example.wire;
             wire[30u] ^= (alteration == 4) ? 0x01u : 0x00u;
-            auto value = ks::decode_secure_wrapper_packet(wire);
+            auto value = ks::decode_wrapper_packet(wire);
             REQUIRE(value.has_value());
             value->session_id ^= (alteration == 0) ? 0x0001u : 0x0000u;
             value->sequence[5u] ^= (alteration == 1) ? 0x01u : 0x00u;
@@ -63,7 +67,7 @@ namespace kmx::aio::test::knx::secure::wrapper_test
             const auto opened = ks::open_wrapper(plain, example.key, *value);
             return refused_with(opened, error::secure_authentication_failed) && sv::all_zero(plain);
         }
-    } // namespace detail
+    }
 
     TEST_CASE("knx secure wrapper seals and opens the AN159 routing example", "[knx][secure][routing][unit]")
     {
@@ -73,7 +77,7 @@ namespace kmx::aio::test::knx::secure::wrapper_test
         REQUIRE(sealed.has_value());
         CHECK(std::ranges::equal(std::span {wire}.first(*sealed), example.wire));
 
-        const auto decoded = ks::decode_secure_wrapper_packet(example.wire);
+        const auto decoded = ks::decode_wrapper_packet(example.wire);
         REQUIRE(decoded.has_value());
         CHECK(decoded->session_id == 0u);
         CHECK(decoded->sequence == example.fields.sequence);
@@ -102,7 +106,7 @@ namespace kmx::aio::test::knx::secure::wrapper_test
             REQUIRE(sealed.has_value());
             CHECK(std::ranges::equal(std::span {wire}.first(*sealed), row.wire));
 
-            const auto decoded = ks::decode_secure_wrapper_packet(row.wire);
+            const auto decoded = ks::decode_wrapper_packet(row.wire);
             REQUIRE(decoded.has_value());
             detail::datagram_buffer_t plain {};
             const auto opened = ks::open_wrapper(plain, key, *decoded);
@@ -117,7 +121,7 @@ namespace kmx::aio::test::knx::secure::wrapper_test
         const auto raw = sv::hex("06 10 09 50 00 3e 00 01 00 00 00 00 00 00 00 fa 12 34 56 78 af fe"
                                  "79 15 a4 f3 6e 6e 42 08 d2 8b 4a 20 7d 8f 35 c0 d1 38 c2 6a 7b 5e 71 69"
                                  "52 db a8 e7 e4 bd 80 bd 7d 86 8a 3a e7 87 49 de");
-        const auto decoded = ks::decode_secure_wrapper_packet(raw);
+        const auto decoded = ks::decode_wrapper_packet(raw);
         REQUIRE(decoded.has_value());
         CHECK(decoded->session_id == 1u);
         CHECK(decoded->sequence == ks::sequence_information_t {});
@@ -125,9 +129,9 @@ namespace kmx::aio::test::knx::secure::wrapper_test
         CHECK(decoded->mac == sv::fixed<16u>("52 db a8 e7 e4 bd 80 bd 7d 86 8a 3a e7 87 49 de"));
 
         detail::datagram_buffer_t encoded {};
-        REQUIRE(ks::encode_secure_wrapper_packet(encoded, *decoded).has_value());
+        REQUIRE(ks::encode_wrapper_packet(encoded, *decoded).has_value());
         CHECK(std::ranges::equal(std::span {encoded}.first(raw.size()), raw));
-        CHECK(!ks::encode_secure_wrapper_packet(std::span {encoded}.first(raw.size() - 1u), *decoded).has_value());
+        CHECK(!ks::encode_wrapper_packet(std::span {encoded}.first(raw.size() - 1u), *decoded).has_value());
     }
 
     TEST_CASE("knx secure wrapper refuses a wrapper altered in any field", "[knx][secure][routing][unit]")
@@ -139,7 +143,7 @@ namespace kmx::aio::test::knx::secure::wrapper_test
         }
 
         detail::an159_example example {};
-        const auto decoded = ks::decode_secure_wrapper_packet(example.wire);
+        const auto decoded = ks::decode_wrapper_packet(example.wire);
         REQUIRE(decoded.has_value());
         detail::datagram_buffer_t plain {};
         const auto wrong_key = ks::open_wrapper(plain, sv::key("96f034fccf510760cbd63da0f70d4a9d"), *decoded);
@@ -151,14 +155,14 @@ namespace kmx::aio::test::knx::secure::wrapper_test
     {
         detail::an159_example example {};
         const auto timer_notify = sv::rows("timer_notify").front().wire;
-        CHECK(ks::decode_secure_wrapper_packet(timer_notify).error() == make_error_code(error::unsupported_service));
-        CHECK(ks::decode_secure_wrapper_packet(std::span {example.wire}.first(example.wire.size() - 1u)).error() ==
+        CHECK(ks::decode_wrapper_packet(timer_notify).error() == make_error_code(error::unsupported_service));
+        CHECK(ks::decode_wrapper_packet(std::span {example.wire}.first(example.wire.size() - 1u)).error() ==
               make_error_code(error::malformed_frame));
 
         // A wrapper with no room for a KNXnet/IP header inside: 43 octets, declared as such.
         auto short_wire = sv::octets_t(example.wire.begin(), example.wire.begin() + 43);
         short_wire[5u] = 43u;
-        CHECK(ks::decode_secure_wrapper_packet(short_wire).error() == make_error_code(error::malformed_frame));
+        CHECK(ks::decode_wrapper_packet(short_wire).error() == make_error_code(error::malformed_frame));
     }
 
     TEST_CASE("knx secure wrapper refuses datagrams that may not be wrapped", "[knx][secure][routing][unit]")
@@ -193,15 +197,15 @@ namespace kmx::aio::test::knx::secure::wrapper_test
         const auto failing = sv::failing_backend();
         detail::datagram_buffer_t wire {};
         wire.fill(0xAAu);
-        CHECK(
-            detail::refused_with(kd::basic_seal_wrapper(failing, wire, example.key, example.fields, example.plain), error::crypto_failure));
+        CHECK(detail::refused_with(kd::basic_seal_wrapper({failing, example.key}, wire, example.fields, example.plain),
+                                   error::crypto_failure));
         CHECK(sv::all_zero(std::span {wire}.first(example.wire.size())));
 
-        const auto decoded = ks::decode_secure_wrapper_packet(example.wire);
+        const auto decoded = ks::decode_wrapper_packet(example.wire);
         REQUIRE(decoded.has_value());
         detail::datagram_buffer_t plain {};
         plain.fill(0xAAu);
-        CHECK(detail::refused_with(kd::basic_open_wrapper(failing, plain, example.key, *decoded), error::crypto_failure));
+        CHECK(detail::refused_with(kd::basic_open_wrapper({failing, example.key}, plain, *decoded), error::crypto_failure));
         CHECK(sv::all_zero(std::span {plain}.first(example.plain.size())));
     }
 
@@ -210,8 +214,8 @@ namespace kmx::aio::test::knx::secure::wrapper_test
         detail::an159_example example {};
         const auto wrapper = kn::decode_datagram(example.wire);
         REQUIRE(wrapper.has_value());
-        CHECK(wrapper->service_type == ks::secure_wrapper_service);
-        const auto* frame = std::get_if<ks::secure_wrapper_frame>(&wrapper->payload);
+        CHECK(wrapper->service_type == ks::wrapper_service);
+        const auto* frame = std::get_if<ks::wrapper_frame>(&wrapper->payload);
         REQUIRE(frame != nullptr);
         CHECK(frame->serial_number == example.fields.serial_number);
         detail::datagram_buffer_t encoded {};

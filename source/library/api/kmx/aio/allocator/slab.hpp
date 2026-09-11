@@ -1,4 +1,4 @@
-/// @file aio/allocator/slab.hpp
+/// @file api/kmx/aio/allocator/slab.hpp
 /// @brief Thread-local, lockless slab allocator for coroutine frames and I/O payloads.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -114,14 +114,12 @@ namespace kmx::aio::allocator
         /// @brief Number of slots currently handed out.
         std::size_t allocated_ {};
     };
-} // namespace kmx::aio::allocator
 
-namespace kmx::aio
-{
-    /// @brief Sets the thread-local instance of the slab allocator.
-    void set_thread_allocator(allocator::slab* alloc) noexcept;
+    /// @brief Installs the slab the calling thread allocates coroutine frames from.
+    /// @param alloc The slab to use, or null to send this thread's frames to the heap.
+    void set_thread_slab(slab* alloc) noexcept;
 
-    /// @brief Retrieves the thread-local instance of the slab allocator.
-    [[nodiscard]] allocator::slab* get_thread_allocator() noexcept;
-
-} // namespace kmx::aio
+    /// @brief Retrieves the slab the calling thread allocates coroutine frames from.
+    /// @return The installed slab, or null when none is installed.
+    [[nodiscard]] slab* get_thread_slab() noexcept;
+}

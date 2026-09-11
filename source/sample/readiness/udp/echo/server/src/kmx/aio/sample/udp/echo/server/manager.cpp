@@ -1,15 +1,20 @@
-#include <kmx/aio/readiness/udp/endpoint.hpp>
-#include <kmx/aio/readiness/udp/socket.hpp>
+/// @file src/kmx/aio/sample/udp/echo/server/manager.cpp
+/// @brief Readiness-model UDP echo server: SO_REUSEPORT endpoints echoing each datagram back to its sender.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/udp/echo/server/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/readiness/udp/endpoint.hpp>
+    #include <kmx/aio/readiness/udp/socket.hpp>
 
-#include <array>
-#include <csignal>
-#include <print>
-#include <source_location>
-#include <span>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <vector>
+    #include <array>
+    #include <csignal>
+    #include <print>
+    #include <source_location>
+    #include <span>
+    #include <vector>
+    #include <sys/socket.h>
+    #include <unistd.h>
+#endif
 
 namespace kmx::aio::sample::udp::echo::server
 {
@@ -104,7 +109,7 @@ namespace kmx::aio::sample::udp::echo::server
                 auto bytes_recv = *recv_result;
                 metrics_.bytes_received.fetch_add(bytes_recv, mem_order);
 
-                cspan_byte_t send_buf {buffer.data(), (std::size_t) bytes_recv};
+                cspan_byte_t send_buf {buffer.data(), static_cast<std::size_t>(bytes_recv)};
                 auto send_result = co_await ep.send(send_buf, reinterpret_cast<const sockaddr*>(&peer), peer_len);
 
                 if (auto total = metrics_.messages_handled.load(mem_order); (total > 0) && ((total % 1000) == 0))

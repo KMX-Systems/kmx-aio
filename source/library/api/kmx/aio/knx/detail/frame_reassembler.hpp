@@ -1,5 +1,6 @@
-/// @file kmx/aio/knx/detail/frame_reassembler.hpp
+/// @file api/kmx/aio/knx/detail/frame_reassembler.hpp
 /// @brief Cuts a byte stream into whole KNXnet/IP frames, which KNXnet/IP over TCP needs and UDP never did.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// Over UDP a datagram is a frame. Over TCP a read returns whatever the stream holds - part of a header, a frame and
 /// a half, three frames at once - so frames have to be recovered from the total length in each KNXnet/IP header.
@@ -11,11 +12,13 @@
 /// It owns no socket and does no I/O. A transport asks @ref kmx::aio::knx::detail::frame_reassembler::next for a
 /// frame, reads into @ref kmx::aio::knx::detail::frame_reassembler::writable when there is none, and reports how many
 /// octets it read with @ref kmx::aio::knx::detail::frame_reassembler::commit.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/knx/frame.hpp>
+
         #include <array>
         #include <cstddef>
         #include <cstdint>
@@ -23,9 +26,6 @@
         #include <optional>
         #include <system_error>
     #endif
-
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/knx/frame.hpp>
 
 namespace kmx::aio::knx::detail
 {

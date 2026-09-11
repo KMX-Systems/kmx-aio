@@ -1,4 +1,4 @@
-/// @file aio/readiness/v4l2/v4l2_types.hpp
+/// @file api/kmx/aio/readiness/v4l2/v4l2_types.hpp
 /// @brief V4L2 capture types shared across the V4L2 pillar.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -42,7 +42,7 @@ namespace kmx::aio::readiness::v4l2
 
         /// @brief H.264 encoded stream. Available on encoder-capable capture devices.
         inline constexpr pixel_format h264 {0x34363248u}; // V4L2_PIX_FMT_H264
-    } // namespace fourcc
+    }
 
     /// @brief Frame resolution in pixels.
     struct frame_size
@@ -90,4 +90,4 @@ namespace kmx::aio::readiness::v4l2
         std::uint32_t fourcc {};       ///< Actual V4L2 FourCC code (after driver negotiation).
     };
 
-} // namespace kmx::aio::readiness::v4l2
+}

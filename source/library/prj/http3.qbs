@@ -13,12 +13,20 @@ StaticLibrary {
     cpp.enableRtti: false
     cpp.includePaths: [
         "../api",
+        "../inc",
         "/usr/local/include",
     ]
     install: true
+    // A qbs "**.cpp" matches only the named directory, not the ones below it, so each subdirectory is listed.
     files: [
         "../api/kmx/aio/http3/**.hpp",
+        "../api/kmx/aio/http3/demo/**.hpp",
+        "../api/kmx/aio/http3/qpack/**.hpp",
+        "../inc/kmx/aio/http3/detail/**.hpp",
         "../src/kmx/aio/http3/**.cpp",
+        "../src/kmx/aio/http3/demo/**.cpp",
+        "../src/kmx/aio/http3/detail/**.cpp",
+        "../src/kmx/aio/http3/qpack/**.cpp",
     ]
 
     Export {

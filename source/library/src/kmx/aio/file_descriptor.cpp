@@ -1,8 +1,10 @@
-/// @file aio/file_descriptor.cpp
+/// @file src/kmx/aio/file_descriptor.cpp
+/// @brief The compiled body of the RAII file descriptor wrapper and its socket system-call helpers.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/file_descriptor.hpp>
-
-#include <kmx/aio/detail/syscalls.hpp>
+#ifndef PCH
+    #include <kmx/aio/detail/syscalls.hpp>
+#endif
 
 namespace kmx::aio
 {
@@ -237,4 +239,4 @@ namespace kmx::aio
 
         return {};
     }
-} // namespace kmx::aio
+}

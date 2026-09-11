@@ -1,21 +1,21 @@
-/// @file aio/readiness/tcp/connect.hpp
+/// @file api/kmx/aio/readiness/tcp/connect.hpp
 /// @brief Readiness-model TCP connect: a non-blocking connect that suspends until it completes.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details The completion model has `executor::async_connect`. The readiness model has no connect of its own,
 ///          so each client used to carry the same sequence: create a non-blocking socket, register it, start the
 ///          connect, wait for the socket to become writable, and read `SO_ERROR` to learn whether it worked. This
 ///          is that sequence, written once.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_READINESS)
     #ifndef PCH
+        #include <kmx/aio/file_descriptor.hpp>
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/task.hpp>
+
         #include <cstdint>
         #include <sys/socket.h>
     #endif
-
-    #include <kmx/aio/file_descriptor.hpp>
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/task.hpp>
 
 namespace kmx::aio::readiness::tcp
 {
@@ -28,7 +28,8 @@ namespace kmx::aio::readiness::tcp
     /// @retval kmx::aio::error_code::operation_cancelled The wait was cancelled, by `cancel_io` or shutdown.
     /// @note Any other failure - the socket, the registration, the connect itself - is reported as the system error
     ///       behind it, and the socket is closed.
-    [[nodiscard]] task<file_descriptor::expected_t> connect(executor& exec, const sockaddr* address, ::socklen_t address_length) noexcept(false);
+    [[nodiscard]] task<file_descriptor::expected_t> connect(executor& exec, const sockaddr* address,
+                                                            ::socklen_t address_length) noexcept(false);
 
     /// @brief Opens a TCP connection, giving up at a deadline.
     /// @param exec The executor the socket is registered with.

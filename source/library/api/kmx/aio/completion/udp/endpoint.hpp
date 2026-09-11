@@ -1,18 +1,18 @@
-/// @file aio/completion/udp/endpoint.hpp
+/// @file api/kmx/aio/completion/udp/endpoint.hpp
 /// @brief Completion-model UDP endpoint using io_uring-based async I/O.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_COMPLETION)
     #ifndef PCH
-        #include <cstdint>
+        #include <kmx/aio/completion/udp/socket.hpp>
+        #include <kmx/aio/task.hpp>
+
         #include <cstddef>
+        #include <cstdint>
         #include <expected>
         #include <span>
         #include <sys/socket.h>
-
-        #include <kmx/aio/completion/udp/socket.hpp>
-        #include <kmx/aio/task.hpp>
     #endif
 
 namespace kmx::aio::completion::udp
@@ -53,18 +53,16 @@ namespace kmx::aio::completion::udp
         [[nodiscard]] task_returning_expected_size_t recv(span_byte_t buffer, sockaddr_storage& peer_addr,
                                                           ::socklen_t& out_peer_addr_len) noexcept(false);
         [[nodiscard]] task_returning_expected_size_t recv_until(span_byte_t buffer, sockaddr_storage& peer_addr,
-                                    ::socklen_t& out_peer_addr_len,
-                                    std::uint64_t timeout_ns) noexcept(false);
+                                                                ::socklen_t& out_peer_addr_len, std::uint64_t timeout_ns) noexcept(false);
 
-        /// @brief Receives a datagram and decodes the peer IP and port.
+        /// @brief Receives a datagram and decodes the sender's IP address and port.
         /// @param buffer Destination buffer for payload bytes.
-        /// @param peer_addr Output socket address for the sender.
-        /// @param out_peer_addr_len Output length of the sender address.
-        /// @param out_peer_ip Output peer IP address.
-        /// @param out_peer_port Output peer port.
-        /// @return A task yielding the received byte count or an error.
-        [[nodiscard]] task_returning_expected_size_t recv(span_byte_t buffer, sockaddr_storage& peer_addr, ::socklen_t& out_peer_addr_len,
-                                                          ip_address_t& out_peer_ip, port_t& out_peer_port) noexcept(false);
+        /// @param out_peer_address Receives the sender's socket address and its length.
+        /// @param out_peer Receives the sender's IP address and port, decoded from @p out_peer_address.
+        /// @return A task yielding the received byte count, or an error: EINVAL when the sender's address is
+        ///         too short to decode, EAFNOSUPPORT when it is neither IPv4 nor IPv6.
+        [[nodiscard]] task_returning_expected_size_t recv(span_byte_t buffer, socket_address& out_peer_address,
+                                                          endpoint_address& out_peer) noexcept(false);
 
         /// @brief Sends a datagram to a raw socket address.
         /// @param buffer Payload bytes to send.
@@ -85,5 +83,5 @@ namespace kmx::aio::completion::udp
         /// @brief Owned completion-model socket backing the endpoint.
         socket socket_;
     };
-} // namespace kmx::aio::completion::udp
+}
 #endif // KMX_AIO_FEATURE_COMPLETION

@@ -1,13 +1,17 @@
+/// @file src/kmx/aio/sample/someip/echo_client/manager.cpp
+/// @brief Completion-model SOME/IP echo client run: waits for the service, calls the echo method and checks the reply.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/someip/echo_client/manager.hpp>
+#ifndef PCH
+    #include <kmx/logger.hpp>
 
-#include <chrono>
-#include <cstdint>
-#include <iostream>
-#include <source_location>
-#include <utility>
-#include <vector>
-
-#include <kmx/logger.hpp>
+    #include <chrono>
+    #include <cstdint>
+    #include <iostream>
+    #include <source_location>
+    #include <utility>
+    #include <vector>
+#endif
 
 namespace kmx::aio::sample::someip::echo_client
 {
@@ -38,7 +42,7 @@ namespace kmx::aio::sample::someip::echo_client
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SOME/IP request_service failed: {}",
                              request_result.error().message());
-            (void) co_await client_.stop();
+            static_cast<void>(co_await client_.stop());
             exec.stop();
             co_return;
         }
@@ -64,8 +68,8 @@ namespace kmx::aio::sample::someip::echo_client
         if (!available)
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SOME/IP service did not become available");
-            (void) co_await client_.release_service(cfg.service_id, cfg.instance_id);
-            (void) co_await client_.stop();
+            static_cast<void>(co_await client_.release_service(cfg.service_id, cfg.instance_id));
+            static_cast<void>(co_await client_.stop());
             exec.stop();
             co_return;
         }
@@ -76,8 +80,8 @@ namespace kmx::aio::sample::someip::echo_client
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SOME/IP call_method failed: {}",
                              call_result.error().message());
-            (void) co_await client_.release_service(cfg.service_id, cfg.instance_id);
-            (void) co_await client_.stop();
+            static_cast<void>(co_await client_.release_service(cfg.service_id, cfg.instance_id));
+            static_cast<void>(co_await client_.stop());
             exec.stop();
             co_return;
         }
@@ -85,8 +89,8 @@ namespace kmx::aio::sample::someip::echo_client
         if (call_result->payload != payload)
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SOME/IP payload mismatch in echo response");
-            (void) co_await client_.release_service(cfg.service_id, cfg.instance_id);
-            (void) co_await client_.stop();
+            static_cast<void>(co_await client_.release_service(cfg.service_id, cfg.instance_id));
+            static_cast<void>(co_await client_.stop());
             exec.stop();
             co_return;
         }

@@ -1,4 +1,4 @@
-/// @file aio/error_code.hpp
+/// @file api/kmx/aio/error_code.hpp
 /// @brief Standardized error codes for all KMX AIO asynchronous operations.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -71,4 +71,4 @@ namespace kmx::aio
     /// @return A std::error_code in std::generic_category().
     [[nodiscard]] std::error_code to_std_error_code(const error_code ec) noexcept;
 
-} // namespace kmx::aio
+}

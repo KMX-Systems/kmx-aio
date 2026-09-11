@@ -1,5 +1,6 @@
-/// @file aio/knx/detail/codec_vectors.hpp
+/// @file inc/kmx/aio/knx/detail/codec_vectors.hpp
 /// @brief Golden wire vectors for the pure KNX codec, checked at compile time.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// Every vector below is a byte sequence a real KNX installation puts on the wire. Including this header
 /// runs the encoder and the decoder over each of them during translation, so a change that alters the wire
@@ -7,18 +8,23 @@
 ///
 /// This is what the `constexpr` codec and the @ref kmx::aio::knx::error enumeration buy: `std::error_code`
 /// is not a literal type, so a codec that reported failures that way could not be exercised here at all.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
-#ifndef PCH
-    #include <array>
-    #include <cstdint>
-#endif
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_KNX)
+    #ifndef PCH
+        #include <kmx/aio/knx/cemi.hpp>
+        #include <kmx/aio/knx/cemi_frame.hpp>
+        #include <kmx/aio/knx/dpt.hpp>
+        #include <kmx/aio/knx/dpt/traits.hpp>
+        #include <kmx/aio/knx/dpt/value_view.hpp>
+        #include <kmx/aio/knx/group_address.hpp>
+        #include <kmx/aio/knx/individual_address.hpp>
 
-#include <kmx/aio/knx/address.hpp>
-#include <kmx/aio/knx/cemi.hpp>
-#include <kmx/aio/knx/dpt.hpp>
+        #include <array>
+        #include <cstdint>
+    #endif
 
-namespace kmx::aio::knx::detail::vectors
+namespace kmx::aio::knx::detail::codec_vectors
 {
     /// @brief The sending device used by the vectors, 1.1.1.
     inline constexpr individual_address source {1u, 1u, 1u};
@@ -51,7 +57,7 @@ namespace kmx::aio::knx::detail::vectors
     {
         const auto value = dpt::traits<1u>::encode(true).value();
         std::array<std::uint8_t, group_value_write_on.size()> buffer {};
-        const auto size = cemi::encode_group_value_write(buffer, destination, value.apdu(), source);
+        const auto size = cemi::encode_group_value_write(buffer, {.destination = destination, .payload = value.apdu(), .source = source});
         return (size.has_value() && (*size == buffer.size())) ? buffer : decltype(buffer) {};
     }
 
@@ -70,7 +76,7 @@ namespace kmx::aio::knx::detail::vectors
     {
         const auto value = dpt::traits<9u>::encode(21.5f).value();
         std::array<std::uint8_t, group_value_write_temperature.size()> buffer {};
-        const auto size = cemi::encode_group_value_write(buffer, destination, value.apdu(), source);
+        const auto size = cemi::encode_group_value_write(buffer, {.destination = destination, .payload = value.apdu(), .source = source});
         return (size.has_value() && (*size == buffer.size())) ? buffer : decltype(buffer) {};
     }
 
@@ -126,3 +132,4 @@ namespace kmx::aio::knx::detail::vectors
     static_assert(cemi::decode(cspan_uint8_t {group_value_write_on.data(), 2u}).error() == error::malformed_frame,
                   "a frame cut short of its link header must be rejected as malformed");
 }
+#endif // KMX_AIO_FEATURE_KNX

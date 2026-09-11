@@ -1,17 +1,23 @@
-#include <kmx/aio/error_code.hpp>
+/// @file src/kmx/aio/sample/tls/h2_alpn_client/manager.cpp
+/// @brief Readiness-model h2 ALPN client: TLS handshake with h2 ALPN, preface and SETTINGS exchange, one GET request.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/tls/h2_alpn_client/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/error_code.hpp>
 
-#include <array>
-#include <csignal>
-#include <openssl/ssl.h>
-#include <span>
-#include <sys/socket.h>
-#include <vector>
+    #include <openssl/ssl.h>
 
-namespace kmx::aio::sample::tls::h2_alpn_readiness_client
+    #include <array>
+    #include <csignal>
+    #include <span>
+    #include <vector>
+    #include <sys/socket.h>
+#endif
+
+namespace kmx::aio::sample::tls::h2_alpn_client
 {
     static constexpr auto mem_order = std::memory_order_relaxed;
-    static constexpr std::array<std::uint8_t, 3u> alpn_h2 {
+    static constexpr std::array<std::uint8_t, 3u> offered_protocols {
         2u,
         static_cast<std::uint8_t>('h'),
         static_cast<std::uint8_t>('2'),
@@ -147,7 +153,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
             auto stream_ptr = std::make_shared<readiness::tls::stream>(std::move(*stream_result));
             stream_ptr->set_connect_state();
 
-            if (const auto alpn_res = stream_ptr->set_alpn_protocols(alpn_h2); !alpn_res)
+            if (const auto alpn_res = stream_ptr->set_alpn_protocols(offered_protocols); !alpn_res)
             {
                 metrics_.failures.fetch_add(1u, mem_order);
                 metrics_.errors.fetch_add(1u, mem_order);
@@ -266,4 +272,4 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
         logger::log(logger::level::info, std::source_location::current(), "Client [{}] completed", worker_id);
         co_return;
     }
-} // namespace kmx::aio::sample::tls::h2_alpn_readiness_client
+}

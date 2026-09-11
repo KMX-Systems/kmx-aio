@@ -1,88 +1,27 @@
-/// @file aio/readiness/v4l2/capture.hpp
+/// @file api/kmx/aio/readiness/v4l2/capture.hpp
 /// @brief Readiness-model V4L2 video capture using epoll for async frame notification.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_READINESS)
     #ifndef PCH
-        #include <expected>
-        #include <memory>
-        #include <span>
-        #include <vector>
-
-        #include <kmx/aio/basic_types.hpp>
         #include <kmx/aio/error_code.hpp>
+        #include <kmx/aio/file_descriptor.hpp>
         #include <kmx/aio/readiness/executor.hpp>
         #include <kmx/aio/readiness/io_base.hpp>
+        #include <kmx/aio/readiness/v4l2/frame_view.hpp>
         #include <kmx/aio/readiness/v4l2/v4l2_types.hpp>
         #include <kmx/aio/task.hpp>
+
+        #include <cstddef>
+        #include <cstdint>
+        #include <expected>
+        #include <memory>
+        #include <vector>
     #endif
 
 namespace kmx::aio::readiness::v4l2
 {
-    /// @brief Zero-copy view of a single captured frame.
-    ///
-    /// Wraps the mmap'd kernel buffer for the duration of frame processing.
-    /// Automatically re-enqueues the buffer (VIDIOC_QBUF) when destroyed, returning
-    /// it to the driver for the next capture cycle.
-    ///
-    /// @warning The `frame_view` must not outlive the `capture` object that created it.
-    ///          Holding a `frame_view` across a co_await that suspends past the capture
-    ///          object's destruction is undefined behaviour.
-    class frame_view
-    {
-    public:
-        /// @brief A frame view is only ever produced by @ref capture; default construction is disabled.
-        frame_view() = delete;
-        /// @brief Non-copyable: the view owns a driver buffer slot.
-        frame_view(const frame_view&) = delete;
-        /// @brief Non-copyable: the view owns a driver buffer slot.
-        frame_view& operator=(const frame_view&) = delete;
-
-        /// @brief Move constructor — transfers ownership of the buffer slot.
-        frame_view(frame_view&&) noexcept;
-
-        /// @brief Move assignment is disabled to keep ownership unambiguous.
-        frame_view& operator=(frame_view&&) noexcept = delete;
-
-        /// @brief Returns the buffer to the driver.
-        ~frame_view() noexcept;
-
-        /// @brief Raw frame bytes (zero-copy view into the mmap'd kernel buffer).
-        [[nodiscard]] cspan_byte_t data() const noexcept;
-
-        /// @brief Frame metadata (sequence, timestamp, dimensions, format).
-        [[nodiscard]] const frame_metadata& metadata() const noexcept { return metadata_; }
-
-    private:
-        friend class capture;
-
-        /// @brief Constructs a view over one mmap'd driver buffer.
-        /// @param device_fd        The capture device descriptor used to re-enqueue the buffer.
-        /// @param index            The driver buffer index this view owns.
-        /// @param ptr              The mapped start of the buffer.
-        /// @param length           The number of valid bytes in the buffer.
-        /// @param metadata         The frame metadata reported by the driver.
-        /// @param device_lifetime  Weak reference to the owning capture, so a destroyed device is not touched.
-        frame_view(fd_t device_fd, std::uint32_t index, const std::byte* ptr, std::size_t length, frame_metadata metadata,
-                   std::weak_ptr<void> device_lifetime) noexcept;
-
-        /// @brief The capture device descriptor used to re-enqueue the buffer.
-        fd_t device_fd_ {};
-        /// @brief The driver buffer index this view owns.
-        std::uint32_t index_ {};
-        /// @brief Start of the mapped buffer.
-        const std::byte* ptr_ {};
-        /// @brief Number of valid bytes in the buffer.
-        std::size_t length_ {};
-        /// @brief Frame metadata reported by the driver.
-        frame_metadata metadata_ {};
-        /// @brief Weak reference to the owning capture; expired once the device is gone.
-        std::weak_ptr<void> device_lifetime_;
-        /// @brief Cleared by a move, so only the surviving view re-enqueues the buffer.
-        bool active_ {true};
-    };
-
     /// @brief Async V4L2 video capture device.
     ///
     /// Opens a V4L2 capture device, allocates MMAP streaming buffers, and exposes a
@@ -205,5 +144,5 @@ namespace kmx::aio::readiness::v4l2
         bool streaming_ {};
     };
 
-} // namespace kmx::aio::readiness::v4l2
+}
 #endif // KMX_AIO_FEATURE_READINESS

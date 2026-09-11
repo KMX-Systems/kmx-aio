@@ -1,19 +1,22 @@
-/// @file aio/core_internals_test.cpp
-/// @brief Unit tests for the core pieces every executor is built on: the slab allocator's fallbacks,
-///        the logger, task exception propagation, and the channel edges the backpressure suite leaves.
+/// @file src/kmx/aio/core_internals_test.cpp
+/// @brief Unit tests for the core pieces every executor is built on.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+/// @details Covers the slab allocator's fallbacks, the logger, task exception propagation, and the channel edges the
+///          backpressure suite leaves.
+#ifndef PCH
+    #include <kmx/aio/allocator/slab.hpp>
+    #include <kmx/aio/channel.hpp>
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/logger.hpp>
 
-#include <cstddef>
-#include <optional>
-#include <stdexcept>
-#include <vector>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <kmx/aio/allocator/slab.hpp>
-#include <kmx/aio/channel.hpp>
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/task.hpp>
-#include <kmx/logger.hpp>
+    #include <cstddef>
+    #include <optional>
+    #include <stdexcept>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::core_internals_test
 {
@@ -113,20 +116,20 @@ namespace kmx::aio::test::core_internals_test
     // task - exception propagation
     namespace detail
     {
-        struct test_error: std::runtime_error
+        struct thrown_error: std::runtime_error
         {
-            test_error(): std::runtime_error("thrown from a task") {}
+            thrown_error(): std::runtime_error("thrown from a task") {}
         };
 
         task<int> throwing_task()
         {
-            throw test_error {};
+            throw thrown_error {};
             co_return 0;
         }
 
         task<void> throwing_void_task()
         {
-            throw test_error {};
+            throw thrown_error {};
             co_return;
         }
 
@@ -146,9 +149,9 @@ namespace kmx::aio::test::core_internals_test
             try
             {
                 const int value = co_await throwing_task();
-                (void) value;
+                static_cast<void>(value);
             }
-            catch (const test_error&)
+            catch (const thrown_error&)
             {
                 caught = true;
             }
@@ -168,14 +171,14 @@ namespace kmx::aio::test::core_internals_test
             {
                 co_await throwing_void_task();
             }
-            catch (const test_error&)
+            catch (const thrown_error&)
             {
                 caught = true;
             }
 
             exec.stop();
         }
-    } // namespace detail
+    }
 
     TEST_CASE("an exception thrown in a task body reaches the awaiting coroutine", "[core][task][exception]")
     {
@@ -298,4 +301,4 @@ namespace kmx::aio::test::core_internals_test
 
         CHECK(pushed == ch.capacity() - 1u);
     }
-} // namespace kmx::aio::test::core_internals_test
+}

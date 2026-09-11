@@ -1,12 +1,12 @@
-/// @file aio/knx/error.hpp
+/// @file api/kmx/aio/knx/error.hpp
 /// @brief KNX wrapper-level error codes.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// The pure protocol layer — addresses, cEMI, datapoint types and the KNXnet/IP codec — reports failures
 /// as this enumeration rather than as `std::error_code`, because `make_error_code` reaches a
 /// function-local static category and is therefore not a constant expression. Returning the enumeration
 /// is what keeps the codec `constexpr` and its golden vectors checkable with `static_assert`.
 /// The I/O layer converts once, at its boundary, with @ref kmx::aio::knx::make_error_code.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)

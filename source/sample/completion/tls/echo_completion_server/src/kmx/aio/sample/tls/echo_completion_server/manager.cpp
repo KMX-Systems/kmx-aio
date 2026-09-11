@@ -1,12 +1,18 @@
-#include <kmx/aio/completion/tcp/listener.hpp>
+/// @file src/kmx/aio/sample/tls/echo_completion_server/manager.cpp
+/// @brief Completion-model TLS echo server: OpenSSL context setup, accept loop, per-client echo, live stats and shutdown.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/tls/echo_completion_server/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/tcp/listener.hpp>
 
-#include <csignal>
-#include <format>
-#include <iostream>
-#include <openssl/ssl.h>
-#include <span>
-#include <vector>
+    #include <openssl/ssl.h>
+
+    #include <csignal>
+    #include <format>
+    #include <iostream>
+    #include <span>
+    #include <vector>
+#endif
 
 namespace kmx::aio::sample::tls::echo_completion_server
 {

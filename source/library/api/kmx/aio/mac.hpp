@@ -1,4 +1,4 @@
-/// @file aio/mac.hpp
+/// @file api/kmx/aio/mac.hpp
 /// @brief MAC address storage and view types.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -35,4 +35,4 @@ namespace kmx::aio::mac
     /// @return true if parsing succeeded, false otherwise.
     [[nodiscard]] bool parse_address(std::string_view text, storage_t& out) noexcept;
 
-} // namespace kmx::aio::mac
+}

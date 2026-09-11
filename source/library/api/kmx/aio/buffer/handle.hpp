@@ -1,9 +1,10 @@
-/// @file aio/buffer/handle.hpp
+/// @file api/kmx/aio/buffer/handle.hpp
 /// @brief Move-only RAII lease on a buffer owned by a buffer pool.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
-    #include <kmx/aio/exception.hpp>
+    #include <kmx/aio/logic_error.hpp>
+
     #include <cstddef>
     #include <stdexcept>
     #include <utility>
@@ -158,4 +159,4 @@ namespace kmx::aio::buffer
         template <typename U, std::size_t C>
         friend class pool;
     };
-} // namespace kmx::aio::buffer
+}

@@ -1,10 +1,13 @@
+/// @file inc/kmx/aio/sample/gpu/image_processing/manager.hpp
+/// @brief GPU image-processing sample manager and its V4L2 capture and CUDA device configuration.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <kmx/aio/completion/v4l2/capture.hpp>
+
     #include <cstdint>
     #include <string>
     #include <utility>
-
-    #include <kmx/aio/completion/v4l2/capture.hpp>
 #endif
 
 namespace kmx::aio::sample::gpu::image_processing

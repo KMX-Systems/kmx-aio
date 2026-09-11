@@ -1,19 +1,20 @@
-/// @file aio/benchmark/core_cases.cpp
+/// @file src/kmx/aio/benchmark/core_cases.cpp
 /// @brief Coroutine, allocator, channel and buffer-pool micro-benchmarks.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/benchmark/cases.hpp>
+#include <kmx/aio/benchmark/core_cases.hpp>
+#ifndef PCH
+    #include <kmx/aio/allocator/slab.hpp>
+    #include <kmx/aio/buffer/pool.hpp>
+    #include <kmx/aio/channel.hpp>
+    #include <kmx/aio/scheduler.hpp>
+    #include <kmx/aio/task.hpp>
 
-#include <array>
-#include <atomic>
-#include <cstddef>
-#include <cstdint>
-#include <thread>
-
-#include <kmx/aio/allocator/slab.hpp>
-#include <kmx/aio/buffer/pool.hpp>
-#include <kmx/aio/channel.hpp>
-#include <kmx/aio/scheduler.hpp>
-#include <kmx/aio/task.hpp>
+    #include <array>
+    #include <atomic>
+    #include <cstddef>
+    #include <cstdint>
+    #include <thread>
+#endif
 
 namespace kmx::aio::benchmark
 {
@@ -51,11 +52,11 @@ namespace kmx::aio::benchmark
         }
 
         /// @brief Times a coroutine-await loop, optionally with a slab allocator installed.
-        static result measure_await(std::string name, const std::size_t iterations, const unsigned depth, const bool use_slab)
+        [[nodiscard]] static result measure_await(std::string name, const std::size_t iterations, const unsigned depth, const bool use_slab)
         {
             allocator::slab slab {1024u, 64u};
             if (use_slab)
-                set_thread_allocator(&slab);
+                allocator::set_thread_slab(&slab);
 
             std::uint64_t sink {};
             // Warm-up, so the first run does not pay for lazily faulted pages.
@@ -69,7 +70,7 @@ namespace kmx::aio::benchmark
 
             const auto elapsed = clock_t::now() - start;
             keep(sink);
-            set_thread_allocator(nullptr);
+            allocator::set_thread_slab(nullptr);
 
             const auto awaits = (depth == 0u) ? iterations : (iterations * (depth + 1u));
             return from_total(std::move(name), awaits, elapsed);
@@ -83,29 +84,27 @@ namespace kmx::aio::benchmark
         {
             go.wait(false, std::memory_order_acquire);
             for (std::size_t received {}; received != iterations;)
-            {
                 if (queue.try_pop())
                     ++received;
-            }
         }
-    } // namespace core_detail
+    }
 
-    static result bench_task_await_heap(const double scale)
+    [[nodiscard]] static result bench_task_await_heap(const double scale)
     {
         return core_detail::measure_await("core/task_await (heap frames)", scaled(2'000'000u, scale), 0u, false);
     }
 
-    static result bench_task_await_slab(const double scale)
+    [[nodiscard]] static result bench_task_await_slab(const double scale)
     {
         return core_detail::measure_await("core/task_await (slab frames)", scaled(2'000'000u, scale), 0u, true);
     }
 
-    static result bench_task_chain_slab(const double scale)
+    [[nodiscard]] static result bench_task_chain_slab(const double scale)
     {
         return core_detail::measure_await("core/task_await_chain8 (slab)", scaled(250'000u, scale), 8u, true);
     }
 
-    static result bench_slab_alloc(const double scale)
+    [[nodiscard]] static result bench_slab_alloc(const double scale)
     {
         const auto iterations = scaled(20'000'000u, scale);
         allocator::slab slab {256u, 64u};
@@ -122,7 +121,7 @@ namespace kmx::aio::benchmark
         return from_total("core/slab_allocate+deallocate", iterations, elapsed);
     }
 
-    static result bench_channel_same_thread(const double scale)
+    [[nodiscard]] static result bench_channel_same_thread(const double scale)
     {
         const auto iterations = scaled(20'000'000u, scale);
         channel<std::uint64_t> ch {1024u};
@@ -140,7 +139,7 @@ namespace kmx::aio::benchmark
         return from_total("core/channel_push+pop (same thread)", iterations, elapsed);
     }
 
-    static result bench_channel_cross_thread(const double scale)
+    [[nodiscard]] static result bench_channel_cross_thread(const double scale)
     {
         const auto iterations = scaled(5'000'000u, scale);
         channel<std::uint64_t> ch {4096u};
@@ -153,17 +152,15 @@ namespace kmx::aio::benchmark
 
         const auto start = clock_t::now();
         for (std::size_t i {}; i != iterations;)
-        {
             if (ch.try_push(std::uint64_t {i}))
                 ++i;
-        }
 
         consumer.join();
         const auto elapsed = clock_t::now() - start;
         return from_total("core/channel_transfer (2 threads)", iterations, elapsed);
     }
 
-    static result bench_buffer_pool(const double scale)
+    [[nodiscard]] static result bench_buffer_pool(const double scale)
     {
         const auto iterations = scaled(10'000'000u, scale);
         buffer::pool<std::array<std::byte, 256u>, 64u> pool {};
@@ -179,7 +176,7 @@ namespace kmx::aio::benchmark
         return from_total("core/buffer_pool_acquire+release", iterations, elapsed);
     }
 
-    static result bench_scheduler_dispatch(const double scale)
+    [[nodiscard]] static result bench_scheduler_dispatch(const double scale)
     {
         const auto iterations = scaled(200'000u, scale);
         scheduler sched {1u};
@@ -198,7 +195,7 @@ namespace kmx::aio::benchmark
         return out;
     }
 
-    static result bench_scheduler_handoff(const double scale)
+    [[nodiscard]] static result bench_scheduler_handoff(const double scale)
     {
         // One task at a time, with nothing queued behind it: the wake-up a caller waits through between
         // handing a callable to a worker and that callable running. This is the hand-off the readiness
@@ -246,4 +243,4 @@ namespace kmx::aio::benchmark
         reg.add("core/scheduler_handoff", bench_scheduler_handoff);
     }
 
-} // namespace kmx::aio::benchmark
+}

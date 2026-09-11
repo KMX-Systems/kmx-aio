@@ -1,17 +1,22 @@
-#include <kmx/aio/channel.hpp>
+/// @file src/kmx/aio/sample/hft/order_router/manager.cpp
+/// @brief HFT order router sample: a market-data producer and a strategy consumer on CPU-pinned threads over an SPSC channel.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/hft/order_router/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/channel.hpp>
 
-#include <atomic>
-#include <chrono>
-#include <cstdint>
-#include <iostream>
-#include <string>
-#include <thread>
+    #include <atomic>
+    #include <chrono>
+    #include <cstdint>
+    #include <iostream>
+    #include <string>
+    #include <thread>
+#endif
 
 namespace kmx::aio::sample::hft::order_router
 {
     // Shared channel: producer pushes, consumer pops.
-    kmx::aio::channel<order> order_channel(channel_capacity);
+    kmx::aio::channel<ticket> ticket_queue(channel_capacity);
 
     // Atomic flag signalling the producer has finished.
     std::atomic_bool producer_done {false};
@@ -29,7 +34,7 @@ namespace kmx::aio::sample::hft::order_router
 
         for (std::uint64_t i {}; i < total_orders; ++i)
         {
-            order o {
+            ticket o {
                 .id = i,
                 .direction = (i % 2u == 0u) ? side::buy : side::sell,
                 .price = 100.0 + static_cast<double>(i % 50u) * 0.25,
@@ -37,8 +42,8 @@ namespace kmx::aio::sample::hft::order_router
             };
 
             // Block only when the channel is actually throttled or full.
-            while (!order_channel.try_push(std::move(o)))
-                order_channel.wait_until_can_send();
+            while (!ticket_queue.try_push(std::move(o)))
+                ticket_queue.wait_until_can_send();
         }
 
         const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - start);
@@ -59,7 +64,7 @@ namespace kmx::aio::sample::hft::order_router
 
         while (true)
         {
-            if (auto maybe_order = order_channel.try_pop())
+            if (auto maybe_order = ticket_queue.try_pop())
             {
                 // Trivial fill/reject: reject every 7th order.
                 if (maybe_order->id % 7u == 0u)
@@ -72,7 +77,7 @@ namespace kmx::aio::sample::hft::order_router
             else if (producer_done.load(std::memory_order_acquire))
             {
                 // Drain any remaining items before exiting.
-                while (auto trailing = order_channel.try_pop())
+                while (auto trailing = ticket_queue.try_pop())
                 {
                     if (trailing->id % 7u == 0u)
                         rejected_count.fetch_add(1u, std::memory_order_relaxed);
@@ -81,6 +86,7 @@ namespace kmx::aio::sample::hft::order_router
 
                     ++consumed;
                 }
+
                 break;
             }
             else
@@ -102,14 +108,14 @@ namespace kmx::aio::sample::hft::order_router
         pthread_setaffinity_np(t.native_handle(), sizeof(cpu_set_t), &cpuset);
     }
 
-    int execute_order_router()
+    int run()
     {
         std::cout << "╔══════════════════════════════════════════════════════════╗\n"
                   << "║   KMX AIO · Phase 5 · HFT Order Router                 ║\n"
                   << "║   Lockless SPSC channel between CPU-pinned threads      ║\n"
                   << "╚══════════════════════════════════════════════════════════╝\n\n";
 
-        std::cout << "Channel capacity .... " << order_channel.capacity() << " slots\n"
+        std::cout << "Channel capacity .... " << ticket_queue.capacity() << " slots\n"
                   << "Orders to route ..... " << total_orders << "\n\n";
 
         // Spawn producer and consumer, pinned to distinct cores.
@@ -145,4 +151,4 @@ namespace kmx::aio::sample::hft::order_router
         return 0;
     }
 
-} // namespace kmx::aio::sample::hft::order_router
+}

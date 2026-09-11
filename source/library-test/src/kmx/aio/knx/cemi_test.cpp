@@ -1,13 +1,24 @@
+/// @file src/kmx/aio/knx/cemi_test.cpp
+/// @brief Unit tests for cEMI encoding and decoding: group and device L_Data frames, property services and reset.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
 #include <kmx/aio/knx/cemi.hpp>
-#include <kmx/aio/test/knx/telegram.hpp>
+#ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/knx/apdu_payload.hpp>
+    #include <kmx/aio/knx/cemi_frame.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/group_address.hpp>
+    #include <kmx/aio/knx/individual_address.hpp>
+    #include <kmx/aio/knx/property_frame.hpp>
+    #include <kmx/aio/test/knx/telegram.hpp>
 
-#include <algorithm>
-#include <array>
-#include <cstdint>
-#include <vector>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <algorithm>
+    #include <array>
+    #include <cstdint>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::knx::cemi_test
 {
@@ -24,7 +35,8 @@ namespace kmx::aio::test::knx::cemi_test
     TEST_CASE("knx cemi encodes a compact group write to the captured bytes", "[knx][cemi][unit]")
     {
         std::array<std::uint8_t, cemi::min_l_data_size> buffer {};
-        const auto size = cemi::encode_group_value_write(buffer, detail::destination, apdu_payload::compact(1u), detail::source);
+        const auto size = cemi::encode_group_value_write(
+            buffer, {.destination = detail::destination, .payload = apdu_payload::compact(1u), .source = detail::source});
 
         REQUIRE(size.has_value());
         CHECK(*size == cemi::min_l_data_size);
@@ -39,7 +51,8 @@ namespace kmx::aio::test::knx::cemi_test
         CHECK(payload->data_length() == 5u);
 
         std::array<std::uint8_t, cemi::min_l_data_size + 4u> buffer {};
-        const auto size = cemi::encode_group_value_write(buffer, detail::destination, *payload, detail::source);
+        const auto size =
+            cemi::encode_group_value_write(buffer, {.destination = detail::destination, .payload = *payload, .source = detail::source});
         REQUIRE(size.has_value());
         CHECK(*size == buffer.size());
 
@@ -58,7 +71,8 @@ namespace kmx::aio::test::knx::cemi_test
         const l_data_options options {
             .telegram_priority = priority::urgent, .hop_count = 3u, .acknowledge_request = true, .repeat = false, .broadcast = false};
         std::array<std::uint8_t, cemi::min_l_data_size> buffer {};
-        REQUIRE(cemi::encode_group_value_write(buffer, detail::destination, apdu_payload {}, detail::source, options).has_value());
+        REQUIRE(cemi::encode_group_value_write(buffer, {.destination = detail::destination, .source = detail::source, .options = options})
+                    .has_value());
 
         const auto decoded = cemi::decode(buffer);
         REQUIRE(decoded.has_value());
@@ -79,12 +93,16 @@ namespace kmx::aio::test::knx::cemi_test
         std::array<std::uint8_t, cemi::min_l_data_size + 15u> buffer {};
         const auto short_payload = apdu_payload::extended(short_value);
         REQUIRE(short_payload.has_value());
-        REQUIRE(cemi::encode_group_value_write(buffer, detail::destination, *short_payload, detail::source).has_value());
+        REQUIRE(cemi::encode_group_value_write(buffer,
+                                               {.destination = detail::destination, .payload = *short_payload, .source = detail::source})
+                    .has_value());
         CHECK(cemi::decode(cspan_uint8_t {buffer.data(), cemi::min_l_data_size + 14u})->standard_frame());
 
         const auto long_payload = apdu_payload::extended(long_value);
         REQUIRE(long_payload.has_value());
-        REQUIRE(cemi::encode_group_value_write(buffer, detail::destination, *long_payload, detail::source).has_value());
+        REQUIRE(
+            cemi::encode_group_value_write(buffer, {.destination = detail::destination, .payload = *long_payload, .source = detail::source})
+                .has_value());
 
         const auto decoded = cemi::decode(buffer);
         REQUIRE(decoded.has_value());
@@ -96,7 +114,10 @@ namespace kmx::aio::test::knx::cemi_test
     {
         constexpr individual_address target {1u, 1u, 20u};
         std::array<std::uint8_t, cemi::min_l_data_size> buffer {};
-        REQUIRE(cemi::encode(buffer, cemi_message_code::l_data_req, detail::source, target, apci::device_descriptor_read, apdu_payload {})
+        REQUIRE(cemi::encode(buffer, {.source = detail::source,
+                                      .destination = target.value(),
+                                      .destination_type = address_type::individual,
+                                      .service = apci::device_descriptor_read})
                     .has_value());
 
         const auto decoded = cemi::decode(buffer);
@@ -188,17 +209,19 @@ namespace kmx::aio::test::knx::cemi_test
     TEST_CASE("knx cemi rejects an encode that does not fit", "[knx][cemi][unit]")
     {
         std::array<std::uint8_t, cemi::min_l_data_size - 1u> buffer {};
-        CHECK(cemi::encode_group_value_write(buffer, detail::destination, apdu_payload {}, detail::source).error() ==
+        CHECK(cemi::encode_group_value_write(buffer, {.destination = detail::destination, .source = detail::source}).error() ==
               error::invalid_length);
 
         std::array<std::uint8_t, cemi::min_l_data_size> ok {};
-        CHECK(
-            cemi::encode(ok, cemi_message_code::m_reset_req, detail::source, detail::destination, apci::group_value_write, apdu_payload {})
-                .error() == error::unsupported_message_code);
+        CHECK(cemi::encode(ok, {.code = cemi_message_code::m_reset_req,
+                                .source = detail::source,
+                                .destination = detail::destination.value(),
+                                .service = apci::group_value_write})
+                  .error() == error::unsupported_message_code);
 
         const l_data_options too_many_hops {.hop_count = 8u};
-        CHECK(cemi::encode_group_value_write(ok, detail::destination, apdu_payload {}, detail::source, too_many_hops).error() ==
-              error::invalid_configuration);
+        CHECK(cemi::encode_group_value_write(ok, {.destination = detail::destination, .source = detail::source, .options = too_many_hops})
+                  .error() == error::invalid_configuration);
     }
 
     TEST_CASE("knx cemi payload view is empty for a foreign buffer", "[knx][cemi][unit]")
@@ -234,8 +257,8 @@ namespace kmx::aio::test::knx::cemi_test
         CHECK(extended->data_length() == 255u);
 
         std::array<std::uint8_t, cemi::max_l_data_size> buffer {};
-        const auto encoded = cemi::encode_group_value_write(
-            buffer, detail::destination, *extended, detail::source);
+        const auto encoded =
+            cemi::encode_group_value_write(buffer, {.destination = detail::destination, .payload = *extended, .source = detail::source});
         REQUIRE(encoded.has_value());
         CHECK(*encoded == cemi::max_l_data_size);
 
@@ -257,7 +280,7 @@ namespace kmx::aio::test::knx::cemi_test
         };
 
         std::array<std::uint8_t, cemi::property_header_size> buffer {};
-        const auto size = cemi::encode_property_read(buffer, 0u, 1u, 0x33u);
+        const auto size = cemi::encode_property_read(buffer, {.object_type = 0u, .object_instance = 1u, .property_id = 0x33u});
         REQUIRE(size.has_value());
         CHECK(*size == cemi::property_header_size);
         CHECK(buffer == expected);
@@ -277,7 +300,7 @@ namespace kmx::aio::test::knx::cemi_test
     {
         const std::array<std::uint8_t, 2u> value {0x12u, 0x34u};
         std::array<std::uint8_t, cemi::property_header_size + value.size()> buffer {};
-        const auto size = cemi::encode_property_write(buffer, 11u, 1u, 0x34u, value);
+        const auto size = cemi::encode_property_write(buffer, {.object_type = 11u, .object_instance = 1u, .property_id = 0x34u}, value);
         REQUIRE(size.has_value());
         CHECK(*size == buffer.size());
         CHECK(buffer[0u] == static_cast<std::uint8_t>(cemi_message_code::m_prop_write_req));
@@ -309,8 +332,7 @@ namespace kmx::aio::test::knx::cemi_test
     TEST_CASE("knx cemi rejects a property service that is not one", "[knx][cemi][unit]")
     {
         std::array<std::uint8_t, cemi::property_header_size> buffer {};
-        CHECK(cemi::encode_property(buffer, property_frame {cemi_message_code::l_data_req}).error() ==
-              error::unsupported_message_code);
+        CHECK(cemi::encode_property(buffer, property_frame {cemi_message_code::l_data_req}).error() == error::unsupported_message_code);
         CHECK(cemi::decode_property(sample_cemi).error() == error::unsupported_message_code);
 
         // The element count is four bits and the start index twelve; neither silently truncates.

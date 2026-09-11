@@ -1,16 +1,17 @@
-/// @file kmx/aio/knx/secure/tunnel_transport.cpp
+/// @file src/kmx/aio/knx/secure/tunnel_transport.cpp
 /// @brief The compiled body of the KNX IP Secure tunnelling transport.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/knx/secure/tunnel_transport.hpp>
+#ifndef PCH
+    #include <kmx/aio/knx/datagram.hpp>
+    #include <kmx/aio/knx/discovery.hpp>
+    #include <kmx/aio/knx/error.hpp>
 
-#include <kmx/aio/knx/datagram.hpp>
-#include <kmx/aio/knx/discovery.hpp>
-#include <kmx/aio/knx/error.hpp>
-
-#include <algorithm>
-#include <chrono>
-#include <utility>
-#include <variant>
+    #include <algorithm>
+    #include <chrono>
+    #include <utility>
+    #include <variant>
+#endif
 
 namespace kmx::aio::knx::secure
 {
@@ -38,8 +39,8 @@ namespace kmx::aio::knx::secure
     /// @brief Indicates whether octets announce a SECURE_WRAPPER, whether or not the rest of it could be read.
     [[nodiscard]] static bool announces_wrapper(const cspan_uint8_t wire) noexcept
     {
-        return (wire.size() >= 4u) && (wire[2u] == static_cast<std::uint8_t>(secure_wrapper_service >> 8u)) &&
-               (wire[3u] == static_cast<std::uint8_t>(secure_wrapper_service & 0xFFu));
+        return (wire.size() >= 4u) && (wire[2u] == static_cast<std::uint8_t>(wrapper_service >> 8u)) &&
+               (wire[3u] == static_cast<std::uint8_t>(wrapper_service & 0xFFu));
     }
 
     tunnel_transport::tunnel_transport(datagram_transport& connection, tunnelling_credentials credentials,
@@ -137,6 +138,7 @@ namespace kmx::aio::knx::secure
             if (const auto unwrapped = unwrap(*received, plain); !unwrapped.has_value() && ends_session(unwrapped.error()))
                 co_return std::unexpected(unwrapped.error());
         }
+
         co_return expected_void_t {};
     }
 
@@ -164,18 +166,21 @@ namespace kmx::aio::knx::secure
                 session_.note_unauthenticated();
             return std::optional<std::size_t> {};
         }
-        if (const auto* const wrapper = std::get_if<secure_wrapper_frame>(&decoded->payload))
+
+        if (const auto* const wrapper = std::get_if<wrapper_frame>(&decoded->payload))
         {
             const auto opened = session_.open(*wrapper, plain, now);
             if (!opened.has_value())
                 return ends_session(opened.error()) ? unwrapped_t {std::unexpected(opened.error())} : std::optional<std::size_t> {};
             return opened->for_tunnel ? std::optional<std::size_t> {opened->size} : std::optional<std::size_t> {};
         }
+
         if (discovery_service(decoded->service_type) && (plain.size() >= size))
         {
             std::ranges::copy(wire, plain.begin());
             return std::optional<std::size_t> {size};
         }
+
         if (const auto* const status = std::get_if<session_status_frame>(&decoded->payload))
             return std::unexpected(session_.on_unwrapped_status(*status).error());
         session_.note_unencrypted();
@@ -269,6 +274,7 @@ namespace kmx::aio::knx::secure
                     session.close();
                     return 0u;
                 }
+
                 return session.prepare_close(sealed, now);
             });
         if (!size.has_value())

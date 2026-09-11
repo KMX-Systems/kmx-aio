@@ -1,26 +1,31 @@
+/// @file src/kmx/aio/knx/secure/routing_secure_interop_test.cpp
+/// @brief KNX IP Secure routing against an external peer, with the router configured from the peer's ETS keyring.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/knx/udp_transport.hpp>
+    #include <kmx/aio/completion/timer.hpp>
+    #include <kmx/aio/completion/udp/endpoint.hpp>
+    #include <kmx/aio/knx/keyring.hpp>
+    #include <kmx/aio/knx/routing.hpp>
+    #include <kmx/aio/knx/routing/client.hpp>
+    #include <kmx/aio/test/knx/secure_vectors.hpp>
+    #include <kmx/aio/test/knx/telegram.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/knx/udp_transport.hpp>
-#include <kmx/aio/completion/timer.hpp>
-#include <kmx/aio/completion/udp/endpoint.hpp>
-#include <kmx/aio/knx/keyring.hpp>
-#include <kmx/aio/knx/routing.hpp>
-#include <kmx/aio/test/knx/secure_vectors.hpp>
-#include <kmx/aio/test/knx/telegram.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <chrono>
-#include <condition_variable>
-#include <cstdint>
-#include <cstdlib>
-#include <fstream>
-#include <iterator>
-#include <mutex>
-#include <net/if.h>
-#include <stop_token>
-#include <string>
-#include <thread>
+    #include <chrono>
+    #include <condition_variable>
+    #include <cstdint>
+    #include <cstdlib>
+    #include <fstream>
+    #include <iterator>
+    #include <mutex>
+    #include <stop_token>
+    #include <string>
+    #include <thread>
+    #include <net/if.h>
+#endif
 
 namespace kmx::aio::test::knx::secure::routing_secure_interop_test
 {
@@ -69,8 +74,8 @@ namespace kmx::aio::test::knx::secure::routing_secure_interop_test
             completion::timer pause {executor};
             while (!state.answered)
             {
-                (void) co_await client.notify_timer();
-                (void) co_await pause.wait(std::chrono::milliseconds {50});
+                static_cast<void>(co_await client.notify_timer());
+                static_cast<void>(co_await pause.wait(std::chrono::milliseconds {50}));
             }
         }
 
@@ -88,7 +93,7 @@ namespace kmx::aio::test::knx::secure::routing_secure_interop_test
             {
                 if (client.timer_synchronised())
                     state.sent += (co_await client.send_indication(on)).has_value() ? 1u : 0u;
-                (void) co_await pause.wait(std::chrono::milliseconds {500});
+                static_cast<void>(co_await pause.wait(std::chrono::milliseconds {500}));
             }
         }
 
@@ -101,6 +106,7 @@ namespace kmx::aio::test::knx::secure::routing_secure_interop_test
                 state.received += received.has_value() ? 1u : 0u;
                 state.answered = received.has_value() && addressed_to(*received, answer_group);
             }
+
             executor.stop();
         }
 
@@ -113,13 +119,13 @@ namespace kmx::aio::test::knx::secure::routing_secure_interop_test
                     std::mutex mutex;
                     std::condition_variable_any wake;
                     std::unique_lock lock(mutex);
-                    (void) wake.wait_for(lock, stop, limit, [] { return false; });
+                    static_cast<void>(wake.wait_for(lock, stop, limit, [] { return false; }));
                     if (!stop.stop_requested())
                         executor.stop();
                 });
             executor.run();
         }
-    } // namespace detail
+    }
 
     TEST_CASE("knx secure router exchanges telegrams with an external KNX IP Secure routing peer", "[knx][secure][routing][interop]")
     {
@@ -146,7 +152,7 @@ namespace kmx::aio::test::knx::secure::routing_secure_interop_test
         auto endpoint = completion::udp::endpoint::create(executor, AF_INET);
         REQUIRE(endpoint.has_value());
         completion::knx::udp_transport transport {*endpoint};
-        kr::client router {transport, group, std::move(*settings)};
+        kr::client router {transport, group, {.settings = std::move(*settings)}};
         REQUIRE(router.start().has_value());
 
         detail::outcome state {};

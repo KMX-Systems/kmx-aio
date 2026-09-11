@@ -18,9 +18,9 @@ tunnelling foundation:
 - KNX IP Secure tunnelling client over TCP: the SESSION_REQUEST, SESSION_RESPONSE, SESSION_AUTHENTICATE and
   SESSION_STATUS codecs and MACs; a session that verifies the interface's device authentication code before it
   authenticates, checks every wrapper's session id, MAC and increasing sequence number, and never reuses a key
-  or a sequence number across reconnects; and a `tunnelling_client` overload taking tunnelling credentials, whose
-  `connect()` sends no unencrypted CONNECT when the handshake fails and whose `keep_alive()` keeps a session on a
-  quiet bus open. Exercised against calimero-server 3.0-M2
+  or a sequence number across reconnects; and a `tunnelling_client` overload taking `secure_tunnelling_options`,
+  which carry the tunnelling credentials, whose `connect()` sends no unencrypted CONNECT when the handshake fails and
+  whose `keep_alive()` keeps a session on a quiet bus open. Exercised against calimero-server 3.0-M2
 - KNX IP Secure tunnelling server over TCP: `server_config::secure` gives `generic_server` a device authentication
   code and a user table held as derived keys, each user with the tunnel addresses it may be given. On each
   connection the server answers SESSION_REQUEST under a fresh key pair, authenticates the user, opens and seals
@@ -104,10 +104,10 @@ tunnelling foundation:
 - `keyring::credentials_for`, `keyring::routing_configuration_for` and `keyring::server_configuration_for`, which
   turn a keyring into the derived tunnelling credentials, routing configuration and secure tunnelling server
   configuration a secure endpoint takes, and refuse an all-zero serial number
-- KNX IP Secure routing. A `routing::client` constructed with a `routing::secure_configuration` wraps every
-  frame it sends in a SECURE_WRAPPER under the backbone key, stamped with its routing timer. It delivers a
-  received wrapper only once the MAC verifies, the timer falls inside the latency window, and the frame is not a
-  repeat; routing traffic that arrives unwrapped is refused and counted. Timers stay aligned through
+- KNX IP Secure routing. A `routing::client` constructed with `routing::secure_options` holding a
+  `routing::secure_configuration` wraps every frame it sends in a SECURE_WRAPPER under the backbone key, stamped with
+  its routing timer. It delivers a received wrapper only once the MAC verifies, the timer falls inside the latency
+  window, and the frame is not a repeat; routing traffic that arrives unwrapped is refused and counted. Timers stay aligned through
   TIMER_NOTIFY - synchronisation, timekeeper and follower roles, update notifies for outdated senders - sent by
   `notify_timer()` whenever `next_timer_deadline_ms()` says one is due. It interoperates in both directions with
   xknx 3.20.0 and Calimero 3.0-M2
@@ -324,7 +324,7 @@ handshake bytes, allowing an explicit retry or reset. Application cEMI payloads 
 
 | Limit | Value | Where |
 | :--- | :--- | :--- |
-| KNXnet/IP total length field | 65535 | `frame::max_frame_size`, the protocol maximum |
+| KNXnet/IP total length field | 65535 | `frame::max_total_length`, the protocol maximum |
 | Buffered datagram | 1472 | `frame::max_datagram_size`, one IPv4 UDP payload on Ethernet |
 | cEMI message accepted by `send()` | 520 | `cemi::max_message_size`; longer messages cannot be decoded |
 | cEMI message accepted by the decoder | 520 | `cemi::max_message_size`, both variable fields at maximum |
@@ -336,7 +336,7 @@ handshake bytes, allowing an explicit retry or reset. Application cEMI payloads 
 | CONNECT / CONNECTIONSTATE / DISCONNECT wait | 10 s each | their own `tunnelling_config` fields |
 | Heartbeat interval a supervisor should use | 60 s | `tunnelling_config::heartbeat_interval_ms` |
 | Heartbeat failures before teardown | 3 | `tunnelling_config::heartbeat_failure_limit` |
-| SEARCH collection window | 3 s | `discovery::discovery_config::search_timeout_ms` |
+| SEARCH collection window | 3 s | `discovery::client_config::search_timeout_ms` |
 | Tunnelling feature value | 16 octets | `tunnelling_feature_value::capacity`; every defined value is 1-2 |
 | Search request parameter block | 255 octets | the block's own one-octet structure length |
 | ETS keyring document | 1 MiB | `keyring::max_document_size` |

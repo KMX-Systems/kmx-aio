@@ -1,4 +1,4 @@
-/// @file aio/executor_base.hpp
+/// @file api/kmx/aio/executor_base.hpp
 /// @brief Shared base state for AIO executor implementations.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -57,4 +57,4 @@ namespace kmx::aio
         std::shared_ptr<void> lifetime_token_;
     };
 
-} // namespace kmx::aio
+}

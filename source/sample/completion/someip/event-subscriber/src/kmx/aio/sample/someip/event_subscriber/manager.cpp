@@ -1,12 +1,16 @@
+/// @file src/kmx/aio/sample/someip/event_subscriber/manager.cpp
+/// @brief Completion-model SOME/IP event subscriber run: subscribes to an event group and counts received notifications.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/someip/event_subscriber/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/someip/error.hpp>
+    #include <kmx/logger.hpp>
 
-#include <iostream>
-#include <source_location>
-#include <string>
-#include <utility>
-
-#include <kmx/aio/someip/error.hpp>
-#include <kmx/logger.hpp>
+    #include <iostream>
+    #include <source_location>
+    #include <string>
+    #include <utility>
+#endif
 
 namespace kmx::aio::sample::someip::event_subscriber
 {
@@ -37,7 +41,7 @@ namespace kmx::aio::sample::someip::event_subscriber
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SOME/IP subscriber request_service failed: {}",
                              request_result.error().message());
-            (void) co_await client_.stop();
+            static_cast<void>(co_await client_.stop());
             exec.stop();
             co_return;
         }
@@ -47,8 +51,8 @@ namespace kmx::aio::sample::someip::event_subscriber
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SOME/IP subscriber bind failed: {}",
                              bind_result.error().message());
-            (void) co_await client_.release_service(cfg.service_id, cfg.instance_id);
-            (void) co_await client_.stop();
+            static_cast<void>(co_await client_.release_service(cfg.service_id, cfg.instance_id));
+            static_cast<void>(co_await client_.stop());
             exec.stop();
             co_return;
         }
@@ -58,8 +62,8 @@ namespace kmx::aio::sample::someip::event_subscriber
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SOME/IP subscriber open failed: {}",
                              open_result.error().message());
-            (void) co_await client_.release_service(cfg.service_id, cfg.instance_id);
-            (void) co_await client_.stop();
+            static_cast<void>(co_await client_.release_service(cfg.service_id, cfg.instance_id));
+            static_cast<void>(co_await client_.stop());
             exec.stop();
             co_return;
         }

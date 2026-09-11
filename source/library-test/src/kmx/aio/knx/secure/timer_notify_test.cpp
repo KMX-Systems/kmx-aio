@@ -1,15 +1,19 @@
+/// @file src/kmx/aio/knx/secure/timer_notify_test.cpp
+/// @brief Unit tests for the KNX IP Secure TIMER_NOTIFY codec and MAC verification against xknx's frames.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
-#include <kmx/aio/knx/error.hpp>
-#include <kmx/aio/knx/secure/detail/wrapper_crypto.hpp>
 #include <kmx/aio/knx/secure/timer_notify.hpp>
-#include <kmx/aio/test/knx/secure_vectors.hpp>
+#ifndef PCH
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/secure/detail/wrapper_crypto.hpp>
+    #include <kmx/aio/test/knx/secure_vectors.hpp>
 
-#include <algorithm>
-#include <array>
-#include <cstdint>
-#include <span>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <algorithm>
+    #include <array>
+    #include <cstdint>
+    #include <span>
+#endif
 
 namespace kmx::aio::test::knx::secure::timer_notify_test
 {
@@ -35,7 +39,7 @@ namespace kmx::aio::test::knx::secure::timer_notify_test
             const auto verified = ks::verify_timer_notify(sv::key(row.key), *value);
             return !verified.has_value() && (verified.error() == make_error_code(error::secure_authentication_failed));
         }
-    } // namespace detail
+    }
 
     TEST_CASE("knx secure timer notify codec round-trips the xknx frame", "[knx][secure][routing][unit]")
     {
@@ -85,6 +89,7 @@ namespace kmx::aio::test::knx::secure::timer_notify_test
             INFO("alteration=" << alteration);
             CHECK(detail::refused_after(row, alteration));
         }
+
         const auto decoded = ks::decode_timer_notify_packet(row.wire);
         REQUIRE(decoded.has_value());
         CHECK(ks::verify_timer_notify(sv::key("00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f"), *decoded).error() ==
@@ -108,9 +113,9 @@ namespace kmx::aio::test::knx::secure::timer_notify_test
         CHECK(ks::make_timer_notify(key, ks::max_sequence, {}, {}).has_value());
 
         const auto failing = sv::failing_backend();
-        CHECK(kd::basic_make_timer_notify(failing, key, 0u, {}, {}).error() == make_error_code(error::crypto_failure));
+        CHECK(kd::basic_make_timer_notify({failing, key}, 0u, {}, {}).error() == make_error_code(error::crypto_failure));
         const auto decoded = ks::decode_timer_notify_packet(wire);
         REQUIRE(decoded.has_value());
-        CHECK(kd::basic_verify_timer_notify(failing, key, *decoded).error() == make_error_code(error::crypto_failure));
+        CHECK(kd::basic_verify_timer_notify({failing, key}, *decoded).error() == make_error_code(error::crypto_failure));
     }
 }

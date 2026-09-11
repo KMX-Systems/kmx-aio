@@ -1,15 +1,19 @@
-#include <kmx/aio/sample/tls/h2_alpn_server/manager.hpp>
+/// @file src/main.cpp
+/// @brief Entry point of the readiness-model HTTP/2 ALPN TLS server sample: runs the manager with default settings.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#ifndef PCH
+    #include <kmx/aio/sample/tls/h2_alpn_server/manager.hpp>
+    #include <kmx/logger.hpp>
 
-#include <kmx/logger.hpp>
-
-#include <exception>
-#include <source_location>
+    #include <exception>
+    #include <source_location>
+#endif
 
 int main() noexcept
 {
     try
     {
-        kmx::aio::sample::tls::h2_alpn_readiness_server::manager server;
+        kmx::aio::sample::tls::h2_alpn_server::manager server;
         return server.run() ? 0 : 1;
     }
     catch (const std::exception& e)

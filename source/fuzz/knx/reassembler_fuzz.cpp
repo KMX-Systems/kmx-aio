@@ -1,18 +1,20 @@
 /// @file fuzz/knx/reassembler_fuzz.cpp
 /// @brief libFuzzer target for the reassembler that cuts KNXnet/IP frames out of a TCP byte stream.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details The first octet of each input picks how long each read is, so frames arrive whole, in pieces, and several to
 ///          a read. Every frame handed over has to be exactly as long as its header says, and the reassembler must
 ///          always either hand over a frame, report a malformed stream, or have room for more. Built and run by
 ///          script/feature/knx/run-fuzz.sh.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/knx/detail/frame_reassembler.hpp>
-#include <kmx/aio/knx/frame.hpp>
+#ifndef PCH
+    #include <kmx/aio/knx/detail/frame_reassembler.hpp>
+    #include <kmx/aio/knx/frame.hpp>
 
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-#include <cstdlib>
-#include <cstring>
+    #include <algorithm>
+    #include <cstddef>
+    #include <cstdint>
+    #include <cstdlib>
+    #include <cstring>
+#endif
 
 namespace kmx::aio::fuzz::knx::reassembler_fuzz
 {
@@ -56,5 +58,6 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, const std::size_
         if (!target::drain(reassembler))
             return 0;
     }
+
     return 0;
 }

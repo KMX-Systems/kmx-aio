@@ -1,18 +1,21 @@
-/// @file aio/readiness/descriptor/timer_test.cpp
+/// @file src/kmx/aio/readiness/descriptor/timer_test.cpp
 /// @brief Unit tests for the readiness timerfd descriptor wrapper.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
-#include <atomic>
-#include <chrono>
-#include <memory>
-#include <unistd.h>
-
-#include <kmx/aio/error_code.hpp>
 #include <kmx/aio/readiness/descriptor/timer.hpp>
-#include <kmx/aio/readiness/executor.hpp>
-#include <kmx/aio/task.hpp>
-#include <kmx/aio/test/executor_runner.hpp>
+#ifndef PCH
+    #include <kmx/aio/error_code.hpp>
+    #include <kmx/aio/readiness/executor.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/aio/test/executor_runner.hpp>
+    #include <kmx/aio/test/scoped_runner.hpp>
+
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <atomic>
+    #include <chrono>
+    #include <memory>
+    #include <unistd.h>
+#endif
 
 namespace kmx::aio::test::readiness::descriptor::timer_test
 {
@@ -95,7 +98,7 @@ namespace kmx::aio::test::readiness::descriptor::timer_test
 
             outcome.completed.store(true, std::memory_order_release);
         }
-    } // namespace detail
+    }
 
     TEST_CASE("timer::create returns a valid timerfd", "[readiness][timerfd][create]")
     {
@@ -313,4 +316,4 @@ namespace kmx::aio::test::readiness::descriptor::timer_test
 
         ::close(fds[0]);
     }
-} // namespace kmx::aio::test::readiness::descriptor::timer_test
+}

@@ -1,22 +1,22 @@
-/// @file aio/integration/someip_smoke_test.cpp
+/// @file src/kmx/aio/integration/someip_smoke_test.cpp
 /// @brief SOME/IP smoke test validating sample echo server/client orchestration.
-
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #if defined(KMX_AIO_FEATURE_SOMEIP)
+    #ifndef PCH
+        #include <kmx/aio/test/sample_process.hpp>
 
-    #include <catch2/catch_test_macros.hpp>
+        #include <catch2/catch_test_macros.hpp>
 
-    #include <kmx/aio/test/sample_process.hpp>
-
-    #include <sys/wait.h>
-
-    #include <chrono>
-    #include <cstdlib>
-    #include <filesystem>
-    #include <fstream>
-    #include <optional>
-    #include <string>
-    #include <string_view>
-    #include <vector>
+        #include <chrono>
+        #include <cstdlib>
+        #include <filesystem>
+        #include <fstream>
+        #include <optional>
+        #include <string>
+        #include <string_view>
+        #include <vector>
+        #include <sys/wait.h>
+    #endif
 
 namespace kmx::aio::test::integration::someip_smoke_test
 {
@@ -174,6 +174,6 @@ namespace kmx::aio::test::integration::someip_smoke_test
                                                                 "SOMEIP_DIAGNOSTICS_DONE",
                                                             }));
     }
-} // namespace kmx::aio::test::integration::someip_smoke_test
+}
 
 #endif // KMX_AIO_FEATURE_SOMEIP

@@ -1,14 +1,16 @@
-/// @file aio/readiness/descriptor/epoll_test.cpp
+/// @file src/kmx/aio/readiness/descriptor/epoll_test.cpp
 /// @brief Unit tests for the epoll descriptor wrapper.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
 #include <kmx/aio/readiness/descriptor/epoll.hpp>
-#include <kmx/aio/test/fd_pair.hpp>
+#ifndef PCH
+    #include <kmx/aio/test/pipe_pair.hpp>
 
-#include <cerrno>
-#include <unistd.h>
-#include <vector>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <cerrno>
+    #include <vector>
+    #include <unistd.h>
+#endif
 
 namespace kmx::aio::test::readiness::descriptor::epoll_test
 {
@@ -265,4 +267,4 @@ namespace kmx::aio::test::readiness::descriptor::epoll_test
         CHECK(::fcntl(replaced, F_GETFD) == -1);
         CHECK(errno == EBADF);
     }
-} // namespace kmx::aio::test::readiness::descriptor::epoll_test
+}

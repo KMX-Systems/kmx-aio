@@ -1,29 +1,33 @@
+/// @file src/kmx/aio/sample/gpu/image_processing/manager.cpp
+/// @brief GPU image-processing sample: V4L2 frames, or a synthetic fallback, run through a CUDA stream on the GPU executor.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/gpu/image_processing/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/v4l2/capture.hpp>
+    #include <kmx/aio/gpu/executor.hpp>
+    #include <kmx/aio/gpu/stream.hpp>
+    #include <kmx/aio/task.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/v4l2/capture.hpp>
-#include <kmx/aio/gpu/executor.hpp>
-#include <kmx/aio/gpu/stream.hpp>
-#include <kmx/aio/task.hpp>
+    #include <cstddef>
+    #include <cstdint>
+    #include <cstring>
+    #include <exception>
+    #include <iostream>
+    #include <memory>
+    #include <numeric>
+    #include <vector>
 
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <iostream>
-#include <memory>
-#include <numeric>
-#include <vector>
-
-#if defined(KMX_AIO_FEATURE_CUDA)
-    #include <cuda_runtime.h>
+    #if defined(KMX_AIO_FEATURE_CUDA)
+        #include <cuda_runtime.h>
+    #endif
 #endif
 
 namespace kmx::aio::sample::gpu::image_processing
 {
     namespace detail
     {
-        kmx::aio::task<void> gpu_process_frame(std::vector<std::uint8_t> host_frame)
+        kmx::aio::task<void> offload_frame(std::vector<std::uint8_t> host_frame)
         {
             kmx::aio::gpu::stream gpu_stream;
 
@@ -82,7 +86,7 @@ namespace kmx::aio::sample::gpu::image_processing
             {
                 std::cerr << "[GPU Image Processing] V4L2 unavailable, using synthetic frame fallback\n";
                 std::vector<std::uint8_t> synthetic(cfg.size.width * cfg.size.height, 0x2Au);
-                gpu_exec->spawn(gpu_process_frame(std::move(synthetic)));
+                gpu_exec->spawn(offload_frame(std::move(synthetic)));
                 io_exec.stop();
                 co_return;
             }
@@ -98,7 +102,7 @@ namespace kmx::aio::sample::gpu::image_processing
                 const auto frame_bytes = frame_res->data();
                 std::vector<std::uint8_t> host_frame(frame_bytes.size());
                 std::memcpy(host_frame.data(), frame_bytes.data(), frame_bytes.size());
-                gpu_exec->spawn(gpu_process_frame(std::move(host_frame)));
+                gpu_exec->spawn(offload_frame(std::move(host_frame)));
             }
 
             io_exec.stop();

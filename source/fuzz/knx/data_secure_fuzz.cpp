@@ -1,15 +1,23 @@
 /// @file fuzz/knx/data_secure_fuzz.cpp
 /// @brief libFuzzer target for KNX Data Secure: the S-A_Data codec, and the policy a context applies to whole frames.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details Each input is taken three ways: as a received cEMI frame a context opens, under the key of 1/2/3 with 1.1.5
 ///          trusted; as secured data `open_apdu` checks under that key; and as a frame a context secures, which a second
 ///          context then has to open back into a frame of the same length. Built and run by script/feature/knx/run-fuzz.sh.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/knx/data_secure.hpp>
+#ifndef PCH
+    #include <kmx/aio/knx/data_secure.hpp>
+    #include <kmx/aio/knx/data_secure/context.hpp>
+    #include <kmx/aio/knx/data_secure/sequence_store.hpp>
+    #include <kmx/aio/knx/group_address.hpp>
+    #include <kmx/aio/knx/individual_address.hpp>
+    #include <kmx/aio/knx/keyring/document.hpp>
+    #include <kmx/aio/knx/secure/key.hpp>
 
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <cstdlib>
+    #include <array>
+    #include <cstddef>
+    #include <cstdint>
+    #include <cstdlib>
+#endif
 
 namespace kmx::aio::fuzz::knx::data_secure_fuzz
 {

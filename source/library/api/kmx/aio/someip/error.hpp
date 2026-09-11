@@ -1,4 +1,4 @@
-/// @file aio/someip/error.hpp
+/// @file api/kmx/aio/someip/error.hpp
 /// @brief SOME/IP-specific error domain for wrapper-level failures.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -40,7 +40,7 @@ namespace kmx::aio::someip
     /// @return An @c std::error_code backed by @c error_category().
     [[nodiscard]] std::error_code make_error_code(error code) noexcept;
 
-} // namespace kmx::aio::someip
+}
 
 namespace std
 {

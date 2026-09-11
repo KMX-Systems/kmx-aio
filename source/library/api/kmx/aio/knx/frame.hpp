@@ -1,5 +1,6 @@
-/// @file aio/knx/frame.hpp
+/// @file api/kmx/aio/knx/frame.hpp
 /// @brief Primitive KNXnet/IP frame and cEMI decode helpers.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// The bottom of the KNXnet/IP stack: the six-octet header every datagram begins with, the connection
 /// header the connection-oriented services add, and the services that carry a cEMI message across an
@@ -10,24 +11,22 @@
 /// not require. The inline capacities are hard bounds, not assumptions: an oversized message is reported
 /// as @ref kmx::aio::knx::error::invalid_length rather than truncated.
 /// @reference KNX System Specifications, 03/08/02 "Core" and 03/08/04 "Tunnelling".
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
-        #include <algorithm>
-        #include <array>
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/knx/cemi.hpp>
+        #include <kmx/aio/knx/cemi_bytes_storage.hpp>
+        #include <kmx/aio/knx/cemi_frame.hpp>
+        #include <kmx/aio/knx/error.hpp>
+        #include <kmx/aio/knx/tunnelling_feature_value.hpp>
+
         #include <cstdint>
         #include <expected>
         #include <span>
         #include <system_error>
-        #include <vector>
     #endif
-
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/knx/cemi.hpp>
-    #include <kmx/aio/knx/contract.hpp>
-    #include <kmx/aio/knx/error.hpp>
 
 namespace kmx::aio::knx
 {
@@ -40,41 +39,6 @@ namespace kmx::aio::knx
         std::uint16_t service_type {};
         /// @brief The datagram length including this header.
         std::uint16_t total_length {};
-    };
-
-    /// @brief Inline storage for the cEMI octets of one decoded tunnelling request.
-    /// @details Sized to @ref kmx::aio::knx::cemi::max_message_size, the largest message the cEMI decoder
-    ///          can accept, rather than to `max_l_data_size`, which describes only what this build's
-    ///          encoder emits and is 255 octets short of what a peer may legitimately send.
-    struct cemi_bytes_storage
-    {
-        /// @brief The storage; only its first @ref size octets are meaningful.
-        std::array<std::uint8_t, cemi::max_message_size> bytes {};
-        /// @brief How many octets of @ref bytes the decoder filled in.
-        std::uint16_t size {};
-
-        /// @brief Indicates whether no octets are held.
-        [[nodiscard]] constexpr bool empty() const noexcept { return size == 0u; }
-        /// @brief Returns how many octets are held.
-        [[nodiscard]] constexpr std::size_t length() const noexcept { return size; }
-        /// @brief Returns an iterator to the first octet.
-        [[nodiscard]] constexpr auto begin() const noexcept { return bytes.begin(); }
-        /// @brief Returns an iterator one past the last meaningful octet.
-        [[nodiscard]] constexpr auto end() const noexcept { return bytes.begin() + size; }
-        /// @brief Returns a view of the meaningful octets.
-        [[nodiscard]] constexpr cspan_uint8_t span() const noexcept { return {bytes.data(), size}; }
-
-        /// @brief Compares the held octets against an owning buffer.
-        /// @param lhs The inline storage.
-        /// @param rhs The buffer to compare against.
-        /// @return `true` when both hold the same octets.
-        /// @note Compares only the meaningful prefix, not the unused tail of @ref bytes.
-        [[nodiscard]] friend bool operator==(const cemi_bytes_storage& lhs,
-                                             const byte_buffer_t& rhs) noexcept
-        {
-            return (lhs.span().size() == rhs.size()) &&
-                   std::equal(lhs.span().begin(), lhs.span().end(), rhs.begin());
-        }
     };
 
     /// @brief One TUNNELLING_REQUEST: a connection header and the cEMI message it carries.
@@ -132,32 +96,6 @@ namespace kmx::aio::knx
         info_service_enable = 0x08u,
     };
 
-    /// @brief Inline storage for a tunnelling feature value.
-    /// @details Every defined feature value is one or two octets; the capacity here is generous for them
-    ///          and is a hard bound rather than an assumption, so a peer cannot make the decoder write past
-    ///          it. A longer value is reported as `error::invalid_length` instead of being truncated.
-    struct tunnelling_feature_value
-    {
-        /// @brief Largest feature value this build accepts.
-        static constexpr std::size_t capacity = 16u;
-
-        /// @brief The storage; only its first @ref size octets are meaningful.
-        std::array<std::uint8_t, capacity> bytes {};
-        /// @brief How many octets of @ref bytes the value occupies.
-        std::uint8_t size {};
-
-        /// @brief Indicates whether the value is absent, as it is in a get request.
-        [[nodiscard]] constexpr bool empty() const noexcept { return size == 0u; }
-        /// @brief Returns how many octets the value occupies.
-        [[nodiscard]] constexpr std::size_t length() const noexcept { return size; }
-        /// @brief Returns an iterator to the first octet.
-        [[nodiscard]] constexpr auto begin() const noexcept { return bytes.begin(); }
-        /// @brief Returns an iterator one past the last meaningful octet.
-        [[nodiscard]] constexpr auto end() const noexcept { return bytes.begin() + size; }
-        /// @brief Returns a view of the meaningful octets.
-        [[nodiscard]] constexpr cspan_uint8_t span() const noexcept { return {bytes.data(), size}; }
-    };
-
     /// @brief One of the four tunnelling feature services.
     /// @details All four share a shape: the connection header, the feature identifier, one octet that is the
     ///          return code in a response and reserved elsewhere, and a value that only some of them carry.
@@ -209,7 +147,7 @@ namespace kmx::aio::knx
         /// @brief TUNNELLING_FEATURE_INFO, an unsolicited report that a feature changed.
         inline constexpr std::uint16_t tunnelling_feature_info_service = 0x0425u;
         /// @brief Largest datagram the KNXnet/IP total length field can describe.
-        inline constexpr std::size_t max_frame_size = 0xFFFFu;
+        inline constexpr std::size_t max_total_length = 0xFFFFu;
         /// @brief Largest datagram this build buffers, the operational limit behind the protocol maximum.
         /// @details One IPv4 UDP payload on an Ethernet link, which is an order of magnitude more than any
         ///          KNXnet/IP service needs: the longest tunnelling frame a cEMI message can fill is about
@@ -248,10 +186,8 @@ namespace kmx::aio::knx
         /// @param total_length The whole datagram's length, this header included.
         /// @param protocol_version The protocol version; only `0x10` is defined.
         /// @return Nothing, or the reason the header could not be encoded.
-        [[nodiscard]] expected_void_t encode_communication_header(span_uint8_t dest,
-                                                                                     std::uint16_t service_type,
-                                                                                     std::uint16_t total_length,
-                                                                                     std::uint8_t protocol_version = 0x10u) noexcept;
+        [[nodiscard]] expected_void_t encode_communication_header(span_uint8_t dest, std::uint16_t service_type, std::uint16_t total_length,
+                                                                  std::uint8_t protocol_version = 0x10u) noexcept;
         /// @brief Decodes a bare cEMI message, with no KNXnet/IP framing around it.
         /// @param buf The cEMI octets.
         /// @return The decoded message, or the reason it could not be read.
@@ -266,10 +202,8 @@ namespace kmx::aio::knx
         /// @return Nothing, or the reason the body could not be encoded.
         /// @note @ref encode_tunnelling_request_packet is what produces a sendable datagram; this exists
         ///       for a caller assembling one itself.
-        [[nodiscard]] expected_void_t encode_tunnelling_request(span_uint8_t dest,
-                                                                                     std::uint8_t channel_id,
-                                                                                     std::uint8_t sequence_number,
-                                                                                     cspan_uint8_t cemi_bytes) noexcept;
+        [[nodiscard]] expected_void_t encode_tunnelling_request(span_uint8_t dest, std::uint8_t channel_id, std::uint8_t sequence_number,
+                                                                cspan_uint8_t cemi_bytes) noexcept;
         /// @brief Decodes a TUNNELLING_REQUEST body, without the KNXnet/IP header.
         /// @param buf The body octets, starting at the connection header.
         /// @return The decoded request, or the reason it could not be read.
@@ -284,17 +218,16 @@ namespace kmx::aio::knx
         /// @param sequence_number The sequence number to send under.
         /// @param cemi_bytes The cEMI message to carry.
         /// @return Nothing, or the reason the datagram could not be encoded.
-        [[nodiscard]] expected_void_t encode_tunnelling_request_packet(
-            span_uint8_t dest, std::uint8_t channel_id, std::uint8_t sequence_number, cspan_uint8_t cemi_bytes) noexcept;
+        [[nodiscard]] expected_void_t encode_tunnelling_request_packet(span_uint8_t dest, std::uint8_t channel_id,
+                                                                       std::uint8_t sequence_number, cspan_uint8_t cemi_bytes) noexcept;
         /// @brief Encodes a complete TUNNELLING_ACK datagram.
         /// @param dest The destination octets.
         /// @param channel_id The channel being acknowledged on.
         /// @param sequence_number The sequence number of the request being acknowledged.
         /// @param status The outcome; zero means accepted.
         /// @return Nothing, or the reason the datagram could not be encoded.
-        [[nodiscard]] expected_void_t encode_tunnelling_ack_packet(span_uint8_t dest, std::uint8_t channel_id,
-                                                                                        std::uint8_t sequence_number,
-                                                                                        std::uint8_t status = 0u) noexcept;
+        [[nodiscard]] expected_void_t encode_tunnelling_ack_packet(span_uint8_t dest, std::uint8_t channel_id, std::uint8_t sequence_number,
+                                                                   std::uint8_t status = 0u) noexcept;
         /// @brief Decodes a complete TUNNELLING_REQUEST datagram.
         /// @param buf The received octets, header included.
         /// @return The decoded request, or the reason it could not be read.
@@ -309,8 +242,9 @@ namespace kmx::aio::knx
         /// @param sequence_number The sequence number to send under.
         /// @param cemi_bytes The cEMI management message to carry.
         /// @return Nothing, or the reason the datagram could not be encoded.
-        [[nodiscard]] expected_void_t encode_device_configuration_request_packet(
-            span_uint8_t dest, std::uint8_t channel_id, std::uint8_t sequence_number, cspan_uint8_t cemi_bytes) noexcept;
+        [[nodiscard]] expected_void_t encode_device_configuration_request_packet(span_uint8_t dest, std::uint8_t channel_id,
+                                                                                 std::uint8_t sequence_number,
+                                                                                 cspan_uint8_t cemi_bytes) noexcept;
         /// @brief Decodes a complete DEVICE_CONFIGURATION_REQUEST datagram.
         /// @param buf The received octets, header included.
         /// @return The decoded request, or the reason it could not be read.
@@ -325,8 +259,8 @@ namespace kmx::aio::knx
         /// @param status The outcome; zero means accepted.
         /// @return Nothing, or the reason the datagram could not be encoded.
         [[nodiscard]] expected_void_t encode_device_configuration_ack_packet(span_uint8_t dest, std::uint8_t channel_id,
-                                                                            std::uint8_t sequence_number,
-                                                                            std::uint8_t status = 0u) noexcept;
+                                                                             std::uint8_t sequence_number,
+                                                                             std::uint8_t status = 0u) noexcept;
         /// @brief Decodes a complete DEVICE_CONFIGURATION_ACK datagram.
         /// @param buf The received octets, header included.
         /// @return The decoded acknowledgement, or the reason it could not be read.
@@ -359,8 +293,7 @@ namespace kmx::aio::knx
         ///         could not be read.
         /// @retval kmx::aio::knx::error::invalid_length The feature value exceeds
         ///         @ref tunnelling_feature_value::capacity.
-        [[nodiscard]] std::expected<tunnelling_feature_frame, std::error_code> decode_tunnelling_feature_packet(
-            cspan_uint8_t buf) noexcept;
+        [[nodiscard]] std::expected<tunnelling_feature_frame, std::error_code> decode_tunnelling_feature_packet(cspan_uint8_t buf) noexcept;
     }
 }
 #endif // KMX_AIO_FEATURE_KNX

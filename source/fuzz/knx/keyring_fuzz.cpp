@@ -1,20 +1,22 @@
 /// @file fuzz/knx/keyring_fuzz.cpp
 /// @brief libFuzzer target for the ETS keyring loader, reaching past the signature to the value readers.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details A mutated document almost never carries a valid signature, so on its own a fuzzer would spend its
 ///          time confirming that the signature check refuses. Each input is therefore loaded twice: as it is,
 ///          and again re-signed under a fixed password hash whenever it parses, so the decryption and value
 ///          reading behind the check are fuzzed too. Built and run by script/feature/knx/run-fuzz.sh.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/knx/keyring.hpp>
-#include <kmx/aio/knx/secure/detail/crypto.hpp>
-#include <kmx/aio/knx/secure/detail/keyring_format.hpp>
+#ifndef PCH
+    #include <kmx/aio/knx/keyring.hpp>
+    #include <kmx/aio/knx/secure/detail/crypto.hpp>
+    #include <kmx/aio/knx/secure/detail/keyring_format.hpp>
 
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <cstdlib>
-#include <string>
-#include <string_view>
+    #include <array>
+    #include <cstddef>
+    #include <cstdint>
+    #include <cstdlib>
+    #include <string>
+    #include <string_view>
+#endif
 
 namespace kmx::aio::fuzz::knx::keyring_fuzz
 {
@@ -59,7 +61,7 @@ namespace kmx::aio::fuzz::knx::keyring_fuzz
         static constexpr ks::serial_number_t serial {0x00u, 0xFAu, 0x12u, 0x34u, 0x56u, 0x78u};
         if (!loaded.has_value())
             return;
-        (void) kr::routing_configuration_for(*loaded, serial);
+        static_cast<void>(kr::routing_configuration_for(*loaded, serial));
         for (const auto& entry: loaded->interfaces)
             if (loaded->find_interface(entry.address) == nullptr)
                 std::abort();

@@ -1,9 +1,14 @@
-#include <csignal>
-#include <kmx/aio/readiness/udp/endpoint.hpp>
-#include <kmx/aio/readiness/udp/socket.hpp>
+/// @file src/kmx/aio/sample/udp/minimal/server/manager.cpp
+/// @brief Readiness-model minimal UDP echo server: a bound endpoint loop replying with an ECHO prefix, plus statistics.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/udp/minimal/server/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/readiness/udp/endpoint.hpp>
+    #include <kmx/aio/readiness/udp/socket.hpp>
 
-#include <sys/socket.h>
+    #include <csignal>
+    #include <sys/socket.h>
+#endif
 
 namespace kmx::aio::sample::udp::minimal::server
 {
@@ -132,6 +137,7 @@ namespace kmx::aio::sample::udp::minimal::server
                                     "Server: Too many consecutive errors ({}), breaking loop", msg_errors);
                         break;
                     }
+
                     continue;
                 }
 
@@ -216,4 +222,4 @@ namespace kmx::aio::sample::udp::minimal::server
         }
     }
 
-} // namespace kmx::aio::sample::udp::minimal::server
+}

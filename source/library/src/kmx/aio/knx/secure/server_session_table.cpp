@@ -1,15 +1,16 @@
-/// @file kmx/aio/knx/secure/server_session_table.cpp
+/// @file src/kmx/aio/knx/secure/server_session_table.cpp
 /// @brief The compiled body of the KNX IP Secure server session table.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/knx/secure/server_session_table.hpp>
+#ifndef PCH
+    #include <kmx/aio/knx/error.hpp>
 
-#include <kmx/aio/knx/error.hpp>
-
-#include <algorithm>
-#include <array>
-#include <cstring>
-#include <netinet/in.h>
-#include <utility>
+    #include <algorithm>
+    #include <array>
+    #include <cstring>
+    #include <utility>
+    #include <netinet/in.h>
+#endif
 
 namespace kmx::aio::knx::secure
 {
@@ -79,15 +80,14 @@ namespace kmx::aio::knx::secure
         }
     }
 
-    session_response_result_t server_session_table::on_session_request(const datagram_transport* const connection,
-                                                                       const transport_peer& peer, const session_request_frame& request,
+    session_response_result_t server_session_table::on_session_request(const client_origin& from, const session_request_frame& request,
                                                                        const std::uint64_t now_ms) noexcept
     {
         const std::lock_guard lock {mutex_};
         // Every wrapper the session sends carries the server's serial number, so a server with none opens no session (P8).
         if (!valid_serial_number(configuration_->serial_number))
             return refuse(error::invalid_configuration);
-        if (const auto admitted = admit_request(peer); !admitted.has_value())
+        if (const auto admitted = admit_request(from.peer); !admitted.has_value())
             return std::unexpected(admitted.error());
         // A fresh key pair per session: a password that leaks later opens no session recorded before it (P3).
         const auto key_pair = entropy_.generate_key_pair();
@@ -103,8 +103,8 @@ namespace kmx::aio::knx::secure
         if (!mac.has_value())
             return std::unexpected(mac.error());
         sessions_.push_back(entry {.session_id = session_id,
-                                   .connection = connection,
-                                   .peer = peer,
+                                   .connection = from.connection,
+                                   .peer = from.peer,
                                    .client_public_key = request.client_public_key,
                                    .server_public_key = key_pair->public_key,
                                    .session_key = std::move(*session_key),
@@ -131,7 +131,7 @@ namespace kmx::aio::knx::secure
         return (found == configuration_->users.end()) ? nullptr : &*found;
     }
 
-    expected_void_t server_session_table::admit(entry& session, const secure_wrapper_frame& wrapper, const span_uint8_t plain) noexcept
+    expected_void_t server_session_table::admit(entry& session, const wrapper_frame& wrapper, const span_uint8_t plain) noexcept
     {
         // With the MAC verified the sequence number can be believed, and it has to move forward (P2).
         const auto sequence = decode_sequence(wrapper.sequence);
@@ -141,28 +141,30 @@ namespace kmx::aio::knx::secure
             detail::cleanse(plain);
             return refuse(error::secure_replay);
         }
+
         if (const auto header = check_wrapped_frame(plain); !header.has_value())
         {
             ++counters_.refused_services;
             detail::cleanse(plain);
             return std::unexpected(header.error());
         }
+
         session.last_received_sequence = sequence;
         return {};
     }
 
-    server_opened_frame_result_t server_session_table::open(const datagram_transport* const connection, const transport_peer& peer,
-                                                            const secure_wrapper_frame& wrapper, const span_uint8_t destination,
-                                                            const std::uint64_t now_ms) noexcept
+    server_opened_frame_result_t server_session_table::open(const client_origin& from, const wrapper_frame& wrapper,
+                                                            const span_uint8_t destination, const std::uint64_t now_ms) noexcept
     {
         const std::lock_guard lock {mutex_};
         // A session belongs to the connection and peer it was opened on: its id arriving elsewhere names nothing.
         auto* const session = find(wrapper.session_id);
-        if ((session == nullptr) || (session->connection != connection) || !same_peer(session->peer, peer))
+        if ((session == nullptr) || (session->connection != from.connection) || !same_peer(session->peer, from.peer))
         {
             ++counters_.authentication_failures;
             return refuse(error::secure_authentication_failed);
         }
+
         const auto opened = open_wrapper(destination, session->session_key, wrapper);
         if (!opened.has_value() && (opened.error() == make_error_code(error::secure_authentication_failed)))
             ++counters_.authentication_failures;
@@ -188,6 +190,7 @@ namespace kmx::aio::knx::secure
             ++counters_.authentication_failures;
             return server_opened_frame {.session_id = session.session_id, .kind = server_frame_kind::refused_authentication};
         }
+
         session.user = user;
         ++counters_.sessions_opened;
         return server_opened_frame {.session_id = session.session_id, .kind = server_frame_kind::authenticated};
@@ -204,6 +207,7 @@ namespace kmx::aio::knx::secure
             ++counters_.refused_services;
             return refuse(error::unsupported_service);
         }
+
         ++counters_.sessions_closed;
         erase(session_id);
         return server_opened_frame {.session_id = session_id, .kind = server_frame_kind::closed};
@@ -224,22 +228,21 @@ namespace kmx::aio::knx::secure
             ++counters_.refused_services;
             return refuse(error::unsupported_service);
         }
+
         return authenticate(session, *authentication);
     }
 
-    expected_size_t server_session_table::seal_locked(const datagram_transport* const connection, const std::uint16_t session_id,
-                                                      const cspan_uint8_t plain_frame, const span_uint8_t destination,
-                                                      const bool authenticated_only) noexcept
+    expected_size_t server_session_table::seal_locked(const seal_request& request) noexcept
     {
-        auto* const session = find(session_id);
-        if ((session == nullptr) || (session->connection != connection) || (session->next_sequence > max_sequence) ||
-            (authenticated_only && (session->user == nullptr)))
+        auto* const session = find(request.session_id);
+        if ((session == nullptr) || (session->connection != request.connection) || (session->next_sequence > max_sequence) ||
+            (request.authenticated_only && (session->user == nullptr)))
             return refuse(error::secure_session_closed);
-        const wrapper_fields fields {.session_id = session_id,
+        const wrapper_fields fields {.session_id = request.session_id,
                                      .sequence = encode_sequence(session->next_sequence),
                                      .serial_number = configuration_->serial_number,
                                      .message_tag = tunnelling_message_tag};
-        const auto sealed = seal_wrapper(destination, session->session_key, fields, plain_frame);
+        const auto sealed = seal_wrapper(request.destination, session->session_key, fields, request.plain_frame);
         if (sealed.has_value())
             ++session->next_sequence;
         return sealed;
@@ -249,7 +252,11 @@ namespace kmx::aio::knx::secure
                                                const cspan_uint8_t plain_frame, const span_uint8_t destination) noexcept
     {
         const std::lock_guard lock {mutex_};
-        return seal_locked(connection, session_id, plain_frame, destination, true);
+        return seal_locked({.connection = connection,
+                            .session_id = session_id,
+                            .plain_frame = plain_frame,
+                            .destination = destination,
+                            .authenticated_only = true});
     }
 
     expected_size_t server_session_table::seal_status(const datagram_transport* const connection, const std::uint16_t session_id,
@@ -259,7 +266,7 @@ namespace kmx::aio::knx::secure
         if (const auto encoded = encode_session_status_packet(plain, {status}); !encoded.has_value())
             return std::unexpected(encoded.error());
         const std::lock_guard lock {mutex_};
-        return seal_locked(connection, session_id, plain, destination, false);
+        return seal_locked({.connection = connection, .session_id = session_id, .plain_frame = plain, .destination = destination});
     }
 
     std::span<const individual_address> server_session_table::tunnel_addresses(const std::uint16_t session_id) const noexcept

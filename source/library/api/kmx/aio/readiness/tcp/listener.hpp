@@ -1,4 +1,4 @@
-/// @file aio/readiness/tcp/listener.hpp
+/// @file api/kmx/aio/readiness/tcp/listener.hpp
 /// @brief Readiness-model TCP listener using epoll-based async accept.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -33,12 +33,12 @@ namespace kmx::aio::readiness::tcp
         /// @brief Marks the socket as accepting connections.
         /// @param backlog Maximum number of pending connections the kernel may queue.
         /// @return Success, or the error `listen` reported.
-        expected_void_t listen(const int backlog = 128) noexcept;
+        [[nodiscard]] expected_void_t listen(const int backlog = 128) noexcept;
         /// @brief Suspends until a connection arrives, then accepts it.
         /// @return A task yielding the accepted connection's descriptor, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
         task<file_descriptor::expected_t> accept() noexcept(false);
     };
 
-} // namespace kmx::aio::readiness::tcp
+}
 #endif // KMX_AIO_FEATURE_READINESS

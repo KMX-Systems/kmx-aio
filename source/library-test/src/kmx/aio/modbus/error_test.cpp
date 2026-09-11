@@ -1,10 +1,13 @@
+/// @file src/kmx/aio/modbus/error_test.cpp
+/// @brief Unit tests for the Modbus error category: its name, its messages and error_code conversion.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
 #include <kmx/aio/modbus/error.hpp>
+#ifndef PCH
+    #include <catch2/catch_test_macros.hpp>
 
-#include <string>
-#include <system_error>
+    #include <string>
+    #include <system_error>
+#endif
 
 namespace kmx::aio::test::modbus::error_test
 {
@@ -49,4 +52,4 @@ namespace kmx::aio::test::modbus::error_test
         CHECK(&make_error_code(error::disconnected).category() == &error_category());
     }
 
-} // namespace kmx::aio::test::modbus::error_test
+}

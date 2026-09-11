@@ -1,4 +1,4 @@
-/// @file aio/tls/stream_test.cpp
+/// @file src/kmx/aio/tls/stream_test.cpp
 /// @brief Unit tests for the TLS stream's construction, ALPN configuration and teardown.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 ///
@@ -6,30 +6,31 @@
 /// certificate pair and a live socket. Everything below needs neither: tls::stream is a template over
 /// the stream underneath it, and the parts that have nothing to do with the handshake - the SSL and BIO
 /// ownership, ALPN configuration, the accessors - can be driven against a stub inner stream.
-#include <catch2/catch_test_macros.hpp>
-
-#include <array>
-#include <cstdint>
-#include <expected>
-#include <new>
-#include <span>
-#include <system_error>
-#include <utility>
-
-#include <openssl/ssl.h>
-#include <sys/socket.h>
-
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/tcp/stream.hpp>
-#include <kmx/aio/file_descriptor.hpp>
 #include <kmx/aio/tls/stream.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/tcp/stream.hpp>
+    #include <kmx/aio/file_descriptor.hpp>
+    #include <kmx/aio/test/scoped_ssl_ctx.hpp>
 
-// The readiness instantiation is only linkable when the readiness library is part of the build.
-#if defined(KMX_AIO_FEATURE_READINESS)
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/readiness/tcp/stream.hpp>
+    #include <catch2/catch_test_macros.hpp>
+    #include <openssl/ssl.h>
+
+    #include <array>
+    #include <cstdint>
+    #include <expected>
+    #include <new>
+    #include <span>
+    #include <system_error>
+    #include <utility>
+    #include <sys/socket.h>
+
+    // The readiness instantiation is only linkable when the readiness library is part of the build.
+    #if defined(KMX_AIO_FEATURE_READINESS)
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/readiness/tcp/stream.hpp>
+    #endif
 #endif
-#include <kmx/aio/test/tls_certs.hpp>
 
 namespace kmx::aio::test::tls::stream_test
 {
@@ -44,7 +45,7 @@ namespace kmx::aio::test::tls::stream_test
         ///          them, so a stub without them does not compile - but nothing below reaches them:
         ///          the paths that pump are the handshake's business, and those are covered by the
         ///          integration tests.
-        struct stub_stream
+        struct stub_transport
         {
             int id {};
 
@@ -65,7 +66,7 @@ namespace kmx::aio::test::tls::stream_test
         // protocol name. "h2" and "http/1.1", the two this library's samples negotiate.
         constexpr std::array<std::uint8_t, 3u> alpn_h2 {2u, 'h', '2'};
         constexpr std::array<std::uint8_t, 12u> alpn_h2_and_http11 {2u, 'h', '2', 8u, 'h', 't', 't', 'p', '/', '1', '.', '1'};
-    } // namespace detail
+    }
 
     TEST_CASE("a TLS stream takes ownership of an SSL and its BIOs", "[core][tls][stream]")
     {
@@ -76,7 +77,7 @@ namespace kmx::aio::test::tls::stream_test
         // here asserts that directly - a leak is what the sanitiser build is for - but the construct and
         // destroy pair has to run at all before either can be trusted.
         {
-            stream<detail::stub_stream> tls_stream {detail::stub_stream {7}, ctx.get()};
+            stream<detail::stub_transport> tls_stream {detail::stub_transport {7}, ctx.get()};
             REQUIRE(tls_stream.next_layer() != nullptr);
             CHECK(tls_stream.next_layer()->id == 7);
         }
@@ -87,7 +88,7 @@ namespace kmx::aio::test::tls::stream_test
     TEST_CASE("a default-constructed TLS stream owns nothing", "[core][tls][stream]")
     {
         // The destructor's null guard: a stream that never got an SSL must not free one.
-        stream<detail::stub_stream> tls_stream;
+        stream<detail::stub_transport> tls_stream;
         CHECK(tls_stream.next_layer() == nullptr);
     }
 
@@ -96,11 +97,11 @@ namespace kmx::aio::test::tls::stream_test
         const scoped_ssl_ctx ctx;
         REQUIRE(ctx.get() != nullptr);
 
-        const stream<detail::stub_stream> tls_stream {detail::stub_stream {11}, ctx.get()};
+        const stream<detail::stub_transport> tls_stream {detail::stub_transport {11}, ctx.get()};
         REQUIRE(tls_stream.next_layer() != nullptr);
         CHECK(tls_stream.next_layer()->id == 11);
 
-        const stream<detail::stub_stream> empty;
+        const stream<detail::stub_transport> empty;
         CHECK(empty.next_layer() == nullptr);
     }
 
@@ -109,8 +110,8 @@ namespace kmx::aio::test::tls::stream_test
         const scoped_ssl_ctx ctx;
         REQUIRE(ctx.get() != nullptr);
 
-        stream<detail::stub_stream> source {detail::stub_stream {3}, ctx.get()};
-        stream<detail::stub_stream> target {std::move(source)};
+        stream<detail::stub_transport> source {detail::stub_transport {3}, ctx.get()};
+        stream<detail::stub_transport> target {std::move(source)};
 
         REQUIRE(target.next_layer() != nullptr);
         CHECK(target.next_layer()->id == 3);
@@ -132,7 +133,7 @@ namespace kmx::aio::test::tls::stream_test
         const scoped_ssl_ctx ctx;
         REQUIRE(ctx.get() != nullptr);
 
-        stream<detail::stub_stream> tls_stream {detail::stub_stream {}, ctx.get()};
+        stream<detail::stub_transport> tls_stream {detail::stub_transport {}, ctx.get()};
         CHECK(tls_stream.set_alpn_protocols(cspan_uint8_t(detail::alpn_h2)).has_value());
         CHECK(tls_stream.set_alpn_protocols(cspan_uint8_t(detail::alpn_h2_and_http11)).has_value());
     }
@@ -142,7 +143,7 @@ namespace kmx::aio::test::tls::stream_test
         const scoped_ssl_ctx ctx;
         REQUIRE(ctx.get() != nullptr);
 
-        stream<detail::stub_stream> tls_stream {detail::stub_stream {}, ctx.get()};
+        stream<detail::stub_transport> tls_stream {detail::stub_transport {}, ctx.get()};
 
         const auto result = tls_stream.set_alpn_protocols(cspan_uint8_t {});
         REQUIRE_FALSE(result.has_value());
@@ -153,7 +154,7 @@ namespace kmx::aio::test::tls::stream_test
     {
         // The other half of the same guard: a default-constructed stream has nothing to configure, and
         // passing its null SSL to OpenSSL would fault rather than fail.
-        stream<detail::stub_stream> tls_stream;
+        stream<detail::stub_transport> tls_stream;
 
         const auto result = tls_stream.set_alpn_protocols(cspan_uint8_t(detail::alpn_h2));
         REQUIRE_FALSE(result.has_value());
@@ -165,7 +166,7 @@ namespace kmx::aio::test::tls::stream_test
         const scoped_ssl_ctx ctx;
         REQUIRE(ctx.get() != nullptr);
 
-        stream<detail::stub_stream> tls_stream {detail::stub_stream {}, ctx.get()};
+        stream<detail::stub_transport> tls_stream {detail::stub_transport {}, ctx.get()};
         REQUIRE(tls_stream.set_alpn_protocols(cspan_uint8_t(detail::alpn_h2)).has_value());
 
         // Offering a protocol is not negotiating one: nothing is selected until a peer has agreed.
@@ -177,10 +178,10 @@ namespace kmx::aio::test::tls::stream_test
         const scoped_ssl_ctx ctx;
         REQUIRE(ctx.get() != nullptr);
 
-        stream<detail::stub_stream> client {detail::stub_stream {}, ctx.get()};
+        stream<detail::stub_transport> client {detail::stub_transport {}, ctx.get()};
         client.set_connect_state();
 
-        stream<detail::stub_stream> server {detail::stub_stream {}, ctx.get()};
+        stream<detail::stub_transport> server {detail::stub_transport {}, ctx.get()};
         server.set_accept_state();
 
         SUCCEED("both handshake roles configured");
@@ -190,7 +191,7 @@ namespace kmx::aio::test::tls::stream_test
     {
         // SSL_new answers a null context with a null SSL, and the constructor has nothing to wrap; it
         // throws rather than leave a stream whose every later call would fault on a null SSL.
-        CHECK_THROWS_AS((stream<detail::stub_stream> {detail::stub_stream {}, nullptr}), std::bad_alloc);
+        CHECK_THROWS_AS((stream<detail::stub_transport> {detail::stub_transport {}, nullptr}), std::bad_alloc);
     }
 
     TEST_CASE("set_alpn_protocols rejects a malformed wire list", "[core][tls][stream][alpn][error]")
@@ -198,7 +199,7 @@ namespace kmx::aio::test::tls::stream_test
         const scoped_ssl_ctx ctx;
         REQUIRE(ctx.get() != nullptr);
 
-        stream<detail::stub_stream> tls_stream {detail::stub_stream {}, ctx.get()};
+        stream<detail::stub_transport> tls_stream {detail::stub_transport {}, ctx.get()};
 
         // A length byte that runs past the end of the buffer, and a zero-length entry: OpenSSL rejects
         // both, and the wrapper has to report that rather than let a stream negotiate with a list the
@@ -216,7 +217,7 @@ namespace kmx::aio::test::tls::stream_test
 
     // the instantiations the library actually ships
     //
-    // Everything above exercises tls::stream<stub_stream>. A class template is compiled once per
+    // Everything above exercises tls::stream<stub_transport>. A class template is compiled once per
     // argument, so covering that instantiation says nothing about tls::stream<completion::tcp::stream>
     // or tls::stream<readiness::tcp::stream> - the two the samples and the handshake tests use, and the
     // two whose destructors and ALPN configuration were reported uncovered. They are instantiated here
@@ -289,4 +290,4 @@ namespace kmx::aio::test::tls::stream_test
         CHECK(empty_readiness.next_layer() == nullptr);
 #endif
     }
-} // namespace kmx::aio::test::tls::stream_test
+}

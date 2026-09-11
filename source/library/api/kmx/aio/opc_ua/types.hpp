@@ -1,4 +1,4 @@
-/// @file aio/opc_ua/types.hpp
+/// @file api/kmx/aio/opc_ua/types.hpp
 /// @brief Backend-neutral configuration and statistics types for OPC UA support.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -141,5 +141,5 @@ namespace kmx::aio::opc_ua
         std::uint64_t certificate_validation_failures {};
     };
 
-} // namespace kmx::aio::opc_ua
+}
 #endif // KMX_AIO_FEATURE_OPC_UA

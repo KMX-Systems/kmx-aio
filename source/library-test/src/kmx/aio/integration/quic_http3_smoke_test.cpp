@@ -1,29 +1,31 @@
-/// @file aio/integration/quic_http3_smoke_test.cpp
+/// @file src/kmx/aio/integration/quic_http3_smoke_test.cpp
 /// @brief Completion QUIC HTTP3 smoke test validating handshake -> stream -> response -> close sequence.
-
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #if defined(KMX_AIO_FEATURE_QUIC)
+    #ifndef PCH
+        #include <kmx/aio/test/sample_process.hpp>
+        #include <kmx/aio/test/tls_certs.hpp>
 
-    #include <catch2/catch_test_macros.hpp>
+        #include <catch2/catch_test_macros.hpp>
+        #include <catch2/generators/catch_generators.hpp>
 
-    #include <kmx/aio/test/tls_certs.hpp>
-
-    #include <catch2/generators/catch_generators.hpp>
-    #include <kmx/aio/test/sample_process.hpp>
-
-    #include <chrono>
-    #include <cstdlib>
-    #include <filesystem>
-    #include <fstream>
-    #include <optional>
-    #include <string>
-    #include <string_view>
-    #include <vector>
+        #include <chrono>
+        #include <cstdint>
+        #include <cstdlib>
+        #include <filesystem>
+        #include <fstream>
+        #include <optional>
+        #include <string>
+        #include <string_view>
+        #include <vector>
+    #endif
 
 namespace kmx::aio::test::integration::quic_http3_smoke_test
 {
     namespace fs = std::filesystem;
 
-    enum class quic_engine_case
+    /// @brief Which pair of sample binaries a run starts: the completion HTTP/3 pair or the readiness echo pair.
+    enum class sample_pair : std::uint8_t
     {
         completion_http3,
         readiness_echo,
@@ -56,13 +58,13 @@ namespace kmx::aio::test::integration::quic_http3_smoke_test
 
     TEST_CASE("QUIC smoke handshake-stream-response-close parametrized", "[quic][http3][readiness][integration][smoke][slow]")
     {
-        const auto engine_case = GENERATE(quic_engine_case::completion_http3, quic_engine_case::readiness_echo);
+        const auto engine_case = GENERATE(sample_pair::completion_http3, sample_pair::readiness_echo);
 
         const auto repo_root_opt = find_repo_root();
         REQUIRE(repo_root_opt.has_value());
 
         const fs::path repo_root = *repo_root_opt;
-        const bool is_completion = engine_case == quic_engine_case::completion_http3;
+        const bool is_completion = engine_case == sample_pair::completion_http3;
         const auto server_bin_name = is_completion ? "sample-quic-http3-server" : "sample-quic-echo-readiness-server";
         const auto client_bin_name = is_completion ? "sample-quic-http3-client" : "sample-quic-echo-readiness-client";
         const auto server_bin_opt = find_binary_under_debug(repo_root, server_bin_name);
@@ -173,6 +175,6 @@ namespace kmx::aio::test::integration::quic_http3_smoke_test
                                                            }));
         }
     }
-} // namespace kmx::aio::test::integration::quic_http3_smoke_test
+}
 
 #endif // KMX_AIO_FEATURE_QUIC

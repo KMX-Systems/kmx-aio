@@ -1,9 +1,10 @@
-/// @file avb/srp/messages.cpp
+/// @file src/kmx/aio/avb/srp/messages.cpp
+/// @brief MSRP (IEEE 802.1Qat) stream ID and Talker Advertise attribute encoding.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-
 #include <kmx/aio/avb/srp/messages.hpp>
-
-#include <arpa/inet.h>
+#ifndef PCH
+    #include <arpa/inet.h>
+#endif
 
 namespace kmx::aio::avb::srp
 {
@@ -30,4 +31,4 @@ namespace kmx::aio::avb::srp
         return a;
     }
 
-} // namespace kmx::aio::avb::srp
+}

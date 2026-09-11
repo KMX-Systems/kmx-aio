@@ -1,3 +1,5 @@
+/// @file inc/kmx/aio/modbus/detail/client_ops.hpp
+/// @brief CRTP mixin with the Modbus TCP client operations shared by the plain and TLS clients.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
@@ -72,4 +74,4 @@ namespace kmx::aio::modbus::detail
         }
     };
 
-} // namespace kmx::aio::modbus::detail
+}

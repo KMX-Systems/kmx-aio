@@ -1,0 +1,94 @@
+/// @file src/kmx/aio/http2/frame_builder.cpp
+/// @brief HTTP/2 frame builder: SETTINGS, SETTINGS ACK, HEADERS and DATA frame serialization.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#include <kmx/aio/http2/frame_builder.hpp>
+#ifndef PCH
+    #include <kmx/aio/http2/frame.hpp>
+    #include <kmx/aio/http2/hpack_encoder.hpp>
+    #include <kmx/aio/invalid_argument.hpp>
+    #include <kmx/aio/runtime_error.hpp>
+
+    #include <cstring>
+#endif
+
+namespace kmx::aio::http2
+{
+    std::size_t frame_builder::make_settings(span_uint8_t buffer) noexcept(false)
+    {
+        if (buffer.size() < 9u)
+            throw invalid_argument("Buffer too small for SETTINGS frame");
+
+        std::memset(buffer.data(), 0, 9u);
+        buffer[3u] = static_cast<std::uint8_t>(frame_type::settings);
+        return 9u;
+    }
+
+    std::size_t frame_builder::make_settings_ack(span_uint8_t buffer) noexcept(false)
+    {
+        std::size_t written = make_settings(buffer);
+        buffer[4u] = 0x01u; // Flags: ACK
+        return written;
+    }
+
+    std::size_t frame_builder::make_headers(span_uint8_t buffer, const std::uint32_t stream_id, const bool end_stream,
+                                            const header_list& headers) noexcept(false)
+    {
+        std::size_t hpack_len = hpack_encoder::encoded_size(headers);
+        if (hpack_len > 0xFFFFFFu)
+            throw runtime_error("Header block too large");
+
+        if (buffer.size() < 9u + hpack_len)
+            throw invalid_argument("Buffer too small for HEADERS frame");
+
+        // Write Frame Header
+        const std::uint32_t len = static_cast<std::uint32_t>(hpack_len);
+        buffer[0u] = (len >> 16u) & 0xFFu;
+        buffer[1u] = (len >> 8u) & 0xFFu;
+        buffer[2u] = len & 0xFFu;
+
+        buffer[3u] = static_cast<std::uint8_t>(frame_type::headers);
+        buffer[4u] = 0x04u; // Flags: END_HEADERS (0x04)
+        if (end_stream)
+            buffer[4u] |= 0x01u; // OR in END_STREAM (0x01)
+
+        buffer[5u] = (stream_id >> 24u) & 0xFFu;
+        buffer[6u] = (stream_id >> 16u) & 0xFFu;
+        buffer[7u] = (stream_id >> 8u) & 0xFFu;
+        buffer[8u] = stream_id & 0xFFu;
+
+        // Inject HPACK payload
+        hpack_encoder::encode(buffer.subspan(9u, hpack_len), headers);
+
+        return 9u + hpack_len;
+    }
+
+    std::size_t frame_builder::make_data(span_uint8_t buffer, const std::uint32_t stream_id, const bool end_stream,
+                                         std::string_view data) noexcept(false)
+    {
+        if (data.size() > 0xFFFFFFu)
+            throw runtime_error("Data block too large");
+
+        if (buffer.size() < 9u + data.size())
+            throw invalid_argument("Buffer too small for DATA frame");
+
+        const std::uint32_t len = static_cast<std::uint32_t>(data.size());
+        buffer[0u] = (len >> 16u) & 0xFFu;
+        buffer[1u] = (len >> 8u) & 0xFFu;
+        buffer[2u] = len & 0xFFu;
+
+        buffer[3u] = static_cast<std::uint8_t>(frame_type::data);
+        buffer[4u] = end_stream ? 0x01u : 0x00u; // Flags: END_STREAM (0x01)
+
+        buffer[5u] = (stream_id >> 24u) & 0xFFu;
+        buffer[6u] = (stream_id >> 16u) & 0xFFu;
+        buffer[7u] = (stream_id >> 8u) & 0xFFu;
+        buffer[8u] = stream_id & 0xFFu;
+
+        // Copy raw payload. A DATA frame carries up to 16 MiB, and a byte-at-a-time loop through a
+        // span is the one place in this builder where that size is paid for one element at a time.
+        if (!data.empty())
+            std::memcpy(buffer.data() + 9u, data.data(), data.size());
+
+        return 9u + data.size();
+    }
+}

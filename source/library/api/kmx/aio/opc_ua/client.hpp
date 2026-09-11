@@ -1,19 +1,19 @@
-/// @file aio/opc_ua/client.hpp
+/// @file api/kmx/aio/opc_ua/client.hpp
 /// @brief Backend-neutral async OPC UA client facade.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_OPC_UA)
     #ifndef PCH
+        #include <kmx/aio/opc_ua/types.hpp>
+        #include <kmx/aio/task.hpp>
+
         #include <chrono>
         #include <cstdint>
         #include <expected>
         #include <memory>
         #include <system_error>
         #include <vector>
-
-        #include <kmx/aio/opc_ua/types.hpp>
-        #include <kmx/aio/task.hpp>
     #endif
 
 namespace kmx::aio::opc_ua
@@ -85,8 +85,7 @@ namespace kmx::aio::opc_ua
         /// @param read_status Status returned for next read callback.
         /// @param write_status Status returned for next write callback.
         /// @param call_status Status returned for next call callback.
-        void __kmx_test_set_next_request_statuses(std::uint32_t read_status, std::uint32_t write_status,
-                                                  std::uint32_t call_status) noexcept;
+        void test_set_next_request_statuses(std::uint32_t read_status, std::uint32_t write_status, std::uint32_t call_status) noexcept;
     #endif
 
     private:
@@ -95,5 +94,5 @@ namespace kmx::aio::opc_ua
         std::unique_ptr<impl> impl_;
     };
 
-} // namespace kmx::aio::opc_ua
+}
 #endif // KMX_AIO_FEATURE_OPC_UA

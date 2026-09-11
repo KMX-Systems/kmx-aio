@@ -1,25 +1,36 @@
-/// @file kmx/aio/knx/data_secure_test.cpp
+/// @file src/kmx/aio/knx/data_secure_test.cpp
 /// @brief KNX Data Secure group communication: xknx's vectors, and the policy a context applies to whole frames.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details The vectors come out of xknx 3.20.0's own Data Secure code, through
 /// script/feature/knx/secure-vectors/generate.py: both algorithms, group and individual destinations, standard and
 /// extended frames. Around them: keys and senders, sequence numbers, the services that are refused, reservation of
 /// sequence numbers before use, and unencrypted traffic to a secured group.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
 #include <kmx/aio/knx/data_secure.hpp>
-#include <kmx/aio/knx/error.hpp>
-#include <kmx/aio/knx/keyring.hpp>
-#include <kmx/aio/test/knx/secure_vectors.hpp>
+#ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/knx/data_secure/context.hpp>
+    #include <kmx/aio/knx/data_secure/sequence_store.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/group_address.hpp>
+    #include <kmx/aio/knx/individual_address.hpp>
+    #include <kmx/aio/knx/keyring.hpp>
+    #include <kmx/aio/knx/keyring/document.hpp>
+    #include <kmx/aio/test/knx/secure_vectors.hpp>
 
-#include <algorithm>
-#include <cstdint>
-#include <fstream>
-#include <iterator>
-#include <span>
-#include <string>
-#include <string_view>
-#include <vector>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <algorithm>
+    #include <cstddef>
+    #include <cstdint>
+    #include <expected>
+    #include <fstream>
+    #include <iterator>
+    #include <span>
+    #include <string>
+    #include <string_view>
+    #include <system_error>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::knx::data_secure_test
 {
@@ -52,6 +63,7 @@ namespace kmx::aio::test::knx::data_secure_test
                 text.push_back(digits[octet >> 4u]);
                 text.push_back(digits[octet & 0x0Fu]);
             }
+
             return text;
         }
 
@@ -79,6 +91,7 @@ namespace kmx::aio::test::knx::data_secure_test
                 result.push_back(vector_row {algorithm, sv::hex(fields[2u]), std::stoull(fields[3u], nullptr, 16), sv::hex(fields[4u]),
                                              sv::hex(fields[5u])});
             }
+
             return result;
         }
 
@@ -108,7 +121,7 @@ namespace kmx::aio::test::knx::data_secure_test
         }
 
         /// @brief What follows the APCI of a secured frame.
-        [[nodiscard]] sv::octets_t secured_data_of(const sv::octets_t& frame)
+        [[nodiscard]] sv::octets_t secured_octets_of(const sv::octets_t& frame)
         {
             return sv::octets_t(frame.begin() + static_cast<std::ptrdiff_t>(link_of(frame) + 9u), frame.end());
         }
@@ -136,26 +149,42 @@ namespace kmx::aio::test::knx::data_secure_test
         };
 
         template <typename Value>
-        [[nodiscard]] std::error_code error_of(const std::expected<Value, std::error_code>& result) noexcept
+        [[nodiscard]] std::error_code error_of(const expected_t<Value>& result) noexcept
         {
             return result.has_value() ? std::error_code {} : result.error();
         }
 
-        /// @brief A configuration keying @p group with @p key, trusting @p sender from just past @p last_sequence.
-        [[nodiscard]] ds::configuration configuration(const sv::octets_t& key, const std::uint16_t group,
-                                                      const kn::individual_address sender, const std::uint64_t last_sequence,
-                                                      const ds::algorithm outgoing = ds::algorithm::authenticated_encryption)
+        /// @brief One group, the key it is secured under, and the one sender it trusts.
+        struct configuration_params
+        {
+            /// @brief The group key.
+            sv::octets_t key {};
+            /// @brief The group.
+            std::uint16_t group {};
+            /// @brief The sender trusted.
+            kn::individual_address sender {};
+            /// @brief The last sequence number accepted from the sender.
+            std::uint64_t last_sequence {};
+            /// @brief How outgoing telegrams are protected.
+            ds::algorithm outgoing {ds::algorithm::authenticated_encryption};
+        };
+
+        /// @brief A configuration keying one group, trusting its sender from just past the last sequence number.
+        [[nodiscard]] ds::configuration configuration(const configuration_params& params)
         {
             ds::configuration value {};
-            value.group_keys.push_back(kr::group_key {.address = kn::group_address {group}, .key = sv::key(key)});
-            value.senders.push_back(ds::sender_sequence {.address = sender, .last_valid_sequence = last_sequence});
-            value.outgoing = outgoing;
+            value.group_keys.push_back(kr::group_key {.address = kn::group_address {params.group}, .key = sv::key(params.key)});
+            value.senders.push_back(ds::sender_sequence {.address = params.sender, .last_valid_sequence = params.last_sequence});
+            value.outgoing = params.outgoing;
             return value;
         }
 
         [[nodiscard]] ds::configuration switch_configuration(const std::uint64_t last_sequence = 0u)
         {
-            return configuration(sv::hex(group_key_text), 0x0A03u, kn::individual_address {1u, 1u, 5u}, last_sequence);
+            return configuration({.key = sv::hex(group_key_text),
+                                  .group = 0x0A03u,
+                                  .sender = kn::individual_address {1u, 1u, 5u},
+                                  .last_sequence = last_sequence});
         }
 
         /// @brief Secures @p frame under a sender whose sequence numbers start at @p first.
@@ -170,6 +199,7 @@ namespace kmx::aio::test::knx::data_secure_test
                 REQUIRE(secured.has_value());
                 frames.push_back(std::move(*secured));
             }
+
             return frames;
         }
 
@@ -191,16 +221,17 @@ namespace kmx::aio::test::knx::data_secure_test
             const auto plain_apdu = detail::plain_apdu_of(row.plain);
             const auto key = sv::key(row.key);
             sv::octets_t sealed(plain_apdu.size() + ds::secured_apdu_overhead, 0u);
-            const auto size =
-                ds::seal_apdu(sealed, key, ds::security_control {.algorithm = row.algorithm}, row.sequence, binding, plain_apdu);
+            const auto size = ds::seal_apdu(
+                sealed, key, ds::apdu_fields {.control = {.algorithm = row.algorithm}, .sequence = row.sequence, .binding = binding},
+                plain_apdu);
             REQUIRE(size.has_value());
-            CHECK(sealed == detail::secured_data_of(row.secured));
+            CHECK(sealed == detail::secured_octets_of(row.secured));
 
             sv::octets_t opened(plain_apdu.size(), 0u);
-            const auto recovered = ds::open_apdu(opened, key, detail::binding_of(row.secured), detail::secured_data_of(row.secured));
+            const auto recovered = ds::open_apdu(opened, key, detail::binding_of(row.secured), detail::secured_octets_of(row.secured));
             REQUIRE(recovered.has_value());
             CHECK(opened == plain_apdu);
-            CHECK(ds::sequence_of(detail::secured_data_of(row.secured)) == row.sequence);
+            CHECK(ds::sequence_of(detail::secured_octets_of(row.secured)) == row.sequence);
         }
     }
 
@@ -213,12 +244,15 @@ namespace kmx::aio::test::knx::data_secure_test
                 continue;
             INFO("secured " << detail::hex_text(row.secured));
             detail::memory_store store {row.sequence};
-            ds::context sender {detail::configuration(row.key, binding.destination, binding.source, 0u, row.algorithm), &store};
+            ds::context sender {
+                detail::configuration({.key = row.key, .group = binding.destination, .sender = binding.source, .outgoing = row.algorithm}),
+                &store};
             const auto secured = sender.secure_frame(row.plain);
             REQUIRE(secured.has_value());
             CHECK(*secured == row.secured);
 
-            ds::context receiver {detail::configuration(row.key, binding.destination, binding.source, row.sequence - 1u)};
+            ds::context receiver {detail::configuration(
+                {.key = row.key, .group = binding.destination, .sender = binding.source, .last_sequence = row.sequence - 1u})};
             const auto opened = receiver.open_frame(row.secured);
             REQUIRE(opened.has_value());
             CHECK(*opened == row.plain);
@@ -229,10 +263,12 @@ namespace kmx::aio::test::knx::data_secure_test
     {
         const auto secured = detail::secured_run(sv::hex(detail::switch_on), 7u, 1u).front();
 
-        ds::context other_group {detail::configuration(sv::hex(detail::group_key_text), 0x0A04u, kn::individual_address {1u, 1u, 5u}, 0u)};
+        ds::context other_group {detail::configuration(
+            {.key = sv::hex(detail::group_key_text), .group = 0x0A04u, .sender = kn::individual_address {1u, 1u, 5u}})};
         CHECK(detail::error_of(other_group.open_frame(secured)) == make_error_code(error::secure_key_missing));
 
-        ds::context other_sender {detail::configuration(sv::hex(detail::group_key_text), 0x0A03u, kn::individual_address {1u, 1u, 9u}, 0u)};
+        ds::context other_sender {detail::configuration(
+            {.key = sv::hex(detail::group_key_text), .group = 0x0A03u, .sender = kn::individual_address {1u, 1u, 9u}})};
         CHECK(detail::error_of(other_sender.open_frame(secured)) == make_error_code(error::secure_key_missing));
 
         auto restricted = detail::switch_configuration();
@@ -277,6 +313,7 @@ namespace kmx::aio::test::knx::data_secure_test
             altered[control] = octet;
             CHECK(detail::error_of(receiver.open_frame(altered)) == make_error_code(error::secure_unsupported));
         }
+
         CHECK(receiver.counters().refused_services == 5u);
 
         // Point-to-point Data Secure is refused on the way in, and point-to-point traffic goes out as it is.
@@ -305,8 +342,9 @@ namespace kmx::aio::test::knx::data_secure_test
             {
                 const auto secured = sender.secure_frame(plain);
                 REQUIRE(secured.has_value());
-                CHECK(ds::sequence_of(detail::secured_data_of(*secured)) == expected);
+                CHECK(ds::sequence_of(detail::secured_octets_of(*secured)) == expected);
             }
+
             CHECK(store.reservations == std::vector<std::uint64_t> {104u, 108u});
         }
 
@@ -316,7 +354,7 @@ namespace kmx::aio::test::knx::data_secure_test
         ds::context restarted {std::move(restarted_configuration), &store};
         const auto first = restarted.secure_frame(plain);
         REQUIRE(first.has_value());
-        CHECK(ds::sequence_of(detail::secured_data_of(*first)) == 108u);
+        CHECK(ds::sequence_of(detail::secured_octets_of(*first)) == 108u);
 
         // A block that cannot be recorded is not used: nothing is sent under it.
         store.failing = true;
@@ -377,7 +415,8 @@ namespace kmx::aio::test::knx::data_secure_test
         // An L_Data.con carries back what this endpoint sent: it opens however often, with no sender table to consult.
         auto confirmation = vector.secured;
         confirmation[0u] = 0x2Eu;
-        ds::context confirmer {detail::configuration(sv::hex(detail::group_key_text), 0x0A03u, kn::individual_address {1u, 1u, 9u}, 0u)};
+        ds::context confirmer {detail::configuration(
+            {.key = sv::hex(detail::group_key_text), .group = 0x0A03u, .sender = kn::individual_address {1u, 1u, 9u}})};
         for (std::size_t index {}; index < 2u; ++index)
         {
             const auto opened = confirmer.open_frame(confirmation);

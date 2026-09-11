@@ -1,28 +1,29 @@
-/// @file completion/udp/endpoint_test.cpp
+/// @file src/kmx/aio/completion/udp/endpoint_test.cpp
 /// @brief Tests for completion::udp::endpoint parity API.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <array>
-#include <cstddef>
-#include <cstring>
-#include <memory>
-#include <span>
-#include <string>
-
-#include <netinet/in.h>
-#include <sys/socket.h>
-
-#include <catch2/catch_test_macros.hpp>
-
-#include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/completion/udp/endpoint.hpp>
-#include <kmx/aio/task.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/task.hpp>
+
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <array>
+    #include <cstddef>
+    #include <cstring>
+    #include <memory>
+    #include <span>
+    #include <string>
+    #include <netinet/in.h>
+    #include <sys/socket.h>
+#endif
 
 namespace kmx::aio::test::completion::udp::endpoint_test
 {
     using namespace kmx::aio::completion;
     using namespace kmx::aio::completion::udp;
 
-    struct endpoint_roundtrip_state
+    struct roundtrip_state
     {
         bool ok {};
         std::error_code error {};
@@ -57,15 +58,13 @@ namespace kmx::aio::test::completion::udp::endpoint_test
     /// @param receiver The bound receiving endpoint.
     /// @param state Receives what arrived and from where.
     /// @return Nothing, or the reason it did not arrive as sent.
-    static auto expect_payload(endpoint& receiver, endpoint_roundtrip_state& state) -> task<expected_void_t>
+    static auto expect_payload(endpoint& receiver, roundtrip_state& state) -> task<expected_void_t>
     {
         std::array<std::byte, 32u> buffer {};
-        sockaddr_storage peer_address {};
-        socklen_t peer_address_length {};
-        ip_address_t peer_ip = ipv4::make_address(ipv4::any);
-        port_t peer_port {};
+        socket_address peer_address {};
+        endpoint_address peer {};
 
-        const auto received = co_await receiver.recv(span_byte_t(buffer), peer_address, peer_address_length, peer_ip, peer_port);
+        const auto received = co_await receiver.recv(span_byte_t(buffer), peer_address, peer);
         if (!received)
             co_return std::unexpected(received.error());
 
@@ -75,13 +74,13 @@ namespace kmx::aio::test::completion::udp::endpoint_test
         if (std::memcmp(buffer.data(), roundtrip_payload.data(), roundtrip_payload.size()) != 0)
             co_return std::unexpected(std::make_error_code(std::errc::bad_message));
 
-        state.peer_ip = ip_to_string(peer_ip);
-        state.peer_port = peer_port;
+        state.peer_ip = ip_to_string(to_ip_address_view(peer.ip));
+        state.peer_port = peer.port;
         co_return expected_void_t {};
     }
 
     /// @brief Sends one datagram between two endpoints on the loopback and checks it arrives.
-    static auto exchange(executor& exec, endpoint_roundtrip_state& state) -> task<expected_void_t>
+    static auto exchange(executor& exec, roundtrip_state& state) -> task<expected_void_t>
     {
         auto receiver = endpoint::create(exec, AF_INET);
         if (!receiver)
@@ -103,7 +102,7 @@ namespace kmx::aio::test::completion::udp::endpoint_test
         co_return co_await expect_payload(*receiver, state);
     }
 
-    static auto run_endpoint_roundtrip(executor& exec, std::shared_ptr<endpoint_roundtrip_state> state) -> task<void>
+    static auto run_roundtrip(executor& exec, std::shared_ptr<roundtrip_state> state) -> task<void>
     {
         const auto result = co_await exchange(exec, *state);
         if (result.has_value())
@@ -121,9 +120,9 @@ namespace kmx::aio::test::completion::udp::endpoint_test
     TEST_CASE("completion udp endpoint loopback roundtrip", "[completion][udp][endpoint]")
     {
         executor exec;
-        auto state = std::make_shared<endpoint_roundtrip_state>();
+        auto state = std::make_shared<roundtrip_state>();
 
-        exec.spawn(run_endpoint_roundtrip(exec, state));
+        exec.spawn(run_roundtrip(exec, state));
         exec.run();
 
         REQUIRE(state->ok);
@@ -133,4 +132,4 @@ namespace kmx::aio::test::completion::udp::endpoint_test
         REQUIRE(state->peer_ip == "127.0.0.1");
         REQUIRE(state->peer_port != 0u);
     }
-} // namespace kmx::aio::test::completion::udp::endpoint_test
+}

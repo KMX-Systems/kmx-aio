@@ -1,9 +1,11 @@
+/// @file inc/kmx/aio/sample/tcp/echo/server/manager.hpp
+/// @brief Readiness-model TCP echo server sample manager: accepts clients, streams random data and shows live stats.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <kmx/aio/readiness/executor.hpp>
     #include <kmx/aio/readiness/tcp/stream.hpp>
     #include <kmx/logger.hpp>
-    #include <unistd.h>
 
     #include <atomic>
     #include <memory>
@@ -11,6 +13,7 @@
     #include <stop_token>
     #include <thread>
     #include <unordered_map>
+    #include <unistd.h>
 #endif
 
 namespace kmx::aio::sample::tcp::echo::server
@@ -41,7 +44,7 @@ namespace kmx::aio::sample::tcp::echo::server
     public:
         explicit manager(config config = {}): config_(std::move(config)) {}
 
-        const metric_data& metrics() const noexcept { return metrics_; }
+        [[nodiscard]] const metric_data& metrics() const noexcept { return metrics_; }
 
         /// @brief Run the server
         [[nodiscard]] bool run() noexcept(false);
@@ -94,4 +97,4 @@ namespace kmx::aio::sample::tcp::echo::server
         static inline std::atomic<readiness::executor*> g_executor_ptr {};
     };
 
-} // namespace kmx::aio::sample::tcp::echo::server
+}

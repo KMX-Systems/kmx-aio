@@ -1,11 +1,13 @@
-/// @file aio/allocator/detail/thread_state.cpp
+/// @file src/kmx/aio/allocator/detail/thread_state.cpp
+/// @brief Registry of per-thread allocator blocks: lazy creation, process-wide totals and counter reset.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/allocator/detail/thread_state.hpp>
+#ifndef PCH
+    #include <kmx/aio/allocator/counter.hpp>
 
-#include <kmx/aio/allocator/counter.hpp>
-
-#include <mutex>
-#include <new>
+    #include <mutex>
+    #include <new>
+#endif
 
 namespace kmx::aio::allocator::detail
 {
@@ -72,4 +74,4 @@ namespace kmx::aio::allocator::detail
             state->heap_allocations.store(0u, std::memory_order_relaxed);
         }
     }
-} // namespace kmx::aio::allocator::detail
+}

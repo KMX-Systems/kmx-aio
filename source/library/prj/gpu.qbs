@@ -13,6 +13,7 @@ StaticLibrary {
     cpp.enableRtti: false
     cpp.includePaths: [
         "../api",
+        "../inc",
         "/usr/local/include",
     ]
     cpp.dynamicLibraries: [
@@ -21,7 +22,9 @@ StaticLibrary {
     install: true
     files: [
         "../api/kmx/aio/gpu/**.hpp",
+        "../inc/kmx/aio/gpu/detail/**.hpp",
         "../src/kmx/aio/gpu/**.cpp",
+        "../src/kmx/aio/gpu/detail/**.cpp",
     ]
 
     Export {

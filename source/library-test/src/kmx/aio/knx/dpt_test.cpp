@@ -1,13 +1,24 @@
+/// @file src/kmx/aio/knx/dpt_test.cpp
+/// @brief Unit tests for KNX datapoint type encoding and decoding across every implemented main type.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_approx.hpp>
-#include <catch2/catch_test_macros.hpp>
-
 #include <kmx/aio/knx/dpt.hpp>
+#ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/knx/dpt/descriptor.hpp>
+    #include <kmx/aio/knx/dpt/payload.hpp>
+    #include <kmx/aio/knx/dpt/string_value.hpp>
+    #include <kmx/aio/knx/dpt/traits.hpp>
+    #include <kmx/aio/knx/dpt/value_view.hpp>
+    #include <kmx/aio/knx/error.hpp>
 
-#include <array>
-#include <cstdint>
-#include <utility>
-#include <vector>
+    #include <catch2/catch_approx.hpp>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <array>
+    #include <cstdint>
+    #include <utility>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::knx::dpt_test
 {
@@ -38,7 +49,7 @@ namespace kmx::aio::test::knx::dpt_test
         /// @param storage Storage the returned view can borrow.
         /// @return The view of the encoded value.
         template <std::uint16_t Main>
-        [[nodiscard]] dpt::value_view round_trip(const typename dpt::traits<Main>::value_t& value, dpt::payload& storage) noexcept(false)
+        [[nodiscard]] dpt::value_view round_trip(const dpt::value_t<Main>& value, dpt::payload& storage) noexcept(false)
         {
             storage = dpt::encode<Main>(value).value();
             return storage.compacted() ? compact(storage.compact_value()) : extended(storage.view());

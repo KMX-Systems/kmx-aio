@@ -1,204 +1,34 @@
-/// @file aio/benchmark/feature/scenarios.hpp
+/// @file inc/kmx/aio/benchmark/feature/scenarios.hpp
 /// @brief Benchmark scenarios written once and measured on both execution models.
-/// @details A scenario in here is a template over a backend from backend_traits.hpp. Writing it once
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+/// @details A scenario in here is a template over a backend from readiness_backend.hpp or completion_backend.hpp. Writing it once
 ///          is not only economy: two hand-written copies of "the same" benchmark drift, and the first
 ///          person to read the report has no way of telling a real difference between the executors
 ///          from a difference between the two benchmark bodies. One body cannot drift from itself.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/benchmark/feature/backend_traits.hpp>
+    #include <kmx/aio/benchmark/feature/detail/run_window.hpp>
+    #include <kmx/aio/benchmark/feature/watchdog.hpp>
+    #include <kmx/aio/benchmark/harness.hpp>
+    #include <kmx/aio/file_descriptor.hpp>
+    #include <kmx/aio/task.hpp>
+
     #include <atomic>
     #include <chrono>
     #include <cstddef>
     #include <string>
-    #include <thread>
     #include <utility>
     #include <vector>
-
-    #include <kmx/aio/benchmark/feature/backend_traits.hpp>
-    #include <kmx/aio/benchmark/harness.hpp>
+    #include <sys/socket.h>
+    #include <unistd.h>
 #endif
 
 namespace kmx::aio::benchmark::feature
 {
-    /// @brief Stops a run that has not finished within a deadline, so one hung case cannot stall the suite.
-    /// @tparam StopFn A callable that asks the run to stop. It is called from the watchdog's thread.
-    template <typename StopFn>
-    class watchdog
-    {
-    public:
-        /// @brief Starts watching.
-        /// @param stop What to call when the deadline passes.
-        /// @param limit How long to wait before calling it.
-        /// @throws std::system_error if the thread cannot be started.
-        watchdog(StopFn stop, const std::chrono::seconds limit) noexcept(false):
-            thread_([this, stop = std::move(stop), limit]() noexcept { watch(stop, limit); })
-        {
-        }
-
-        /// @brief Stops watching and joins the thread.
-        ~watchdog() noexcept { done_.store(true, std::memory_order_release); }
-
-        watchdog(const watchdog&) = delete;
-        watchdog& operator=(const watchdog&) = delete;
-
-        /// @brief Whether the deadline passed.
-        /// @return True when the run had to be stopped.
-        [[nodiscard]] bool expired() const noexcept { return expired_.load(std::memory_order_relaxed); }
-
-    private:
-        /// @brief Polls the deadline until the run finishes, calling @p stop if it passes first.
-        /// @param stop What to call when the deadline passes.
-        /// @param limit How long to wait before calling it.
-        void watch(const StopFn& stop, const std::chrono::seconds limit) noexcept;
-
-        /// @brief Set when the run finished on its own.
-        std::atomic_bool done_ {};
-
-        /// @brief Set when the deadline passed first.
-        std::atomic_bool expired_ {};
-
-        /// @brief The watching thread. Declared last, so it starts only once the flags exist.
-        std::jthread thread_;
-    };
-
-    template <typename StopFn>
-    void watchdog<StopFn>::watch(const StopFn& stop, const std::chrono::seconds limit) noexcept
-    {
-        const auto deadline = std::chrono::steady_clock::now() + limit;
-        while (!done_.load(std::memory_order_acquire))
-        {
-            if (std::chrono::steady_clock::now() >= deadline)
-            {
-                expired_.store(true, std::memory_order_relaxed);
-                stop();
-                return;
-            }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        }
-    }
-
-    /// @brief Deduction guide, so a lambda can be handed straight to the constructor.
-    template <typename StopFn>
-    watchdog(StopFn, std::chrono::seconds) -> watchdog<StopFn>;
-
     /// @brief How long a scenario is given before the watchdog stops it.
     static constexpr std::chrono::seconds scenario_time_limit {60};
-
-    /// @brief What each paired scenario is called and how much work it does.
-    /// @details Held in one place so both sides of a pairing cannot disagree about it. A scenario
-    ///          whose two sides ran different amounts of work is not a comparison, and the only
-    ///          reliable way to stop that happening is for neither side to own the number.
-    namespace catalogue
-    {
-        /// @brief The socketpair round-trip scenario.
-        struct socketpair_rtt_scenario
-        {
-            /// @brief The key both sides register under.
-            static constexpr std::string_view key = "socketpair_rtt";
-
-            /// @brief What the row means, in one line.
-            static constexpr std::string_view description =
-                "one byte out and back between two coroutines, one round trip in flight at a time";
-
-            /// @brief Round trips timed at scale 1.
-            static constexpr std::size_t iterations = 20'000u;
-
-            /// @brief Bytes carried per round trip.
-            /// @details One. These cases measure the cost of getting the executor's attention, not the
-            ///          cost of moving bytes; a larger payload measures the socket buffer as well and
-            ///          blurs exactly the thing being compared. Throughput has its own scenarios.
-            static constexpr std::size_t payload_size = 1u;
-        };
-
-        /// @brief The loopback TCP echo scenario, at one connection and at many.
-        struct tcp_echo_scenario
-        {
-            /// @brief The key the single-connection pairing registers under.
-            static constexpr std::string_view single_key = "tcp_echo_rtt (1 conn)";
-
-            /// @brief What the single-connection row means.
-            static constexpr std::string_view single_description =
-                "64 bytes out and back over a loopback TCP connection, one round trip in flight";
-
-            /// @brief The key the many-connection pairing registers under.
-            static constexpr std::string_view many_key = "tcp_echo_rtt (64 conn)";
-
-            /// @brief What the many-connection row means.
-            static constexpr std::string_view many_description =
-                "the same round trips spread over 64 connections, where submission batching can show";
-
-            /// @brief Round trips per connection at scale 1, single-connection case.
-            static constexpr std::size_t single_rounds = 5'000u;
-
-            /// @brief Total round trips at scale 1, spread across the connections.
-            static constexpr std::size_t many_total_rounds = 12'800u;
-
-            /// @brief How many connections the many-connection case opens.
-            static constexpr std::size_t connections = 64u;
-
-            /// @brief Bytes per round trip. A payload that fits one segment and one read.
-            static constexpr std::size_t payload_size = 64u;
-        };
-
-        /// @brief The loopback TCP bulk transfer scenario.
-        /// @details A sweep over three block sizes rather than one, because the size is the variable
-        ///          that decides this row. Each model has a fixed cost per I/O operation and the two
-        ///          costs are not the same, so moving a fixed number of bytes in smaller pieces charges
-        ///          that difference more times. A single figure would invite a conclusion about
-        ///          "throughput" that is really a statement about one block size - and the TLS
-        ///          throughput row, where the record pump works in 8 KiB chunks whatever the caller
-        ///          asked for, is exactly the case that needs this sweep to be readable.
-        struct tcp_throughput_scenario
-        {
-            static constexpr std::string_view small_key = "tcp_throughput (4 KiB)";   ///< The small-block pairing key.
-            static constexpr std::string_view medium_key = "tcp_throughput (16 KiB)"; ///< The medium-block pairing key.
-            static constexpr std::string_view large_key = "tcp_throughput (64 KiB)";  ///< The large-block pairing key.
-
-            static constexpr std::string_view small_description = "4 KiB blocks streamed one way over loopback TCP";
-            static constexpr std::string_view medium_description =
-                "16 KiB blocks streamed one way over loopback TCP - the size the TLS pump works in";
-            static constexpr std::string_view large_description = "64 KiB blocks streamed one way over loopback TCP";
-
-            /// @brief Bytes moved at scale 1, held constant across the sweep.
-            /// @details The same total at every size, so the sweep says what changing the block size
-            ///          costs rather than what moving more bytes costs.
-            static constexpr std::size_t total_bytes = 256u * 1024u * 1024u;
-
-            static constexpr std::size_t small_block = 4'096u;   ///< Bytes per block, small.
-            static constexpr std::size_t medium_block = 16'384u; ///< Bytes per block, medium.
-            static constexpr std::size_t large_block = 65'536u;  ///< Bytes per block, large.
-        };
-
-        /// @brief The loopback TCP accept scenario.
-        struct tcp_accept_scenario
-        {
-            static constexpr std::string_view key = "tcp_accept"; ///< The pairing key.
-            static constexpr std::string_view description =
-                "connect and accept, timed on the accepting side: IORING_OP_ACCEPT against epoll-then-accept";
-            static constexpr std::size_t connections = 2'000u; ///< Connections accepted at scale 1.
-        };
-
-        /// @brief The loopback UDP round-trip scenario.
-        struct udp_echo_scenario
-        {
-            static constexpr std::string_view key = "udp_echo_rtt"; ///< The pairing key.
-            static constexpr std::string_view description = "a 64-byte datagram out and back between two loopback UDP endpoints";
-            static constexpr std::size_t iterations = 10'000u; ///< Round trips at scale 1.
-            static constexpr std::size_t payload_size = 64u;   ///< Bytes per datagram.
-        };
-
-        /// @brief The one-shot timer scenario.
-        struct timer_scenario
-        {
-            static constexpr std::string_view key = "timer_oneshot (200 us)"; ///< The pairing key.
-            static constexpr std::string_view description =
-                "how late a 200 us timer actually fires: timerfd + epoll against IORING_OP_TIMEOUT";
-            static constexpr std::size_t iterations = 2'000u;             ///< Timers awaited at scale 1.
-            static constexpr std::chrono::nanoseconds interval {200'000}; ///< What each one asks for.
-        };
-    } // namespace catalogue
 
     namespace detail
     {
@@ -224,34 +54,41 @@ namespace kmx::aio::benchmark::feature
             }
         }
 
+        /// @brief What the near side of a ping-pong drives, and where it records the round trips.
+        /// @tparam Backend The execution model to drive.
+        template <typename Backend>
+        struct ping_side_params
+        {
+            typename Backend::executor_t& exec; ///< The executor.
+            fd_t fd {-1};                       ///< The descriptor to ping on.
+            std::size_t iterations {};          ///< How many round trips to make.
+            std::size_t payload_size {};        ///< The payload size in bytes.
+            std::vector<double>& samples;       ///< Receives one duration per round trip. Must outlive the run.
+        };
+
         /// @brief The near side of a ping-pong: send a payload, wait for it to come back, time it.
         /// @tparam Backend The execution model to drive.
-        /// @param exec The executor.
-        /// @param fd The descriptor to ping on.
-        /// @param iterations How many round trips to make.
-        /// @param payload_size The payload size in bytes.
-        /// @param samples Receives one duration per round trip. Must outlive the run.
+        /// @param params The executor, the descriptor, the work to do and where the samples go.
         /// @throws std::bad_alloc (coroutine frame and buffer allocation).
         template <typename Backend>
-        task<void> ping_side(typename Backend::executor_t& exec, const fd_t fd, const std::size_t iterations,
-                             const std::size_t payload_size, std::vector<double>& samples) noexcept(false)
+        task<void> ping_side(const ping_side_params<Backend> params) noexcept(false)
         {
-            std::vector<char> buffer(payload_size);
-            for (std::size_t i {}; i != iterations; ++i)
+            std::vector<char> buffer(params.payload_size);
+            for (std::size_t i {}; i != params.iterations; ++i)
             {
                 const auto start = clock_t::now();
 
-                if (!co_await Backend::write_exact(exec, fd, cspan_char_t(buffer.data(), buffer.size())))
+                if (!co_await Backend::write_exact(params.exec, params.fd, cspan_char_t(buffer.data(), buffer.size())))
                     co_return;
 
-                if (!co_await Backend::read_exact(exec, fd, span_char_t(buffer.data(), buffer.size())))
+                if (!co_await Backend::read_exact(params.exec, params.fd, span_char_t(buffer.data(), buffer.size())))
                     co_return;
 
-                samples.push_back(
+                params.samples.push_back(
                     static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(clock_t::now() - start).count()));
             }
         }
-    } // namespace detail
+    }
 
     /// @brief One payload out and back over a connected socket pair, timed per round trip.
     /// @details The floor of each executor: two coroutines, one round trip in flight at a time, so
@@ -285,7 +122,8 @@ namespace kmx::aio::benchmark::feature
 
         // The echo side first, so it is already waiting when the ping side sends its first payload.
         exec.spawn(detail::echo_side<Backend>(exec, fd[1], iterations, payload_size));
-        exec.spawn(detail::ping_side<Backend>(exec, fd[0], iterations, payload_size, samples));
+        exec.spawn(detail::ping_side<Backend>(
+            {.exec = exec, .fd = fd[0], .iterations = iterations, .payload_size = payload_size, .samples = samples}));
 
         {
             const watchdog guard {[&exec]() noexcept { exec.stop(); }, scenario_time_limit};
@@ -303,35 +141,6 @@ namespace kmx::aio::benchmark::feature
 
     namespace detail
     {
-        /// @brief The window in which the connections were actually running.
-        /// @details Timing around run() would fold the executor's own start-up and its loop's final
-        ///          wait timeout into the per-operation figure - on the completion side that wait is
-        ///          100 ms, which spread over a few thousand operations is most of what the case would
-        ///          report. A scenario that drives an executor times its own work instead: from the
-        ///          first connection starting to the last one finishing.
-        struct run_window
-        {
-            std::atomic_size_t started {};  ///< Connections that have begun.
-            std::atomic_size_t finished {}; ///< Connections that have ended.
-            clock_t::time_point begin {};   ///< When the first one began.
-            clock_t::time_point end {};     ///< When the last one ended.
-
-            /// @brief Marks a connection as started, stamping the window's opening on the first.
-            void open() noexcept
-            {
-                if (started.fetch_add(1u, std::memory_order_relaxed) == 0u)
-                    begin = clock_t::now();
-            }
-
-            /// @brief Marks a connection as finished, stamping the window's close on the last.
-            /// @param total How many connections there are in all.
-            void close(const std::size_t total) noexcept
-            {
-                if ((finished.fetch_add(1u, std::memory_order_relaxed) + 1u) == total)
-                    end = clock_t::now();
-            }
-        };
-
         /// @brief Reads a whole buffer from a stream, however many reads that takes.
         /// @tparam Stream Either model's tcp::stream - both expose the same read().
         /// @param stream The stream to read.
@@ -378,60 +187,74 @@ namespace kmx::aio::benchmark::feature
             }
         }
 
+        /// @brief What the accepting side of the TCP echo scenario serves.
+        /// @tparam Backend The execution model to drive.
+        template <typename Backend>
+        struct tcp_acceptor_params
+        {
+            typename Backend::executor_t& exec;         ///< The executor.
+            typename Backend::tcp_listener_t& listener; ///< The listening socket. Must outlive the run.
+            std::size_t connections {};                 ///< How many connections to accept.
+            std::size_t rounds {};                      ///< How many payloads each connection echoes.
+            std::size_t payload_size {};                ///< Bytes per payload.
+        };
+
         /// @brief Accepts a fixed number of connections and gives each one an echo coroutine.
         /// @tparam Backend The execution model to drive.
-        /// @param exec The executor.
-        /// @param listener The listening socket. Must outlive the run.
-        /// @param connections How many connections to accept.
-        /// @param rounds How many payloads each connection echoes.
-        /// @param payload_size Bytes per payload.
+        /// @param params The executor, the listener and the work each connection does.
         /// @throws std::bad_alloc (coroutine frame allocation).
         template <typename Backend>
-        task<void> tcp_acceptor(typename Backend::executor_t& exec, typename Backend::tcp_listener_t& listener,
-                                const std::size_t connections, const std::size_t rounds, const std::size_t payload_size) noexcept(false)
+        task<void> tcp_acceptor(const tcp_acceptor_params<Backend> params) noexcept(false)
         {
-            for (std::size_t i {}; i != connections; ++i)
+            for (std::size_t i {}; i != params.connections; ++i)
             {
-                auto accepted = co_await listener.accept();
+                auto accepted = co_await params.listener.accept();
                 if (!accepted)
                     co_return;
 
-                exec.spawn(tcp_echo_server_side<Backend>(exec, std::move(*accepted), rounds, payload_size));
+                params.exec.spawn(tcp_echo_server_side<Backend>(params.exec, std::move(*accepted), params.rounds, params.payload_size));
             }
         }
 
+        /// @brief What the client end of one TCP echo connection does, and where it records it.
+        /// @tparam Backend The execution model to drive.
+        template <typename Backend>
+        struct tcp_echo_client_side_params
+        {
+            typename Backend::executor_t& exec; ///< The executor.
+            port_t port {};                     ///< The loopback port to connect to.
+            std::size_t rounds {};              ///< How many round trips to make.
+            std::size_t payload_size {};        ///< Bytes per round trip.
+            std::vector<double>* samples {};    ///< Receives one duration per round trip when not null. Must outlive the run.
+            run_window& window;                 ///< The shared timing window. Must outlive the run.
+            std::size_t connections {};         ///< How many clients there are in all, so the last one can close the window.
+            std::atomic_size_t& completed;      ///< Counts the round trips that finished. Must outlive the run.
+        };
+
         /// @brief The client end of one TCP connection: send a payload, wait for it back, repeat.
         /// @tparam Backend The execution model to drive.
-        /// @param exec The executor.
-        /// @param port The loopback port to connect to.
-        /// @param rounds How many round trips to make.
-        /// @param payload_size Bytes per round trip.
-        /// @param samples Receives one duration per round trip when not null. Must outlive the run.
-        /// @param window The shared timing window. Must outlive the run.
-        /// @param connections How many clients there are in all, so the last one can close the window.
-        /// @param completed Counts the round trips that finished. Must outlive the run.
+        /// @param params The executor, the port, the work to do and where it is recorded.
         /// @throws std::bad_alloc (coroutine frame and buffer allocation).
         template <typename Backend>
-        task<void> tcp_echo_client_side(typename Backend::executor_t& exec, const port_t port, const std::size_t rounds,
-                                        const std::size_t payload_size, std::vector<double>* const samples, run_window& window,
-                                        const std::size_t connections, std::atomic_size_t& completed) noexcept(false)
+        task<void> tcp_echo_client_side(const tcp_echo_client_side_params<Backend> params) noexcept(false)
         {
-            auto connected = co_await Backend::connect(exec, port);
+            auto& window = params.window;
+            auto connected = co_await Backend::connect(params.exec, params.port);
             if (!connected)
             {
                 window.open();
-                window.close(connections);
+                window.close(params.connections);
                 co_return;
             }
 
-            typename Backend::tcp_stream_t stream {exec, std::move(*connected)};
-            std::vector<char> buffer(payload_size);
+            typename Backend::tcp_stream_t stream {params.exec, std::move(*connected)};
+            std::vector<char> buffer(params.payload_size);
 
             // The connection is established before the window opens: a scenario measuring round trips
             // should not have the handshake averaged into them.
             window.open();
 
-            for (std::size_t i {}; i != rounds; ++i)
+            for (std::size_t i {}; i != params.rounds; ++i)
             {
                 const auto start = clock_t::now();
 
@@ -441,68 +264,82 @@ namespace kmx::aio::benchmark::feature
                 if (!co_await stream_read_exact(stream, span_char_t(buffer.data(), buffer.size())))
                     break;
 
-                if (samples != nullptr)
-                    samples->push_back(
+                if (params.samples != nullptr)
+                    params.samples->push_back(
                         static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(clock_t::now() - start).count()));
 
-                completed.fetch_add(1u, std::memory_order_relaxed);
+                params.completed.fetch_add(1u, std::memory_order_relaxed);
             }
 
-            window.close(connections);
+            window.close(params.connections);
         }
+
+        /// @brief What the receiving side of the TCP throughput scenario reads, and where it counts it.
+        /// @tparam Backend The execution model to drive.
+        template <typename Backend>
+        struct block_sink_params
+        {
+            typename Backend::executor_t& exec;         ///< The executor the accepted stream is registered on.
+            typename Backend::tcp_listener_t& listener; ///< The listener to accept the single connection from.
+            std::size_t count {};                       ///< How many blocks to read.
+            std::size_t size {};                        ///< Bytes per block.
+            std::atomic_size_t& counter;                ///< Incremented once per whole block read.
+            run_window& window;                         ///< Closed once the sink is done, stamping the measured window.
+        };
 
         /// @brief Reads a fixed number of whole blocks off one accepted connection.
         /// @tparam Backend The execution model to drive.
-        /// @param exec The executor the accepted stream is registered on.
-        /// @param listener The listener to accept the single connection from.
-        /// @param count How many blocks to read.
-        /// @param size Bytes per block.
-        /// @param counter Incremented once per whole block read.
-        /// @param window Closed once the sink is done, stamping the measured window.
+        /// @param params The executor, the listener, the blocks to read and where they are counted.
         /// @throws std::bad_alloc (coroutine frame and buffer allocation).
         template <typename Backend>
-        task<void> block_sink(typename Backend::executor_t& exec, typename Backend::tcp_listener_t& listener, const std::size_t count,
-                              const std::size_t size, std::atomic_size_t& counter, run_window& window) noexcept(false)
+        task<void> block_sink(const block_sink_params<Backend> params) noexcept(false)
         {
-            auto accepted = co_await listener.accept();
+            auto accepted = co_await params.listener.accept();
             if (!accepted)
                 co_return;
 
-            typename Backend::tcp_stream_t stream {exec, std::move(*accepted)};
-            std::vector<char> buffer(size);
+            typename Backend::tcp_stream_t stream {params.exec, std::move(*accepted)};
+            std::vector<char> buffer(params.size);
 
-            for (std::size_t i {}; i != count; ++i)
+            for (std::size_t i {}; i != params.count; ++i)
             {
                 if (!co_await stream_read_exact(stream, span_char_t(buffer.data(), buffer.size())))
                     break;
 
-                counter.fetch_add(1u, std::memory_order_relaxed);
+                params.counter.fetch_add(1u, std::memory_order_relaxed);
             }
 
-            window.close(1u);
+            params.window.close(1u);
         }
+
+        /// @brief What the sending side of the TCP throughput scenario writes.
+        /// @tparam Backend The execution model to drive.
+        template <typename Backend>
+        struct block_source_params
+        {
+            typename Backend::executor_t& exec; ///< The executor to connect on.
+            port_t port {};                     ///< The loopback port to connect to.
+            std::size_t count {};               ///< How many blocks to write.
+            std::size_t size {};                ///< Bytes per block.
+            run_window& window;                 ///< Opened once the connection is up, so the handshake stays out of the figure.
+        };
 
         /// @brief Connects once and writes a fixed number of whole blocks.
         /// @tparam Backend The execution model to drive.
-        /// @param exec The executor to connect on.
-        /// @param port The loopback port to connect to.
-        /// @param count How many blocks to write.
-        /// @param size Bytes per block.
-        /// @param window Opened once the connection is up, so the handshake stays out of the figure.
+        /// @param params The executor, the port, the blocks to write and the window to open.
         /// @throws std::bad_alloc (coroutine frame and buffer allocation).
         template <typename Backend>
-        task<void> block_source(typename Backend::executor_t& exec, const port_t port, const std::size_t count, const std::size_t size,
-                                run_window& window) noexcept(false)
+        task<void> block_source(const block_source_params<Backend> params) noexcept(false)
         {
-            auto connected = co_await Backend::connect(exec, port);
+            auto connected = co_await Backend::connect(params.exec, params.port);
             if (!connected)
                 co_return;
 
-            typename Backend::tcp_stream_t stream {exec, std::move(*connected)};
-            const std::vector<char> buffer(size);
+            typename Backend::tcp_stream_t stream {params.exec, std::move(*connected)};
+            const std::vector<char> buffer(params.size);
 
-            window.open();
-            for (std::size_t i {}; i != count; ++i)
+            params.window.open();
+            for (std::size_t i {}; i != params.count; ++i)
                 if (!co_await stream.write_all(cspan_char_t(buffer.data(), buffer.size())))
                     break;
         }
@@ -579,55 +416,70 @@ namespace kmx::aio::benchmark::feature
             }
         }
 
+        /// @brief What the pinging side of the UDP echo scenario sends, and where it records the round trips.
+        /// @tparam Backend The execution model to drive.
+        template <typename Backend>
+        struct udp_echo_pinger_params
+        {
+            typename Backend::udp_endpoint_t& endpoint; ///< The endpoint to send from and receive on.
+            port_t peer_port {};                        ///< The loopback port of the echoing endpoint.
+            std::size_t count {};                       ///< How many round trips to time.
+            std::size_t size {};                        ///< Bytes per datagram.
+            std::vector<double>& samples;               ///< One nanosecond figure appended per completed round trip.
+        };
+
         /// @brief Sends a datagram and waits for it to come back, timing each round trip.
         /// @tparam Backend The execution model to drive.
-        /// @param endpoint The endpoint to send from and receive on.
-        /// @param peer_port The loopback port of the echoing endpoint.
-        /// @param count How many round trips to time.
-        /// @param size Bytes per datagram.
-        /// @param samples One nanosecond figure appended per completed round trip.
+        /// @param params The endpoint, the peer's port, the datagrams to send and where the samples go.
         /// @throws std::bad_alloc (coroutine frame, buffer and sample allocation).
         template <typename Backend>
-        task<void> udp_echo_pinger(typename Backend::udp_endpoint_t& endpoint, const port_t peer_port, const std::size_t count,
-                                   const std::size_t size, std::vector<double>& samples) noexcept(false)
+        task<void> udp_echo_pinger(const udp_echo_pinger_params<Backend> params) noexcept(false)
         {
-            std::vector<std::byte> buffer(size);
+            std::vector<std::byte> buffer(params.size);
             ::sockaddr_storage peer {};
             ::socklen_t peer_length = sizeof(peer);
 
-            for (std::size_t i {}; i != count; ++i)
+            for (std::size_t i {}; i != params.count; ++i)
             {
                 const auto start = clock_t::now();
 
-                if (!co_await endpoint.send(cspan_byte_t(buffer.data(), buffer.size()), loopback(), peer_port))
+                if (!co_await params.endpoint.send(cspan_byte_t(buffer.data(), buffer.size()), loopback(), params.peer_port))
                     co_return;
 
                 peer_length = sizeof(peer);
-                if (!co_await endpoint.recv(span_byte_t(buffer.data(), buffer.size()), peer, peer_length))
+                if (!co_await params.endpoint.recv(span_byte_t(buffer.data(), buffer.size()), peer, peer_length))
                     co_return;
 
-                samples.push_back(
+                params.samples.push_back(
                     static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(clock_t::now() - start).count()));
             }
         }
 
+        /// @brief What the timer scenario waits for, and where it records how late each wait returned.
+        /// @tparam Backend The execution model to drive.
+        template <typename Backend>
+        struct timer_overshoot_params
+        {
+            typename Backend::executor_t& exec;    ///< The executor the timer waits on.
+            typename Backend::timer_handle& timer; ///< The timer, created once and re-armed per wait.
+            std::size_t count {};                  ///< How many waits to time.
+            std::chrono::nanoseconds wanted {};    ///< What each wait asks for.
+            std::vector<double>& samples;          ///< One nanosecond overshoot figure appended per wait, clamped at zero.
+        };
+
         /// @brief Re-arms one timer for a fixed number of waits, recording how late each one fires.
         /// @tparam Backend The execution model to drive.
-        /// @param exec The executor the timer waits on.
-        /// @param timer The timer, created once and re-armed per wait.
-        /// @param count How many waits to time.
-        /// @param wanted What each wait asks for.
-        /// @param samples One nanosecond overshoot figure appended per wait, clamped at zero.
+        /// @param params The executor, the timer, the waits to time and where the samples go.
         /// @throws std::bad_alloc (coroutine frame and sample allocation).
         template <typename Backend>
-        task<void> timer_overshoot(typename Backend::executor_t& exec, typename Backend::timer_handle& timer, const std::size_t count,
-                                   const std::chrono::nanoseconds wanted, std::vector<double>& samples) noexcept(false)
+        task<void> timer_overshoot(const timer_overshoot_params<Backend> params) noexcept(false)
         {
+            const auto wanted = params.wanted;
             const auto wanted_ns = static_cast<double>(wanted.count());
-            for (std::size_t i {}; i != count; ++i)
+            for (std::size_t i {}; i != params.count; ++i)
             {
                 const auto start = clock_t::now();
-                if (!co_await timer.wait_for(exec, wanted))
+                if (!co_await params.timer.wait_for(params.exec, wanted))
                     co_return;
 
                 const auto elapsed =
@@ -635,43 +487,36 @@ namespace kmx::aio::benchmark::feature
 
                 // Clamped at zero: a timer that fires a hair early is the clock's granularity, not a
                 // negative overshoot, and letting it through would drag the mean below what any wait cost.
-                samples.push_back((elapsed > wanted_ns) ? (elapsed - wanted_ns) : 0.0);
+                params.samples.push_back((elapsed > wanted_ns) ? (elapsed - wanted_ns) : 0.0);
             }
         }
-    } // namespace detail
+    }
 
-    /// @brief A payload out and back over loopback TCP, at a chosen number of connections.
-    /// @details At one connection this is the latency floor: nothing to batch, nothing to overlap. At
-    ///          many it is the shape a server actually has, and the only one in which io_uring's
-    ///          submission batching can show - every operation prepared between two waits rides into
-    ///          the kernel on the same io_uring_enter. The same total number of round trips runs at
-    ///          every width, so the per-round-trip figures compare directly.
-    /// @tparam Backend The execution model to drive.
-    /// @param name The case name.
-    /// @param connections How many connections to spread the work over.
-    /// @param rounds_per_connection Round trips each connection makes.
-    /// @param payload_size Bytes per round trip.
-    /// @return The measured result, or a skip when the machine would not give up the sockets.
-    /// @throws std::bad_alloc if the samples or the executor cannot be allocated.
-    /// @brief Turns a finished run into a result.
-    /// @param name The case's name.
-    /// @param sampled Whether per-round-trip samples were taken.
-    /// @param samples Those samples, when they were.
-    /// @param done How many round trips completed.
-    /// @param window When the first started and the last finished.
-    /// @return The result, or a skip when nothing ran to completion.
-    [[nodiscard]] inline result rtt_result(std::string name, const bool sampled, std::vector<double>& samples,
-                                           const std::size_t done, const detail::run_window& window) noexcept(false)
+    /// @brief A finished round-trip run, as @ref rtt_result turns it into a result.
+    struct rtt_result_params
     {
-        if (done == 0u)
-            return skipped(std::move(name), "no round trip completed");
-        if (sampled)
-            return from_samples(std::move(name), samples);
+        std::string name {};              ///< The case's name.
+        bool sampled {};                  ///< Whether per-round-trip samples were taken.
+        std::vector<double>& samples;     ///< Those samples, when they were. Sorted in place.
+        std::size_t done {};              ///< How many round trips completed.
+        const detail::run_window& window; ///< When the first started and the last finished.
+    };
 
-        const auto elapsed = window.end - window.begin;
+    /// @brief Turns a finished run into a result.
+    /// @param params The case's name, the samples when they were taken, the round trips completed and the timing window.
+    /// @return The result, or a skip when nothing ran to completion.
+    /// @throws std::bad_alloc if the name cannot be stored.
+    [[nodiscard]] inline result rtt_result(rtt_result_params params) noexcept(false)
+    {
+        if (params.done == 0u)
+            return skipped(std::move(params.name), "no round trip completed");
+        if (params.sampled)
+            return from_samples(std::move(params.name), params.samples);
+
+        const auto elapsed = params.window.end - params.window.begin;
         if (elapsed <= clock_t::duration::zero())
-            return skipped(std::move(name), "no connection ran to completion");
-        return from_total(std::move(name), done, elapsed);
+            return skipped(std::move(params.name), "no connection ran to completion");
+        return from_total(std::move(params.name), params.done, elapsed);
     }
 
     /// @brief Listens on an ephemeral loopback port and reports the port the kernel chose.
@@ -689,6 +534,19 @@ namespace kmx::aio::benchmark::feature
         return bound_port(listener.get_fd());
     }
 
+    /// @brief A payload out and back over loopback TCP, at a chosen number of connections.
+    /// @details At one connection this is the latency floor: nothing to batch, nothing to overlap. At
+    ///          many it is the shape a server actually has, and the only one in which io_uring's
+    ///          submission batching can show - every operation prepared between two waits rides into
+    ///          the kernel on the same io_uring_enter. The same total number of round trips runs at
+    ///          every width, so the per-round-trip figures compare directly.
+    /// @tparam Backend The execution model to drive.
+    /// @param name The case name.
+    /// @param connections How many connections to spread the work over.
+    /// @param rounds_per_connection Round trips each connection makes.
+    /// @param payload_size Bytes per round trip.
+    /// @return The measured result, or a skip when the machine would not give up the sockets.
+    /// @throws std::bad_alloc if the samples or the executor cannot be allocated.
     template <typename Backend>
     [[nodiscard]] result tcp_echo_rtt(std::string name, const std::size_t connections, const std::size_t rounds_per_connection,
                                       const std::size_t payload_size) noexcept(false)
@@ -714,17 +572,31 @@ namespace kmx::aio::benchmark::feature
         if (sampled)
             samples.reserve(rounds_per_connection);
 
-        exec.spawn(detail::tcp_acceptor<Backend>(exec, listener, connections, rounds_per_connection, payload_size));
+        exec.spawn(detail::tcp_acceptor<Backend>({.exec = exec,
+                                                  .listener = listener,
+                                                  .connections = connections,
+                                                  .rounds = rounds_per_connection,
+                                                  .payload_size = payload_size}));
         for (std::size_t i {}; i != connections; ++i)
-            exec.spawn(detail::tcp_echo_client_side<Backend>(exec, port, rounds_per_connection, payload_size, sampled ? &samples : nullptr,
-                                                             window, connections, completed));
+            exec.spawn(detail::tcp_echo_client_side<Backend>({.exec = exec,
+                                                              .port = port,
+                                                              .rounds = rounds_per_connection,
+                                                              .payload_size = payload_size,
+                                                              .samples = sampled ? &samples : nullptr,
+                                                              .window = window,
+                                                              .connections = connections,
+                                                              .completed = completed}));
 
         {
             const watchdog guard {[&exec]() noexcept { exec.stop(); }, scenario_time_limit};
             exec.run();
         }
 
-        return rtt_result(std::move(name), sampled, samples, completed.load(std::memory_order_relaxed), window);
+        return rtt_result({.name = std::move(name),
+                           .sampled = sampled,
+                           .samples = samples,
+                           .done = completed.load(std::memory_order_relaxed),
+                           .window = window});
     }
 
     /// @brief Blocks streamed one way over a loopback TCP connection.
@@ -756,8 +628,9 @@ namespace kmx::aio::benchmark::feature
         detail::run_window window {};
 
         // The sink reads everything the source sends and counts whole blocks.
-        exec.spawn(detail::block_sink<Backend>(exec, listener, blocks, block_size, received_blocks, window));
-        exec.spawn(detail::block_source<Backend>(exec, port, blocks, block_size, window));
+        exec.spawn(detail::block_sink<Backend>(
+            {.exec = exec, .listener = listener, .count = blocks, .size = block_size, .counter = received_blocks, .window = window}));
+        exec.spawn(detail::block_source<Backend>({.exec = exec, .port = port, .count = blocks, .size = block_size, .window = window}));
 
         {
             const watchdog guard {[&exec]() noexcept { exec.stop(); }, scenario_time_limit};
@@ -851,7 +724,8 @@ namespace kmx::aio::benchmark::feature
         samples.reserve(iterations);
 
         exec.spawn(detail::udp_echo_responder<Backend>(*server, iterations, payload_size));
-        exec.spawn(detail::udp_echo_pinger<Backend>(*client, server_port, iterations, payload_size, samples));
+        exec.spawn(detail::udp_echo_pinger<Backend>(
+            {.endpoint = *client, .peer_port = server_port, .count = iterations, .size = payload_size, .samples = samples}));
 
         {
             const watchdog guard {[&exec]() noexcept { exec.stop(); }, scenario_time_limit};
@@ -895,7 +769,8 @@ namespace kmx::aio::benchmark::feature
         std::vector<double> samples {};
         samples.reserve(iterations);
 
-        exec.spawn(detail::timer_overshoot<Backend>(exec, *handle, iterations, interval, samples));
+        exec.spawn(detail::timer_overshoot<Backend>(
+            {.exec = exec, .timer = *handle, .count = iterations, .wanted = interval, .samples = samples}));
 
         {
             const watchdog guard {[&exec]() noexcept { exec.stop(); }, scenario_time_limit};
@@ -908,4 +783,4 @@ namespace kmx::aio::benchmark::feature
         return from_samples(std::move(name), samples);
     }
 
-} // namespace kmx::aio::benchmark::feature
+}

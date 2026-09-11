@@ -1,15 +1,19 @@
+/// @file src/kmx/aio/sample/common/cli_parse.cpp
+/// @brief The compiled body of the unsigned integer command-line argument parsers shared by the samples.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/common/cli_parse.hpp>
-
-#include <charconv>
-#include <cstdint>
-#include <limits>
+#ifndef PCH
+    #include <charconv>
+    #include <cstdint>
+    #include <limits>
+#endif
 
 namespace kmx::aio::sample::common
 {
     namespace detail
     {
         template <typename T>
-        bool parse_unsigned_sv(const std::string_view text, T& out) noexcept
+        [[nodiscard]] bool parse_unsigned_sv(const std::string_view text, T& out) noexcept
         {
             const char* begin = text.data();
             const char* end = text.data() + text.size();
@@ -23,7 +27,7 @@ namespace kmx::aio::sample::common
         }
 
         template <typename T>
-        bool parse_unsigned_cstr_impl(const char* raw, T& out) noexcept
+        [[nodiscard]] bool parse_unsigned_cstr_impl(const char* raw, T& out) noexcept
         {
             if (!raw)
                 return false;
@@ -41,7 +45,7 @@ namespace kmx::aio::sample::common
             out = static_cast<T>(parsed);
             return true;
         }
-    } // namespace detail
+    }
 
     bool parse_unsigned_u16(const std::string_view text, std::uint16_t& out) noexcept
     {

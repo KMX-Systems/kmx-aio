@@ -1,17 +1,12 @@
-/// @file aio/someip/vsomeip_compat.hpp
-/// @brief Internal backend abstraction layer between the SOME/IP facade and vsomeip.
+/// @file inc/kmx/aio/someip/vsomeip_compat.hpp
+/// @brief Internal backend abstraction layer between the SOME/IP facade and vsomeip: the vsomeip headers and the RPC message.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
-    #include <chrono>
-    #include <cstdint>
-    #include <functional>
-    #include <memory>
-    #include <optional>
-    #include <string>
-    #include <vector>
-
     #include <kmx/aio/someip/types.hpp>
+
+    #include <cstdint>
+    #include <vector>
 #endif
 
 #if defined(KMX_AIO_FEATURE_SOMEIP) && defined(KMX_AIO_SOMEIP_LINK_BACKEND)
@@ -44,9 +39,9 @@
     #endif
 #endif
 
-/// @namespace kmx::aio::someip::compat
+/// @namespace kmx::aio::someip::vsomeip_compat
 /// @brief Internal backend abstraction; not part of the public SOME/IP API.
-namespace kmx::aio::someip::compat
+namespace kmx::aio::someip::vsomeip_compat
 {
     /// @brief Represents a single SOME/IP RPC message (request or response).
     struct rpc_message
@@ -67,151 +62,4 @@ namespace kmx::aio::someip::compat
         std::vector<std::uint8_t> payload;
     };
 
-    /// @brief Backend runtime abstraction for a SOME/IP client application.
-    ///
-    /// When vsomeip headers are present the real vsomeip application is used;
-    /// otherwise a deterministic in-process stub is activated automatically.
-    ///
-    /// @note Thread-safety: start() and stop() are not thread-safe with respect
-    ///       to each other.  All other methods may be called after start() from
-    ///       any thread.
-    class client_runtime
-    {
-    public:
-        /// @brief Constructs a runtime for the named application.
-        /// @param application_name Unique vsomeip application name.
-        /// @param config_file_path Path to vsomeip JSON config, or empty for the default.
-        client_runtime(std::string application_name, std::string config_file_path);
-        /// @brief Stops the dispatch thread and releases the vsomeip application.
-        ~client_runtime();
-
-        /// @brief Non-copyable: the runtime owns the vsomeip application.
-        client_runtime(const client_runtime&) = delete;
-        /// @brief Non-copyable: the runtime owns the vsomeip application.
-        client_runtime& operator=(const client_runtime&) = delete;
-        /// @brief Move constructor — transfers ownership of the vsomeip application.
-        client_runtime(client_runtime&&) noexcept;
-        /// @brief Move assignment — transfers ownership of the vsomeip application.
-        client_runtime& operator=(client_runtime&&) noexcept;
-
-        /// @brief Initialises the vsomeip application and starts its dispatch thread.
-        /// @return @c true on success, @c false if already started or init failed.
-        [[nodiscard]] bool start();
-
-        /// @brief Stops the dispatch thread and releases vsomeip resources.
-        /// @return @c true always.
-        [[nodiscard]] bool stop() noexcept;
-
-        /// @brief Issues a request_service() to vsomeip for availability tracking.
-        /// @return @c true on success, @c false if not started.
-        [[nodiscard]] bool request_service(service_id_t service_id, instance_id_t instance_id);
-
-        /// @brief Releases a previously requested service.
-        /// @return @c true on success, @c false if not started.
-        [[nodiscard]] bool release_service(service_id_t service_id, instance_id_t instance_id);
-
-        /// @brief Returns whether a service/instance pair is currently available.
-        [[nodiscard]] bool is_service_available(service_id_t service_id, instance_id_t instance_id) const;
-
-        /// @brief Sends a SOME/IP request and blocks (via condition variable) for the response.
-        /// @param timeout Maximum wait duration.
-        /// @return The response message, or @c std::nullopt on timeout.
-        [[nodiscard]] std::optional<rpc_message> call_method(service_id_t service_id, instance_id_t instance_id, method_id_t method_id,
-                                                             std::vector<std::uint8_t> payload, std::chrono::milliseconds timeout);
-
-        /// @brief Registers event identifiers and subscribes to the event group.
-        /// @param queue_capacity Maximum number of notifications to buffer.
-        /// @return @c true on success, @c false if not started.
-        [[nodiscard]] bool subscribe(service_id_t service_id, instance_id_t instance_id, event_group_id_t event_group_id,
-                                     const std::vector<event_id_t>& event_ids, std::size_t queue_capacity);
-
-        /// @brief Cancels event registration and unsubscribes from the event group.
-        /// @return @c true on success, @c false if not started.
-        [[nodiscard]] bool unsubscribe(service_id_t service_id, instance_id_t instance_id, event_group_id_t event_group_id,
-                                       const std::vector<event_id_t>& event_ids);
-
-        /// @brief Dequeues the next buffered event notification.
-        /// @param timeout Maximum time to wait if the queue is empty.
-        /// @return The oldest buffered notification, or @c std::nullopt on timeout.
-        [[nodiscard]] std::optional<event_notification> next_event(std::chrono::milliseconds timeout);
-
-        /// @brief Returns the total number of notifications dropped due to a full buffer.
-        [[nodiscard]] std::uint64_t dropped_events() const noexcept;
-
-#if !defined(KMX_AIO_HAS_VSOMEIP_HEADER)
-        /// @brief Test-only: injects a synthetic notification into the event queue.
-        /// @warning Only available in stub builds (no real vsomeip headers).
-        void __kmx_test_push_event(event_notification notification);
-#endif
-
-    private:
-        /// @brief The backend implementation, real vsomeip or in-process stub.
-        struct impl;
-        /// @brief The backend implementation, kept opaque so this header need not include vsomeip.
-        std::unique_ptr<impl> impl_;
-    };
-
-    /// @brief Backend runtime abstraction for a SOME/IP server application.
-    ///
-    /// When vsomeip headers are present the real vsomeip application is used;
-    /// otherwise a deterministic in-process stub is activated automatically.
-    class server_runtime
-    {
-    public:
-        /// @brief Constructs a runtime for the named application.
-        /// @param application_name Unique vsomeip application name.
-        /// @param config_file_path Path to vsomeip JSON config, or empty for the default.
-        server_runtime(std::string application_name, std::string config_file_path);
-        /// @brief Stops the dispatch thread and releases the vsomeip application.
-        ~server_runtime();
-
-        /// @brief Non-copyable: the runtime owns the vsomeip application.
-        server_runtime(const server_runtime&) = delete;
-        /// @brief Non-copyable: the runtime owns the vsomeip application.
-        server_runtime& operator=(const server_runtime&) = delete;
-        /// @brief Move constructor — transfers ownership of the vsomeip application.
-        server_runtime(server_runtime&&) noexcept;
-        /// @brief Move assignment — transfers ownership of the vsomeip application.
-        server_runtime& operator=(server_runtime&&) noexcept;
-
-        /// @brief Initialises the vsomeip application and starts its dispatch thread.
-        /// @return @c true on success, @c false if already started or init failed.
-        [[nodiscard]] bool start();
-
-        /// @brief Stops the dispatch thread and releases vsomeip resources.
-        /// @return @c true always.
-        [[nodiscard]] bool stop() noexcept;
-
-        /// @brief Advertises a service/instance via vsomeip Service Discovery.
-        /// @return @c true on success, @c false if not started.
-        [[nodiscard]] bool offer_service(service_id_t service_id, instance_id_t instance_id);
-
-        /// @brief Withdraws a previously offered service from Service Discovery.
-        /// @return @c true on success, @c false if not started.
-        [[nodiscard]] bool stop_offer_service(service_id_t service_id, instance_id_t instance_id);
-
-        /// @brief Dequeues the oldest pending method request.
-        /// @return The request, or @c std::nullopt if none is pending.
-        [[nodiscard]] std::optional<rpc_message> next_request();
-
-        /// @brief Sends a response to a previously dequeued request.
-        /// @return @c true on success, @c false if the request_id is not tracked.
-        [[nodiscard]] bool send_response(request_id_t request_id, std::vector<std::uint8_t> payload);
-
-        /// @brief Publishes an event notification to all active subscribers.
-        /// @return @c true on success, @c false if not started.
-        [[nodiscard]] bool notify(service_id_t service_id, instance_id_t instance_id, event_id_t event_id,
-                                  std::vector<std::uint8_t> payload);
-
-        /// @brief Registers a callback invoked from the vsomeip thread when a request arrives.
-        /// @param handler Zero-argument callable; intended for waking a waiting coroutine.
-        void set_request_handler(std::function<void()> handler);
-
-    private:
-        /// @brief The backend implementation, real vsomeip or in-process stub.
-        struct impl;
-        /// @brief The backend implementation, kept opaque so this header need not include vsomeip.
-        std::unique_ptr<impl> impl_;
-    };
-
-} // namespace kmx::aio::someip::compat
+}

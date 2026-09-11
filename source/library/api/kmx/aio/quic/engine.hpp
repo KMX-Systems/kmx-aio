@@ -1,130 +1,35 @@
-/// @file aio/quic/engine.hpp
-/// @brief Generic QUIC engine template consolidated for all I/O models.
+/// @file api/kmx/aio/quic/engine.hpp
+/// @brief The peer a client QUIC engine connects to, shared by the generic engine and its implementation.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_QUIC)
-
     #ifndef PCH
-        #include <expected>
-        #include <functional>
-        #include <memory>
-        #include <span>
-        #include <string>
-        #include <system_error>
-        #include <vector>
-
         #include <kmx/aio/basic_types.hpp>
-        #include <kmx/aio/buffer/handle.hpp>
         #include <kmx/aio/quic/settings.hpp>
-        #include <kmx/aio/task.hpp>
-    #endif
 
-struct lsquic_stream;
-struct lsquic_conn;
+        #include <string>
+        #include <vector>
+    #endif
 
 namespace kmx::aio::quic
 {
-    inline constexpr std::size_t stream_payload_capacity = 4096u;
-    using stream_payload_buffer = std::array<char, stream_payload_capacity>;
-
-    /// @brief Move-only payload view backed by preallocated storage.
-    struct stream_payload
+    /// @brief The peer a client engine connects to, what it sends there, and how the connection is set up.
+    struct connect_params
     {
-        buffer::handle<stream_payload_buffer> storage;
-        std::size_t size {};
-
-        [[nodiscard]] span_char_t bytes() noexcept(false) { return {storage->data(), size}; }
-        [[nodiscard]] cspan_char_t bytes() const noexcept(false) { return {storage->data(), size}; }
+        /// @brief IP address to connect to; a view, so the storage it refers to must outlive the connect.
+        ip_address_t peer_ip;
+        /// @brief Port number to connect to.
+        port_t peer_port {};
+        /// @brief Hostname for SNI (Server Name Indication); empty to omit SNI.
+        std::string hostname {};
+        /// @brief Payloads queued client-side; each non-empty payload is written on a distinct stream.
+        std::vector<std::string> payloads {};
+        /// @brief BoringSSL SSL_CTX pointer; borrowed, not owned.
+        void* ssl_ctx {};
+        /// @brief QUIC protocol settings.
+        settings config {};
     };
-
-    /// @brief Generic QUIC engine template.
-    /// @details Provides a unified interface for lsquic-based engines,
-    ///          parameterized by Executor and UdpSocket types.
-    /// @tparam Executor  The model-specific executor (readiness/completion).
-    /// @tparam UdpSocket The model-specific UDP socket.
-    template <typename Executor, typename UdpSocket>
-    class generic_engine
-    {
-    public:
-        /// @brief Callback invoked when a new QUIC stream is accepted.
-        /// @details The stream pointer is non-owning and valid only while the stream remains open.
-        using stream_handler_t = std::function<task<void>(::lsquic_stream*, stream_payload)>;
-        using post_handshake_stream_writer_t = std::function<void(::lsquic_stream*)>;
-
-        /// @brief Constructor.
-        /// @param exec The executor to bind this engine to.
-        explicit generic_engine(Executor& exec) noexcept;
-
-        /// @brief Sets the callback for accepted streams.
-        void set_stream_handler(stream_handler_t handler) noexcept;
-
-        /// @brief Sets the ALPN identifier passed into lsquic engine setup.
-        void set_alpn(std::string alpn) noexcept;
-
-        /// @brief Configures how many local streams to request once handshake completes.
-        /// @details This is useful for protocol bootstrap writes (e.g. HTTP/3 control preface).
-        void set_post_handshake_stream_count(std::size_t count) noexcept;
-
-        /// @brief Sets the writer callback used for post-handshake bootstrap streams.
-        /// @details The callback is called once per bootstrap stream on first write opportunity.
-        void set_post_handshake_stream_writer(post_handshake_stream_writer_t writer) noexcept;
-
-        /// @brief Non-copyable.
-        generic_engine(const generic_engine&) = delete;
-        /// @brief Non-copyable.
-        generic_engine& operator=(const generic_engine&) = delete;
-
-        /// @brief Move constructor.
-        generic_engine(generic_engine&&) noexcept = default;
-        /// @brief Move assignment is disabled.
-        generic_engine& operator=(generic_engine&&) noexcept = delete;
-
-        /// @brief Destructor.
-        ~generic_engine() noexcept;
-
-        /// @brief Starts the QUIC engine, binding to the specified address.
-        /// @param ip      IP address to bind to.
-        /// @param port    Port number to bind to.
-        /// @param ssl_ctx BoringSSL SSL_CTX pointer.
-        /// @param config  QUIC protocol settings.
-        /// @return Success or an error code.
-        [[nodiscard]] task_returning_expected_void_t start(ip_address_t ip, port_t port, void* ssl_ctx = nullptr,
-                                                           const settings& config = settings {}) noexcept(false);
-
-        /// @brief Processes pending QUIC events (called from the event loop).
-        /// @return Success or an error code.
-        [[nodiscard]] task_returning_expected_void_t process() noexcept(false);
-
-        /// @brief Connects the QUIC engine to a specified remote peer.
-        /// @param peer_ip   IP address to connect to.
-        /// @param peer_port Port number to connect to.
-        /// @param hostname  Hostname for SNI (Server Name Indication). Optional.
-        /// @param payload   Payload to send once connected.
-        /// @param ssl_ctx   BoringSSL SSL_CTX pointer.
-        /// @param config    QUIC protocol settings.
-        /// @return Success or an error code once connection is established.
-        [[nodiscard]] task_returning_expected_void_t connect(ip_address_t peer_ip, port_t peer_port, const std::string& hostname = "",
-                                                             const std::string& payload = "", void* ssl_ctx = nullptr,
-                                                             const settings& config = settings {}) noexcept(false);
-
-        /// @brief Connects to a peer and creates one client-initiated stream per payload.
-        /// @param peer_ip   IP address to connect to.
-        /// @param peer_port Port number to connect to.
-        /// @param hostname  Hostname for SNI (Server Name Indication). Optional.
-        /// @param payloads  Payloads queued client-side; each payload is written on a distinct stream.
-        /// @param ssl_ctx   BoringSSL SSL_CTX pointer.
-        /// @param config    QUIC protocol settings.
-        /// @return Success or an error code once connection is established.
-        [[nodiscard]] task_returning_expected_void_t connect(ip_address_t peer_ip, port_t peer_port, const std::string& hostname,
-                                                             const std::vector<std::string>& payloads, void* ssl_ctx = nullptr,
-                                                             const settings& config = {}) noexcept(false);
-
-    private:
-        struct impl;
-        std::unique_ptr<impl> impl_;
-    };
-
-} // namespace kmx::aio::quic
+}
 
 #endif // KMX_AIO_FEATURE_QUIC

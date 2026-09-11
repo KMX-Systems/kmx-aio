@@ -1,3 +1,6 @@
+/// @file inc/kmx/aio/sample/tls/echo_readiness_client/manager.hpp
+/// @brief Readiness-model TLS echo client sample manager: concurrent TLS connection stress test with live stats.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <kmx/aio/file_descriptor.hpp>
@@ -6,11 +9,8 @@
     #include <kmx/aio/task.hpp>
     #include <kmx/logger.hpp>
 
-    #include <arpa/inet.h>
-    #include <fcntl.h>
     #include <openssl/err.h>
     #include <openssl/ssl.h>
-    #include <sys/socket.h>
 
     #include <atomic>
     #include <chrono>
@@ -19,6 +19,9 @@
     #include <stop_token>
     #include <thread>
     #include <unordered_map>
+    #include <arpa/inet.h>
+    #include <fcntl.h>
+    #include <sys/socket.h>
 #endif
 
 namespace kmx::aio::sample::tls::echo_readiness_client
@@ -64,7 +67,7 @@ namespace kmx::aio::sample::tls::echo_readiness_client
         /// @brief Non-movable.
         manager& operator=(manager&&) = delete;
 
-        const metric_data& metrics() const noexcept { return metrics_; }
+        [[nodiscard]] const metric_data& metrics() const noexcept { return metrics_; }
 
         /// @brief Run the stress test.
         /// @return true when all requests succeed; otherwise false.

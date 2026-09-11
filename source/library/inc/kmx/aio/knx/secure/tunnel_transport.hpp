@@ -1,5 +1,6 @@
-/// @file kmx/aio/knx/secure/tunnel_transport.hpp
+/// @file inc/kmx/aio/knx/secure/tunnel_transport.hpp
 /// @brief A stream transport that carries a KNX IP Secure tunnelling session: the handshake on open, every frame wrapped.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// The tunnelling client runs its tunnel over this as over any stream transport, and the session never shows through
 /// to it. Opening opens the connection underneath and runs the handshake. Every frame sent is sealed under the session
@@ -11,11 +12,16 @@
 /// `async_mutex` held across the send, which puts wrappers on the connection in the order of their sequence numbers;
 /// the session sits behind a mutex held for its synchronous steps alone, since a receive and the senders reach it from
 /// tasks that may run on different threads.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/async_mutex.hpp>
+        #include <kmx/aio/knx/datagram_transport.hpp>
+        #include <kmx/aio/knx/frame.hpp>
+        #include <kmx/aio/knx/secure/client_session.hpp>
+        #include <kmx/aio/knx/transport.hpp>
+
         #include <array>
         #include <cstddef>
         #include <cstdint>
@@ -25,11 +31,6 @@
         #include <type_traits>
         #include <utility>
     #endif
-
-    #include <kmx/aio/async_mutex.hpp>
-    #include <kmx/aio/knx/frame.hpp>
-    #include <kmx/aio/knx/secure/client_session.hpp>
-    #include <kmx/aio/knx/transport.hpp>
 
 namespace kmx::aio::knx::secure
 {
@@ -108,7 +109,7 @@ namespace kmx::aio::knx::secure
 
         /// @brief Runs one synchronous step on the session, holding its lock.
         template <typename Step>
-        std::invoke_result_t<Step, client_session&> with_session(Step&& step) const noexcept
+        [[nodiscard]] std::invoke_result_t<Step, client_session&> with_session(Step&& step) const noexcept
         {
             const std::lock_guard lock {session_mutex_};
             return std::forward<Step>(step)(session_);

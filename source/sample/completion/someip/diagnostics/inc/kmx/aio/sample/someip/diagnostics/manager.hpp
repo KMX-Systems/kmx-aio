@@ -1,12 +1,15 @@
+/// @file inc/kmx/aio/sample/someip/diagnostics/manager.hpp
+/// @brief Completion-model SOME/IP diagnostics sample manager, owning a client and an event subscription.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
-    #include <atomic>
-    #include <memory>
-
     #include <kmx/aio/completion/executor.hpp>
     #include <kmx/aio/someip/client.hpp>
     #include <kmx/aio/someip/subscription.hpp>
     #include <kmx/aio/task.hpp>
+
+    #include <atomic>
+    #include <memory>
 #endif
 
 namespace kmx::aio::sample::someip::diagnostics

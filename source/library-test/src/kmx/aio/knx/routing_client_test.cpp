@@ -1,107 +1,115 @@
+/// @file src/kmx/aio/knx/routing_client_test.cpp
+/// @brief Unit tests for the KNXnet/IP routing client and gateway: control frames, reflections, busy backoff, lifecycle.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/knx/datagram_transport.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/frame.hpp>
+    #include <kmx/aio/knx/gateway.hpp>
+    #include <kmx/aio/knx/generic_server.hpp>
+    #include <kmx/aio/knx/routing.hpp>
+    #include <kmx/aio/knx/routing/client.hpp>
+    #include <kmx/aio/knx/secure/common.hpp>
+    #include <kmx/aio/knx/secure/credentials.hpp>
+    #include <kmx/aio/knx/secure/server_configuration.hpp>
+    #include <kmx/aio/knx/transport.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/aio/test/knx/telegram.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/knx/gateway.hpp>
-#include <kmx/aio/knx/routing.hpp>
-#include <kmx/aio/test/knx/telegram.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <algorithm>
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <deque>
-#include <memory>
-#include <netinet/in.h>
-#include <vector>
+    #include <algorithm>
+    #include <array>
+    #include <cstddef>
+    #include <cstdint>
+    #include <deque>
+    #include <memory>
+    #include <vector>
+    #include <netinet/in.h>
+#endif
 
 namespace kmx::aio::test::knx::routing_client_test
 {
     using namespace kmx::aio::knx;
-    std::uint32_t routing_now_ms {};
-
-    [[nodiscard]] std::uint32_t routing_clock_now() noexcept
-    {
-        return routing_now_ms;
-    }
-
-    class loopback_routing_transport final: public datagram_transport
-    {
-    public:
-        bool joined {};
-        bool invalid_peer {};
-        std::vector<std::uint8_t> last_sent {};
-
-        void enqueue(std::vector<std::uint8_t> packet)
-        {
-            incoming_.push_back(std::move(packet));
-        }
-
-        [[nodiscard]] task_returning_expected_size_t send(
-            const cspan_byte_t payload,
-            const sockaddr*,
-            const ::socklen_t) noexcept(false) override
-        {
-            const auto* bytes = reinterpret_cast<const std::uint8_t*>(payload.data());
-            last_sent.assign(bytes, bytes + payload.size());
-            co_return expected_size_t {payload.size()};
-        }
-
-        [[nodiscard]] task_returning_expected_size_t receive(
-            const span_byte_t buffer,
-            transport_peer& peer) noexcept(false) override
-        {
-            if (incoming_.empty())
-                co_return std::unexpected(make_error_code(error::timeout));
-
-            const auto payload = std::move(incoming_.front());
-            incoming_.pop_front();
-            if (payload.size() > buffer.size())
-                co_return std::unexpected(make_error_code(error::invalid_length));
-
-            peer = {};
-            auto& sender = reinterpret_cast<sockaddr_in&>(peer.address);
-            sender.sin_family = AF_INET;
-            sender.sin_port = htons(3671u);
-            sender.sin_addr.s_addr = htonl(0x7F000001u);
-            peer.length = sizeof(sockaddr_in);
-            if (invalid_peer)
-            {
-                peer.length = sizeof(sockaddr_in) - 1u;
-                sender.sin_port = 0u;
-            }
-
-            for (std::size_t i = 0u; i < payload.size(); ++i)
-                buffer[i] = static_cast<std::byte>(payload[i]);
-            co_return expected_size_t {payload.size()};
-        }
-
-        [[nodiscard]] expected_void_t join_multicast_group(
-            const multicast_group_configuration&) noexcept override
-        {
-            joined = true;
-            return {};
-        }
-
-        [[nodiscard]] expected_void_t leave_multicast_group(
-            const multicast_group_configuration&) noexcept override
-        {
-            joined = false;
-            return {};
-        }
-
-    private:
-        std::deque<std::vector<std::uint8_t>> incoming_ {};
-    };
 
     namespace detail
     {
+        /// @brief The time the client under test reads.
+        std::uint32_t now_ms {};
+
+        /// @brief Reads @ref now_ms.
+        [[nodiscard]] std::uint32_t clock_now() noexcept
+        {
+            return now_ms;
+        }
+
+        class loopback_transport final: public datagram_transport
+        {
+        public:
+            bool joined {};
+            bool invalid_peer {};
+            std::vector<std::uint8_t> last_sent {};
+
+            void enqueue(std::vector<std::uint8_t> packet) { incoming_.push_back(std::move(packet)); }
+
+            [[nodiscard]] task_returning_expected_size_t send(const cspan_byte_t payload, const sockaddr*,
+                                                              const ::socklen_t) noexcept(false) override
+            {
+                const auto* bytes = reinterpret_cast<const std::uint8_t*>(payload.data());
+                last_sent.assign(bytes, bytes + payload.size());
+                co_return expected_size_t {payload.size()};
+            }
+
+            [[nodiscard]] task_returning_expected_size_t receive(const span_byte_t buffer, transport_peer& peer) noexcept(false) override
+            {
+                if (incoming_.empty())
+                    co_return std::unexpected(make_error_code(error::timeout));
+
+                const auto payload = std::move(incoming_.front());
+                incoming_.pop_front();
+                if (payload.size() > buffer.size())
+                    co_return std::unexpected(make_error_code(error::invalid_length));
+
+                peer = {};
+                auto& sender = reinterpret_cast<sockaddr_in&>(peer.address);
+                sender.sin_family = AF_INET;
+                sender.sin_port = htons(3671u);
+                sender.sin_addr.s_addr = htonl(0x7F000001u);
+                peer.length = sizeof(sockaddr_in);
+                if (invalid_peer)
+                {
+                    peer.length = sizeof(sockaddr_in) - 1u;
+                    sender.sin_port = 0u;
+                }
+
+                for (std::size_t i = 0u; i < payload.size(); ++i)
+                    buffer[i] = static_cast<std::byte>(payload[i]);
+                co_return expected_size_t {payload.size()};
+            }
+
+            [[nodiscard]] expected_void_t join_multicast_group(const multicast_group_configuration&) noexcept override
+            {
+                joined = true;
+                return {};
+            }
+
+            [[nodiscard]] expected_void_t leave_multicast_group(const multicast_group_configuration&) noexcept override
+            {
+                joined = false;
+                return {};
+            }
+
+        private:
+            std::deque<std::vector<std::uint8_t>> incoming_ {};
+        };
+
         /// @brief Reads one indication and records whether it carried the expected cEMI.
         task<void> receive_indication(routing::client& client, bool& received, completion::executor& executor) noexcept(false)
         {
             const auto indication = co_await client.receive_indication();
-            received = indication.has_value() &&
-                       (indication->cemi_bytes == std::vector<std::uint8_t>(sample_cemi.begin(), sample_cemi.end()));
+            received =
+                indication.has_value() && (indication->cemi_bytes == std::vector<std::uint8_t>(sample_cemi.begin(), sample_cemi.end()));
             executor.stop();
         }
 
@@ -133,19 +141,28 @@ namespace kmx::aio::test::knx::routing_client_test
             receive_executor.stop();
         }
 
-        /// @brief Sends a busy and a lost-message control, decoding each one back off the transport.
-        task<void> send_busy_and_lost(routing::client& client, const loopback_routing_transport& transport, bool& sent_busy,
-                                      bool& sent_lost, completion::executor& executor) noexcept(false)
+        /// @brief Whether each control went out and decoded back off the transport as it was sent.
+        struct controls_sent
         {
-            sent_busy = (co_await client.send_busy(routing::busy {.wait_time_ms = 90u})).has_value();
+            /// @brief The ROUTING_BUSY.
+            bool busy {};
+            /// @brief The ROUTING_LOST_MESSAGE.
+            bool lost {};
+        };
+
+        /// @brief Sends a busy and a lost-message control, decoding each one back off the transport.
+        task<void> send_busy_and_lost(routing::client& client, const loopback_transport& transport, controls_sent& sent,
+                                      completion::executor& executor) noexcept(false)
+        {
+            sent.busy = (co_await client.send_busy(routing::busy {.wait_time_ms = 90u})).has_value();
             const auto busy = routing::decode_busy_packet(transport.last_sent);
-            sent_busy = sent_busy && busy.has_value() && (busy->wait_time_ms == 90u);
-            sent_lost = (co_await client.send_lost_message(routing::lost_message {.count = 2u})).has_value();
+            sent.busy = sent.busy && busy.has_value() && (busy->wait_time_ms == 90u);
+            sent.lost = (co_await client.send_lost_message(routing::lost_message {.count = 2u})).has_value();
             const auto lost = routing::decode_lost_message_packet(transport.last_sent);
-            sent_lost = sent_lost && lost.has_value() && (lost->count == 2u);
+            sent.lost = sent.lost && lost.has_value() && (lost->count == 2u);
             executor.stop();
         }
-    } // namespace detail
+    }
 
     // Golden wire vectors, the routing counterpart of the compile-time cEMI vectors. Encoder and decoder
     // agree with each other by construction, so only bytes captured from the specification can catch the
@@ -157,8 +174,7 @@ namespace kmx::aio::test::knx::routing_client_test
     {
         // 06 10 | 05 30 | 00 11, then the cEMI frame itself - no channel id, no sequence, no reserved.
         const std::array<std::uint8_t, frame::communication_header_size + sample_cemi_size> expected {
-            0x06u, 0x10u, 0x05u, 0x30u, 0x00u, 0x11u,
-            0x11u, 0x00u, 0xBCu, 0xE0u, 0x11u, 0x01u, 0x0Au, 0x03u, 0x01u, 0x00u, 0x81u,
+            0x06u, 0x10u, 0x05u, 0x30u, 0x00u, 0x11u, 0x11u, 0x00u, 0xBCu, 0xE0u, 0x11u, 0x01u, 0x0Au, 0x03u, 0x01u, 0x00u, 0x81u,
         };
 
         std::array<std::uint8_t, expected.size()> encoded {};
@@ -225,7 +241,7 @@ namespace kmx::aio::test::knx::routing_client_test
 
     TEST_CASE("knx routing client joins and leaves multicast runtime", "[knx][routing][unit]")
     {
-        loopback_routing_transport transport;
+        detail::loopback_transport transport;
         routing::client client {transport};
         REQUIRE(client.start().has_value());
         CHECK(transport.joined);
@@ -235,7 +251,7 @@ namespace kmx::aio::test::knx::routing_client_test
 
     TEST_CASE("knx routing client records busy, lost and reflected messages", "[knx][routing][unit]")
     {
-        loopback_routing_transport transport;
+        detail::loopback_transport transport;
         routing::client client {transport};
         client.note_busy(250u);
         client.note_lost();
@@ -249,7 +265,7 @@ namespace kmx::aio::test::knx::routing_client_test
 
     TEST_CASE("knx gateway stops routing and server lifecycles together", "[knx][gateway][unit]")
     {
-        loopback_routing_transport transport;
+        detail::loopback_transport transport;
         gateway value {transport};
         REQUIRE(value.start().has_value());
         CHECK(transport.joined);
@@ -271,7 +287,7 @@ namespace kmx::aio::test::knx::routing_client_test
 
     TEST_CASE("knx gateway exposes continuous server loop", "[knx][gateway][unit]")
     {
-        loopback_routing_transport transport;
+        detail::loopback_transport transport;
         gateway value {transport};
         REQUIRE(value.shutdown().has_value());
 
@@ -290,7 +306,7 @@ namespace kmx::aio::test::knx::routing_client_test
 
     TEST_CASE("knx gateway can restart after stop", "[knx][gateway][unit]")
     {
-        loopback_routing_transport transport;
+        detail::loopback_transport transport;
         gateway value {transport};
         REQUIRE(value.start().has_value());
         REQUIRE(value.stop().has_value());
@@ -303,7 +319,7 @@ namespace kmx::aio::test::knx::routing_client_test
 
     TEST_CASE("knx gateway reports which of its halves are secure", "[knx][gateway][unit]")
     {
-        loopback_routing_transport transport;
+        detail::loopback_transport transport;
         const gateway plain {transport};
         CHECK(!plain.server_secured());
         CHECK(!plain.router_secured());
@@ -314,15 +330,17 @@ namespace kmx::aio::test::knx::routing_client_test
         server_security->serial_number = serial;
         secure::routing_configuration routing_security {};
         routing_security.serial_number = serial;
-        const gateway secured {transport, server_config {.secure = std::move(server_security)}, routing::multicast_configuration {},
-                               std::move(routing_security)};
+        const gateway secured {transport,
+                               server_config {.secure = std::move(server_security)},
+                               routing::multicast_configuration {},
+                               {.routing_settings = std::move(routing_security)}};
         CHECK(secured.server_secured());
         CHECK(secured.router_secured());
     }
 
     TEST_CASE("knx routing client sends indication after start", "[knx][routing][integration]")
     {
-        loopback_routing_transport transport;
+        detail::loopback_transport transport;
         routing::client client {transport};
         REQUIRE(client.start().has_value());
 
@@ -345,7 +363,7 @@ namespace kmx::aio::test::knx::routing_client_test
 
     TEST_CASE("knx routing client receives indication payload", "[knx][routing][integration]")
     {
-        loopback_routing_transport transport;
+        detail::loopback_transport transport;
         routing::client client {transport};
         REQUIRE(client.start().has_value());
 
@@ -363,7 +381,7 @@ namespace kmx::aio::test::knx::routing_client_test
 
     TEST_CASE("knx routing client receives busy and lost controls", "[knx][routing][integration]")
     {
-        loopback_routing_transport transport;
+        detail::loopback_transport transport;
         routing::client client {transport};
         REQUIRE(client.start().has_value());
 
@@ -392,7 +410,7 @@ namespace kmx::aio::test::knx::routing_client_test
 
     TEST_CASE("knx routing client rejects malformed source peer metadata", "[knx][routing][unit]")
     {
-        loopback_routing_transport transport;
+        detail::loopback_transport transport;
         transport.invalid_peer = true;
         routing::client client {transport};
         REQUIRE(client.start().has_value());
@@ -415,7 +433,7 @@ namespace kmx::aio::test::knx::routing_client_test
 
     TEST_CASE("knx routing client suppresses reflected indications", "[knx][routing][integration]")
     {
-        loopback_routing_transport transport;
+        detail::loopback_transport transport;
         routing::client client {transport};
         REQUIRE(client.start().has_value());
 
@@ -443,7 +461,7 @@ namespace kmx::aio::test::knx::routing_client_test
 
     TEST_CASE("knx routing client suppresses reflections from recent sends", "[knx][routing][integration]")
     {
-        loopback_routing_transport transport;
+        detail::loopback_transport transport;
         routing::client client {transport};
         REQUIRE(client.start().has_value());
 
@@ -474,9 +492,9 @@ namespace kmx::aio::test::knx::routing_client_test
 
     TEST_CASE("knx routing client enforces busy backoff before sending", "[knx][routing][unit]")
     {
-        routing_now_ms = 100u;
-        loopback_routing_transport transport;
-        routing::client client {transport, {}, &routing_clock_now};
+        detail::now_ms = 100u;
+        detail::loopback_transport transport;
+        routing::client client {transport, {}, &detail::clock_now};
         REQUIRE(client.start().has_value());
         client.note_busy(50u);
 
@@ -492,7 +510,7 @@ namespace kmx::aio::test::knx::routing_client_test
         blocked_executor.run();
         CHECK(blocked);
 
-        routing_now_ms = 150u;
+        detail::now_ms = 150u;
         bool sent {};
         completion::executor sent_executor;
         auto sent_run = [&]() -> task<void>
@@ -503,29 +521,28 @@ namespace kmx::aio::test::knx::routing_client_test
         sent_executor.spawn(sent_run());
         sent_executor.run();
         CHECK(sent);
-        routing_now_ms = 0u;
+        detail::now_ms = 0u;
     }
 
     TEST_CASE("knx routing client sends busy and lost controls", "[knx][routing][integration]")
     {
-        loopback_routing_transport transport;
+        detail::loopback_transport transport;
         routing::client client {transport};
         REQUIRE(client.start().has_value());
 
-        bool sent_busy {};
-        bool sent_lost {};
+        detail::controls_sent sent {};
         completion::executor executor;
-        executor.spawn(detail::send_busy_and_lost(client, transport, sent_busy, sent_lost, executor));
+        executor.spawn(detail::send_busy_and_lost(client, transport, sent, executor));
         executor.run();
-        CHECK(sent_busy);
-        CHECK(sent_lost);
+        CHECK(sent.busy);
+        CHECK(sent.lost);
     }
 
     TEST_CASE("knx routing client clears transient state on restart", "[knx][routing][unit]")
     {
-        routing_now_ms = 100u;
-        loopback_routing_transport transport;
-        routing::client client {transport, {}, &routing_clock_now};
+        detail::now_ms = 100u;
+        detail::loopback_transport transport;
+        routing::client client {transport, {}, &detail::clock_now};
         REQUIRE(client.start().has_value());
         client.note_busy(100u);
         REQUIRE(client.stop().has_value());
@@ -541,6 +558,6 @@ namespace kmx::aio::test::knx::routing_client_test
         executor.spawn(run());
         executor.run();
         CHECK(sent);
-        routing_now_ms = 0u;
+        detail::now_ms = 0u;
     }
 }

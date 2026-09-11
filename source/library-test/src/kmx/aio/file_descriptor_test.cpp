@@ -1,18 +1,19 @@
-/// @file aio/file_descriptor_test.cpp
+/// @file src/kmx/aio/file_descriptor_test.cpp
 /// @brief Unit tests for the file_descriptor RAII wrapper and its syscall shims.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
 #include <kmx/aio/file_descriptor.hpp>
+#ifndef PCH
+    #include <catch2/catch_test_macros.hpp>
 
-#include <array>
-#include <cerrno>
-#include <cstring>
-#include <fcntl.h>
-#include <netinet/in.h>
-#include <string>
-#include <sys/socket.h>
-#include <unistd.h>
+    #include <array>
+    #include <cerrno>
+    #include <cstring>
+    #include <string>
+    #include <fcntl.h>
+    #include <netinet/in.h>
+    #include <sys/socket.h>
+    #include <unistd.h>
+#endif
 
 namespace kmx::aio::test::file_descriptor_test
 {
@@ -26,7 +27,7 @@ namespace kmx::aio::test::file_descriptor_test
             port_t port {};
         };
 
-        listening_socket make_listener()
+        [[nodiscard]] listening_socket make_listener()
         {
             auto created = file_descriptor::create_socket(AF_INET, SOCK_STREAM, 0);
             REQUIRE(created.has_value());
@@ -45,7 +46,7 @@ namespace kmx::aio::test::file_descriptor_test
 
             return result;
         }
-    } // namespace detail
+    }
 
     TEST_CASE("a default-constructed descriptor owns nothing", "[core][file_descriptor][lifetime]")
     {
@@ -525,4 +526,4 @@ namespace kmx::aio::test::file_descriptor_test
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error() == error_from_errno(EAFNOSUPPORT));
     }
-} // namespace kmx::aio::test::file_descriptor_test
+}

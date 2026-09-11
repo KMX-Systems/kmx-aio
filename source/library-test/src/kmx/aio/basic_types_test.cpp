@@ -1,14 +1,15 @@
-/// @file aio/basic_types_test.cpp
+/// @file src/kmx/aio/basic_types_test.cpp
 /// @brief Unit tests for the IP address vocabulary and sockaddr conversions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_template_test_macros.hpp>
-#include <catch2/catch_test_macros.hpp>
-
 #include <kmx/aio/basic_types.hpp>
+#ifndef PCH
+    #include <catch2/catch_template_test_macros.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <cerrno>
-#include <cstring>
-#include <netinet/in.h>
+    #include <cerrno>
+    #include <cstring>
+    #include <netinet/in.h>
+#endif
 
 namespace kmx::aio::test::basic_types_test
 {
@@ -17,7 +18,7 @@ namespace kmx::aio::test::basic_types_test
         constexpr ipv4::storage_t ipv4_documentation {192u, 0u, 2u, 33u};
         constexpr ipv6::storage_t ipv6_documentation {0x20u, 0x01u, 0x0du, 0xb8u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0x01u};
         constexpr ipv6::storage_t ipv6_loopback {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 1u};
-    } // namespace detail
+    }
 
     TEST_CASE("ip_family reports the family of a view", "[core][basic_types][family]")
     {
@@ -265,4 +266,4 @@ namespace kmx::aio::test::basic_types_test
         REQUIRE_FALSE(parsed.has_value());
         CHECK(parsed.error() == error_from_errno(EAFNOSUPPORT));
     }
-} // namespace kmx::aio::test::basic_types_test
+}

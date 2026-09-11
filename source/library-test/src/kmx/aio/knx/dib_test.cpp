@@ -1,14 +1,27 @@
+/// @file src/kmx/aio/knx/dib_test.cpp
+/// @brief Unit tests for KNXnet/IP Description Information Blocks: wire layout, round trips and unmodelled blocks.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
 #include <kmx/aio/knx/dib.hpp>
-#include <kmx/aio/knx/discovery.hpp>
-#include <kmx/aio/knx/routing.hpp>
+#ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/ipv4.hpp>
+    #include <kmx/aio/knx/connection.hpp>
+    #include <kmx/aio/knx/dib/device_info.hpp>
+    #include <kmx/aio/knx/dib/supported_service_families.hpp>
+    #include <kmx/aio/knx/discovery.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/frame.hpp>
+    #include <kmx/aio/knx/individual_address.hpp>
+    #include <kmx/aio/knx/routing.hpp>
 
-#include <algorithm>
-#include <array>
-#include <cstdint>
-#include <vector>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <algorithm>
+    #include <array>
+    #include <cstdint>
+    #include <variant>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::knx::dib_test
 {
@@ -19,7 +32,7 @@ namespace kmx::aio::test::knx::dib_test
     TEST_CASE("knx dib device info matches its wire layout", "[knx][dib][unit]")
     {
         dib::device_info info {};
-        info.knx_medium = dib::medium::ip;
+        info.knx_medium = dib::medium_ip;
         info.device_status = 0x01u; // programming mode
         info.address = individual_address {1u, 1u, 10u};
         info.project_installation_id = 0x1234u;
@@ -33,13 +46,13 @@ namespace kmx::aio::test::knx::dib_test
         REQUIRE(size.has_value());
         CHECK(*size == 54u);
 
-        CHECK(encoded[0u] == 54u);    // structure length
-        CHECK(encoded[1u] == 0x01u);  // device info
-        CHECK(encoded[2u] == 0x20u);  // IP medium
-        CHECK(encoded[3u] == 0x01u);  // programming mode
-        CHECK(encoded[4u] == 0x11u);  // individual address 1.1.10
+        CHECK(encoded[0u] == 54u);   // structure length
+        CHECK(encoded[1u] == 0x01u); // device info
+        CHECK(encoded[2u] == 0x20u); // IP medium
+        CHECK(encoded[3u] == 0x01u); // programming mode
+        CHECK(encoded[4u] == 0x11u); // individual address 1.1.10
         CHECK(encoded[5u] == 0x0Au);
-        CHECK(encoded[6u] == 0x12u);  // project installation id
+        CHECK(encoded[6u] == 0x12u); // project installation id
         CHECK(encoded[7u] == 0x34u);
         CHECK(encoded[14u] == 224u);  // multicast address
         CHECK(encoded[18u] == 0x0Au); // mac address
@@ -145,8 +158,7 @@ namespace kmx::aio::test::knx::dib_test
         CHECK(held->subnet_mask == ipv4::storage_t {255u, 255u, 255u, 0u});
         CHECK(held->assignment_method == 0x02u);
 
-        const dib::current_ip_config current {
-            {192u, 0u, 2u, 20u}, {255u, 255u, 255u, 0u}, {192u, 0u, 2u, 1u}, {192u, 0u, 2u, 2u}, 0x04u};
+        const dib::current_ip_config current {{192u, 0u, 2u, 20u}, {255u, 255u, 255u, 0u}, {192u, 0u, 2u, 1u}, {192u, 0u, 2u, 2u}, 0x04u};
         std::array<std::uint8_t, 20u> current_encoded {};
         REQUIRE(dib::encode(current_encoded, dib::block {current}).has_value());
         CHECK(current_encoded[0u] == 20u);
@@ -160,7 +172,7 @@ namespace kmx::aio::test::knx::dib_test
 
     TEST_CASE("knx dib knx addresses round-trip", "[knx][dib][unit]")
     {
-        const dib::knx_addresses addresses {
+        const dib::addresses addresses {
             individual_address {1u, 1u, 0u},
             {individual_address {1u, 1u, 10u}, individual_address {1u, 1u, 11u}},
         };
@@ -171,7 +183,7 @@ namespace kmx::aio::test::knx::dib_test
 
         const auto decoded = dib::decode(encoded);
         REQUIRE(decoded.has_value());
-        const auto* held = std::get_if<dib::knx_addresses>(&decoded.value());
+        const auto* held = std::get_if<dib::addresses>(&decoded.value());
         REQUIRE(held != nullptr);
         CHECK(held->device == individual_address {1u, 1u, 0u});
         REQUIRE(held->additional.size() == 2u);
@@ -217,9 +229,8 @@ namespace kmx::aio::test::knx::dib_test
 
         const std::vector<dib::block> blocks {
             dib::block {info},
-            dib::block {dib::supported_service_families {false, {{dib::service_family::core, 2u},
-                                                                 {dib::service_family::tunnelling, 2u}}}},
-            dib::block {dib::knx_addresses {individual_address {1u, 1u, 0u}, {}}},
+            dib::block {dib::supported_service_families {false, {{dib::service_family::core, 2u}, {dib::service_family::tunnelling, 2u}}}},
+            dib::block {dib::addresses {individual_address {1u, 1u, 0u}, {}}},
         };
 
         std::vector<std::uint8_t> encoded(dib::encoded_size(blocks), 0u);
@@ -248,8 +259,7 @@ namespace kmx::aio::test::knx::dib_test
         // A block claiming more octets than remain, and one claiming fewer than its own prologue.
         CHECK(!dib::valid_blocks(std::array<std::uint8_t, 3u> {0x08u, 0x02u, 0x04u}));
         CHECK(!dib::valid_blocks(std::array<std::uint8_t, 3u> {0x01u, 0x02u, 0x04u}));
-        CHECK(dib::decode_all(std::array<std::uint8_t, 3u> {0x08u, 0x02u, 0x04u}).error() ==
-              make_error_code(error::malformed_frame));
+        CHECK(dib::decode_all(std::array<std::uint8_t, 3u> {0x08u, 0x02u, 0x04u}).error() == make_error_code(error::malformed_frame));
     }
 
     // The service family of a KNXnet/IP service is the high octet of its service type, which is what lets a

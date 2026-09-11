@@ -1,5 +1,6 @@
-/// @file aio/knx/dib.hpp
+/// @file api/kmx/aio/knx/dib.hpp
 /// @brief Description Information Blocks: what a KNXnet/IP server says about itself.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// A SEARCH_RESPONSE and a DESCRIPTION_RESPONSE are a HPAI followed by a run of description information
 /// blocks, and every block shares a two-octet prologue: its own structure length, then its type. That
@@ -11,25 +12,24 @@
 /// families it serves and at which versions, how its IP is configured, and which KNX addresses it owns.
 /// Everything else is kept as @ref kmx::aio::knx::dib::unknown_block so a round trip is lossless.
 /// @reference KNX System Specifications, 03/08/02 "Core", description information block.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
-        #include <array>
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/ipv4.hpp>
+        #include <kmx/aio/knx/dib/device_info.hpp>
+        #include <kmx/aio/knx/dib/supported_service_families.hpp>
+        #include <kmx/aio/knx/error.hpp>
+        #include <kmx/aio/knx/individual_address.hpp>
+
         #include <cstdint>
         #include <expected>
         #include <span>
-        #include <string_view>
         #include <system_error>
         #include <variant>
         #include <vector>
     #endif
-
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/mac.hpp>
-    #include <kmx/aio/knx/address.hpp>
-    #include <kmx/aio/knx/error.hpp>
 
 namespace kmx::aio::knx::dib
 {
@@ -56,29 +56,6 @@ namespace kmx::aio::knx::dib
         manufacturer_data = 0xFEu,
     };
 
-    /// @brief The KNXnet/IP service families a server can serve.
-    /// @details The value is also the high octet of every service type in that family, which is why
-    ///          @ref family_of can name the family a service belongs to without a table.
-    enum class service_family : std::uint8_t
-    {
-        /// @brief Discovery, description and connection management.
-        core = 0x02u,
-        /// @brief Device management: reading and writing the server's own interface objects.
-        device_management = 0x03u,
-        /// @brief Tunnelling onto the bus.
-        tunnelling = 0x04u,
-        /// @brief Multicast routing.
-        routing = 0x05u,
-        /// @brief Remote logging.
-        remote_logging = 0x06u,
-        /// @brief Remote configuration and diagnosis.
-        remote_configuration = 0x07u,
-        /// @brief Object server.
-        object_server = 0x08u,
-        /// @brief KNX Secure.
-        security = 0x09u,
-    };
-
     /// @brief Indicates whether a code names a service family this build knows.
     [[nodiscard]] constexpr bool known_service_family(const std::uint8_t value) noexcept
     {
@@ -94,6 +71,7 @@ namespace kmx::aio::knx::dib
             case service_family::security:
                 return true;
         }
+
         return false;
     }
 
@@ -112,100 +90,8 @@ namespace kmx::aio::knx::dib
         return static_cast<service_family>(family);
     }
 
-    /// @brief One service family and the version of it a server serves.
-    struct service_family_entry
-    {
-        /// @brief Which family.
-        service_family family = service_family::core;
-        /// @brief The version of it the server serves.
-        std::uint8_t version = 1u;
-
-        /// @brief Compares two entries by family and version.
-        [[nodiscard]] friend constexpr bool operator==(const service_family_entry&, const service_family_entry&) noexcept = default;
-    };
-
-    /// @brief The communication media a device supports, as the bit mask of a DEVICE_INFO block.
-    namespace medium
-    {
-        /// @brief Twisted pair 0.
-        inline constexpr std::uint8_t tp0 = 0x01u;
-        /// @brief Twisted pair 1, the medium of most KNX installations.
-        inline constexpr std::uint8_t tp1 = 0x02u;
-        /// @brief Powerline 110.
-        inline constexpr std::uint8_t pl110 = 0x04u;
-        /// @brief Powerline 132.
-        inline constexpr std::uint8_t pl132 = 0x08u;
-        /// @brief KNX radio frequency.
-        inline constexpr std::uint8_t rf = 0x10u;
-        /// @brief KNXnet/IP.
-        inline constexpr std::uint8_t ip = 0x20u;
-    }
-
-    /// @brief The six-octet KNX serial number of a device.
-    /// @details Its own alias rather than a bare array: a serial number and a MAC address are both six
-    ///          octets, and a function taking either would accept the other silently.
-    using serial_number_t = std::array<std::uint8_t, 6u>;
-
-    /// @brief Length of the friendly name field, which is fixed and NUL padded.
-    inline constexpr std::size_t friendly_name_size = 30u;
     /// @brief Size of the structure length and type octets every block begins with.
     inline constexpr std::size_t block_header_size = 2u;
-
-    /// @brief A DEVICE_INFO block.
-    struct device_info
-    {
-        /// @brief The media the device supports, as a mask of @ref kmx::aio::knx::dib::medium values.
-        std::uint8_t knx_medium = medium::ip;
-        /// @brief The device status; bit zero is the programming mode flag.
-        std::uint8_t device_status {};
-        /// @brief The device's own individual address.
-        individual_address address {};
-        /// @brief The project installation identifier.
-        std::uint16_t project_installation_id {};
-        /// @brief The six-octet KNX serial number.
-        serial_number_t serial_number {};
-        /// @brief The routing multicast address, all-zero when the device does not route.
-        ipv4::storage_t multicast_address {};
-        /// @brief The device's MAC address.
-        mac::storage_t mac_address {};
-        /// @brief The friendly name, NUL padded to @ref friendly_name_size octets.
-        std::array<char, friendly_name_size> friendly_name {};
-
-        /// @brief Indicates whether the device is in programming mode.
-        [[nodiscard]] constexpr bool programming_mode() const noexcept { return (device_status & 0x01u) != 0u; }
-
-        /// @brief Returns the friendly name without its NUL padding.
-        [[nodiscard]] constexpr std::string_view name() const noexcept
-        {
-            std::size_t length {};
-            while ((length < friendly_name.size()) && (friendly_name[length] != '\0'))
-                ++length;
-            return {friendly_name.data(), length};
-        }
-
-        /// @brief Sets the friendly name, truncating anything past @ref friendly_name_size octets.
-        constexpr void set_name(const std::string_view value) noexcept
-        {
-            friendly_name = {};
-            const auto length = (value.size() < friendly_name.size()) ? value.size() : friendly_name.size();
-            for (std::size_t i {}; i < length; ++i)
-                friendly_name[i] = value[i];
-        }
-    };
-
-    /// @brief A SUPP_SVC_FAMILIES or SECURED_SERVICE_FAMILIES block.
-    struct supported_service_families
-    {
-        /// @brief Whether this is the secured variant, which names the families that require KNX Secure.
-        bool secured {};
-        /// @brief The families served, each with its version.
-        std::vector<service_family_entry> families {};
-
-        /// @brief Indicates whether a family is present, at any version.
-        [[nodiscard]] bool contains(const service_family value) const noexcept;
-        /// @brief Indicates whether a family is present at or above a version.
-        [[nodiscard]] bool contains(const service_family value, const std::uint8_t minimum_version) const noexcept;
-    };
 
     /// @brief An IP_CONFIG block: the configuration the device was told to use.
     struct ip_config
@@ -238,7 +124,7 @@ namespace kmx::aio::knx::dib
     };
 
     /// @brief A KNX_ADDRESSES block.
-    struct knx_addresses
+    struct addresses
     {
         /// @brief The device's own address.
         individual_address device {};
@@ -267,8 +153,8 @@ namespace kmx::aio::knx::dib
     };
 
     /// @brief One description information block.
-    using block = std::variant<device_info, supported_service_families, ip_config, current_ip_config, knx_addresses,
-                               manufacturer_data, unknown_block>;
+    using block =
+        std::variant<device_info, supported_service_families, ip_config, current_ip_config, addresses, manufacturer_data, unknown_block>;
 
     /// @brief Every block of a description, or the error explaining why it could not be read.
     using block_list_result_t = std::expected<std::vector<block>, std::error_code>;
@@ -293,8 +179,7 @@ namespace kmx::aio::knx::dib
     /// @param destination The buffer to write into.
     /// @param values The blocks to encode, in order.
     /// @return The number of octets written, or why they could not be encoded.
-    [[nodiscard]] std::expected<std::size_t, std::error_code> encode_all(span_uint8_t destination,
-                                                                        std::span<const block> values) noexcept;
+    [[nodiscard]] std::expected<std::size_t, std::error_code> encode_all(span_uint8_t destination, std::span<const block> values) noexcept;
 
     /// @brief Decodes the first block of a run.
     /// @param bytes The octets, starting at the block's structure length.
@@ -321,8 +206,7 @@ namespace kmx::aio::knx::dib
     /// @param values The decoded blocks.
     /// @param secured Whether to look for the secured variant.
     /// @return A pointer to the block, or null when the description carries none.
-    [[nodiscard]] const supported_service_families* find_service_families(std::span<const block> values,
-                                                                          bool secured = false) noexcept;
+    [[nodiscard]] const supported_service_families* find_service_families(std::span<const block> values, bool secured = false) noexcept;
 
     /// @brief Finds the device information block of a description, if it has one.
     /// @param values The decoded blocks.

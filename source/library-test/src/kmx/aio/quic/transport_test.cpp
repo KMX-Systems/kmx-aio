@@ -1,4 +1,4 @@
-/// @file aio/quic/transport_test.cpp
+/// @file src/kmx/aio/quic/transport_test.cpp
 /// @brief Loopback tests for quic::endpoint: a client and a server on one executor.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 ///
@@ -6,26 +6,35 @@
 ///       testing here lives in the lsquic callbacks - which connection a stream belongs to, what survives a
 ///       connection ending - and none of that is reachable without one.
 #if defined(KMX_AIO_FEATURE_QUIC)
-
-    #include <catch2/catch_test_macros.hpp>
-
-    #include <algorithm>
-    #include <array>
-    #include <cstdlib>
-    #include <deque>
-    #include <filesystem>
-    #include <memory>
-    #include <span>
-    #include <string>
-    #include <string_view>
-    #include <vector>
-
-    #include <openssl/ssl.h>
-
-    #include <kmx/aio/completion/executor.hpp>
     #include <kmx/aio/quic/transport.hpp>
-    #include <kmx/aio/task.hpp>
-    #include <kmx/aio/test/tls_certs.hpp>
+    #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/completion/executor.hpp>
+        #include <kmx/aio/quic/byte_buffer.hpp>
+        #include <kmx/aio/quic/endpoint.hpp>
+        #include <kmx/aio/quic/stream.hpp>
+        #include <kmx/aio/task.hpp>
+        #include <kmx/aio/test/scoped_ssl_ctx.hpp>
+        #include <kmx/aio/test/tls_certs.hpp>
+
+        #include <catch2/catch_test_macros.hpp>
+        #include <openssl/ssl.h>
+
+        #include <algorithm>
+        #include <array>
+        #include <cstddef>
+        #include <cstdint>
+        #include <cstdlib>
+        #include <deque>
+        #include <filesystem>
+        #include <memory>
+        #include <span>
+        #include <string>
+        #include <string_view>
+        #include <system_error>
+        #include <utility>
+        #include <vector>
+    #endif
 
 namespace kmx::aio::test::quic::transport_test
 {
@@ -38,7 +47,7 @@ namespace kmx::aio::test::quic::transport_test
 
     namespace detail
     {
-        constexpr const char* test_alpn = "kmx-quic-test";
+        constexpr const char* alpn_name = "kmx-quic-test";
         constexpr std::array<std::uint8_t, 4u> loopback {127u, 0u, 0u, 1u};
 
         [[nodiscard]] std::shared_ptr<scoped_ssl_ctx> make_server_context()
@@ -55,7 +64,7 @@ namespace kmx::aio::test::quic::transport_test
                 return {};
 
             // Without this the handshake dies before a packet reaches the application; see transport.hpp.
-            configure_server_alpn(ctx, test_alpn);
+            configure_server_alpn(ctx, alpn_name);
             return owner;
         }
 
@@ -123,50 +132,61 @@ namespace kmx::aio::test::quic::transport_test
                 result->server_received.push_back(request);
 
                 const std::string response = "echo:" + request;
-                (void) co_await peer_stream.write_all(cspan_char_t(response.data(), response.size()));
+                static_cast<void>(co_await peer_stream.write_all(cspan_char_t(response.data(), response.size())));
                 peer_stream.shutdown_write();
             }
         }
 
-        /// @brief One connection: open a stream, send @p payload, read the echo, close.
-        task<void> exchange(executor& exec, const port_t port, std::string payload, std::shared_ptr<outcome> result,
-                            std::shared_ptr<scoped_ssl_ctx> ctx) noexcept(false)
+        /// @brief One client connection: where it goes, what it sends, and where the outcome is recorded.
+        struct exchange_params
         {
-            endpoint_t client(exec);
-            client.set_alpn(test_alpn);
+            executor& exec;                         ///< The executor both endpoints run on.
+            port_t port {};                         ///< The server's port on the loopback.
+            std::string payload {};                 ///< What the client sends on its stream.
+            std::shared_ptr<outcome> result {};     ///< Records what the client received, or why it failed.
+            std::shared_ptr<scoped_ssl_ctx> ctx {}; ///< The client's TLS context.
+        };
 
-            const auto connected = client.connect(make_ip_address(loopback), port, "localhost", ctx->get());
+        /// @brief One connection: open a stream, send the payload, read the echo, close.
+        /// @param params The executor, the server port, the payload, the outcome and the client context; taken by
+        ///               value, as the coroutine outlives the caller's temporary.
+        task<void> exchange(const exchange_params params) noexcept(false)
+        {
+            endpoint_t client(params.exec);
+            client.set_alpn(alpn_name);
+
+            const auto connected = client.connect(make_ip_address(loopback), params.port, "localhost", params.ctx->get());
             if (!connected)
             {
-                result->failure = connected.error();
+                params.result->failure = connected.error();
                 co_return;
             }
 
-            exec.spawn(client.run());
+            params.exec.spawn(client.run());
 
             auto opened = co_await client.session();
             if (!opened)
             {
-                result->failure = opened.error();
+                params.result->failure = opened.error();
                 client.stop();
                 co_return;
             }
 
             auto call = std::move(*opened);
-            const auto written = co_await call.write_all(cspan_char_t(payload.data(), payload.size()));
+            const auto written = co_await call.write_all(cspan_char_t(params.payload.data(), params.payload.size()));
             if (!written)
             {
-                result->failure = written.error();
+                params.result->failure = written.error();
                 client.stop();
                 co_return;
             }
 
-            result->client_received.push_back(co_await read_exactly(call, 10u));
+            params.result->client_received.push_back(co_await read_exactly(call, 10u));
 
             // Tell the server the connection is over, and keep the loop turning long enough to send it.
             client.close();
             for (unsigned i = 0u; i != 8u; ++i)
-                (void) co_await exec.async_timeout(2u * 1000u * 1000u);
+                static_cast<void>(co_await params.exec.async_timeout(2u * 1000u * 1000u));
 
             client.stop();
         }
@@ -176,7 +196,7 @@ namespace kmx::aio::test::quic::transport_test
                          std::shared_ptr<scoped_ssl_ctx> client_ctx) noexcept(false)
         {
             endpoint_t server(exec);
-            server.set_alpn(test_alpn);
+            server.set_alpn(alpn_name);
 
             const auto listening = server.listen(make_ip_address(loopback), 0u, server_ctx->get());
             if (!listening)
@@ -197,11 +217,11 @@ namespace kmx::aio::test::quic::transport_test
             if (!idle_open)
                 result->server_open_error = idle_open.error();
 
-            co_await exchange(exec, port, "one--", result, client_ctx);
+            co_await exchange({.exec = exec, .port = port, .payload = "one--", .result = result, .ctx = client_ctx});
 
             // The regression: the first client has gone and taken its connection with it. A server that
             // treated that as its own end would be deaf from here on.
-            co_await exchange(exec, port, "two--", result, client_ctx);
+            co_await exchange({.exec = exec, .port = port, .payload = "two--", .result = result, .ctx = client_ctx});
 
             // And with both connections gone the server is idle again, not holding one that lsquic has
             // freed. Getting this wrong is not a wrong answer but a use-after-free inside lsquic.
@@ -212,7 +232,7 @@ namespace kmx::aio::test::quic::transport_test
 
             server.stop();
             for (unsigned i = 0u; i != 4u; ++i)
-                (void) co_await exec.async_timeout(2u * 1000u * 1000u);
+                static_cast<void>(co_await exec.async_timeout(2u * 1000u * 1000u));
 
             exec.stop();
         }
@@ -228,7 +248,7 @@ namespace kmx::aio::test::quic::transport_test
             rng ^= rng << 17u;
             return static_cast<std::size_t>(rng % bound);
         }
-    } // namespace detail
+    }
 
     TEST_CASE("quic transport endpoint serves successive connections", "[quic][transport][integration]")
     {
@@ -394,6 +414,6 @@ namespace kmx::aio::test::quic::transport_test
         }
     }
 
-} // namespace kmx::aio::test::quic::transport_test
+}
 
 #endif // KMX_AIO_FEATURE_QUIC

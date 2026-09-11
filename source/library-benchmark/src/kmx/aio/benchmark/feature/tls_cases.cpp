@@ -1,35 +1,38 @@
-/// @file aio/benchmark/feature/tls_cases.cpp
+/// @file src/kmx/aio/benchmark/feature/tls_cases.cpp
 /// @brief The TLS scenarios, registered for whichever execution models this build has.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details One file per feature, holding both sides. Each side is gated on its own model alone, so a
 ///          build with one of them still measures that one and the report says the other did not run.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/benchmark/cases.hpp>
+#include <kmx/aio/benchmark/feature/tls_cases.hpp>
+#ifndef PCH
+    #include <kmx/aio/benchmark/feature/catalogue.hpp>
+    #include <kmx/aio/benchmark/feature/completion_backend.hpp>
+    #include <kmx/aio/benchmark/feature/readiness_backend.hpp>
+    #include <kmx/aio/benchmark/feature/tls_scenarios.hpp>
+#endif
 
-#include <kmx/aio/benchmark/feature/tls_scenarios.hpp>
-
-namespace kmx::aio::benchmark
+namespace kmx::aio::benchmark::feature
 {
-    using namespace feature::catalogue;
+    using namespace catalogue;
 
 #if defined(KMX_AIO_FEATURE_READINESS)
 
-    static result bench_readiness_tls_handshake(const double scale)
+    [[nodiscard]] static result bench_readiness_tls_handshake(const double scale)
     {
-        return feature::tls_handshake<feature::readiness_backend>("readiness/tls_handshake",
-                                                                  scaled(tls_handshake_scenario::iterations, scale));
+        return tls_handshake<readiness_backend>("readiness/tls_handshake", scaled(tls_handshake_scenario::iterations, scale));
     }
 
-    static result bench_readiness_tls_echo(const double scale)
+    [[nodiscard]] static result bench_readiness_tls_echo(const double scale)
     {
-        return feature::tls_echo_rtt<feature::readiness_backend>("readiness/tls_echo_rtt", scaled(tls_echo_scenario::iterations, scale),
-                                                                 tls_echo_scenario::payload_size);
+        return tls_echo_rtt<readiness_backend>("readiness/tls_echo_rtt", scaled(tls_echo_scenario::iterations, scale),
+                                               tls_echo_scenario::payload_size);
     }
 
-    static result bench_readiness_tls_throughput(const double scale)
+    [[nodiscard]] static result bench_readiness_tls_throughput(const double scale)
     {
-        return with_note(feature::tls_throughput<feature::readiness_backend>("readiness/tls_throughput (16 KiB blocks)",
-                                                                             scaled(tls_throughput_scenario::blocks, scale),
-                                                                             tls_throughput_scenario::block_size),
+        return with_note(tls_throughput<readiness_backend>("readiness/tls_throughput (16 KiB blocks)",
+                                                           scaled(tls_throughput_scenario::blocks, scale),
+                                                           tls_throughput_scenario::block_size),
                          "one 16 KiB block encrypted and streamed one way; the sender never waits");
     }
 
@@ -37,23 +40,22 @@ namespace kmx::aio::benchmark
 
 #if defined(KMX_AIO_FEATURE_COMPLETION)
 
-    static result bench_completion_tls_handshake(const double scale)
+    [[nodiscard]] static result bench_completion_tls_handshake(const double scale)
     {
-        return feature::tls_handshake<feature::completion_backend>("completion/tls_handshake",
-                                                                   scaled(tls_handshake_scenario::iterations, scale));
+        return tls_handshake<completion_backend>("completion/tls_handshake", scaled(tls_handshake_scenario::iterations, scale));
     }
 
-    static result bench_completion_tls_echo(const double scale)
+    [[nodiscard]] static result bench_completion_tls_echo(const double scale)
     {
-        return feature::tls_echo_rtt<feature::completion_backend>("completion/tls_echo_rtt", scaled(tls_echo_scenario::iterations, scale),
-                                                                  tls_echo_scenario::payload_size);
+        return tls_echo_rtt<completion_backend>("completion/tls_echo_rtt", scaled(tls_echo_scenario::iterations, scale),
+                                                tls_echo_scenario::payload_size);
     }
 
-    static result bench_completion_tls_throughput(const double scale)
+    [[nodiscard]] static result bench_completion_tls_throughput(const double scale)
     {
-        return with_note(feature::tls_throughput<feature::completion_backend>("completion/tls_throughput (16 KiB blocks)",
-                                                                              scaled(tls_throughput_scenario::blocks, scale),
-                                                                              tls_throughput_scenario::block_size),
+        return with_note(tls_throughput<completion_backend>("completion/tls_throughput (16 KiB blocks)",
+                                                            scaled(tls_throughput_scenario::blocks, scale),
+                                                            tls_throughput_scenario::block_size),
                          "one 16 KiB block encrypted and streamed one way; the sender never waits");
     }
 
@@ -81,4 +83,4 @@ namespace kmx::aio::benchmark
 #endif
     }
 
-} // namespace kmx::aio::benchmark
+}

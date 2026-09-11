@@ -1,16 +1,22 @@
+/// @file src/kmx/aio/sample/quic/echo_client/manager.cpp
+/// @brief Readiness-model QUIC echo client sample: opens two lsquic streams to localhost and prints the echoed replies.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/quic/echo_client/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/readiness/quic/engine.hpp>
 
-#include <array>
-#include <atomic>
-#include <charconv>
-#include <cstdlib>
-#include <iostream>
-#include <kmx/aio/readiness/quic/engine.hpp>
-#include <lsquic.h>
-#include <openssl/ssl.h>
-#include <string>
-#include <string_view>
-#include <vector>
+    #include <lsquic.h>
+    #include <openssl/ssl.h>
+
+    #include <array>
+    #include <atomic>
+    #include <charconv>
+    #include <cstdlib>
+    #include <iostream>
+    #include <string>
+    #include <string_view>
+    #include <vector>
+#endif
 
 namespace kmx::aio::sample::quic::echo_client
 {
@@ -22,7 +28,7 @@ namespace kmx::aio::sample::quic::echo_client
         std::atomic_uint32_t responses_received {};
         std::atomic_uint32_t close_after_responses {2u};
 
-        std::uint16_t parse_peer_port_from_env()
+        [[nodiscard]] std::uint16_t parse_peer_port_from_env()
         {
             constexpr std::uint16_t default_port = 12345u;
             const char* const env = std::getenv("KMX_QUIC_ECHO_PORT");
@@ -38,7 +44,7 @@ namespace kmx::aio::sample::quic::echo_client
             return static_cast<std::uint16_t>(parsed);
         }
 
-        std::uint32_t parse_response_target_from_env()
+        [[nodiscard]] std::uint32_t parse_response_target_from_env()
         {
             constexpr std::uint32_t default_target = 2u;
             const char* const env = std::getenv("KMX_QUIC_ECHO_CLIENT_CLOSE_AFTER_RESPONSES");
@@ -107,7 +113,8 @@ namespace kmx::aio::sample::quic::echo_client
         std::cout << "[QUIC Readiness Echo Client] Connecting to 127.0.0.1:" << peer_port << " with " << payloads.size() << " streams...\n";
         std::cout << "[QUIC Readiness Echo Client] close_after_responses=" << detail::close_after_responses.load() << "\n";
 
-        auto res = co_await engine.connect(peer_ip, peer_port, "localhost", payloads, ssl_ctx);
+        auto res = co_await engine.connect(
+            {.peer_ip = peer_ip, .peer_port = peer_port, .hostname = "localhost", .payloads = payloads, .ssl_ctx = ssl_ctx});
         if (!res)
         {
             std::cerr << "Failed to connect engine: " << res.error().message() << "\n";

@@ -1,43 +1,48 @@
-/// @file kmx/aio/knx/secure/tcp_server_secure_test.cpp
+/// @file src/kmx/aio/knx/secure/tcp_server_secure_test.cpp
 /// @brief KNX IP Secure tunnelling end to end: the in-tree secure client against the in-tree secure server, on both pillars.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details Real loopback connections throughout. The server holds two users - one with four tunnel addresses, one with a
 /// single address - and clients authenticate, tunnel both ways, and disconnect. Around that: a wrong password, an unknown
 /// user, another user's address, a plain client that must not get a channel (P1), a handshake abandoned half way, a third
 /// handshake from one address turned away, a connection that never opens a session, several clients at once on two
 /// threads, and a server torn down while a session is still open.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/knx/tcp_server.hpp>
+    #include <kmx/aio/completion/knx/tcp_transport.hpp>
+    #include <kmx/aio/completion/timer.hpp>
+    #include <kmx/aio/file_descriptor.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/generic_server.hpp>
+    #include <kmx/aio/knx/secure/client_session.hpp>
+    #include <kmx/aio/knx/secure/entropy.hpp>
+    #include <kmx/aio/knx/server.hpp>
+    #include <kmx/aio/knx/tunnelling_client.hpp>
+    #include <kmx/aio/test/knx/telegram.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/knx/tcp_server.hpp>
-#include <kmx/aio/completion/knx/tcp_transport.hpp>
-#include <kmx/aio/completion/timer.hpp>
-#include <kmx/aio/file_descriptor.hpp>
-#include <kmx/aio/knx/client.hpp>
-#include <kmx/aio/knx/error.hpp>
-#include <kmx/aio/knx/secure/client_session.hpp>
-#include <kmx/aio/knx/server.hpp>
-#include <kmx/aio/test/knx/telegram.hpp>
-#if defined(KMX_AIO_FEATURE_READINESS)
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/readiness/knx/tcp_server.hpp>
-    #include <kmx/aio/readiness/knx/tcp_transport.hpp>
-    #include <kmx/aio/readiness/timer.hpp>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <algorithm>
+    #include <array>
+    #include <atomic>
+    #include <chrono>
+    #include <cstdint>
+    #include <memory>
+    #include <mutex>
+    #include <string_view>
+    #include <thread>
+    #include <vector>
+    #include <netinet/in.h>
+    #include <poll.h>
+    #include <sys/socket.h>
+
+    #if defined(KMX_AIO_FEATURE_READINESS)
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/readiness/knx/tcp_server.hpp>
+        #include <kmx/aio/readiness/knx/tcp_transport.hpp>
+        #include <kmx/aio/readiness/timer.hpp>
+    #endif
 #endif
-
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <chrono>
-#include <cstdint>
-#include <memory>
-#include <mutex>
-#include <netinet/in.h>
-#include <poll.h>
-#include <string_view>
-#include <sys/socket.h>
-#include <thread>
-#include <vector>
 
 namespace kmx::aio::test::knx::secure::tcp_server_secure_test
 {
@@ -52,7 +57,7 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
         constexpr std::chrono::milliseconds patience {10'000};
 
         constexpr ks::serial_number_t client_serial {0x00u, 0xFAu, 0x12u, 0x34u, 0x56u, 0x78u};
-        constexpr ks::serial_number_t server_serial {0x00u, 0xFAu, 0xAAu, 0xAAu, 0xAAu, 0xAAu};
+        constexpr ks::serial_number_t own_serial {0x00u, 0xFAu, 0xAAu, 0xAAu, 0xAAu, 0xAAu};
         /// @brief The user with four tunnel addresses, and the user with one.
         constexpr std::uint8_t first_user = 2u;
         constexpr std::uint8_t second_user = 3u;
@@ -97,8 +102,8 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
         /// @brief A secure server configuration.
         /// @param lifetime_ms How long a handshake, and a connection without a session, may take.
         /// @param handshakes_per_peer How many handshakes one address may have under way; every client here is on loopback.
-        [[nodiscard]] kn::server_config secure_config(const std::uint32_t lifetime_ms = 10'000u,
-                                                      const std::uint8_t handshakes_per_peer = 2u)
+        [[nodiscard]] kn::server_config session_config(const std::uint32_t lifetime_ms = 10'000u,
+                                                       const std::uint8_t handshakes_per_peer = 2u)
         {
             auto secure = std::make_shared<ks::server_configuration>();
             secure->device_authentication_code = device_code().clone();
@@ -110,7 +115,7 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
             secure->users.push_back(ks::tunnelling_user {.user_id = second_user,
                                                          .password_key = second_password().clone(),
                                                          .tunnel_addresses = {kn::individual_address {1u, 1u, 250u}}});
-            secure->serial_number = server_serial;
+            secure->serial_number = own_serial;
             secure->unauthenticated_lifetime_ms = lifetime_ms;
             secure->max_unauthenticated_per_peer = handshakes_per_peer;
             return kn::server_config {.max_channels = 8u, .secure = std::move(secure)};
@@ -182,19 +187,34 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
             return address;
         }
 
+        /// @brief What one tunnel is opened with: where the server listens, the server, the credentials and the request.
+        struct tunnel_setup
+        {
+            /// @brief Where the server listens.
+            sockaddr_in address {};
+            /// @brief The server, which sends a frame down the tunnel.
+            kn::generic_server& server;
+            /// @brief The credentials the session is opened with.
+            ks::tunnelling_credentials credentials {};
+            /// @brief The connection asked for.
+            kn::connect_request_frame connect_request {};
+        };
+
         /// @brief Opens a secure tunnel, exchanges frames both ways around a heartbeat, and disconnects.
         template <typename Transport>
-        task<void> run_secure_tunnel(Transport& transport, const sockaddr_in& address, kn::generic_server& server,
-                                     ks::tunnelling_credentials credentials, const kn::connect_request_frame connect_request,
-                                     tunnel_observation& observed)
+        task<void> run_session_tunnel(Transport& transport, tunnel_setup setup, tunnel_observation& observed)
         {
-            kn::tunnelling_client client {transport, reinterpret_cast<const sockaddr*>(&address), sizeof(address), kn::tunnelling_config {},
-                                          std::move(credentials)};
-            if (const auto connected = co_await client.connect(connect_request); !connected.has_value())
+            auto& server = setup.server;
+            kn::tunnelling_client client {transport,
+                                          reinterpret_cast<const sockaddr*>(&setup.address),
+                                          sizeof(setup.address),
+                                          {.credentials = std::move(setup.credentials)}};
+            if (const auto connected = co_await client.connect(setup.connect_request); !connected.has_value())
             {
                 observed.refusal = connected.error();
                 co_return;
             }
+
             observed.connected = true;
             observed.channel = client.channel_id();
             observed.assigned = client.assigned_address();
@@ -218,19 +238,19 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
 
         /// @brief Opens a secure tunnel, sends @p frames frames down it, and disconnects.
         template <typename Transport>
-        task<void> run_secure_burst(Transport& transport, const sockaddr_in& address, const std::size_t frames,
-                                    std::atomic_size_t& completed)
+        task<void> run_session_burst(Transport& transport, const sockaddr_in& address, const std::size_t frames,
+                                     std::atomic_size_t& completed)
         {
-            kn::tunnelling_client client {transport, reinterpret_cast<const sockaddr*>(&address), sizeof(address), kn::tunnelling_config {},
-                                          credentials(first_user, first_password())};
+            kn::tunnelling_client client {transport,
+                                          reinterpret_cast<const sockaddr*>(&address),
+                                          sizeof(address),
+                                          {.credentials = credentials(first_user, first_password())}};
             if (!(co_await client.connect(request())).has_value())
                 co_return;
             std::size_t sent {};
             for (std::size_t index {}; index < frames; ++index)
-            {
                 if ((co_await client.send(sample_cemi)).has_value())
                     ++sent;
-            }
             const auto disconnected = co_await client.disconnect();
             if ((sent == frames) && disconnected.has_value())
                 completed.fetch_add(1u);
@@ -238,7 +258,7 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
 
         /// @brief Runs an accept loop, then records that it ended.
         template <typename Server>
-        task<void> run_server(Server& tcp, std::atomic_bool& ended)
+        task<void> run_accept_loop(Server& tcp, std::atomic_bool& ended)
         {
             static_cast<void>(co_await tcp.serve());
             ended = true;
@@ -262,6 +282,7 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
                     return false;
                 std::this_thread::sleep_for(std::chrono::milliseconds {5});
             }
+
             return true;
         }
 
@@ -276,6 +297,7 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
                 completion::timer timer {executor};
                 static_cast<void>(co_await timer.wait(std::chrono::milliseconds {5}));
             }
+
             co_return true;
         }
 
@@ -298,6 +320,7 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
                     return false;
                 octets = octets.subspan(static_cast<std::size_t>(written));
             }
+
             return true;
         }
 
@@ -314,6 +337,7 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
                     return {};
                 filled += static_cast<std::size_t>(received);
             }
+
             return octets;
         }
 
@@ -389,6 +413,7 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
                 // Long enough for the server to take the keep-alive before the clock moves again.
                 co_await pause(executor, 150u);
             }
+
             observed.open_after = client.poll().has_value() && (server.secure_sessions() == 1u);
             observed.sent = (co_await client.send(sample_cemi)).has_value();
             observed.disconnected = (co_await client.disconnect()).has_value();
@@ -409,7 +434,7 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
               "[knx][secure][server][integration][completion]")
     {
         completion::executor executor;
-        kn::generic_server server {detail::secure_config()};
+        kn::generic_server server {detail::session_config()};
         detail::event_log log {};
         completion::knx::tcp_server tcp {
             executor, server, {.bind_address = {127u, 0u, 0u, 1u}, .port = 0u, .on_event = detail::recorder(log)}};
@@ -422,9 +447,10 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
 
         auto run = [&]() -> task<void>
         {
-            executor.spawn(detail::run_server(tcp, serving_ended));
-            co_await detail::run_secure_tunnel(
-                transport, address, server, detail::credentials(detail::first_user, detail::first_password()), detail::request(), observed);
+            executor.spawn(detail::run_accept_loop(tcp, serving_ended));
+            co_await detail::run_session_tunnel(
+                transport, {address, server, detail::credentials(detail::first_user, detail::first_password()), detail::request()},
+                observed);
             released = co_await detail::settle(
                 executor,
                 [&]() { return (server.active_channels() == 0u) && (server.secure_sessions() == 0u) && (tcp.connections() == 0u); });
@@ -444,7 +470,7 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
               "[knx][secure][server][integration][completion]")
     {
         completion::executor executor;
-        kn::generic_server server {detail::secure_config()};
+        kn::generic_server server {detail::session_config()};
         completion::knx::tcp_server tcp {executor, server, {.bind_address = {127u, 0u, 0u, 1u}, .port = 0u}};
         REQUIRE(tcp.listen().has_value());
         const auto address = detail::loopback(tcp.port());
@@ -458,20 +484,22 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
 
         auto run = [&]() -> task<void>
         {
-            executor.spawn(detail::run_server(tcp, serving_ended));
+            executor.spawn(detail::run_accept_loop(tcp, serving_ended));
             const auto own_address = kn::individual_address {1u, 1u, 241u};
             const auto second_users_address = kn::individual_address {1u, 1u, 250u};
-            co_await detail::run_secure_tunnel(*transports[0u], address, server,
-                                               detail::credentials(detail::first_user, detail::wrong_password()), detail::request(),
-                                               observed[0u]);
-            co_await detail::run_secure_tunnel(*transports[1u], address, server, detail::credentials(9u, detail::first_password()),
-                                               detail::request(), observed[1u]);
-            co_await detail::run_secure_tunnel(*transports[2u], address, server,
-                                               detail::credentials(detail::first_user, detail::first_password()),
-                                               detail::request(second_users_address), observed[2u]);
-            co_await detail::run_secure_tunnel(*transports[3u], address, server,
-                                               detail::credentials(detail::first_user, detail::first_password()),
-                                               detail::request(own_address), observed[3u]);
+            co_await detail::run_session_tunnel(
+                *transports[0u], {address, server, detail::credentials(detail::first_user, detail::wrong_password()), detail::request()},
+                observed[0u]);
+            co_await detail::run_session_tunnel(
+                *transports[1u], {address, server, detail::credentials(9u, detail::first_password()), detail::request()}, observed[1u]);
+            co_await detail::run_session_tunnel(
+                *transports[2u],
+                {address, server, detail::credentials(detail::first_user, detail::first_password()), detail::request(second_users_address)},
+                observed[2u]);
+            co_await detail::run_session_tunnel(
+                *transports[3u],
+                {address, server, detail::credentials(detail::first_user, detail::first_password()), detail::request(own_address)},
+                observed[3u]);
             released = co_await detail::settle(
                 executor,
                 [&]() { return (server.active_channels() == 0u) && (server.secure_sessions() == 0u) && (tcp.connections() == 0u); });
@@ -497,7 +525,7 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
               "[knx][secure][server][integration][completion]")
     {
         completion::executor executor;
-        kn::generic_server server {detail::secure_config()};
+        kn::generic_server server {detail::session_config()};
         completion::knx::tcp_server tcp {executor, server, {.bind_address = {127u, 0u, 0u, 1u}, .port = 0u}};
         REQUIRE(tcp.listen().has_value());
         const auto address = detail::loopback(tcp.port());
@@ -508,7 +536,7 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
 
         auto run = [&]() -> task<void>
         {
-            executor.spawn(detail::run_server(tcp, serving_ended));
+            executor.spawn(detail::run_accept_loop(tcp, serving_ended));
             co_await detail::run_plain_tunnel(transport, address, observed);
             channels_after = server.active_channels() != 0u;
             static_cast<void>(co_await detail::settle(executor, [&]() { return tcp.connections() == 0u; }));
@@ -531,7 +559,7 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
     TEST_CASE("knx readiness secure tcp server tunnels an authenticated client end to end", "[knx][secure][server][integration][readiness]")
     {
         auto executor = std::make_shared<readiness::executor>(readiness::executor_config {.thread_count = 2u, .timeout_ms = 20u});
-        kn::generic_server server {detail::secure_config()};
+        kn::generic_server server {detail::session_config()};
         detail::event_log log {};
         readiness::knx::tcp_server tcp {
             *executor, server, {.bind_address = {127u, 0u, 0u, 1u}, .port = 0u, .on_event = detail::recorder(log)}};
@@ -542,11 +570,12 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
         std::atomic_bool serving_ended {};
         std::atomic_size_t finished {};
 
-        executor->spawn(detail::run_server(tcp, serving_ended));
-        executor->spawn(detail::counted(detail::run_secure_tunnel(transport, address, server,
-                                                                  detail::credentials(detail::first_user, detail::first_password()),
-                                                                  detail::request(), observed),
-                                        finished));
+        executor->spawn(detail::run_accept_loop(tcp, serving_ended));
+        executor->spawn(detail::counted(
+            detail::run_session_tunnel(
+                transport, {address, server, detail::credentials(detail::first_user, detail::first_password()), detail::request()},
+                observed),
+            finished));
         std::jthread runner([executor]() { executor->run(); });
         CHECK(detail::wait_until([&]() { return finished.load() == 1u; }));
         CHECK(detail::wait_until(
@@ -563,11 +592,11 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
     TEST_CASE("knx readiness secure tcp server forgets a handshake whose connection goes", "[knx][secure][server][integration][readiness]")
     {
         auto executor = std::make_shared<readiness::executor>(readiness::executor_config {.thread_count = 2u, .timeout_ms = 20u});
-        kn::generic_server server {detail::secure_config()};
+        kn::generic_server server {detail::session_config()};
         readiness::knx::tcp_server tcp {*executor, server, {.bind_address = {127u, 0u, 0u, 1u}, .port = 0u}};
         REQUIRE(tcp.listen().has_value());
         std::atomic_bool serving_ended {};
-        executor->spawn(detail::run_server(tcp, serving_ended));
+        executor->spawn(detail::run_accept_loop(tcp, serving_ended));
         std::jthread runner([executor]() { executor->run(); });
 
         std::vector<std::uint8_t> response {};
@@ -595,11 +624,11 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
               "[knx][secure][server][integration][readiness]")
     {
         auto executor = std::make_shared<readiness::executor>(readiness::executor_config {.thread_count = 2u, .timeout_ms = 20u});
-        kn::generic_server server {detail::secure_config()};
+        kn::generic_server server {detail::session_config()};
         readiness::knx::tcp_server tcp {*executor, server, {.bind_address = {127u, 0u, 0u, 1u}, .port = 0u}};
         REQUIRE(tcp.listen().has_value());
         std::atomic_bool serving_ended {};
-        executor->spawn(detail::run_server(tcp, serving_ended));
+        executor->spawn(detail::run_accept_loop(tcp, serving_ended));
         std::jthread runner([executor]() { executor->run(); });
 
         std::array<std::vector<std::uint8_t>, 3u> answers {};
@@ -630,11 +659,11 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
               "[knx][secure][server][integration][readiness]")
     {
         auto executor = std::make_shared<readiness::executor>(readiness::executor_config {.thread_count = 2u, .timeout_ms = 20u});
-        kn::generic_server server {detail::secure_config(200u)};
+        kn::generic_server server {detail::session_config(200u)};
         readiness::knx::tcp_server tcp {*executor, server, {.bind_address = {127u, 0u, 0u, 1u}, .port = 0u}};
         REQUIRE(tcp.listen().has_value());
         std::atomic_bool serving_ended {};
-        executor->spawn(detail::run_server(tcp, serving_ended));
+        executor->spawn(detail::run_accept_loop(tcp, serving_ended));
         std::jthread runner([executor]() { executor->run(); });
 
         const auto connection = detail::connect_blocking(tcp.port());
@@ -655,7 +684,7 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
         constexpr std::size_t frames = 3u;
         auto executor = std::make_shared<readiness::executor>(readiness::executor_config {.thread_count = 2u, .timeout_ms = 20u});
         // All four handshakes come from 127.0.0.1 at once, past the default share of one address.
-        kn::generic_server server {detail::secure_config(10'000u, clients)};
+        kn::generic_server server {detail::session_config(10'000u, clients)};
         std::atomic_size_t delivered {};
         auto count_delivered = [&delivered](kn::server_event) -> task<void>
         {
@@ -670,13 +699,14 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
         std::atomic_size_t finished {};
         std::atomic_bool serving_ended {};
 
-        executor->spawn(detail::run_server(tcp, serving_ended));
+        executor->spawn(detail::run_accept_loop(tcp, serving_ended));
         for (std::size_t index {}; index < clients; ++index)
         {
             transports.push_back(
                 std::make_unique<readiness::knx::tcp_transport>(*executor, reinterpret_cast<const sockaddr*>(&address), sizeof(address)));
-            executor->spawn(detail::counted(detail::run_secure_burst(*transports.back(), address, frames, completed), finished));
+            executor->spawn(detail::counted(detail::run_session_burst(*transports.back(), address, frames, completed), finished));
         }
+
         std::jthread runner([executor]() { executor->run(); });
         CHECK(detail::wait_until([&]() { return finished.load() == clients; }));
         CHECK(detail::wait_until(
@@ -700,17 +730,17 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
         std::atomic_bool connected {};
         std::atomic_bool receive_failed {};
         {
-            kn::generic_server server {detail::secure_config()};
+            kn::generic_server server {detail::session_config()};
             readiness::knx::tcp_server tcp {*executor, server, {.bind_address = {127u, 0u, 0u, 1u}, .port = 0u}};
             REQUIRE(tcp.listen().has_value());
             const auto address = detail::loopback(tcp.port());
             transport =
                 std::make_unique<readiness::knx::tcp_transport>(*executor, reinterpret_cast<const sockaddr*>(&address), sizeof(address));
-            client = std::make_unique<kn::tunnelling_client>(*transport, reinterpret_cast<const sockaddr*>(&address), sizeof(address),
-                                                             kn::tunnelling_config {},
-                                                             detail::credentials(detail::first_user, detail::first_password()));
+            client = std::make_unique<kn::tunnelling_client>(
+                *transport, reinterpret_cast<const sockaddr*>(&address), sizeof(address),
+                kn::secure_tunnelling_options {.credentials = detail::credentials(detail::first_user, detail::first_password())});
             std::atomic_bool serving_ended {};
-            executor->spawn(detail::run_server(tcp, serving_ended));
+            executor->spawn(detail::run_accept_loop(tcp, serving_ended));
             executor->spawn([](kn::tunnelling_client& value, std::atomic_bool& done) -> task<void>
                             { done = (co_await value.connect(detail::request())).has_value(); }(*client, connected));
             CHECK(detail::wait_until([&]() { return connected.load() && (server.secure_sessions() == 1u); }));
@@ -733,7 +763,7 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
     {
         auto executor = std::make_shared<readiness::executor>(readiness::executor_config {.thread_count = 2u, .timeout_ms = 20u});
         detail::session_clock_ms = 0u;
-        kn::generic_server server {detail::secure_config(), nullptr, detail::session_clock};
+        kn::generic_server server {detail::session_config(), {.secure_clock_ms = detail::session_clock}};
         std::atomic_size_t delivered {};
         auto count_delivered = [&delivered](kn::server_event) -> task<void>
         {
@@ -744,18 +774,16 @@ namespace kmx::aio::test::knx::secure::tcp_server_secure_test
         REQUIRE(tcp.listen().has_value());
         const auto address = detail::loopback(tcp.port());
         readiness::knx::tcp_transport transport {*executor, reinterpret_cast<const sockaddr*>(&address), sizeof(address)};
-        kn::tunnelling_client client {transport,
-                                      reinterpret_cast<const sockaddr*>(&address),
-                                      sizeof(address),
-                                      kn::tunnelling_config {},
-                                      detail::credentials(detail::first_user, detail::first_password()),
-                                      nullptr,
-                                      detail::session_clock};
+        kn::tunnelling_client client {
+            transport,
+            reinterpret_cast<const sockaddr*>(&address),
+            sizeof(address),
+            {.credentials = detail::credentials(detail::first_user, detail::first_password()), .clock_ms = detail::session_clock}};
         detail::quiet_observation observed {};
         std::atomic_bool serving_ended {};
         std::atomic_size_t finished {};
 
-        executor->spawn(detail::run_server(tcp, serving_ended));
+        executor->spawn(detail::run_accept_loop(tcp, serving_ended));
         executor->spawn(detail::counted(detail::keep_quiet_session(*executor, client, server, observed), finished));
         std::jthread runner([executor]() { executor->run(); });
         CHECK(detail::wait_until([&]() { return finished.load() == 1u; }));

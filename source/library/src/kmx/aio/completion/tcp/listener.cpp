@@ -1,9 +1,11 @@
-/// @file aio/completion/tcp/listener.cpp
+/// @file src/kmx/aio/completion/tcp/listener.cpp
+/// @brief Completion-model TCP listener implementation: socket setup and io_uring accept.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/completion/tcp/listener.hpp>
-
-#include <kmx/aio/exception.hpp>
-#include <kmx/logger.hpp>
+#ifndef PCH
+    #include <kmx/aio/system_error.hpp>
+    #include <kmx/logger.hpp>
+#endif
 
 namespace kmx::aio::completion::tcp
 {
@@ -55,4 +57,4 @@ namespace kmx::aio::completion::tcp
         co_return client_fd;
     }
 
-} // namespace kmx::aio::completion::tcp
+}

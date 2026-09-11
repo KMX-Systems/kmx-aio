@@ -1,11 +1,11 @@
-/// @file readiness/avb/srp/client.hpp
+/// @file api/kmx/aio/readiness/avb/srp/client.hpp
 /// @brief Readiness-model alias for AVB SRP client.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_READINESS) && defined(KMX_AIO_FEATURE_AVB)
     #ifndef PCH
-        #include <kmx/aio/avb/srp/client.hpp>
+        #include <kmx/aio/avb/srp/generic_client.hpp>
         #include <kmx/aio/readiness/executor.hpp>
     #endif
 

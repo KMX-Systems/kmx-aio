@@ -1,4 +1,4 @@
-/// @file kmx/aio/sample/avb/manager_model.hpp
+/// @file inc/kmx/aio/sample/avb/manager_model.hpp
 /// @brief Deterministic AVB manager control-flow model for unit tests and helper math.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -53,24 +53,28 @@ namespace kmx::aio::sample::avb
             out.errors = 1u;
             return out;
         }
+
         if (!step.clock_sync_ok)
         {
             out.error = startup_error::clock_sync;
             out.errors = 1u;
             return out;
         }
+
         if (!step.socket_open_ok)
         {
             out.error = startup_error::socket_open;
             out.errors = 1u;
             return out;
         }
+
         if (!step.srp_start_ok)
         {
             out.error = startup_error::srp_start;
             out.errors = 1u;
             return out;
         }
+
         if (!step.srp_advertise_ok)
         {
             out.error = startup_error::srp_advertise;
@@ -143,24 +147,28 @@ namespace kmx::aio::sample::avb
             out.errors = 1u;
             return out;
         }
+
         if (!step.clock_sync_ok)
         {
             out.error = startup_error::clock_sync;
             out.errors = 1u;
             return out;
         }
+
         if (!step.socket_open_ok)
         {
             out.error = startup_error::socket_open;
             out.errors = 1u;
             return out;
         }
+
         if (!step.srp_start_ok)
         {
             out.error = startup_error::srp_start;
             out.errors = 1u;
             return out;
         }
+
         if (!step.srp_subscribe_ok)
         {
             out.error = startup_error::srp_subscribe;
@@ -169,7 +177,6 @@ namespace kmx::aio::sample::avb
         }
 
         if (!step.diagnostics_only)
-        {
             for (const auto& frame: step.frames)
             {
                 if (!frame.recv_ok)
@@ -196,7 +203,6 @@ namespace kmx::aio::sample::avb
                 if (jitter > out.jitter_abs_max_ns)
                     out.jitter_abs_max_ns = jitter;
             }
-        }
 
         out.withdrew_stream = step.srp_withdraw_ok;
         if (!step.srp_withdraw_ok)
@@ -207,4 +213,4 @@ namespace kmx::aio::sample::avb
 
         return out;
     }
-} // namespace kmx::aio::sample::avb
+}

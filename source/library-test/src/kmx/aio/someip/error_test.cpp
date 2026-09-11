@@ -1,10 +1,13 @@
+/// @file src/kmx/aio/someip/error_test.cpp
+/// @brief Unit tests for the SOME/IP error category name and messages.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
 #include <kmx/aio/someip/error.hpp>
+#ifndef PCH
+    #include <catch2/catch_test_macros.hpp>
 
-#include <string>
-#include <system_error>
+    #include <string>
+    #include <system_error>
+#endif
 
 namespace kmx::aio::test::someip::error_test
 {
@@ -21,4 +24,4 @@ namespace kmx::aio::test::someip::error_test
         const std::error_code ec = make_error_code(error::timed_out);
         CHECK(ec.message() == std::string("SOME/IP operation timed out"));
     }
-} // namespace kmx::aio::test::someip::error_test
+}

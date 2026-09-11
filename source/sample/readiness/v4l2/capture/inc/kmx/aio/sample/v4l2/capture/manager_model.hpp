@@ -1,4 +1,4 @@
-/// @file kmx/aio/sample/v4l2/capture/manager_model.hpp
+/// @file inc/kmx/aio/sample/v4l2/capture/manager_model.hpp
 /// @brief Deterministic control-flow model for the readiness V4L2 capture sample.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -16,21 +16,21 @@ namespace kmx::aio::sample::v4l2::capture
         capture_create,
     };
 
-    struct capture_frame_result
+    struct frame_result
     {
         bool recv_ok {true};
         bool frame_ok {true};
         std::uint64_t bytes_used {};
     };
 
-    struct capture_step_results
+    struct step_results
     {
         bool device_open_ok {};
         bool capture_create_ok {};
-        std::span<const capture_frame_result> frames {};
+        std::span<const frame_result> frames {};
     };
 
-    struct capture_simulation
+    struct simulation
     {
         startup_error error {};
         std::uint64_t frames_captured {};
@@ -39,9 +39,9 @@ namespace kmx::aio::sample::v4l2::capture
         bool capture_started {};
     };
 
-    [[nodiscard]] constexpr auto simulate_manager(const capture_step_results& step) noexcept -> capture_simulation
+    [[nodiscard]] constexpr auto simulate_manager(const step_results& step) noexcept -> simulation
     {
-        capture_simulation out {};
+        simulation out {};
 
         if (!step.device_open_ok)
         {
@@ -79,4 +79,4 @@ namespace kmx::aio::sample::v4l2::capture
 
         return out;
     }
-} // namespace kmx::aio::sample::v4l2::capture
+}

@@ -37,7 +37,9 @@ StaticLibrary {
     files: [
         "../api/kmx/aio/opc_ua/**.hpp",
         "../inc/kmx/aio/opc_ua/**.hpp",
+        "../inc/kmx/aio/opc_ua/detail/**.hpp",
         "../src/kmx/aio/opc_ua/**.cpp",
+        "../src/kmx/aio/opc_ua/detail/**.cpp",
     ]
 
     Export {

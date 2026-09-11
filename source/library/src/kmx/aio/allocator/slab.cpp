@@ -1,8 +1,10 @@
-/// @file aio/allocator/slab.cpp
+/// @file src/kmx/aio/allocator/slab.cpp
+/// @brief The compiled body of the slab allocator: free list, lock-free remote frees and the thread allocator hooks.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/allocator/slab.hpp>
-
-#include <kmx/aio/allocator/detail/thread_state.hpp>
+#ifndef PCH
+    #include <kmx/aio/allocator/detail/thread_state.hpp>
+#endif
 
 namespace kmx::aio::allocator
 {
@@ -110,17 +112,14 @@ namespace kmx::aio::allocator
             slot = next;
         }
     }
-} // namespace kmx::aio::allocator
 
-namespace kmx::aio
-{
-    void set_thread_allocator(allocator::slab* alloc) noexcept
+    void set_thread_slab(slab* alloc) noexcept
     {
-        allocator::detail::current_thread_state().allocator = alloc;
+        detail::current_thread_state().allocator = alloc;
     }
 
-    allocator::slab* get_thread_allocator() noexcept
+    slab* get_thread_slab() noexcept
     {
-        return allocator::detail::current_thread_state().allocator;
+        return detail::current_thread_state().allocator;
     }
-} // namespace kmx::aio
+}

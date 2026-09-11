@@ -1,22 +1,26 @@
-#include <catch2/catch_test_macros.hpp>
+/// @file src/kmx/aio/integration/tls_mtls_client_server_test.cpp
+/// @brief mTLS checks for the completion TLS echo samples: CA-signed certificate generation and binary discovery.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#ifndef PCH
+    #include <kmx/aio/test/sample_process.hpp>
+    #include <kmx/aio/test/scoped_temp_dir.hpp>
+    #include <kmx/aio/test/tls_certs.hpp>
 
-#include <kmx/aio/test/temp_dir.hpp>
-#include <kmx/aio/test/tls_certs.hpp>
+    #include <catch2/catch_test_macros.hpp>
+    #include <catch2/generators/catch_generators.hpp>
 
-#include <catch2/generators/catch_generators.hpp>
-#include <kmx/aio/test/sample_process.hpp>
-
-#include <cstdlib>
-#include <filesystem>
-#include <fstream>
-#include <optional>
-#include <vector>
+    #include <cstdlib>
+    #include <filesystem>
+    #include <fstream>
+    #include <optional>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::integration::tls_mtls_client_server_test
 {
     using namespace std::literals::chrono_literals;
 
-    bool contains_marker(const std::string& text, const std::string& marker)
+    [[nodiscard]] bool contains_marker(const std::string& text, const std::string& marker)
     {
         return text.find(marker) != std::string::npos;
     }
@@ -90,4 +94,4 @@ namespace kmx::aio::test::integration::tls_mtls_client_server_test
         REQUIRE(std::filesystem::is_regular_file(client_bin_opt.value()));
     }
 
-} // namespace kmx::aio::test::integration::tls_mtls_client_server_test
+}

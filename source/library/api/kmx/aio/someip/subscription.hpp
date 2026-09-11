@@ -1,17 +1,17 @@
-/// @file aio/someip/subscription.hpp
+/// @file api/kmx/aio/someip/subscription.hpp
 /// @brief Backend-neutral subscription facade for SOME/IP events.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_SOMEIP)
     #ifndef PCH
+        #include <kmx/aio/someip/types.hpp>
+        #include <kmx/aio/task.hpp>
+
         #include <cstdint>
         #include <expected>
         #include <memory>
         #include <system_error>
-
-        #include <kmx/aio/someip/types.hpp>
-        #include <kmx/aio/task.hpp>
     #endif
 
 namespace kmx::aio::someip
@@ -88,7 +88,7 @@ namespace kmx::aio::someip
         /// @brief Test-only: pushes a synthetic event directly into the internal queue.
         /// @param notification Event to inject.
         /// @warning Available only in stub/test builds without real vsomeip headers.
-        void __kmx_test_push_event(event_notification notification);
+        void test_push_event(event_notification notification);
     #endif
 
     private:
@@ -97,5 +97,5 @@ namespace kmx::aio::someip
         std::unique_ptr<impl> impl_;
     };
 
-} // namespace kmx::aio::someip
+}
 #endif // KMX_AIO_FEATURE_SOMEIP

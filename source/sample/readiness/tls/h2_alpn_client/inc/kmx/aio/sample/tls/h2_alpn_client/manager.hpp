@@ -1,3 +1,6 @@
+/// @file inc/kmx/aio/sample/tls/h2_alpn_client/manager.hpp
+/// @brief Readiness-model HTTP/2 ALPN client sample manager: negotiates h2 over TLS and makes a minimal request.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <kmx/aio/file_descriptor.hpp>
@@ -14,7 +17,7 @@
     #include <system_error>
 #endif
 
-namespace kmx::aio::sample::tls::h2_alpn_readiness_client
+namespace kmx::aio::sample::tls::h2_alpn_client
 {
     struct config
     {
@@ -64,4 +67,4 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_client
         metric_data metrics_ {};
         ::SSL_CTX* ssl_ctx_ {};
     };
-} // namespace kmx::aio::sample::tls::h2_alpn_readiness_client
+}

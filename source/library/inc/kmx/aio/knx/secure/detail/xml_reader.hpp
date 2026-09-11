@@ -1,5 +1,6 @@
-/// @file kmx/aio/knx/secure/detail/xml_reader.hpp
+/// @file inc/kmx/aio/knx/secure/detail/xml_reader.hpp
 /// @brief A bounded reader for the subset of XML an ETS keyring is written in.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// A keyring is key material, so the part of the library that reads it is kept small and strict rather than
 /// general. This reader accepts what ETS writes - an optional byte order mark and XML declaration, comments,
@@ -12,7 +13,6 @@
 /// Attribute values come back decoded and normalised exactly as a conforming SAX parser reports them,
 /// because the keyring signature is computed over those values and not over the raw text.
 /// @reference W3C Extensible Markup Language (XML) 1.0, sections 2.3, 2.11 and 3.3.3.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)

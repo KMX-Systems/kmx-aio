@@ -1,5 +1,6 @@
-/// @file aio/knx/datagram.hpp
+/// @file api/kmx/aio/knx/datagram.hpp
 /// @brief Typed dispatch for supported KNXnet/IP datagrams.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// The service-specific headers each decode one KNXnet/IP service and know their own body layout. This
 /// header is the layer above them: it reads the service type out of the common header once and hands the
@@ -9,63 +10,40 @@
 /// The variant is closed on purpose. A service this build does not model is reported as
 /// @ref kmx::aio::knx::error::unsupported_service rather than being carried through as opaque octets,
 /// because everything downstream acts on the decoded frame and has nothing to do with one it cannot read.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/knx/connection.hpp>
+        #include <kmx/aio/knx/discovery.hpp>
+        #include <kmx/aio/knx/frame.hpp>
+        #include <kmx/aio/knx/routing.hpp>
+        #include <kmx/aio/knx/secure/session.hpp>
+        #include <kmx/aio/knx/secure/timer_notify.hpp>
+        #include <kmx/aio/knx/secure/wrapper.hpp>
+        #include <kmx/aio/task.hpp>
+
         #include <expected>
         #include <system_error>
         #include <variant>
     #endif
-
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/task.hpp>
-    #include <kmx/aio/knx/connection.hpp>
-    #include <kmx/aio/knx/discovery.hpp>
-    #include <kmx/aio/knx/frame.hpp>
-    #include <kmx/aio/knx/routing.hpp>
-    #include <kmx/aio/knx/secure/session.hpp>
-    #include <kmx/aio/knx/secure/timer_notify.hpp>
-    #include <kmx/aio/knx/secure/wrapper.hpp>
 
 namespace kmx::aio::knx
 {
     /// @brief Every KNXnet/IP frame this build decodes, in service-type order.
     /// @details The alternative that comes back names the service, so a receiver switches on the decoded
     ///          type rather than on @ref datagram::service_type.
-    using datagram_payload = std::variant<
-        discovery::search_request_frame,
-        discovery::ipv6_search_request_frame,
-        discovery::search_response_frame,
-        discovery::ipv6_search_response_frame,
-        discovery::description_request_frame,
-        discovery::description_response_frame,
-        discovery::extended_search_request_frame,
-        discovery::extended_search_response_frame,
-        connect_request_frame,
-        ipv6_connect_request_frame,
-        management_connect_request_frame,
-        connect_response_frame,
-        ipv6_connect_response_frame,
-        management_connect_response_frame,
-        connectionstate_request_frame,
-        connectionstate_response_frame,
-        disconnect_request_frame,
-        disconnect_response_frame,
-        routing::indication,
-        routing::lost_message,
-        routing::busy,
-        tunnelling_request_frame,
-        tunnelling_ack_frame,
-        device_configuration_frame,
-        tunnelling_feature_frame,
-        secure::secure_wrapper_frame,
-        secure::session_request_frame,
-        secure::session_response_frame,
-        secure::session_authenticate_frame,
-        secure::session_status_frame,
-        secure::timer_notify_frame>;
+    using datagram_payload =
+        std::variant<discovery::search_request_frame, discovery::ipv6_search_request_frame, discovery::search_response_frame,
+                     discovery::ipv6_search_response_frame, discovery::description_request_frame, discovery::description_response_frame,
+                     discovery::extended_search_request_frame, discovery::extended_search_response_frame, connect_request_frame,
+                     ipv6_connect_request_frame, management_connect_request_frame, connect_response_frame, ipv6_connect_response_frame,
+                     management_connect_response_frame, connectionstate_request_frame, connectionstate_response_frame,
+                     disconnect_request_frame, disconnect_response_frame, routing::indication, routing::lost_message, routing::busy,
+                     tunnelling_request_frame, tunnelling_ack_frame, device_configuration_frame, tunnelling_feature_frame,
+                     secure::wrapper_frame, secure::session_request_frame, secure::session_response_frame,
+                     secure::session_authenticate_frame, secure::session_status_frame, secure::timer_notify_frame>;
 
     /// @brief One decoded KNXnet/IP datagram: the service it announced, and the frame it carried.
     /// @details Both are kept because they are not quite redundant. Several services decode to the same
@@ -112,7 +90,6 @@ namespace kmx::aio::knx
     /// @details The point of this over encoding the response by hand is that the correlating fields come
     ///          from the request itself. A TUNNELLING_ACK that echoes the wrong sequence number is not an
     ///          acknowledgement of anything, and it is exactly the field a caller mirrors incorrectly.
-    [[nodiscard]] expected_void_t encode_response_datagram(
-        span_uint8_t packet, const datagram& request, std::uint8_t status = 0u) noexcept;
+    [[nodiscard]] expected_void_t encode_response_datagram(span_uint8_t packet, const datagram& request, std::uint8_t status = 0u) noexcept;
 }
 #endif // KMX_AIO_FEATURE_KNX

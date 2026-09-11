@@ -66,7 +66,7 @@ auto tcp = kmx::aio::readiness::tcp::stream(exec, std::move(fd));
 kmx::aio::readiness::tls::stream stream(std::move(tcp), ctx);
 
 // ALPN — server registers a callback on the CTX; client calls set_alpn_protocols on the stream
-SSL_CTX_set_alpn_select_cb(ctx, alpn_select_cb, nullptr);               // server side
+SSL_CTX_set_alpn_select_cb(ctx, select_protocol, nullptr);              // server side
 stream.set_alpn_protocols(std::array<std::uint8_t, 3>{2, 'h', '2'});   // client side
 
 stream.set_accept_state();   // server
@@ -94,7 +94,7 @@ auto tcp = kmx::aio::completion::tcp::stream(exec, std::move(fd));
 kmx::aio::completion::tls::stream stream(std::move(tcp), ctx);
 
 // ALPN — server registers a callback on the CTX; client calls set_alpn_protocols on the stream
-SSL_CTX_set_alpn_select_cb(ctx, alpn_select_cb, nullptr);               // server side
+SSL_CTX_set_alpn_select_cb(ctx, select_protocol, nullptr);              // server side
 stream.set_alpn_protocols(std::array<std::uint8_t, 3>{2, 'h', '2'});   // client side
 
 stream.set_accept_state();   // server

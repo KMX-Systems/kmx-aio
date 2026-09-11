@@ -1,13 +1,17 @@
+/// @file src/kmx/aio/sample/someip/diagnostics/manager.cpp
+/// @brief Completion-model SOME/IP diagnostics run: service request, method call, event receipt and client stats logging.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/someip/diagnostics/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/someip/error.hpp>
+    #include <kmx/logger.hpp>
 
-#include <iostream>
-#include <source_location>
-#include <string>
-#include <utility>
-#include <vector>
-
-#include <kmx/aio/someip/error.hpp>
-#include <kmx/logger.hpp>
+    #include <iostream>
+    #include <source_location>
+    #include <string>
+    #include <utility>
+    #include <vector>
+#endif
 
 namespace kmx::aio::sample::someip::diagnostics
 {
@@ -35,7 +39,7 @@ namespace kmx::aio::sample::someip::diagnostics
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SOME/IP diagnostics request_service failed: {}",
                              request.error().message());
-            (void) co_await client_.stop();
+            static_cast<void>(co_await client_.stop());
             exec.stop();
             co_return;
         }
@@ -45,8 +49,8 @@ namespace kmx::aio::sample::someip::diagnostics
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SOME/IP diagnostics bind failed: {}",
                              bind.error().message());
-            (void) co_await client_.release_service(client_cfg.service_id, client_cfg.instance_id);
-            (void) co_await client_.stop();
+            static_cast<void>(co_await client_.release_service(client_cfg.service_id, client_cfg.instance_id));
+            static_cast<void>(co_await client_.stop());
             exec.stop();
             co_return;
         }
@@ -56,8 +60,8 @@ namespace kmx::aio::sample::someip::diagnostics
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SOME/IP diagnostics subscription open failed: {}",
                              open.error().message());
-            (void) co_await client_.release_service(client_cfg.service_id, client_cfg.instance_id);
-            (void) co_await client_.stop();
+            static_cast<void>(co_await client_.release_service(client_cfg.service_id, client_cfg.instance_id));
+            static_cast<void>(co_await client_.stop());
             exec.stop();
             co_return;
         }
@@ -86,6 +90,7 @@ namespace kmx::aio::sample::someip::diagnostics
                     continue;
                 break;
             }
+
             ++received;
             const std::string payload_str(event->payload.begin(), event->payload.end());
             kmx::logger::log(kmx::logger::level::info, std::source_location::current(),
@@ -95,9 +100,9 @@ namespace kmx::aio::sample::someip::diagnostics
                 break;
         }
 
-        (void) co_await subscription_.close();
-        (void) co_await client_.release_service(client_cfg.service_id, client_cfg.instance_id);
-        (void) co_await client_.stop();
+        static_cast<void>(co_await subscription_.close());
+        static_cast<void>(co_await client_.release_service(client_cfg.service_id, client_cfg.instance_id));
+        static_cast<void>(co_await client_.stop());
 
         const auto& client_stats = client_.get_stats();
 

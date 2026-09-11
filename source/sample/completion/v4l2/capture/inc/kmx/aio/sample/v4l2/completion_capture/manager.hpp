@@ -1,16 +1,16 @@
-/// @file kmx/aio/sample/v4l2/completion_capture/manager.hpp
+/// @file inc/kmx/aio/sample/v4l2/completion_capture/manager.hpp
 /// @brief Completion-model V4L2 capture sample manager.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
-    #include <atomic>
-    #include <memory>
-    #include <string>
-
     #include <kmx/aio/completion/executor.hpp>
     #include <kmx/aio/completion/v4l2/capture.hpp>
     #include <kmx/aio/task.hpp>
     #include <kmx/logger.hpp>
+
+    #include <atomic>
+    #include <memory>
+    #include <string>
 #endif
 
 namespace kmx::aio::sample::v4l2::completion_capture
@@ -57,4 +57,4 @@ namespace kmx::aio::sample::v4l2::completion_capture
         static inline std::atomic<kmx::aio::completion::executor*> g_executor_ptr {};
     };
 
-} // namespace kmx::aio::sample::v4l2::completion_capture
+}

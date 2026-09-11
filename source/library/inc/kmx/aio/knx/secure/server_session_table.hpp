@@ -1,5 +1,6 @@
-/// @file kmx/aio/knx/secure/server_session_table.hpp
+/// @file inc/kmx/aio/knx/secure/server_session_table.hpp
 /// @brief The sessions of a KNX IP Secure tunnelling server, without I/O: allocation, the handshake, limits and timeouts.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// A secure tunnelling server holds one session per client. This table answers SESSION_REQUEST - a fresh key pair and
 /// session key per session (P3), and the device authentication MAC - then opens every wrapper a client sends, checks
@@ -16,11 +17,21 @@
 /// Every member takes the table's lock for its own duration, so connection loops and application sends may reach it from
 /// any thread. The lock is never held across I/O, and nothing outside the table is called under it.
 /// @reference KNX System Specifications, 03/08/09 "KNXnet/IP Security".
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/knx/datagram_transport.hpp>
+        #include <kmx/aio/knx/individual_address.hpp>
+        #include <kmx/aio/knx/secure/client_session.hpp>
+        #include <kmx/aio/knx/secure/common.hpp>
+        #include <kmx/aio/knx/secure/entropy_source.hpp>
+        #include <kmx/aio/knx/secure/key.hpp>
+        #include <kmx/aio/knx/secure/server_configuration.hpp>
+        #include <kmx/aio/knx/secure/session.hpp>
+        #include <kmx/aio/knx/secure/wrapper.hpp>
+        #include <kmx/aio/knx/transport.hpp>
+
         #include <cstddef>
         #include <cstdint>
         #include <expected>
@@ -31,16 +42,6 @@
         #include <system_error>
         #include <vector>
     #endif
-
-    #include <kmx/aio/knx/address.hpp>
-    #include <kmx/aio/knx/secure/client_session.hpp>
-    #include <kmx/aio/knx/secure/common.hpp>
-    #include <kmx/aio/knx/secure/entropy.hpp>
-    #include <kmx/aio/knx/secure/key.hpp>
-    #include <kmx/aio/knx/secure/server_configuration.hpp>
-    #include <kmx/aio/knx/secure/session.hpp>
-    #include <kmx/aio/knx/secure/wrapper.hpp>
-    #include <kmx/aio/knx/transport.hpp>
 
 namespace kmx::aio::knx::secure
 {
@@ -71,6 +72,15 @@ namespace kmx::aio::knx::secure
         server_frame_kind kind {server_frame_kind::tunnel};
     };
 
+    /// @brief Where a client's frame reached the table: the connection it arrived on, and the peer that sent it.
+    struct client_origin
+    {
+        /// @brief The connection the frame arrived on; compared, never followed.
+        const datagram_transport* connection {};
+        /// @brief The sender the frame arrived from.
+        transport_peer peer {};
+    };
+
     /// @brief An opened wrapper, or why it was refused.
     using server_opened_frame_result_t = std::expected<server_opened_frame, std::error_code>;
     /// @brief A SESSION_RESPONSE to send, or why the request was refused.
@@ -90,33 +100,30 @@ namespace kmx::aio::knx::secure
         server_session_table& operator=(const server_session_table&) = delete;
 
         /// @brief Answers a SESSION_REQUEST: opens a session, draws its key pair and derives its key.
-        /// @param connection The connection the request arrived on; the session belongs to it.
-        /// @param peer The client's address, for the per-peer limit.
+        /// @param from The connection the request arrived on, which the session belongs to, and the client's address, for
+        ///        the per-peer limit.
         /// @param request The decoded request.
         /// @param now_ms The monotonic time.
         /// @return The SESSION_RESPONSE to send in the clear.
-        /// @retval kmx::aio::knx::error::send_queue_full Every session is taken, or @p peer holds its share of
+        /// @retval kmx::aio::knx::error::send_queue_full Every session is taken, or the peer holds its share of
         ///         unauthenticated ones.
         /// @retval kmx::aio::knx::error::crypto_failure No key pair could be drawn, or the client's key agrees on nothing.
-        [[nodiscard]] session_response_result_t on_session_request(const datagram_transport* connection, const transport_peer& peer,
-                                                                   const session_request_frame& request, std::uint64_t now_ms) noexcept;
+        [[nodiscard]] session_response_result_t on_session_request(const client_origin& from, const session_request_frame& request,
+                                                                   std::uint64_t now_ms) noexcept;
 
-        /// @brief Authenticates and decrypts a wrapper received from @p peer on @p connection, and applies it when it is
-        ///        the session's own.
-        /// @param connection The connection the wrapper arrived on.
-        /// @param peer The sender the wrapper arrived from.
+        /// @brief Authenticates and decrypts a wrapper received from a client, and applies it when it is the session's own.
+        /// @param from The connection the wrapper arrived on, and the sender it arrived from.
         /// @param wrapper The decoded wrapper.
         /// @param destination Receives the frame it carried.
         /// @param now_ms The monotonic time.
         /// @return What the wrapper held.
-        /// @retval kmx::aio::knx::error::secure_authentication_failed No such session on @p connection from @p peer, or a MAC
-        ///         that does not verify.
+        /// @retval kmx::aio::knx::error::secure_authentication_failed No such session on that connection from that peer, or
+        ///         a MAC that does not verify.
         /// @retval kmx::aio::knx::error::secure_replay A sequence number not above the last one accepted.
         /// @retval kmx::aio::knx::error::unsupported_service A service that may not be wrapped, or anything but
         ///         SESSION_AUTHENTICATE and SESSION_STATUS before the session's user is authenticated.
-        [[nodiscard]] server_opened_frame_result_t open(const datagram_transport* connection, const transport_peer& peer,
-                                const secure_wrapper_frame& wrapper, span_uint8_t destination,
-                                std::uint64_t now_ms) noexcept;
+        [[nodiscard]] server_opened_frame_result_t open(const client_origin& from, const wrapper_frame& wrapper, span_uint8_t destination,
+                                                        std::uint64_t now_ms) noexcept;
 
         /// @brief Seals a frame for an authenticated session under its next sequence number.
         /// @param connection The connection the wrapper is for; a session is sealed for its own connection only.
@@ -183,6 +190,21 @@ namespace kmx::aio::knx::secure
             std::optional<std::uint64_t> last_received_sequence {};
         };
 
+        /// @brief What one seal is for: a session on a connection, the frame and where the wrapper goes.
+        struct seal_request
+        {
+            /// @brief The connection the wrapper is for.
+            const datagram_transport* connection {};
+            /// @brief The session to seal under.
+            std::uint16_t session_id {};
+            /// @brief The frame to seal.
+            cspan_uint8_t plain_frame {};
+            /// @brief Receives the wrapper.
+            span_uint8_t destination {};
+            /// @brief Whether a session whose user is not authenticated yet is refused.
+            bool authenticated_only {};
+        };
+
         // Every member below expects the lock held.
         [[nodiscard]] std::size_t session_limit() const noexcept;
         [[nodiscard]] expected_void_t admit_request(const transport_peer& peer) const noexcept;
@@ -190,12 +212,11 @@ namespace kmx::aio::knx::secure
         [[nodiscard]] entry* find(std::uint16_t session_id) noexcept;
         [[nodiscard]] const entry* find(std::uint16_t session_id) const noexcept;
         [[nodiscard]] const tunnelling_user* find_user(std::uint8_t user_id) const noexcept;
-        [[nodiscard]] expected_void_t admit(entry& session, const secure_wrapper_frame& wrapper, span_uint8_t plain) noexcept;
+        [[nodiscard]] expected_void_t admit(entry& session, const wrapper_frame& wrapper, span_uint8_t plain) noexcept;
         [[nodiscard]] server_opened_frame_result_t apply(entry& session, cspan_uint8_t plain) noexcept;
         [[nodiscard]] server_opened_frame_result_t apply_status(entry& session, session_status status) noexcept;
         [[nodiscard]] server_opened_frame authenticate(entry& session, const session_authenticate_frame& value) noexcept;
-        [[nodiscard]] expected_size_t seal_locked(const datagram_transport* connection, std::uint16_t session_id, cspan_uint8_t plain_frame,
-                                                  span_uint8_t destination, bool authenticated_only) noexcept;
+        [[nodiscard]] expected_size_t seal_locked(const seal_request& request) noexcept;
         void erase(std::uint16_t session_id) noexcept;
 
         std::shared_ptr<const server_configuration> configuration_;

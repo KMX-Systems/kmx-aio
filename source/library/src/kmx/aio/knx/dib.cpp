@@ -1,8 +1,24 @@
+/// @file src/kmx/aio/knx/dib.cpp
+/// @brief KNXnet/IP Description Information Block encoding, decoding and validation.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/knx/dib.hpp>
+#ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/knx/dib/device_info.hpp>
+    #include <kmx/aio/knx/dib/supported_service_families.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/individual_address.hpp>
 
-#include <algorithm>
-#include <optional>
+    #include <algorithm>
+    #include <array>
+    #include <cstdint>
+    #include <expected>
+    #include <optional>
+    #include <span>
+    #include <system_error>
+    #include <variant>
+    #include <vector>
+#endif
 
 namespace kmx::aio::knx::dib
 {
@@ -52,18 +68,27 @@ namespace kmx::aio::knx::dib
         /// @brief The encoded size of one block, resolved per alternative.
         /// @details One overload set answers both @ref encoded_size and the bound @ref encode writes
         ///          within, so the length a block reports and the length it occupies cannot drift apart.
-        [[nodiscard]] constexpr std::size_t block_size(const device_info&) noexcept { return device_info_size; }
+        [[nodiscard]] constexpr std::size_t block_size(const device_info&) noexcept
+        {
+            return device_info_size;
+        }
 
         [[nodiscard]] inline std::size_t block_size(const supported_service_families& value) noexcept
         {
             return block_header_size + (2u * value.families.size());
         }
 
-        [[nodiscard]] constexpr std::size_t block_size(const ip_config&) noexcept { return ip_config_size; }
+        [[nodiscard]] constexpr std::size_t block_size(const ip_config&) noexcept
+        {
+            return ip_config_size;
+        }
 
-        [[nodiscard]] constexpr std::size_t block_size(const current_ip_config&) noexcept { return current_ip_config_size; }
+        [[nodiscard]] constexpr std::size_t block_size(const current_ip_config&) noexcept
+        {
+            return current_ip_config_size;
+        }
 
-        [[nodiscard]] inline std::size_t block_size(const knx_addresses& value) noexcept
+        [[nodiscard]] inline std::size_t block_size(const addresses& value) noexcept
         {
             return block_header_size + 2u + (2u * value.additional.size());
         }
@@ -77,17 +102,6 @@ namespace kmx::aio::knx::dib
         {
             return block_header_size + value.data.size();
         }
-    }
-
-    bool supported_service_families::contains(const service_family value) const noexcept
-    {
-        return std::ranges::any_of(families, [value](const auto& entry) noexcept { return entry.family == value; });
-    }
-
-    bool supported_service_families::contains(const service_family value, const std::uint8_t minimum_version) const noexcept
-    {
-        return std::ranges::any_of(families, [value, minimum_version](const auto& entry) noexcept
-                                   { return (entry.family == value) && (entry.version >= minimum_version); });
     }
 
     std::size_t encoded_size(const block& value) noexcept
@@ -122,11 +136,9 @@ namespace kmx::aio::knx::dib
     }
 
     /// @copydoc write_block
-    static void write_block(const span_uint8_t destination, const std::size_t size,
-                            const supported_service_families& value) noexcept
+    static void write_block(const span_uint8_t destination, const std::size_t size, const supported_service_families& value) noexcept
     {
-        write_header(destination, size,
-                     value.secured ? block_type::secured_service_families : block_type::supported_service_families);
+        write_header(destination, size, value.secured ? block_type::secured_service_families : block_type::supported_service_families);
         std::size_t offset = block_header_size;
         for (const auto& entry: value.families)
         {
@@ -160,7 +172,7 @@ namespace kmx::aio::knx::dib
     }
 
     /// @copydoc write_block
-    static void write_block(const span_uint8_t destination, const std::size_t size, const knx_addresses& value) noexcept
+    static void write_block(const span_uint8_t destination, const std::size_t size, const addresses& value) noexcept
     {
         write_header(destination, size, block_type::knx_addresses);
         write_u16(destination, 2u, value.device.value());
@@ -195,8 +207,7 @@ namespace kmx::aio::knx::dib
     /// @param held The block to encode.
     /// @return How many octets were written, or why the block could not be encoded.
     template <typename T>
-    [[nodiscard]] static std::expected<std::size_t, std::error_code> encode_block(const span_uint8_t destination,
-                                                                                  const T& held) noexcept
+    [[nodiscard]] static std::expected<std::size_t, std::error_code> encode_block(const span_uint8_t destination, const T& held) noexcept
     {
         const auto size = block_size(held);
         // The structure length is one octet, so a block that cannot describe its own size is not encodable
@@ -217,9 +228,7 @@ namespace kmx::aio::knx::dib
         return std::visit([destination](const auto& held) noexcept { return encode_block(destination, held); }, value);
     }
 
-
-    std::expected<std::size_t, std::error_code> encode_all(const span_uint8_t destination,
-                                                           const std::span<const block> values) noexcept
+    std::expected<std::size_t, std::error_code> encode_all(const span_uint8_t destination, const std::span<const block> values) noexcept
     {
         std::size_t offset {};
         for (const auto& value: values)
@@ -229,6 +238,7 @@ namespace kmx::aio::knx::dib
                 return std::unexpected(written.error());
             offset += *written;
         }
+
         return offset;
     }
 
@@ -264,18 +274,14 @@ namespace kmx::aio::knx::dib
             return std::unexpected(make_error_code(error::malformed_frame));
 
         for (std::size_t offset = block_header_size; offset < body.size(); offset += 2u)
-        {
             if (!known_service_family(body[offset]))
                 return block {unknown_block {body[1u], byte_buffer_t {body.begin() + block_header_size, body.end()}}};
-        }
 
         supported_service_families decoded {};
         decoded.secured = secured;
         decoded.families.reserve((body.size() - block_header_size) / 2u);
         for (std::size_t offset = block_header_size; offset < body.size(); offset += 2u)
-        {
             decoded.families.push_back(service_family_entry {static_cast<service_family>(body[offset]), body[offset + 1u]});
-        }
         return block {decoded};
     }
 
@@ -310,12 +316,12 @@ namespace kmx::aio::knx::dib
     }
 
     /// @brief Reads a KNX_ADDRESSES block: the device's own address, then any additional ones.
-    [[nodiscard]] static block_result_t decode_knx_addresses(const cspan_uint8_t body) noexcept
+    [[nodiscard]] static block_result_t decode_addresses(const cspan_uint8_t body) noexcept
     {
         if ((body.size() < 4u) || ((body.size() % 2u) != 0u))
             return std::unexpected(make_error_code(error::malformed_frame));
 
-        knx_addresses decoded {};
+        addresses decoded {};
         decoded.device = individual_address {read_u16(body, 2u)};
         decoded.additional.reserve((body.size() - 4u) / 2u);
         for (std::size_t offset = 4u; offset < body.size(); offset += 2u)
@@ -383,16 +389,16 @@ namespace kmx::aio::knx::dib
             case block_type::current_ip_config:
                 return decode_current_ip_config(*body);
             case block_type::knx_addresses:
-                return decode_knx_addresses(*body);
+                return decode_addresses(*body);
             case block_type::manufacturer_data:
                 return decode_manufacturer_data(*body);
             case block_type::tunnelling_info:
             case block_type::extended_device_info:
                 break; // named so the switch stays exhaustive; modelled only as their octets
         }
+
         return decode_unknown(*body, type);
     }
-
 
     block_list_result_t decode_all(const cspan_uint8_t bytes) noexcept
     {
@@ -419,6 +425,7 @@ namespace kmx::aio::knx::dib
             offset += bytes[offset];
             decoded.push_back(std::move(*value));
         }
+
         return decoded;
     }
 
@@ -433,26 +440,23 @@ namespace kmx::aio::knx::dib
                 return false;
             offset += size;
         }
+
         return offset == bytes.size();
     }
 
     const supported_service_families* find_service_families(const std::span<const block> values, const bool secured) noexcept
     {
         for (const auto& value: values)
-        {
             if (const auto* held = std::get_if<supported_service_families>(&value); (held != nullptr) && (held->secured == secured))
                 return held;
-        }
         return nullptr;
     }
 
     const device_info* find_device_info(const std::span<const block> values) noexcept
     {
         for (const auto& value: values)
-        {
             if (const auto* held = std::get_if<device_info>(&value))
                 return held;
-        }
         return nullptr;
     }
 }

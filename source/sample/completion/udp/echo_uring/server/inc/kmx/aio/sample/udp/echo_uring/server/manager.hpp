@@ -1,13 +1,16 @@
+/// @file inc/kmx/aio/sample/udp/echo_uring/server/manager.hpp
+/// @brief Completion-model UDP echo server sample manager, with its config and metrics.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <kmx/aio/completion/executor.hpp>
     #include <kmx/logger.hpp>
-    #include <unistd.h>
 
     #include <atomic>
     #include <memory>
     #include <stop_token>
     #include <thread>
+    #include <unistd.h>
 #endif
 
 namespace kmx::aio::sample::udp::echo_uring::server
@@ -52,4 +55,4 @@ namespace kmx::aio::sample::udp::echo_uring::server
         static inline std::atomic<kmx::aio::completion::executor*> g_executor_ptr {};
     };
 
-} // namespace kmx::aio::sample::udp::echo_uring::server
+}

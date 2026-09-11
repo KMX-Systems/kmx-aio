@@ -1,14 +1,14 @@
-/// @file kmx/aio/knx/secure/session.cpp
+/// @file src/kmx/aio/knx/secure/session.cpp
 /// @brief The compiled body of the KNX IP Secure session codecs and handshake MACs.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/knx/secure/session.hpp>
+#ifndef PCH
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/secure/detail/ccm.hpp>
+    #include <kmx/aio/knx/secure/detail/session_crypto.hpp>
 
-#include <kmx/aio/knx/error.hpp>
-#include <kmx/aio/knx/secure/detail/ccm.hpp>
-#include <kmx/aio/knx/secure/detail/session_crypto.hpp>
-
-#include <algorithm>
-#include <array>
+    #include <algorithm>
+#endif
 
 namespace kmx::aio::knx::secure
 {
@@ -47,18 +47,6 @@ namespace kmx::aio::knx::secure
             !header.has_value())
             return std::unexpected(header.error());
         return {};
-    }
-
-    /// @brief The six header octets a handshake MAC covers, for @p service over @p size octets.
-    [[nodiscard]] static constexpr std::array<std::uint8_t, frame::communication_header_size> header_octets(const std::uint16_t service,
-                                                                                                            const std::size_t size) noexcept
-    {
-        return {0x06u,
-                0x10u,
-                static_cast<std::uint8_t>(service >> 8u),
-                static_cast<std::uint8_t>(service & 0xFFu),
-                static_cast<std::uint8_t>(size >> 8u),
-                static_cast<std::uint8_t>(size & 0xFFu)};
     }
 
     expected_void_t encode_session_request_packet(const span_uint8_t destination, const session_request_frame& value) noexcept
@@ -167,7 +155,7 @@ namespace kmx::aio::knx::secure
                                               const x25519_public_key_t& client_public_key,
                                               const x25519_public_key_t& server_public_key) noexcept
     {
-        return detail::basic_session_response_mac(detail::evp_backend(), device_authentication_code, session_id, client_public_key,
+        return detail::basic_session_response_mac({detail::evp_backend(), device_authentication_code}, session_id, client_public_key,
                                                   server_public_key);
     }
 
@@ -187,7 +175,7 @@ namespace kmx::aio::knx::secure
                                                   const x25519_public_key_t& client_public_key,
                                                   const x25519_public_key_t& server_public_key) noexcept
     {
-        return detail::basic_session_authenticate_mac(detail::evp_backend(), user_password_key, user_id, client_public_key,
+        return detail::basic_session_authenticate_mac({detail::evp_backend(), user_password_key}, user_id, client_public_key,
                                                       server_public_key);
     }
 
@@ -206,51 +194,5 @@ namespace kmx::aio::knx::secure
     secret_key_result_t derive_session_key(const x25519_private_key& private_key, const x25519_public_key_t& peer_public_key) noexcept
     {
         return detail::derive_session_key(detail::evp_backend(), private_key, peer_public_key);
-    }
-}
-
-namespace kmx::aio::knx::secure::detail
-{
-    x25519_public_key_t public_keys_xor(const x25519_public_key_t& client_public_key, const x25519_public_key_t& server_public_key) noexcept
-    {
-        x25519_public_key_t result {};
-        for (std::size_t index {}; index < result.size(); ++index)
-            result[index] = client_public_key[index] ^ server_public_key[index];
-        return result;
-    }
-
-    session_mac_result_t handshake_mac(const crypto_backend& backend, const secret_key& key, const cspan_uint8_t associated_data) noexcept
-    {
-        auto mac = cbc_mac(backend, key, block_t {}, associated_data, {});
-        if (!mac.has_value())
-            return std::unexpected(mac.error());
-        if (const auto encrypted = ctr(backend, key, handshake_counter_0(), *mac, {}); !encrypted.has_value())
-            return std::unexpected(encrypted.error());
-        return *mac;
-    }
-
-    session_mac_result_t basic_session_response_mac(const crypto_backend& backend, const secret_key& device_authentication_code,
-                                                    const std::uint16_t session_id, const x25519_public_key_t& client_public_key,
-                                                    const x25519_public_key_t& server_public_key) noexcept
-    {
-        // The response's header, the session id, and the XOR of the two public keys.
-        std::array<std::uint8_t, frame::communication_header_size + 2u + x25519_key_size> associated {};
-        std::ranges::copy(header_octets(session_response_service, session_response_size), associated.begin());
-        associated[6u] = static_cast<std::uint8_t>(session_id >> 8u);
-        associated[7u] = static_cast<std::uint8_t>(session_id & 0xFFu);
-        std::ranges::copy(public_keys_xor(client_public_key, server_public_key), associated.begin() + 8u);
-        return handshake_mac(backend, device_authentication_code, associated);
-    }
-
-    session_mac_result_t basic_session_authenticate_mac(const crypto_backend& backend, const secret_key& user_password_key,
-                                                        const std::uint8_t user_id, const x25519_public_key_t& client_public_key,
-                                                        const x25519_public_key_t& server_public_key) noexcept
-    {
-        // The authentication's header, a reserved zero octet, the user id, and the XOR of the two public keys.
-        std::array<std::uint8_t, frame::communication_header_size + 2u + x25519_key_size> associated {};
-        std::ranges::copy(header_octets(session_authenticate_service, session_authenticate_size), associated.begin());
-        associated[7u] = user_id;
-        std::ranges::copy(public_keys_xor(client_public_key, server_public_key), associated.begin() + 8u);
-        return handshake_mac(backend, user_password_key, associated);
     }
 }

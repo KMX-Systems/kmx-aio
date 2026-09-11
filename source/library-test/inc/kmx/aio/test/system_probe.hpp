@@ -1,25 +1,24 @@
-/// @file aio/test/system_probe.hpp
+/// @file inc/kmx/aio/test/system_probe.hpp
 /// @brief Environment predicates that decide whether a test can run at all.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details These gate SKIP()s rather than assertions. A test that pins a thread to a core, needs
 ///          hugepages, or opens a raw socket is testing the library, not the machine, so on a host that
 ///          cannot offer what it needs the honest outcome is "skipped", not "failed".
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
+
     #include <cstdint>
     #include <expected>
     #include <fstream>
     #include <string>
     #include <system_error>
-
     #include <linux/if_ether.h>
     #include <netinet/in.h>
     #include <pthread.h>
     #include <sched.h>
     #include <sys/socket.h>
     #include <unistd.h>
-
-    #include <kmx/aio/basic_types.hpp>
 #endif
 
 namespace kmx::aio::test
@@ -78,4 +77,4 @@ namespace kmx::aio::test
         return true;
     }
 
-} // namespace kmx::aio::test
+}

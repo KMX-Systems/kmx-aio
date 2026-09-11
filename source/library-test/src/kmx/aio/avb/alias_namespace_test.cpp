@@ -1,20 +1,21 @@
-/// @file avb/alias_namespace_test.cpp
+/// @file src/kmx/aio/avb/alias_namespace_test.cpp
 /// @brief Compile-time checks for AVB model-specific alias ownership.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#ifndef PCH
+    #include <kmx/aio/avb/generic_eth_socket.hpp>
+    #include <kmx/aio/avb/gptp/generic_clock.hpp>
+    #include <kmx/aio/avb/srp/generic_client.hpp>
+    #include <kmx/aio/completion/avb/eth_socket.hpp>
+    #include <kmx/aio/completion/avb/gptp/clock.hpp>
+    #include <kmx/aio/completion/avb/srp/client.hpp>
+    #include <kmx/aio/readiness/avb/eth_socket.hpp>
+    #include <kmx/aio/readiness/avb/gptp/clock.hpp>
+    #include <kmx/aio/readiness/avb/srp/client.hpp>
 
-#include <type_traits>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <catch2/catch_test_macros.hpp>
-
-#include <kmx/aio/avb/eth_socket.hpp>
-#include <kmx/aio/avb/gptp/clock.hpp>
-#include <kmx/aio/avb/srp/client.hpp>
-#include <kmx/aio/completion/avb/eth_socket.hpp>
-#include <kmx/aio/completion/avb/gptp/clock.hpp>
-#include <kmx/aio/completion/avb/srp/client.hpp>
-#include <kmx/aio/readiness/avb/eth_socket.hpp>
-#include <kmx/aio/readiness/avb/gptp/clock.hpp>
-#include <kmx/aio/readiness/avb/srp/client.hpp>
+    #include <type_traits>
+#endif
 
 namespace kmx::aio::test::avb::alias_namespace_test
 {
@@ -37,4 +38,4 @@ namespace kmx::aio::test::avb::alias_namespace_test
         SUCCEED();
     }
 
-} // namespace kmx::aio::test::avb::alias_namespace_test
+}

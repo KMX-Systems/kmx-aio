@@ -31,12 +31,25 @@ library_needs_pic_rebuild() {
 	# it has its own incompatibilities, which are not this check's business (the OPC UA builder makes
 	# that check for itself).
 	#
-	# The output is captured rather than piped into grep: "grep -q" stops at the first match and closes
-	# the pipe, readelf dies of SIGPIPE, and under the "set -o pipefail" every caller of this file runs
-	# with, the pipeline then reports 141 - so a large archive that does need rebuilding would be read
-	# as "no match" and kept.
+	# Only the relocations of code and data count. Debug information is never loaded, and DWARF refers
+	# from one debug section to another through 32-bit absolute offsets even in an object built with
+	# -fPIC, so a position-independent archive compiled with -g is full of R_X86_64_32 entries in its
+	# .rela.debug_* sections. Counting those called every such archive non-PIC and had the builders
+	# delete and rebuild it on every run. The section name is matched from its start: with
+	# -ffunction-sections a function called print_debug_info lives in .rela.text.print_debug_info, whose
+	# relocations do count.
+	#
+	# The output is captured rather than piped: "grep -q" (or an awk that exits early) stops at the first
+	# match and closes the pipe, readelf dies of SIGPIPE, and under the "set -o pipefail" every caller of
+	# this file runs with, the pipeline then reports 141 - so a large archive that does need rebuilding
+	# would be read as "no match" and kept.
 	local relocations
 	relocations="$(readelf --relocs "${library}" 2>/dev/null || true)"
 
-	grep -q 'R_X86_64_32' <<< "${relocations}"
+	awk '
+		/^File: / { skip = 0; next }
+		/^Relocation section / { skip = ($3 ~ /^.\.rela?\.(z?debug_|gnu\.debuglto_)/); next }
+		!skip && /R_X86_64_32/ { found = 1; exit }
+		END { exit !found }
+	' <<< "${relocations}"
 }

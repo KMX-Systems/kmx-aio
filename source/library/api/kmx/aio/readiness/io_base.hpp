@@ -1,14 +1,15 @@
-/// @file aio/readiness/io_base.hpp
+/// @file api/kmx/aio/readiness/io_base.hpp
+/// @brief Readiness-model socket base: owns the descriptor and unregisters it from the epoll executor on destruction.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_READINESS)
     #ifndef PCH
-        #include <memory>
-
         #include <kmx/aio/basic_types.hpp>
         #include <kmx/aio/file_descriptor.hpp>
         #include <kmx/aio/readiness/executor.hpp>
+
+        #include <memory>
     #endif
 
 namespace kmx::aio::readiness
@@ -70,5 +71,5 @@ namespace kmx::aio::readiness
         /// @brief Owned descriptor.
         file_descriptor fd_;
     };
-} // namespace kmx::aio::readiness
+}
 #endif // KMX_AIO_FEATURE_READINESS

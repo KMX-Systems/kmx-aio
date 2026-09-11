@@ -1,42 +1,28 @@
-/// @file aio/benchmark/baseline_cases.cpp
+/// @file src/kmx/aio/benchmark/baseline_cases.cpp
 /// @brief Raw-syscall reference points the executor numbers are read against.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/benchmark/cases.hpp>
+#include <kmx/aio/benchmark/baseline_cases.hpp>
+#ifndef PCH
+    #include <kmx/aio/benchmark/detail/socket_pair.hpp>
+    #include <kmx/aio/benchmark/harness.hpp>
+    #include <kmx/aio/benchmark/registry.hpp>
 
-#include <cerrno>
-#include <cstddef>
-#include <cstdlib>
-#include <new>
-#include <sys/epoll.h>
-#include <sys/socket.h>
-#include <thread>
-#include <unistd.h>
-#include <vector>
+    #include <cerrno>
+    #include <chrono>
+    #include <cstddef>
+    #include <cstdlib>
+    #include <new>
+    #include <thread>
+    #include <vector>
+    #include <sys/epoll.h>
+    #include <sys/socket.h>
+    #include <unistd.h>
+#endif
 
 namespace kmx::aio::benchmark
 {
     namespace baseline_detail
     {
-        /// @brief An anonymous socket pair, closed on destruction.
-        struct socket_pair
-        {
-            int fd[2] {-1, -1};
-
-            explicit socket_pair(const int flags) noexcept { valid = ::socketpair(AF_UNIX, SOCK_STREAM | flags, 0, fd) == 0; }
-
-            ~socket_pair() noexcept
-            {
-                for (const int f: fd)
-                    if (f >= 0)
-                        ::close(f);
-            }
-
-            socket_pair(const socket_pair&) = delete;
-            socket_pair& operator=(const socket_pair&) = delete;
-
-            bool valid {};
-        };
-
         /// @brief Writes one byte, ignoring short writes that a socketpair cannot produce.
         static void ping(const int fd) noexcept
         {
@@ -64,7 +50,7 @@ namespace kmx::aio::benchmark
                 ping(fd);
             }
         }
-    } // namespace baseline_detail
+    }
 
     namespace baseline_detail
     {
@@ -74,7 +60,7 @@ namespace kmx::aio::benchmark
         /// @note Read readiness only. Registering EPOLLOUT as well would have every wait return at once
         ///       on a socket that is always writable, and a case built on it would measure nothing it
         ///       claims to.
-        [[nodiscard]] inline int watch_for_read(const socket_pair& pair)
+        [[nodiscard]] inline int watch_for_read(const detail::socket_pair& pair)
         {
             const int epoll_fd = ::epoll_create1(0);
             if (epoll_fd < 0)
@@ -87,14 +73,15 @@ namespace kmx::aio::benchmark
                 ev.data.fd = fd;
                 keep(::epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev));
             }
+
             return epoll_fd;
         }
     }
 
-    static result bench_epoll_rtt(const double scale)
+    [[nodiscard]] static result bench_epoll_rtt(const double scale)
     {
         const auto iterations = scaled(200'000u, scale);
-        baseline_detail::socket_pair pair {SOCK_NONBLOCK};
+        detail::socket_pair pair {SOCK_NONBLOCK};
         if (!pair.valid)
             return skipped("baseline/socketpair_rtt (epoll, 1 thread)", "socketpair failed");
 
@@ -156,10 +143,10 @@ namespace kmx::aio::benchmark
         }
     }
 
-    static result bench_epoll_rtt_eagain(const double scale)
+    [[nodiscard]] static result bench_epoll_rtt_eagain(const double scale)
     {
         const auto iterations = scaled(200'000u, scale);
-        baseline_detail::socket_pair pair {SOCK_NONBLOCK};
+        detail::socket_pair pair {SOCK_NONBLOCK};
         if (!pair.valid)
             return skipped("baseline/socketpair_rtt (epoll + EAGAIN probe)", "socketpair failed");
 
@@ -175,9 +162,9 @@ namespace kmx::aio::benchmark
         {
             const auto start = clock_t::now();
 
-            baseline_detail::send_then_probe(pair.fd[0]);              // The ping side writes and parks on its own end.
+            baseline_detail::send_then_probe(pair.fd[0]);                     // The ping side writes and parks on its own end.
             baseline_detail::wait_then_receive(epoll_fd, events, pair.fd[1]); // The loop wakes the echo side, which takes
-            baseline_detail::send_then_probe(pair.fd[1]);              // the byte, answers, and parks on its end in turn.
+            baseline_detail::send_then_probe(pair.fd[1]);                     // the byte, answers, and parks on its end in turn.
             baseline_detail::wait_then_receive(epoll_fd, events, pair.fd[0]); // The loop wakes the ping side with the answer.
 
             samples.push_back(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(clock_t::now() - start).count()));
@@ -189,10 +176,10 @@ namespace kmx::aio::benchmark
         return out;
     }
 
-    static result bench_thread_handoff_rtt(const double scale)
+    [[nodiscard]] static result bench_thread_handoff_rtt(const double scale)
     {
         const auto iterations = scaled(100'000u, scale);
-        baseline_detail::socket_pair pair {0};
+        detail::socket_pair pair {0};
         if (!pair.valid)
             return skipped("baseline/socketpair_rtt (2 threads, blocking)", "socketpair failed");
 
@@ -216,7 +203,7 @@ namespace kmx::aio::benchmark
         return out;
     }
 
-    static result bench_heap_alloc(const double scale)
+    [[nodiscard]] static result bench_heap_alloc(const double scale)
     {
         const auto iterations = scaled(20'000'000u, scale);
         const auto start = clock_t::now();
@@ -241,4 +228,4 @@ namespace kmx::aio::benchmark
         reg.add("baseline/thread_handoff_rtt", bench_thread_handoff_rtt);
     }
 
-} // namespace kmx::aio::benchmark
+}

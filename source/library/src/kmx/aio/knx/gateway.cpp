@@ -1,4 +1,4 @@
-/// @file kmx/aio/knx/gateway.cpp
+/// @file src/kmx/aio/knx/gateway.cpp
 /// @brief The compiled body of the KNX gateway facade.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/knx/gateway.hpp>

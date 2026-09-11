@@ -1,19 +1,19 @@
-/// @file aio/someip/client.hpp
+/// @file api/kmx/aio/someip/client.hpp
 /// @brief Backend-neutral async SOME/IP client facade.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_SOMEIP)
     #ifndef PCH
+        #include <kmx/aio/someip/types.hpp>
+        #include <kmx/aio/task.hpp>
+
         #include <chrono>
         #include <cstdint>
         #include <expected>
         #include <memory>
         #include <system_error>
         #include <vector>
-
-        #include <kmx/aio/someip/types.hpp>
-        #include <kmx/aio/task.hpp>
     #endif
 
 namespace kmx::aio::someip
@@ -97,12 +97,12 @@ namespace kmx::aio::someip
     #if !defined(KMX_AIO_HAS_VSOMEIP_HEADER)
         /// @brief Test-only: marks a service/instance as available without network interaction.
         /// @warning Available only in stub builds (no real vsomeip headers).
-        void __kmx_test_inject_service_available(service_id_t service_id, instance_id_t instance_id) noexcept;
+        void test_inject_service_available(service_id_t service_id, instance_id_t instance_id) noexcept;
 
         /// @brief Test-only: overrides the return status of the next call_method() invocation.
         /// @param status  Zero for success; non-zero causes @c error::request_failed.
         /// @warning Available only in stub builds (no real vsomeip headers).
-        void __kmx_test_set_next_call_status(std::uint32_t status) noexcept;
+        void test_set_next_call_status(std::uint32_t status) noexcept;
     #endif
 
     private:
@@ -111,5 +111,5 @@ namespace kmx::aio::someip
         std::unique_ptr<impl> impl_;
     };
 
-} // namespace kmx::aio::someip
+}
 #endif // KMX_AIO_FEATURE_SOMEIP

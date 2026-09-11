@@ -1,5 +1,6 @@
-/// @file aio/readiness/knx/tcp_transport.hpp
+/// @file api/kmx/aio/readiness/knx/tcp_transport.hpp
 /// @brief Readiness TCP adapter for the KNX transport contract: one KNXnet/IP connection over TCP.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// KNXnet/IP over TCP carries the same frames as UDP, one after another on a byte stream, so this adapter does the two
 /// things a datagram socket did for free: it recovers whole frames from the stream, and it keeps two senders' frames
@@ -13,22 +14,22 @@
 /// A receive that fails for any reason but its deadline closes the connection. A byte stream that lost its place - a
 /// frame cut short, a header that does not parse - cannot be brought back into step, so every later receive reports
 /// @ref kmx::aio::knx::error::shutdown instead of misreading what follows.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_READINESS) && defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/async_mutex.hpp>
+        #include <kmx/aio/file_descriptor.hpp>
+        #include <kmx/aio/knx/datagram_transport.hpp>
+        #include <kmx/aio/knx/detail/frame_reassembler.hpp>
+        #include <kmx/aio/knx/transport.hpp>
+        #include <kmx/aio/readiness/basic_types.hpp>
+        #include <kmx/aio/readiness/executor.hpp>
+
         #include <cstdint>
         #include <optional>
         #include <sys/socket.h>
     #endif
-
-    #include <kmx/aio/async_mutex.hpp>
-    #include <kmx/aio/file_descriptor.hpp>
-    #include <kmx/aio/knx/detail/frame_reassembler.hpp>
-    #include <kmx/aio/knx/transport.hpp>
-    #include <kmx/aio/readiness/basic_types.hpp>
-    #include <kmx/aio/readiness/executor.hpp>
 
 namespace kmx::aio::readiness::knx
 {

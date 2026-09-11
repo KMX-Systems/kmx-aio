@@ -1,10 +1,12 @@
-/// @file aio/scheduler.cpp
+/// @file src/kmx/aio/scheduler.cpp
+/// @brief Thread-pool scheduler: worker threads draining a locked task queue, with an idle wait and an orderly stop.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/scheduler.hpp>
+#ifndef PCH
+    #include <kmx/logger.hpp>
 
-#include <kmx/logger.hpp>
-
-#include <thread>
+    #include <thread>
+#endif
 
 namespace kmx::aio
 {
@@ -124,8 +126,8 @@ namespace kmx::aio
             const std::lock_guard lock(queue_mutex_);
             if (queue_.empty() && (active_ == 0u))
                 // notify outside is not possible here without another unlock dance; notifying under the
-            // lock is correct, only marginally less efficient.
-            idle_cv_.notify_all();
+                // lock is correct, only marginally less efficient.
+                idle_cv_.notify_all();
         }
     }
-} // namespace kmx::aio
+}

@@ -1,5 +1,6 @@
-/// @file aio/knx/secure/session.hpp
+/// @file api/kmx/aio/knx/secure/session.hpp
 /// @brief The KNX IP Secure session services: SESSION_REQUEST, SESSION_RESPONSE, SESSION_AUTHENTICATE and SESSION_STATUS.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// A secure tunnelling session opens with a Diffie-Hellman exchange. The client sends SESSION_REQUEST with its X25519
 /// public key. The server answers SESSION_RESPONSE with a session id, its own public key, and a MAC under the device
@@ -11,22 +12,21 @@
 /// The codecs here only move octets, and the MAC functions only compute and check them. Ordering the exchange - and
 /// refusing to go on after a check fails - is the session state machine's job.
 /// @reference KNX System Specifications, 03/08/09 "KNXnet/IP Security"; KNX AN159.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/knx/connection.hpp>
+        #include <kmx/aio/knx/frame.hpp>
+        #include <kmx/aio/knx/secure/common.hpp>
+        #include <kmx/aio/knx/secure/key.hpp>
+
         #include <cstddef>
         #include <cstdint>
         #include <expected>
         #include <system_error>
     #endif
-
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/knx/connection.hpp>
-    #include <kmx/aio/knx/frame.hpp>
-    #include <kmx/aio/knx/secure/common.hpp>
-    #include <kmx/aio/knx/secure/key.hpp>
 
 namespace kmx::aio::knx::secure
 {

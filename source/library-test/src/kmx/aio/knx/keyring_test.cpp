@@ -1,22 +1,33 @@
+/// @file src/kmx/aio/knx/keyring_test.cpp
+/// @brief Unit tests for the ETS keyring reader: project exports, the credentials built from them, and refused documents.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
-#include <kmx/aio/knx/error.hpp>
 #include <kmx/aio/knx/keyring.hpp>
-#include <kmx/aio/knx/secure/detail/crypto.hpp>
-#include <kmx/aio/knx/secure/detail/keyring_format.hpp>
-#include <kmx/aio/knx/secure/key.hpp>
+#ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/ipv4.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/group_address.hpp>
+    #include <kmx/aio/knx/individual_address.hpp>
+    #include <kmx/aio/knx/keyring/document.hpp>
+    #include <kmx/aio/knx/secure/common.hpp>
+    #include <kmx/aio/knx/secure/detail/crypto.hpp>
+    #include <kmx/aio/knx/secure/detail/keyring_format.hpp>
+    #include <kmx/aio/knx/secure/detail/xml_reader.hpp>
+    #include <kmx/aio/knx/secure/key.hpp>
 
-#include <algorithm>
-#include <array>
-#include <cstdint>
-#include <filesystem>
-#include <fstream>
-#include <iterator>
-#include <random>
-#include <string>
-#include <string_view>
-#include <vector>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <algorithm>
+    #include <array>
+    #include <cstdint>
+    #include <filesystem>
+    #include <fstream>
+    #include <iterator>
+    #include <random>
+    #include <string>
+    #include <string_view>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::knx::keyring_test
 {
@@ -110,7 +121,7 @@ namespace kmx::aio::test::knx::keyring_test
                    "xmlns=\"http://knx.org/xml/keyring/1\">" +
                    std::string {body} + "</Keyring>";
         }
-    } // namespace detail
+    }
 
     TEST_CASE("knx keyring reads the backbone and tunnels of a full project export", "[knx][keyring][unit]")
     {
@@ -204,6 +215,7 @@ namespace kmx::aio::test::knx::keyring_test
             REQUIRE(tunnel != nullptr);
             CHECK(tunnel->user_password.view() == ("tunnel_" + std::to_string(device)));
         }
+
         REQUIRE(keyring->devices.size() == 1u);
         CHECK(detail::equal(keyring->devices.front().tool_key.bytes(), "90870edb344bb79b072081270664b508"));
     }
@@ -422,6 +434,7 @@ namespace kmx::aio::test::knx::keyring_test
                 mutated.resize(generator() % mutated.size());
             loaded += kr::load(mutated, *hash).has_value() ? 1u : 0u;
         }
+
         CHECK(loaded < 400u);
     }
 }

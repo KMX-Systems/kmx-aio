@@ -1,18 +1,19 @@
-/// @file kmx/aio/readiness/knx/tcp_server.cpp
+/// @file src/kmx/aio/readiness/knx/tcp_server.cpp
 /// @brief The compiled body of the epoll KNXnet/IP TCP accept loop.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/readiness/knx/tcp_server.hpp>
+#ifndef PCH
+    #include <kmx/aio/error_code.hpp>
+    #include <kmx/aio/readiness/knx/tcp_transport.hpp>
 
-#include <kmx/aio/error_code.hpp>
-#include <kmx/aio/readiness/knx/tcp_transport.hpp>
-
-#include <cerrno>
-#include <chrono>
-#include <cstring>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <system_error>
-#include <utility>
+    #include <cerrno>
+    #include <chrono>
+    #include <cstring>
+    #include <system_error>
+    #include <utility>
+    #include <netinet/in.h>
+    #include <netinet/tcp.h>
+#endif
 
 namespace kmx::aio::readiness::knx
 {
@@ -115,6 +116,7 @@ namespace kmx::aio::readiness::knx
             connections_.fetch_add(1u, std::memory_order_relaxed);
             exec_.spawn(serve_connection(std::move(*accepted), peer, peer_length));
         }
+
         co_return expected_void_t {};
     }
 

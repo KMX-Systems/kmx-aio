@@ -1,7 +1,12 @@
-#include <catch2/catch_test_macros.hpp>
-
+/// @file src/kmx/aio/completion/spdk/runtime_test.cpp
+/// @brief Unit test that the completion SPDK runtime refuses to initialize or enumerate bdevs when SPDK is disabled.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/completion/spdk/runtime.hpp>
-#include <kmx/aio/test/system_probe.hpp>
+#ifndef PCH
+    #include <kmx/aio/test/system_probe.hpp>
+
+    #include <catch2/catch_test_macros.hpp>
+#endif
 
 #if !defined(KMX_AIO_FEATURE_SPDK)
 namespace kmx::aio::test::completion::spdk::runtime_test
@@ -23,5 +28,5 @@ namespace kmx::aio::test::completion::spdk::runtime_test
         const auto bdevs = kmx::aio::completion::spdk::runtime::enumerate_bdevs();
         REQUIRE_FALSE(bdevs);
     }
-} // namespace kmx::aio::test::completion::spdk::runtime_test
+}
 #endif

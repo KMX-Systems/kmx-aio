@@ -1,5 +1,6 @@
-/// @file kmx/aio/test/modbus/mock_stream.hpp
+/// @file inc/kmx/aio/test/modbus/mock_stream.hpp
 /// @brief In-memory mock stream for unit-testing Modbus session framing.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// `mock_stream` satisfies the stream concept expected by
 /// `kmx::aio::modbus::detail::session` function templates (`read`, `write_all`)
@@ -12,10 +13,11 @@
 ///   auto pdu = co_await detail::exchange(ms, adu_span, tid, unit_id);
 ///   CHECK(ms.written_bytes() == expected_adu);
 /// @endcode
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #if defined(KMX_AIO_FEATURE_MODBUS)
     #ifndef PCH
+        #include <kmx/aio/task.hpp>
+
         #include <cstdint>
         #include <deque>
         #include <expected>
@@ -23,8 +25,6 @@
         #include <system_error>
         #include <vector>
     #endif
-
-    #include <kmx/aio/task.hpp>
 
 namespace kmx::aio::test::modbus
 {
@@ -97,5 +97,5 @@ namespace kmx::aio::test::modbus
         std::vector<std::uint8_t> written_;
     };
 
-} // namespace kmx::aio::test::modbus
+}
 #endif // KMX_AIO_FEATURE_MODBUS

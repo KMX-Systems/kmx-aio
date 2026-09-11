@@ -1,13 +1,16 @@
+/// @file inc/kmx/aio/sample/someip/event_subscriber/manager.hpp
+/// @brief Completion-model SOME/IP event subscriber sample manager.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
-    #include <atomic>
-    #include <cstddef>
-    #include <memory>
-
     #include <kmx/aio/completion/executor.hpp>
     #include <kmx/aio/someip/client.hpp>
     #include <kmx/aio/someip/subscription.hpp>
     #include <kmx/aio/task.hpp>
+
+    #include <atomic>
+    #include <cstddef>
+    #include <memory>
 #endif
 
 namespace kmx::aio::sample::someip::event_subscriber

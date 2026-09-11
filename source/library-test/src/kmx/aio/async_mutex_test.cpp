@@ -1,4 +1,4 @@
-/// @file aio/async_mutex_test.cpp
+/// @file src/kmx/aio/async_mutex_test.cpp
 /// @brief Unit tests for the coroutine-aware mutex the TLS layer serializes its pumps with.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 ///
@@ -7,13 +7,14 @@
 /// coroutine, that coroutine runs to its own release, and so on down the queue. So the order the
 /// waiters come out in can be asserted outright rather than waited for, and none of these tests needs
 /// an executor, a thread or a timeout to be meaningful.
-#include <catch2/catch_test_macros.hpp>
-
-#include <coroutine>
-#include <utility>
-#include <vector>
-
 #include <kmx/aio/async_mutex.hpp>
+#ifndef PCH
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <coroutine>
+    #include <utility>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::async_mutex_test
 {
@@ -29,18 +30,18 @@ namespace kmx::aio::test::async_mutex_test
             struct promise_type
             {
                 /// @brief Produces the caller's handle on the coroutine.
-                fire_and_forget get_return_object() const noexcept { return {}; }
+                [[nodiscard]] fire_and_forget get_return_object() const noexcept { return {}; }
                 /// @brief Runs the body immediately rather than on a first await.
-                std::suspend_never initial_suspend() const noexcept { return {}; }
+                [[nodiscard]] std::suspend_never initial_suspend() const noexcept { return {}; }
                 /// @brief Destroys the frame at the end of the body.
-                std::suspend_never final_suspend() const noexcept { return {}; }
+                [[nodiscard]] std::suspend_never final_suspend() const noexcept { return {}; }
                 /// @brief Completes the coroutine.
                 void return_void() const noexcept {}
                 /// @brief Nothing in these tests throws.
                 void unhandled_exception() const noexcept {}
             };
         };
-    } // namespace detail
+    }
 
     TEST_CASE("try_lock takes an unheld async_mutex and refuses a held one", "[core][async_mutex]")
     {
@@ -167,4 +168,4 @@ namespace kmx::aio::test::async_mutex_test
         CHECK(second.try_lock());
         second.unlock();
     }
-} // namespace kmx::aio::test::async_mutex_test
+}

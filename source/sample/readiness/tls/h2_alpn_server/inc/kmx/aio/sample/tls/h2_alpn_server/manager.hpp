@@ -1,3 +1,6 @@
+/// @file inc/kmx/aio/sample/tls/h2_alpn_server/manager.hpp
+/// @brief Readiness-model HTTP/2 ALPN server sample manager: selects h2 over TLS and answers a minimal request.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <kmx/aio/readiness/executor.hpp>
@@ -11,7 +14,7 @@
     #include <string>
 #endif
 
-namespace kmx::aio::sample::tls::h2_alpn_readiness_server
+namespace kmx::aio::sample::tls::h2_alpn_server
 {
     struct config
     {
@@ -63,4 +66,4 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
         static inline std::atomic<kmx::aio::readiness::executor*> g_executor_ptr {};
     };
 
-} // namespace kmx::aio::sample::tls::h2_alpn_readiness_server
+}

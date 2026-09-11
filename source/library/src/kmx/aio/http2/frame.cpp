@@ -1,8 +1,13 @@
+/// @file src/kmx/aio/http2/frame.cpp
+/// @brief HTTP/2 GOAWAY frame serialization.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/http2/frame.hpp>
-#include <kmx/aio/exception.hpp>
+#ifndef PCH
+    #include <kmx/aio/invalid_argument.hpp>
 
-#include <cstring>
-#include <stdexcept>
+    #include <cstring>
+    #include <stdexcept>
+#endif
 
 namespace kmx::aio::http2
 {
@@ -29,4 +34,4 @@ namespace kmx::aio::http2
         return 17u;
     }
 
-} // namespace kmx::aio::http2
+}

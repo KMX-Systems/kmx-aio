@@ -1,31 +1,34 @@
-/// @file aio/benchmark/feature/single_model_cases.cpp
+/// @file src/kmx/aio/benchmark/feature/single_model_cases.cpp
 /// @brief Features the matrix gives one execution model, measured on that model alone.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details These are registered with registry::add rather than add_paired, deliberately. A pairing
 ///          row exists to compare two executors at the same work; where the library offers the
 ///          feature on one model only there is no second figure and never will be, and a row saying
 ///          "not run" in the other column would imply a comparison is pending when none is possible.
 ///          The feature matrix in README.md already records which model each of these belongs to.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/benchmark/cases.hpp>
+#include <kmx/aio/benchmark/feature/single_model_cases.hpp>
+#ifndef PCH
+    #include <kmx/aio/benchmark/feature/scenarios.hpp>
+    #include <kmx/aio/benchmark/feature/watchdog.hpp>
 
-#include <kmx/aio/benchmark/feature/scenarios.hpp>
+    #if defined(KMX_AIO_FEATURE_MODBUS) && defined(KMX_AIO_FEATURE_READINESS)
+        #include <kmx/aio/modbus/client.hpp>
+        #include <kmx/aio/modbus/server.hpp>
+        #include <kmx/aio/readiness/executor.hpp>
 
-#if defined(KMX_AIO_FEATURE_MODBUS) && defined(KMX_AIO_FEATURE_READINESS)
-    #include <atomic>
-    #include <chrono>
-    #include <cstdint>
-    #include <string>
+        #include <atomic>
+        #include <chrono>
+        #include <cstdint>
+        #include <string>
+    #endif
 
-    #include <kmx/aio/modbus/client.hpp>
-    #include <kmx/aio/modbus/server.hpp>
+    #if defined(KMX_AIO_FEATURE_CUDA)
+        #include <kmx/aio/gpu/executor.hpp>
+        #include <kmx/aio/gpu/stream.hpp>
+    #endif
 #endif
 
-#if defined(KMX_AIO_FEATURE_CUDA)
-    #include <kmx/aio/gpu/executor.hpp>
-    #include <kmx/aio/gpu/stream.hpp>
-#endif
-
-namespace kmx::aio::benchmark
+namespace kmx::aio::benchmark::feature
 {
 #if defined(KMX_AIO_FEATURE_MODBUS) && defined(KMX_AIO_FEATURE_READINESS)
 
@@ -139,14 +142,14 @@ namespace kmx::aio::benchmark
             static_cast<void>(co_await client.disconnect());
             exec.stop();
         }
-    } // namespace modbus_detail
+    }
 
     /// @brief One Modbus/TCP read-holding-registers request and its response, over loopback.
     /// @details Readiness only, which is what the feature matrix says: the Modbus facade takes a
     ///          readiness::executor by reference and there is no completion-model equivalent to
     ///          compare it against. The figure is the whole request path - frame, write, wait,
     ///          response frame, decode - on an already-open connection.
-    static result bench_modbus_read_registers(const double scale)
+    [[nodiscard]] static result bench_modbus_read_registers(const double scale)
     {
         const auto iterations = scaled(5'000u, scale);
 
@@ -156,8 +159,8 @@ namespace kmx::aio::benchmark
         const auto port = modbus_detail::next_port();
 
         modbus::server server {};
-        server.set_handler(modbus::function_code::read_holding_registers, [](modbus::server_request request)
-                           { return modbus_detail::read_registers_response(std::move(request)); });
+        server.set_handler(modbus::function_code::read_holding_registers,
+                           [](modbus::server_request request) { return modbus_detail::read_registers_response(std::move(request)); });
 
         std::vector<double> samples {};
         samples.reserve(iterations);
@@ -167,7 +170,7 @@ namespace kmx::aio::benchmark
         exec->spawn(modbus_detail::client_side(*exec, iterations, port, samples));
 
         {
-            const feature::watchdog guard {[&exec]() noexcept { exec->stop(); }, feature::scenario_time_limit};
+            const watchdog guard {[&exec]() noexcept { exec->stop(); }, scenario_time_limit};
             exec->run();
         }
 
@@ -205,7 +208,7 @@ namespace kmx::aio::benchmark
     ///          machinery - the event record, the poll, the resumption - with none of the work whose
     ///          completion it would normally be reporting. Anything measured on a real workload has
     ///          at least this underneath it.
-    static result bench_gpu_event_completion(const double scale)
+    [[nodiscard]] static result bench_gpu_event_completion(const double scale)
     {
         const auto iterations = scaled(20'000u, scale);
 
@@ -251,4 +254,4 @@ namespace kmx::aio::benchmark
 #endif
     }
 
-} // namespace kmx::aio::benchmark
+}

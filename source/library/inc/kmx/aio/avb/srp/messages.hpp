@@ -1,12 +1,12 @@
-/// @file avb/srp/messages.hpp
+/// @file inc/kmx/aio/avb/srp/messages.hpp
 /// @brief MSRP (Multiple Stream Reservation Protocol, IEEE 802.1Qat) PDU wire formats.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <kmx/aio/avb/avb_types.hpp>
+
     #include <array>
     #include <cstdint>
-
-    #include <kmx/aio/avb/avb_types.hpp>
 #endif
 
 namespace kmx::aio::avb::srp
@@ -176,4 +176,4 @@ namespace kmx::aio::avb::srp
     /// @param desc The stream description to encode.
     /// @return The wire-encoded Talker Advertise attribute.
 
-} // namespace kmx::aio::avb::srp
+}

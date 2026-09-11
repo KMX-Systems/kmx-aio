@@ -1,64 +1,68 @@
-/// @file aio/task_internals_test.cpp
-/// @brief Tests for the task promise machinery: exception capture per result type, stop-token
-///        inheritance, and the allocation path a coroutine frame takes when the slab is exhausted.
+/// @file src/kmx/aio/task_internals_test.cpp
+/// @brief Tests for the task promise machinery.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+/// @details Covers exception capture per result type, stop-token inheritance, and the allocation path a coroutine frame
+///          takes when the slab is exhausted.
 ///
 /// task<T> is a template, so each result type is a separate promise instantiation with its own
 /// unhandled_exception and return_value. The library's own tasks are mostly
 /// task_returning_expected_size_t and its siblings, and nothing in the suite makes
 /// one of those throw - the exception path exists once per instantiation and was taken in none of them.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/allocator/slab.hpp>
+    #include <kmx/aio/allocator/statistics.hpp>
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/promise_base.hpp>
+    #include <kmx/aio/task.hpp>
 
-#include <coroutine>
-#include <expected>
-#include <stdexcept>
-#include <stop_token>
-#include <system_error>
-#include <utility>
-#include <vector>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <kmx/aio/allocator/slab.hpp>
-#include <kmx/aio/allocator/statistics.hpp>
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/task.hpp>
+    #include <coroutine>
+    #include <expected>
+    #include <stdexcept>
+    #include <stop_token>
+    #include <system_error>
+    #include <utility>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::task_internals_test
 {
     namespace detail
     {
-        struct task_error: std::runtime_error
+        struct body_error: std::runtime_error
         {
-            task_error(): std::runtime_error("thrown from a task body") {}
+            body_error(): std::runtime_error("thrown from a task body") {}
         };
 
         // One throwing coroutine per result type the library instantiates, so the promise under test is
         // that instantiation's own rather than a shared one.
-        task_returning_expected_size_t throwing_size_task()
+        task_returning_expected_size_t throwing_size_result()
         {
-            throw task_error {};
+            throw body_error {};
             co_return expected_size_t {0u};
         }
 
-        task<expected_int_t> throwing_int_result_task()
+        task<expected_int_t> throwing_int_result()
         {
-            throw task_error {};
+            throw body_error {};
             co_return expected_int_t {0};
         }
 
-        task_returning_expected_void_t throwing_void_result_task()
+        task_returning_expected_void_t throwing_void_result()
         {
-            throw task_error {};
+            throw body_error {};
             co_return expected_void_t {};
         }
 
-        task<int> int_task(const int value)
+        task<int> value_of(const int value)
         {
             co_return value;
         }
 
-        task<int> awaits_int_task(const int value)
+        task<int> successor_of(const int value)
         {
-            const int inner = co_await int_task(value);
+            const int inner = co_await value_of(value);
             co_return inner + 1;
         }
 
@@ -76,14 +80,14 @@ namespace kmx::aio::test::task_internals_test
         /// @param exec The executor whose loop to stop once the task has been awaited.
         /// @return A task the caller spawns.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        task<void> catch_from_size_task(bool& caught, completion::executor& exec) noexcept(false)
+        task<void> catch_from_size_result(bool& caught, completion::executor& exec) noexcept(false)
         {
             try
             {
-                const auto result = co_await throwing_size_task();
-                (void) result;
+                const auto result = co_await throwing_size_result();
+                static_cast<void>(result);
             }
-            catch (const task_error&)
+            catch (const body_error&)
             {
                 caught = true;
             }
@@ -96,14 +100,14 @@ namespace kmx::aio::test::task_internals_test
         /// @param exec The executor whose loop to stop once the task has been awaited.
         /// @return A task the caller spawns.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        task<void> catch_from_int_task(bool& caught, completion::executor& exec) noexcept(false)
+        task<void> catch_from_int_result(bool& caught, completion::executor& exec) noexcept(false)
         {
             try
             {
-                const auto result = co_await throwing_int_result_task();
-                (void) result;
+                const auto result = co_await throwing_int_result();
+                static_cast<void>(result);
             }
-            catch (const task_error&)
+            catch (const body_error&)
             {
                 caught = true;
             }
@@ -116,13 +120,13 @@ namespace kmx::aio::test::task_internals_test
         /// @param exec The executor whose loop to stop once the task has been awaited.
         /// @return A task the caller spawns.
         /// @throws std::bad_alloc (coroutine frame allocation).
-        task<void> catch_from_void_task(bool& caught, completion::executor& exec) noexcept(false)
+        task<void> catch_from_void_result(bool& caught, completion::executor& exec) noexcept(false)
         {
             try
             {
-                static_cast<void>(co_await throwing_void_result_task());
+                static_cast<void>(co_await throwing_void_result());
             }
-            catch (const task_error&)
+            catch (const body_error&)
             {
                 caught = true;
             }
@@ -141,12 +145,12 @@ namespace kmx::aio::test::task_internals_test
             observed = token.stop_requested();
             co_await std::suspend_always {};
         }
-    } // namespace detail
+    }
 
     TEST_CASE("a throwing expected<size_t> task reports through its own promise", "[core][task][exception]")
     {
         bool caught {};
-        auto body = [&caught](completion::executor& exec) { return detail::catch_from_size_task(caught, exec); };
+        auto body = [&caught](completion::executor& exec) { return detail::catch_from_size_result(caught, exec); };
         detail::run_one(body);
         CHECK(caught);
     }
@@ -154,7 +158,7 @@ namespace kmx::aio::test::task_internals_test
     TEST_CASE("a throwing expected<int> task reports through its own promise", "[core][task][exception]")
     {
         bool caught {};
-        auto body = [&caught](completion::executor& exec) { return detail::catch_from_int_task(caught, exec); };
+        auto body = [&caught](completion::executor& exec) { return detail::catch_from_int_result(caught, exec); };
         detail::run_one(body);
         CHECK(caught);
     }
@@ -162,7 +166,7 @@ namespace kmx::aio::test::task_internals_test
     TEST_CASE("a throwing expected<void> task reports through its own promise", "[core][task][exception]")
     {
         bool caught {};
-        auto body = [&caught](completion::executor& exec) { return detail::catch_from_void_task(caught, exec); };
+        auto body = [&caught](completion::executor& exec) { return detail::catch_from_void_result(caught, exec); };
         detail::run_one(body);
         CHECK(caught);
     }
@@ -174,7 +178,7 @@ namespace kmx::aio::test::task_internals_test
         int observed {};
         auto body = [&observed](completion::executor& exec) -> task<void>
         {
-            observed = co_await detail::awaits_int_task(41);
+            observed = co_await detail::successor_of(41);
             exec.stop();
         };
         detail::run_one(body);
@@ -230,7 +234,7 @@ namespace kmx::aio::test::task_internals_test
         CHECK(!empty.stop_token().stop_possible());
         CHECK(!empty.request_stop());
 
-        auto moved = detail::int_task(7);
+        auto moved = detail::value_of(7);
         auto source = std::move(moved);
         CHECK(!moved.valid());
         CHECK(moved.done());
@@ -319,27 +323,27 @@ namespace kmx::aio::test::task_internals_test
         // cannot serve the frame. The existing slab test covers a frame too large for a slot; this is
         // the other arm - a frame that fits, arriving when every slot is already handed out.
         allocator::slab slab {1024u, 2u};
-        set_thread_allocator(&slab);
+        allocator::set_thread_slab(&slab);
 
-        const auto before = get_allocator_statistics().heap_allocations.load(std::memory_order_relaxed);
+        const auto before = allocator::get_statistics().heap_allocations.load(std::memory_order_relaxed);
 
         // Many more live coroutines than the slab has slots, so allocation has to spill over.
         std::vector<task<int>> tasks;
         tasks.reserve(32u);
         for (int i = 0; i < 32; ++i)
-            tasks.push_back(detail::int_task(i));
+            tasks.push_back(detail::value_of(i));
 
-        const auto after = get_allocator_statistics().heap_allocations.load(std::memory_order_relaxed);
-        const auto slab_used = get_allocator_statistics().slab_allocations.load(std::memory_order_relaxed);
+        const auto after = allocator::get_statistics().heap_allocations.load(std::memory_order_relaxed);
+        const auto slab_used = allocator::get_statistics().slab_allocations.load(std::memory_order_relaxed);
 
         // Order matters, and getting it wrong aborts rather than leaks: operator delete decides where a
         // frame came from by asking the *current* thread allocator whether it owns the pointer. Clearing
         // the allocator first would send the slab-backed frames to ::operator delete, which is a free()
         // of a pointer it never handed out.
         tasks.clear();
-        set_thread_allocator(nullptr);
+        allocator::set_thread_slab(nullptr);
 
         CHECK(slab_used > 0u); // the slab served what it could
         CHECK(after > before); // and the rest spilled to the heap
     }
-} // namespace kmx::aio::test::task_internals_test
+}

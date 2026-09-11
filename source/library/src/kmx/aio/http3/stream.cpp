@@ -1,7 +1,13 @@
+/// @file src/kmx/aio/http3/stream.cpp
+/// @brief HTTP/3 request stream state tracking: frame ordering, FIN and reset transitions.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/http3/stream.hpp>
-#include <kmx/aio/exception.hpp>
+#ifndef PCH
+    #include <kmx/aio/invalid_argument.hpp>
+    #include <kmx/aio/logic_error.hpp>
 
-#include <stdexcept>
+    #include <stdexcept>
+#endif
 
 namespace kmx::aio::http3
 {
@@ -65,4 +71,4 @@ namespace kmx::aio::http3
         recv_closed_ = true;
         state_ = stream_state::closed;
     }
-} // namespace kmx::aio::http3
+}

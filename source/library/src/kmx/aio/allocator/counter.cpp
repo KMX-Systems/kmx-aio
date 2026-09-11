@@ -1,8 +1,10 @@
-/// @file aio/allocator/counter.cpp
+/// @file src/kmx/aio/allocator/counter.cpp
+/// @brief The compiled body of the process-wide allocation counter, summed from the per-thread blocks.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/allocator/counter.hpp>
-
-#include <kmx/aio/allocator/detail/thread_state.hpp>
+#ifndef PCH
+    #include <kmx/aio/allocator/detail/thread_state.hpp>
+#endif
 
 namespace kmx::aio::allocator
 {
@@ -10,4 +12,4 @@ namespace kmx::aio::allocator
     {
         return detail::total_allocations(kind_);
     }
-} // namespace kmx::aio::allocator
+}

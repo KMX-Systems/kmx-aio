@@ -1,10 +1,11 @@
-/// @file aio/async_mutex.cpp
+/// @file src/kmx/aio/async_mutex.cpp
+/// @brief The compiled body of async_mutex: acquisition, waiter queueing and FIFO ownership hand-off.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/async_mutex.hpp>
 #ifndef PCH
-    #include <source_location>
-
     #include <kmx/logger.hpp>
+
+    #include <source_location>
 #endif
 
 namespace kmx::aio
@@ -69,4 +70,4 @@ namespace kmx::aio
             next.resume();
     }
 
-} // namespace kmx::aio
+}

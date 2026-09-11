@@ -1,3 +1,6 @@
+/// @file inc/kmx/aio/sample/udp/echo/server/manager.hpp
+/// @brief Readiness-model UDP echo server sample manager: several SO_REUSEPORT listeners echoing datagrams back.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <kmx/aio/readiness/executor.hpp>

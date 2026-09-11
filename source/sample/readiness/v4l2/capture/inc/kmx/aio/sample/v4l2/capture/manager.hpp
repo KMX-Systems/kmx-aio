@@ -1,12 +1,15 @@
+/// @file inc/kmx/aio/sample/v4l2/capture/manager.hpp
+/// @brief Readiness-model V4L2 capture sample manager.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
-    #include <atomic>
-    #include <string>
-
     #include <kmx/aio/readiness/executor.hpp>
     #include <kmx/aio/readiness/v4l2/capture.hpp>
     #include <kmx/aio/task.hpp>
     #include <kmx/logger.hpp>
+
+    #include <atomic>
+    #include <string>
 #endif
 
 namespace kmx::aio::sample::v4l2::capture
@@ -45,4 +48,4 @@ namespace kmx::aio::sample::v4l2::capture
         std::shared_ptr<kmx::aio::readiness::executor> executor_;
         static inline std::atomic<kmx::aio::readiness::executor*> g_executor_ptr {};
     };
-} // namespace kmx::aio::sample::v4l2::capture
+}

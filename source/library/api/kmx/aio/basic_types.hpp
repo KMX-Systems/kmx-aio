@@ -1,22 +1,23 @@
-/// @file aio/basic_types.hpp
+/// @file api/kmx/aio/basic_types.hpp
+/// @brief Library-wide span, expected-result, IP address, endpoint and socket address types, with errno helpers.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
-    #include <arpa/inet.h>
+    #include <kmx/aio/ipv4.hpp>
+    #include <kmx/aio/ipv6.hpp>
+
     #include <cerrno>
     #include <cstring>
     #include <expected>
     #include <optional>
-    #include <netinet/in.h>
     #include <span>
     #include <string>
-    #include <sys/socket.h>
     #include <system_error>
     #include <variant>
     #include <vector>
-
-    #include <kmx/aio/ipv4.hpp>
-    #include <kmx/aio/ipv6.hpp>
+    #include <arpa/inet.h>
+    #include <netinet/in.h>
+    #include <sys/socket.h>
 #endif
 
 namespace kmx::aio
@@ -41,6 +42,10 @@ namespace kmx::aio
     /// @brief Non-owning IP address view variant.
     using ip_address_t = std::variant<ipv4::address_t, ipv6::address_t>;
 
+    /// @brief Result of an operation yielding a value, or an error code.
+    /// @tparam Value The type the operation yields when it succeeds.
+    template <typename Value>
+    using expected_t = std::expected<Value, std::error_code>;
     /// @brief Result of an operation yielding a boolean, or an error code.
     using expected_bool_t = std::expected<bool, std::error_code>;
     /// @brief Result of an operation yielding an integer, or an error code.
@@ -188,4 +193,4 @@ namespace kmx::aio
     /// @return An owned endpoint representation or an error.
     [[nodiscard]] expected_endpoint_address_t parse_socket_address(const socket_address& address) noexcept;
 
-} // namespace kmx::aio
+}

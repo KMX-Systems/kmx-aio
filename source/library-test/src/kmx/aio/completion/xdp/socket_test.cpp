@@ -1,21 +1,26 @@
-#include <array>
-#include <cstddef>
-#include <cstring>
-#include <memory>
-#include <span>
-
-#include <catch2/catch_test_macros.hpp>
-
-#include <kmx/aio/completion/executor.hpp>
+/// @file src/kmx/aio/completion/xdp/socket_test.cpp
+/// @brief Unit tests for the completion-model AF_XDP socket: config validation and a fallback ring round trip.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/completion/xdp/socket.hpp>
-#include <kmx/aio/task.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/task.hpp>
+
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <array>
+    #include <cstddef>
+    #include <cstring>
+    #include <memory>
+    #include <span>
+#endif
 
 namespace kmx::aio::test::completion::xdp::socket_test
 {
     using namespace kmx::aio::completion;
     using namespace kmx::aio::completion::xdp;
 
-    struct xdp_roundtrip_state
+    struct roundtrip_state
     {
         bool ok {};
         std::error_code create_error {};
@@ -50,7 +55,7 @@ namespace kmx::aio::test::completion::xdp::socket_test
     /// @param sock The socket to exercise.
     /// @param state Receives the errors the test asserts on.
     /// @return Nothing, or the reason the exchange did not complete.
-    auto exchange_frames(socket& sock, xdp_roundtrip_state& state) -> task<expected_void_t>
+    auto exchange_frames(socket& sock, roundtrip_state& state) -> task<expected_void_t>
     {
         const auto send_a = co_await sock.send(cspan_byte_t(payload_a));
         if (!send_a)
@@ -86,7 +91,7 @@ namespace kmx::aio::test::completion::xdp::socket_test
         co_return expected_void_t {};
     }
 
-    auto run_roundtrip(executor& exec, std::shared_ptr<xdp_roundtrip_state> state) -> task<void>
+    auto run_roundtrip(executor& exec, std::shared_ptr<roundtrip_state> state) -> task<void>
     {
         const socket_config cfg {
             .interface_name = "lo",
@@ -144,7 +149,7 @@ namespace kmx::aio::test::completion::xdp::socket_test
     TEST_CASE("xdp fallback roundtrip and queue behavior", "[completion][xdp]")
     {
         executor exec;
-        auto state = std::make_shared<xdp_roundtrip_state>();
+        auto state = std::make_shared<roundtrip_state>();
 
         exec.spawn(run_roundtrip(exec, state));
         exec.run();
@@ -152,4 +157,4 @@ namespace kmx::aio::test::completion::xdp::socket_test
         REQUIRE((state->ok || (state->create_error.value() != 0)));
         REQUIRE((state->ok || (state->create_error.value() != 0)));
     }
-} // namespace kmx::aio::test::completion::xdp::socket_test
+}

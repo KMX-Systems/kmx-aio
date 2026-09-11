@@ -1,18 +1,18 @@
-/// @file kmx/aio/sample/avb/listener/manager.hpp
+/// @file inc/kmx/aio/sample/avb/listener/manager.hpp
 /// @brief Completion-model AVB listener sample manager.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
-    #include <atomic>
-    #include <chrono>
-    #include <memory>
-    #include <string>
-
     #include <kmx/aio/avb/avb_types.hpp>
     #include <kmx/aio/completion/avb/gptp/clock.hpp>
     #include <kmx/aio/completion/avb/srp/client.hpp>
     #include <kmx/aio/completion/executor.hpp>
     #include <kmx/aio/task.hpp>
+
+    #include <atomic>
+    #include <chrono>
+    #include <memory>
+    #include <string>
 #endif
 
 namespace kmx::aio::sample::avb::listener
@@ -58,4 +58,4 @@ namespace kmx::aio::sample::avb::listener
         std::unique_ptr<kmx::aio::completion::avb::srp::client> srp_ {};
         static inline std::atomic<kmx::aio::completion::executor*> g_executor_ptr {};
     };
-} // namespace kmx::aio::sample::avb::listener
+}

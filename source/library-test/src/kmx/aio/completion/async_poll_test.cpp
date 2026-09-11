@@ -1,17 +1,18 @@
-/// @file completion/async_poll_test.cpp
+/// @file src/kmx/aio/completion/async_poll_test.cpp
 /// @brief Unit tests for completion::executor::async_poll() using pipe fds.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <array>
-#include <memory>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/task.hpp>
 
-#include <fcntl.h>
-#include <poll.h>
-#include <unistd.h>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <catch2/catch_test_macros.hpp>
-
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/task.hpp>
+    #include <array>
+    #include <memory>
+    #include <fcntl.h>
+    #include <poll.h>
+    #include <unistd.h>
+#endif
 
 namespace kmx::aio::test::completion::async_poll_test
 {
@@ -21,7 +22,7 @@ namespace kmx::aio::test::completion::async_poll_test
     // Test 1 — fd already readable before poll is submitted
     // ---------------------------------------------------------------------------
 
-    struct poll_ready_state
+    struct ready_state
     {
         bool completed {};
         bool ok {};
@@ -29,7 +30,7 @@ namespace kmx::aio::test::completion::async_poll_test
         std::error_code error {};
     };
 
-    auto run_poll_ready(executor& exec, std::shared_ptr<poll_ready_state> state, const int read_fd) -> task<void>
+    auto run_on_readable_fd(executor& exec, std::shared_ptr<ready_state> state, const int read_fd) -> task<void>
     {
         const auto result = co_await exec.async_poll(read_fd, POLLIN);
         state->completed = true;
@@ -57,9 +58,9 @@ namespace kmx::aio::test::completion::async_poll_test
         REQUIRE(::write(write_fd, &sentinel, 1u) == 1);
 
         executor exec;
-        auto state = std::make_shared<poll_ready_state>();
+        auto state = std::make_shared<ready_state>();
 
-        exec.spawn(run_poll_ready(exec, state, read_fd));
+        exec.spawn(run_on_readable_fd(exec, state, read_fd));
         exec.run();
 
         ::close(write_fd);
@@ -74,14 +75,14 @@ namespace kmx::aio::test::completion::async_poll_test
     // Test 2 — negative case: async_poll propagates errors for bad fds
     // ---------------------------------------------------------------------------
 
-    struct poll_error_state
+    struct error_state
     {
         bool completed {};
         bool is_error {};
         std::error_code error {};
     };
 
-    auto run_poll_bad_fd(executor& exec, std::shared_ptr<poll_error_state> state) -> task<void>
+    auto run_on_bad_fd(executor& exec, std::shared_ptr<error_state> state) -> task<void>
     {
         // fd -1 is always invalid; the kernel rejects it and io_uring returns EBADF.
         const auto result = co_await exec.async_poll(-1, POLLIN);
@@ -98,9 +99,9 @@ namespace kmx::aio::test::completion::async_poll_test
     TEST_CASE("async_poll returns error for invalid fd", "[completion][executor][async_poll]")
     {
         executor exec;
-        auto state = std::make_shared<poll_error_state>();
+        auto state = std::make_shared<error_state>();
 
-        exec.spawn(run_poll_bad_fd(exec, state));
+        exec.spawn(run_on_bad_fd(exec, state));
         exec.run();
 
         REQUIRE(state->completed);
@@ -108,4 +109,4 @@ namespace kmx::aio::test::completion::async_poll_test
         REQUIRE(state->error.value() != 0);
     }
 
-} // namespace kmx::aio::test::completion::async_poll_test
+}

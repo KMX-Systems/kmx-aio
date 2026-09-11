@@ -1,10 +1,13 @@
+/// @file src/kmx/aio/basic_types.cpp
+/// @brief IP address conversions between owned and view forms, text formatting, and socket address mapping.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/basic_types.hpp>
 
 namespace kmx::aio
 {
     /// @brief Copies one IP address view alternative into its owned counterpart.
     template <typename ip_t>
-    static ip_address_owned_t own_address_bytes(const ip_t& bytes) noexcept
+    [[nodiscard]] static ip_address_owned_t own_address_bytes(const ip_t& bytes) noexcept
     {
         if constexpr (std::is_same_v<ip_t, ipv4::address_t>)
         {
@@ -25,7 +28,7 @@ namespace kmx::aio
 
     /// @brief Makes a non-owning view over one owned IP address alternative.
     template <typename ip_t>
-    static ip_address_t view_address_bytes(const ip_t& bytes) noexcept
+    [[nodiscard]] static ip_address_t view_address_bytes(const ip_t& bytes) noexcept
     {
         if constexpr (std::is_same_v<ip_t, ipv4::address_owned_t>)
             return ipv4::address_t {bytes};
@@ -40,7 +43,7 @@ namespace kmx::aio
 
     /// @brief Formats one IP address view alternative into a caller-supplied text buffer.
     template <typename ip_t>
-    static bool print_address_bytes(const ip_t& bytes, std::array<char, INET6_ADDRSTRLEN>& buffer) noexcept
+    [[nodiscard]] static bool print_address_bytes(const ip_t& bytes, std::array<char, INET6_ADDRSTRLEN>& buffer) noexcept
     {
         if constexpr (std::is_same_v<ip_t, ipv4::address_t>)
         {

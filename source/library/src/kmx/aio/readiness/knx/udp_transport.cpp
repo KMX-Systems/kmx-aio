@@ -1,4 +1,4 @@
-/// @file kmx/aio/readiness/knx/udp_transport.cpp
+/// @file src/kmx/aio/readiness/knx/udp_transport.cpp
 /// @brief The compiled body of the epoll KNX UDP transport.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/readiness/knx/udp_transport.hpp>
@@ -42,8 +42,8 @@ namespace kmx::aio::readiness::knx
     /// @details Several KNX applications on one host listen to the same group and port, so the address is
     ///          shared rather than owned. Loopback stays off unless the configuration asks for it, so that a
     ///          lone sender does not hear its own multicast back.
-    [[nodiscard]] static expected_void_t prepare_multicast_socket(const int fd,
-                                                                  const kmx::aio::knx::multicast_group_configuration& configuration) noexcept
+    [[nodiscard]] static expected_void_t prepare_multicast_socket(
+        const int fd, const kmx::aio::knx::multicast_group_configuration& configuration) noexcept
     {
         const int reuse = 1;
         if (::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0)
@@ -68,6 +68,7 @@ namespace kmx::aio::readiness::knx
             if ((errno != EINVAL) && (errno != EADDRINUSE))
                 return std::unexpected(error_from_errno());
         }
+
         return {};
     }
 

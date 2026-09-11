@@ -1,4 +1,4 @@
-/// @file aio/allocator/counter.hpp
+/// @file api/kmx/aio/allocator/counter.hpp
 /// @brief Process-wide allocation total summed from the per-thread counters when read.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -37,4 +37,4 @@ namespace kmx::aio::allocator
         counter_kind kind_;
     };
 
-} // namespace kmx::aio::allocator
+}

@@ -1,4 +1,5 @@
-/// @file aio/completion/io_base.hpp
+/// @file api/kmx/aio/completion/io_base.hpp
+/// @brief Shared executor and owned descriptor base for completion-model socket wrappers.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
@@ -48,5 +49,5 @@ namespace kmx::aio::completion
         /// @brief Owned descriptor managed by the wrapper.
         file_descriptor fd_;
     };
-} // namespace kmx::aio::completion
+}
 #endif // KMX_AIO_FEATURE_COMPLETION

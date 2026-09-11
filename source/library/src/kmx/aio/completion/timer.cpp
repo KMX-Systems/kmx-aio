@@ -1,4 +1,5 @@
-/// @file aio/completion/timer.cpp
+/// @file src/kmx/aio/completion/timer.cpp
+/// @brief Completion-model timer implementation over io_uring IORING_OP_TIMEOUT.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/completion/timer.hpp>
 
@@ -13,4 +14,4 @@ namespace kmx::aio::completion
         co_return expected_void_t {};
     }
 
-} // namespace kmx::aio::completion
+}

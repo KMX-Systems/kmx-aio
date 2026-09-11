@@ -1,52 +1,64 @@
+/// @file src/kmx/aio/knx/discovery_test.cpp
+/// @brief Unit tests for KNXnet/IP discovery: SEARCH, extended SEARCH and DESCRIPTION frames and the discovery client.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
-#include <kmx/aio/knx/datagram.hpp>
 #include <kmx/aio/knx/discovery.hpp>
-#include <kmx/aio/completion/executor.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/knx/connection.hpp>
+    #include <kmx/aio/knx/datagram.hpp>
+    #include <kmx/aio/knx/datagram_transport.hpp>
+    #include <kmx/aio/knx/discovery/client.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/frame.hpp>
+    #include <kmx/aio/knx/transport.hpp>
+    #include <kmx/aio/task.hpp>
 
-#include <algorithm>
-#include <array>
-#include <cstdint>
-#include <variant>
-#include <vector>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <algorithm>
+    #include <array>
+    #include <cstdint>
+    #include <variant>
+    #include <vector>
+    #include <netinet/in.h>
+#endif
 
 namespace kmx::aio::test::knx::discovery_test
 {
     using namespace kmx::aio::knx;
 
-    class discovery_transport final: public datagram_transport
-    {
-    public:
-        std::vector<std::uint8_t> response {};
-
-        [[nodiscard]] task_returning_expected_size_t send(
-            const cspan_byte_t payload, const sockaddr*, const ::socklen_t) noexcept(false) override
-        {
-            const auto* bytes = reinterpret_cast<const std::uint8_t*>(payload.data());
-            const auto header = frame::decode_communication_header({bytes, payload.size()});
-            if (!header.has_value())
-                co_return std::unexpected(header.error());
-            co_return expected_size_t {payload.size()};
-        }
-
-        [[nodiscard]] task_returning_expected_size_t receive(
-            const span_byte_t buffer, transport_peer& peer) noexcept(false) override
-        {
-            peer.address = {};
-            auto& address = reinterpret_cast<sockaddr_in6&>(peer.address);
-            address.sin6_family = AF_INET6;
-            address.sin6_port = htons(3671u);
-            address.sin6_addr = in6addr_loopback;
-            peer.length = sizeof(sockaddr_in6);
-            for (std::size_t i = 0u; i < response.size(); ++i)
-                buffer[i] = static_cast<std::byte>(response[i]);
-            co_return expected_size_t {response.size()};
-        }
-    };
-
     namespace detail
     {
+        /// @brief A transport that answers every receive with @ref response, from the IPv6 loopback address.
+        class ipv6_response_transport final: public datagram_transport
+        {
+        public:
+            std::vector<std::uint8_t> response {};
+
+            [[nodiscard]] task_returning_expected_size_t send(const cspan_byte_t payload, const sockaddr*,
+                                                              const ::socklen_t) noexcept(false) override
+            {
+                const auto* bytes = reinterpret_cast<const std::uint8_t*>(payload.data());
+                const auto header = frame::decode_communication_header({bytes, payload.size()});
+                if (!header.has_value())
+                    co_return std::unexpected(header.error());
+                co_return expected_size_t {payload.size()};
+            }
+
+            [[nodiscard]] task_returning_expected_size_t receive(const span_byte_t buffer, transport_peer& peer) noexcept(false) override
+            {
+                peer.address = {};
+                auto& address = reinterpret_cast<sockaddr_in6&>(peer.address);
+                address.sin6_family = AF_INET6;
+                address.sin6_port = htons(3671u);
+                address.sin6_addr = in6addr_loopback;
+                peer.length = sizeof(sockaddr_in6);
+                for (std::size_t i = 0u; i < response.size(); ++i)
+                    buffer[i] = static_cast<std::byte>(response[i]);
+                co_return expected_size_t {response.size()};
+            }
+        };
+
         /// @brief Issues one IPv6 SEARCH and records whether the typed response came back.
         task<void> search_ipv6(datagram_transport& transport, const sockaddr_storage& peer, bool& succeeded,
                                completion::executor& executor) noexcept(false)
@@ -62,12 +74,12 @@ namespace kmx::aio::test::knx::discovery_test
             succeeded = result.has_value() && std::holds_alternative<discovery::ipv6_search_response_frame>(*result);
             executor.stop();
         }
-    } // namespace detail
+    }
 
     TEST_CASE("knx search request round-trips discovery HPAI", "[knx][discovery][integration]")
     {
         const discovery::search_request_frame request {
-            .discovery_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
+            .discovery_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3671u}, 0x01u},
         };
         std::array<std::uint8_t, 14u> packet {};
 
@@ -81,10 +93,11 @@ namespace kmx::aio::test::knx::discovery_test
     TEST_CASE("knx IPv6 search request round-trips discovery HPAI", "[knx][discovery][integration]")
     {
         const discovery::ipv6_search_request_frame request {
-            .discovery_endpoint = ipv6_hpai {
-                ipv6_endpoint {{0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u}, 3671u},
-                0x01u,
-            },
+            .discovery_endpoint =
+                ipv6_hpai {
+                    ipv6_endpoint {{0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u}, 3671u},
+                    0x01u,
+                },
         };
         std::array<std::uint8_t, 26u> packet {};
         REQUIRE(discovery::encode_ipv6_search_request_packet(packet, request).has_value());
@@ -97,8 +110,7 @@ namespace kmx::aio::test::knx::discovery_test
     TEST_CASE("knx search request rejects a non-UDP HPAI", "[knx][discovery][unit]")
     {
         const std::array<std::uint8_t, 14u> packet {
-            0x06u, 0x10u, 0x02u, 0x01u, 0x00u, 0x0Eu,
-            0x08u, 0x02u, 127u, 0u, 0u, 1u, 0x0Eu, 0x57u,
+            0x06u, 0x10u, 0x02u, 0x01u, 0x00u, 0x0Eu, 0x08u, 0x02u, 127u, 0u, 0u, 1u, 0x0Eu, 0x57u,
         };
 
         const auto decoded = discovery::decode_search_request_packet(packet);
@@ -109,8 +121,8 @@ namespace kmx::aio::test::knx::discovery_test
     TEST_CASE("knx search response round-trips opaque device information", "[knx][discovery][integration]")
     {
         const discovery::search_response_frame response {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .device_info_blocks = { 0x04u, 0x02u, 0x01u, 0x00u },
+            .control_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3671u}, 0x01u},
+            .device_info_blocks = {0x04u, 0x02u, 0x01u, 0x00u},
         };
         std::array<std::uint8_t, 18u> packet {};
         REQUIRE(discovery::encode_search_response_packet(packet, response).has_value());
@@ -121,19 +133,20 @@ namespace kmx::aio::test::knx::discovery_test
         CHECK(decoded->device_info_blocks == response.device_info_blocks);
 
         std::array<std::uint8_t, 18u> reencoded {};
-        const datagram value { discovery::search_response_service, decoded.value() };
+        const datagram value {discovery::search_response_service, decoded.value()};
         REQUIRE(encode_datagram(reencoded, value).has_value());
         CHECK(reencoded == packet);
     }
 
     TEST_CASE("knx IPv6 discovery client returns a typed search response", "[knx][discovery][integration]")
     {
-        discovery_transport transport;
+        detail::ipv6_response_transport transport;
         const discovery::ipv6_search_response_frame response {
-            .control_endpoint = ipv6_hpai {
-                ipv6_endpoint {{0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 1u}, 3672u},
-                0x01u,
-            },
+            .control_endpoint =
+                ipv6_hpai {
+                    ipv6_endpoint {{0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 1u}, 3672u},
+                    0x01u,
+                },
             .device_info_blocks = {0x04u, 0x02u, 0x01u, 0x00u},
         };
         transport.response.resize(30u);
@@ -154,10 +167,11 @@ namespace kmx::aio::test::knx::discovery_test
     TEST_CASE("knx IPv6 search response round-trips opaque device information", "[knx][discovery][integration]")
     {
         const discovery::ipv6_search_response_frame response {
-            .control_endpoint = ipv6_hpai {
-                ipv6_endpoint {{15u, 14u, 13u, 12u, 11u, 10u, 9u, 8u, 7u, 6u, 5u, 4u, 3u, 2u, 1u, 0u}, 3671u},
-                0x01u,
-            },
+            .control_endpoint =
+                ipv6_hpai {
+                    ipv6_endpoint {{15u, 14u, 13u, 12u, 11u, 10u, 9u, 8u, 7u, 6u, 5u, 4u, 3u, 2u, 1u, 0u}, 3671u},
+                    0x01u,
+                },
             .device_info_blocks = {0x04u, 0x02u, 0x01u, 0x00u},
         };
         std::array<std::uint8_t, 30u> packet {};
@@ -172,9 +186,7 @@ namespace kmx::aio::test::knx::discovery_test
     TEST_CASE("knx search response rejects an invalid DIB length", "[knx][discovery][unit]")
     {
         const std::array<std::uint8_t, 16u> packet {
-            0x06u, 0x10u, 0x02u, 0x02u, 0x00u, 0x10u,
-            0x08u, 0x01u, 127u, 0u, 0u, 1u, 0x0Eu, 0x57u,
-            0x08u, 0x02u,
+            0x06u, 0x10u, 0x02u, 0x02u, 0x00u, 0x10u, 0x08u, 0x01u, 127u, 0u, 0u, 1u, 0x0Eu, 0x57u, 0x08u, 0x02u,
         };
         const auto decoded = discovery::decode_search_response_packet(packet);
         REQUIRE(!decoded.has_value());
@@ -184,8 +196,7 @@ namespace kmx::aio::test::knx::discovery_test
     TEST_CASE("knx discovery rejects IPv6 search HPAI as unsupported", "[knx][discovery][unit]")
     {
         const std::array<std::uint8_t, 14u> packet {
-            0x06u, 0x10u, 0x02u, 0x01u, 0x00u, 0x0Eu,
-            0x14u, 0x01u, 127u, 0u, 0u, 1u, 0x0Eu, 0x57u,
+            0x06u, 0x10u, 0x02u, 0x01u, 0x00u, 0x0Eu, 0x14u, 0x01u, 127u, 0u, 0u, 1u, 0x0Eu, 0x57u,
         };
         const auto decoded = discovery::decode_search_request_packet(packet);
         REQUIRE(!decoded.has_value());
@@ -195,14 +206,13 @@ namespace kmx::aio::test::knx::discovery_test
     TEST_CASE("knx discovery encoders reject unsupported HPAI protocols", "[knx][discovery][unit]")
     {
         const discovery::search_request_frame request {
-            .discovery_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x02u },
+            .discovery_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3671u}, 0x02u},
         };
         std::array<std::uint8_t, 14u> packet {};
         const auto result = discovery::encode_search_request_packet(packet, request);
         REQUIRE(!result.has_value());
         CHECK(result.error() == make_error_code(error::unsupported_hpai));
     }
-
 
     namespace detail
     {
@@ -223,14 +233,13 @@ namespace kmx::aio::test::knx::discovery_test
             std::size_t sends {};
 
             [[nodiscard]] task_returning_expected_size_t send(const cspan_byte_t payload, const sockaddr*,
-                                                               const ::socklen_t) noexcept(false) override
+                                                              const ::socklen_t) noexcept(false) override
             {
                 ++sends;
                 co_return expected_size_t {payload.size()};
             }
 
-            [[nodiscard]] task_returning_expected_size_t receive(const span_byte_t buffer,
-                                                                 transport_peer& peer) noexcept(false) override
+            [[nodiscard]] task_returning_expected_size_t receive(const span_byte_t buffer, transport_peer& peer) noexcept(false) override
             {
                 if (next >= answers.size())
                     co_return std::unexpected(make_error_code(error::timeout));
@@ -268,7 +277,7 @@ namespace kmx::aio::test::knx::discovery_test
         }
 
         /// @brief The KNXnet/IP discovery multicast group, 224.0.23.12:3671.
-        [[nodiscard]] inline sockaddr_in discovery_group() noexcept
+        [[nodiscard]] inline sockaddr_in multicast_group() noexcept
         {
             sockaddr_in address {};
             address.sin_family = AF_INET;
@@ -289,7 +298,7 @@ namespace kmx::aio::test::knx::discovery_test
             {detail::search_response_bytes(11u), 11u},
         };
 
-        auto group = detail::discovery_group();
+        auto group = detail::multicast_group();
         discovery::client client {transport, reinterpret_cast<const sockaddr*>(&group), sizeof(group)};
 
         std::vector<discovery::discovered_server> found;
@@ -317,7 +326,7 @@ namespace kmx::aio::test::knx::discovery_test
     TEST_CASE("knx discovery search_all ends quietly when nothing answers", "[knx][discovery][unit]")
     {
         detail::multi_response_transport transport;
-        auto group = detail::discovery_group();
+        auto group = detail::multicast_group();
         discovery::client client {transport, reinterpret_cast<const sockaddr*>(&group), sizeof(group)};
 
         bool empty {};
@@ -375,21 +384,33 @@ namespace kmx::aio::test::knx::discovery_test
         std::array<std::uint8_t, frame::communication_header_size + discovery::description_request_body_size> request_packet {};
         REQUIRE(discovery::encode_description_request_packet(request_packet, source_request).has_value());
         CHECK(request_packet == std::array<std::uint8_t, 14u> {
-                                    0x06u, 0x10u, 0x02u, 0x03u, 0x00u, 0x0Eu,
-                                    0x08u, 0x01u, 192u, 0u, 2u, 5u, 0x0Eu, 0x58u,
+                                    0x06u,
+                                    0x10u,
+                                    0x02u,
+                                    0x03u,
+                                    0x00u,
+                                    0x0Eu,
+                                    0x08u,
+                                    0x01u,
+                                    192u,
+                                    0u,
+                                    2u,
+                                    5u,
+                                    0x0Eu,
+                                    0x58u,
                                 });
 
         const auto request = discovery::decode_description_request_packet(request_packet);
         REQUIRE(request.has_value());
         CHECK(request->control_endpoint.endpoint.port == 3672u);
 
-        const datagram request_datagram { discovery::description_request_service, request.value() };
+        const datagram request_datagram {discovery::description_request_service, request.value()};
         std::array<std::uint8_t, request_packet.size()> reencoded_request {};
         REQUIRE(encode_datagram(reencoded_request, request_datagram).has_value());
         CHECK(reencoded_request == request_packet);
 
         const discovery::description_response_frame response {
-            .device_info_blocks = { 0x04u, 0x02u, 0x01u, 0x00u },
+            .device_info_blocks = {0x04u, 0x02u, 0x01u, 0x00u},
         };
         std::array<std::uint8_t, 10u> response_packet {};
         REQUIRE(discovery::encode_description_response_packet(response_packet, response).has_value());
@@ -401,8 +422,8 @@ namespace kmx::aio::test::knx::discovery_test
     TEST_CASE("knx discovery responses preserve multiple DIBs", "[knx][discovery][integration]")
     {
         const discovery::search_response_frame response {
-            .control_endpoint = hpai { ipv4_endpoint { { 127u, 0u, 0u, 1u }, 3671u }, 0x01u },
-            .device_info_blocks = { 0x02u, 0x01u, 0x04u, 0x02u, 0xAAu, 0xBBu },
+            .control_endpoint = hpai {ipv4_endpoint {{127u, 0u, 0u, 1u}, 3671u}, 0x01u},
+            .device_info_blocks = {0x02u, 0x01u, 0x04u, 0x02u, 0xAAu, 0xBBu},
         };
         std::array<std::uint8_t, 20u> packet {};
         REQUIRE(discovery::encode_search_response_packet(packet, response).has_value());
@@ -414,9 +435,7 @@ namespace kmx::aio::test::knx::discovery_test
     TEST_CASE("knx discovery responses reject a truncated trailing DIB", "[knx][discovery][unit]")
     {
         const std::array<std::uint8_t, 18u> packet {
-            0x06u, 0x10u, 0x02u, 0x02u, 0x00u, 0x12u,
-            0x08u, 0x01u, 127u, 0u, 0u, 1u, 0x0Eu, 0x57u,
-            0x02u, 0x01u, 0x05u, 0xAAu,
+            0x06u, 0x10u, 0x02u, 0x02u, 0x00u, 0x12u, 0x08u, 0x01u, 127u, 0u, 0u, 1u, 0x0Eu, 0x57u, 0x02u, 0x01u, 0x05u, 0xAAu,
         };
         const auto decoded = discovery::decode_search_response_packet(packet);
         REQUIRE(!decoded.has_value());
@@ -431,8 +450,8 @@ namespace kmx::aio::test::knx::discovery_test
             hpai {ipv4_endpoint {{192u, 0u, 2u, 1u}, 3672u}, 0x01u},
             {
                 discovery::search_parameter {true, discovery::search_parameter_type::programming_mode, {}},
-                discovery::search_parameter {true, discovery::search_parameter_type::mac_address,
-                                             {0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u}},
+                discovery::search_parameter {
+                    true, discovery::search_parameter_type::mac_address, {0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u}},
             },
         };
 
@@ -441,9 +460,8 @@ namespace kmx::aio::test::knx::discovery_test
         CHECK(*size == 6u + 8u + 2u + 8u);
 
         const std::array<std::uint8_t, 24u> expected {
-            0x06u, 0x10u, 0x02u, 0x0Bu, 0x00u, 0x18u,
-            0x08u, 0x01u, 192u, 0u, 2u, 1u, 0x0Eu, 0x58u,
-            0x02u, 0x81u,                                        // programming mode, mandatory
+            0x06u, 0x10u, 0x02u, 0x0Bu, 0x00u, 0x18u, 0x08u, 0x01u,
+            192u,  0u,    2u,    1u,    0x0Eu, 0x58u, 0x02u, 0x81u, // programming mode, mandatory
             0x08u, 0x82u, 0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u, // select by MAC, mandatory
         };
 
@@ -487,9 +505,7 @@ namespace kmx::aio::test::knx::discovery_test
     {
         // A block length below the two-octet header would never advance the decode cursor.
         std::vector<std::uint8_t> packet {
-            0x06u, 0x10u, 0x02u, 0x0Bu, 0x00u, 0x10u,
-            0x08u, 0x01u, 192u, 0u, 2u, 1u, 0x0Eu, 0x58u,
-            0x01u, 0x81u,
+            0x06u, 0x10u, 0x02u, 0x0Bu, 0x00u, 0x10u, 0x08u, 0x01u, 192u, 0u, 2u, 1u, 0x0Eu, 0x58u, 0x01u, 0x81u,
         };
         CHECK(discovery::decode_extended_search_request_packet(packet).error() == make_error_code(error::malformed_frame));
 
@@ -503,9 +519,8 @@ namespace kmx::aio::test::knx::discovery_test
 
         // An unknown optional parameter is skipped without error.
         std::vector<std::uint8_t> optional_packet {
-            0x06u, 0x10u, 0x02u, 0x0Bu, 0x00u, 0x12u,
-            0x08u, 0x01u, 192u, 0u, 2u, 1u, 0x0Eu, 0x58u,
-            0x04u, 0x7Eu, 0xAAu, 0x00u, // type 0x7E, mandatory bit 0, size 4
+            0x06u, 0x10u, 0x02u, 0x0Bu, 0x00u, 0x12u, 0x08u, 0x01u, 192u,
+            0u,    2u,    1u,    0x0Eu, 0x58u, 0x04u, 0x7Eu, 0xAAu, 0x00u, // type 0x7E, mandatory bit 0, size 4
         };
         const auto decoded_opt = discovery::decode_extended_search_request_packet(optional_packet);
         REQUIRE(decoded_opt.has_value());
@@ -513,8 +528,7 @@ namespace kmx::aio::test::knx::discovery_test
 
         // An unknown mandatory parameter is rejected as unsupported.
         optional_packet[15u] = 0xFEu; // mandatory bit 1
-        CHECK(discovery::decode_extended_search_request_packet(optional_packet).error() ==
-              make_error_code(error::unsupported_service));
+        CHECK(discovery::decode_extended_search_request_packet(optional_packet).error() == make_error_code(error::unsupported_service));
     }
 
     TEST_CASE("knx extended search response round-trips", "[knx][discovery][unit]")

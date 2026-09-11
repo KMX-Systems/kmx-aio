@@ -1,4 +1,4 @@
-/// @file aio/gpu/stream.hpp
+/// @file api/kmx/aio/gpu/stream.hpp
 /// @brief GPU stream wrapper for CUDA stream operations.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -55,5 +55,5 @@ namespace kmx::aio::gpu
         void destroy() noexcept;
     };
 
-} // namespace kmx::aio::gpu
+}
 #endif // KMX_AIO_FEATURE_CUDA

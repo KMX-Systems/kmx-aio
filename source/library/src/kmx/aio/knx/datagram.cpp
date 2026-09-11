@@ -1,7 +1,10 @@
+/// @file src/kmx/aio/knx/datagram.cpp
+/// @brief Service-type dispatch that decodes and encodes every supported KNXnet/IP datagram.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/knx/datagram.hpp>
-
-#include <optional>
+#ifndef PCH
+    #include <optional>
+#endif
 
 namespace kmx::aio::knx
 {
@@ -19,8 +22,7 @@ namespace kmx::aio::knx
     /// @details Every arm of the dispatch below is the same three steps - decode, propagate the error,
     ///          wrap - so they are written once here and each arm names only its own decoder.
     template <typename Decoder>
-    [[nodiscard]] static datagram_result_t as_datagram(const std::uint16_t service, const cspan_uint8_t packet,
-                                                       Decoder&& decode) noexcept
+    [[nodiscard]] static datagram_result_t as_datagram(const std::uint16_t service, const cspan_uint8_t packet, Decoder&& decode) noexcept
     {
         const auto decoded = decode(packet);
         if (!decoded.has_value())
@@ -55,8 +57,7 @@ namespace kmx::aio::knx
     }
 
     /// @brief Decodes the connectionless discovery services.
-    [[nodiscard]] static optional_datagram_result_t decode_discovery_service(const std::uint16_t service,
-                                                                             const cspan_uint8_t packet,
+    [[nodiscard]] static optional_datagram_result_t decode_discovery_service(const std::uint16_t service, const cspan_uint8_t packet,
                                                                              const std::uint16_t total_length) noexcept
     {
         switch (service)
@@ -87,8 +88,7 @@ namespace kmx::aio::knx
     }
 
     /// @brief Decodes the channel management services.
-    [[nodiscard]] static optional_datagram_result_t decode_connection_service(const std::uint16_t service,
-                                                                              const cspan_uint8_t packet,
+    [[nodiscard]] static optional_datagram_result_t decode_connection_service(const std::uint16_t service, const cspan_uint8_t packet,
                                                                               const std::uint16_t total_length) noexcept
     {
         switch (service)
@@ -135,8 +135,7 @@ namespace kmx::aio::knx
     }
 
     /// @brief Decodes the connectionless routing services.
-    [[nodiscard]] static optional_datagram_result_t decode_routing_service(const std::uint16_t service,
-                                                                           const cspan_uint8_t packet) noexcept
+    [[nodiscard]] static optional_datagram_result_t decode_routing_service(const std::uint16_t service, const cspan_uint8_t packet) noexcept
     {
         switch (service)
         {
@@ -152,13 +151,12 @@ namespace kmx::aio::knx
     }
 
     /// @brief Decodes the KNX IP Secure services: SECURE_WRAPPER, the four session services, and TIMER_NOTIFY.
-    [[nodiscard]] static optional_datagram_result_t decode_secure_service(const std::uint16_t service,
-                                                                          const cspan_uint8_t packet) noexcept
+    [[nodiscard]] static optional_datagram_result_t decode_secure_service(const std::uint16_t service, const cspan_uint8_t packet) noexcept
     {
         switch (service)
         {
-            case secure::secure_wrapper_service:
-                return as_datagram(service, packet, secure::decode_secure_wrapper_packet);
+            case secure::wrapper_service:
+                return as_datagram(service, packet, secure::decode_wrapper_packet);
             case secure::session_request_service:
                 return as_datagram(service, packet, secure::decode_session_request_packet);
             case secure::session_response_service:
@@ -209,8 +207,7 @@ namespace kmx::aio::knx
     /// @details Every arm below asks the same question - is the payload the one this service names - so
     ///          the check and the error it reports live here rather than once per service.
     template <typename Payload, typename Encoder>
-    [[nodiscard]] static expected_void_t encode_payload(const span_uint8_t packet, const datagram& value,
-                                                        Encoder&& encode) noexcept
+    [[nodiscard]] static expected_void_t encode_payload(const span_uint8_t packet, const datagram& value, Encoder&& encode) noexcept
     {
         const auto* payload = std::get_if<Payload>(&value.payload);
         if (payload == nullptr)
@@ -255,13 +252,11 @@ namespace kmx::aio::knx
     }
 
     /// @brief Encodes a TUNNELLING_REQUEST, rejecting one that carries no cEMI to tunnel.
-    [[nodiscard]] static expected_void_t encode_tunnelling(const span_uint8_t packet,
-                                                            const tunnelling_request_frame& request) noexcept
+    [[nodiscard]] static expected_void_t encode_tunnelling(const span_uint8_t packet, const tunnelling_request_frame& request) noexcept
     {
         if (request.cemi_bytes.empty())
             return std::unexpected(make_error_code(error::malformed_frame));
-        return frame::encode_tunnelling_request_packet(packet, request.channel_id, request.sequence_number,
-                                                       request.cemi_bytes.span());
+        return frame::encode_tunnelling_request_packet(packet, request.channel_id, request.sequence_number, request.cemi_bytes.span());
     }
 
     /// @brief Encodes a TUNNELLING_ACK from the fields the frame carries.
@@ -271,15 +266,13 @@ namespace kmx::aio::knx
     }
 
     /// @brief Encodes a tunnelling feature service, whose value travels beside the frame that names it.
-    [[nodiscard]] static expected_void_t encode_feature(const span_uint8_t packet,
-                                                         const tunnelling_feature_frame& feature) noexcept
+    [[nodiscard]] static expected_void_t encode_feature(const span_uint8_t packet, const tunnelling_feature_frame& feature) noexcept
     {
         return frame::encode_tunnelling_feature_packet(packet, feature, feature.value.span());
     }
 
     /// @brief Encodes the connectionless discovery services.
-    [[nodiscard]] static optional_expected_void_t encode_discovery_service(const std::uint16_t service,
-                                                                           const span_uint8_t packet,
+    [[nodiscard]] static optional_expected_void_t encode_discovery_service(const std::uint16_t service, const span_uint8_t packet,
                                                                            const datagram& value) noexcept
     {
         switch (service)
@@ -289,25 +282,22 @@ namespace kmx::aio::knx
             case discovery::search_response_service:
                 return encode_search_response(packet, value);
             case discovery::search_request_extended_service:
-                return encode_payload<discovery::extended_search_request_frame>(
-                    packet, value, discovery::encode_extended_search_request_packet);
+                return encode_payload<discovery::extended_search_request_frame>(packet, value,
+                                                                                discovery::encode_extended_search_request_packet);
             case discovery::search_response_extended_service:
-                return encode_payload<discovery::extended_search_response_frame>(
-                    packet, value, discovery::encode_extended_search_response_packet);
+                return encode_payload<discovery::extended_search_response_frame>(packet, value,
+                                                                                 discovery::encode_extended_search_response_packet);
             case discovery::description_request_service:
-                return encode_payload<discovery::description_request_frame>(
-                    packet, value, discovery::encode_description_request_packet);
+                return encode_payload<discovery::description_request_frame>(packet, value, discovery::encode_description_request_packet);
             case discovery::description_response_service:
-                return encode_payload<discovery::description_response_frame>(
-                    packet, value, discovery::encode_description_response_packet);
+                return encode_payload<discovery::description_response_frame>(packet, value, discovery::encode_description_response_packet);
             default:
                 return {};
         }
     }
 
     /// @brief Encodes the channel management services.
-    [[nodiscard]] static optional_expected_void_t encode_connection_service(const std::uint16_t service,
-                                                                            const span_uint8_t packet,
+    [[nodiscard]] static optional_expected_void_t encode_connection_service(const std::uint16_t service, const span_uint8_t packet,
                                                                             const datagram& value) noexcept
     {
         switch (service)
@@ -317,11 +307,9 @@ namespace kmx::aio::knx
             case connection::connect_response_service:
                 return encode_connect_response(packet, value);
             case connection::connectionstate_request_service:
-                return encode_payload<connectionstate_request_frame>(
-                    packet, value, connection::encode_connectionstate_request_packet);
+                return encode_payload<connectionstate_request_frame>(packet, value, connection::encode_connectionstate_request_packet);
             case connection::connectionstate_response_service:
-                return encode_payload<connectionstate_response_frame>(
-                    packet, value, connection::encode_connectionstate_response_packet);
+                return encode_payload<connectionstate_response_frame>(packet, value, connection::encode_connectionstate_response_packet);
             case connection::disconnect_request_service:
                 return encode_payload<disconnect_request_frame>(packet, value, connection::encode_disconnect_request_packet);
             case connection::disconnect_response_service:
@@ -332,8 +320,7 @@ namespace kmx::aio::knx
     }
 
     /// @brief Encodes the services carried on an established tunnelling channel.
-    [[nodiscard]] static optional_expected_void_t encode_tunnelling_service(const std::uint16_t service,
-                                                                            const span_uint8_t packet,
+    [[nodiscard]] static optional_expected_void_t encode_tunnelling_service(const std::uint16_t service, const span_uint8_t packet,
                                                                             const datagram& value) noexcept
     {
         switch (service)
@@ -353,8 +340,7 @@ namespace kmx::aio::knx
     }
 
     /// @brief Encodes the connectionless routing services.
-    [[nodiscard]] static optional_expected_void_t encode_routing_service(const std::uint16_t service,
-                                                                         const span_uint8_t packet,
+    [[nodiscard]] static optional_expected_void_t encode_routing_service(const std::uint16_t service, const span_uint8_t packet,
                                                                          const datagram& value) noexcept
     {
         switch (service)
@@ -371,14 +357,13 @@ namespace kmx::aio::knx
     }
 
     /// @brief Encodes the KNX IP Secure services this build decodes.
-    [[nodiscard]] static optional_expected_void_t encode_secure_service(const std::uint16_t service,
-                                                                        const span_uint8_t packet,
+    [[nodiscard]] static optional_expected_void_t encode_secure_service(const std::uint16_t service, const span_uint8_t packet,
                                                                         const datagram& value) noexcept
     {
         switch (service)
         {
-            case secure::secure_wrapper_service:
-                return encode_payload<secure::secure_wrapper_frame>(packet, value, secure::encode_secure_wrapper_packet);
+            case secure::wrapper_service:
+                return encode_payload<secure::wrapper_frame>(packet, value, secure::encode_wrapper_packet);
             case secure::session_request_service:
                 return encode_payload<secure::session_request_frame>(packet, value, secure::encode_session_request_packet);
             case secure::session_response_service:
@@ -410,19 +395,13 @@ namespace kmx::aio::knx
         return std::unexpected(make_error_code(error::unsupported_service));
     }
 
-
-    expected_void_t encode_response_datagram(const span_uint8_t packet,
-                                                                  const datagram& request,
-                                                                  const std::uint8_t status) noexcept
+    expected_void_t encode_response_datagram(const span_uint8_t packet, const datagram& request, const std::uint8_t status) noexcept
     {
         if (const auto* tunnel = std::get_if<tunnelling_request_frame>(&request.payload))
         {
             if (request.service_type != frame::tunnelling_request_service)
                 return std::unexpected(make_error_code(error::invalid_configuration));
-            return frame::encode_tunnelling_ack_packet(packet,
-                                                       tunnel->channel_id,
-                                                       tunnel->sequence_number,
-                                                       status);
+            return frame::encode_tunnelling_ack_packet(packet, tunnel->channel_id, tunnel->sequence_number, status);
         }
 
         if (const auto* heartbeat = std::get_if<connectionstate_request_frame>(&request.payload))
@@ -430,8 +409,7 @@ namespace kmx::aio::knx
             if (request.service_type != connection::connectionstate_request_service)
                 return std::unexpected(make_error_code(error::invalid_configuration));
             return connection::encode_connectionstate_response_packet(
-                packet, connectionstate_response_frame { heartbeat->channel_id,
-                                                         static_cast<connect_status>(status) });
+                packet, connectionstate_response_frame {heartbeat->channel_id, static_cast<connect_status>(status)});
         }
 
         if (const auto* disconnect = std::get_if<disconnect_request_frame>(&request.payload))
@@ -439,8 +417,7 @@ namespace kmx::aio::knx
             if (request.service_type != connection::disconnect_request_service)
                 return std::unexpected(make_error_code(error::invalid_configuration));
             return connection::encode_disconnect_response_packet(
-                packet, disconnect_response_frame { disconnect->channel_id,
-                                                    static_cast<connect_status>(status) });
+                packet, disconnect_response_frame {disconnect->channel_id, static_cast<connect_status>(status)});
         }
 
         return std::unexpected(make_error_code(error::unsupported_service));

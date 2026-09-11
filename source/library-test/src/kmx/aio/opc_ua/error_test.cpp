@@ -1,10 +1,13 @@
+/// @file src/kmx/aio/opc_ua/error_test.cpp
+/// @brief Unit tests for the OPC UA error category name and messages.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
 #include <kmx/aio/opc_ua/error.hpp>
+#ifndef PCH
+    #include <catch2/catch_test_macros.hpp>
 
-#include <string>
-#include <system_error>
+    #include <string>
+    #include <system_error>
+#endif
 
 namespace kmx::aio::test::opc_ua::error_test
 {
@@ -21,4 +24,4 @@ namespace kmx::aio::test::opc_ua::error_test
         const std::error_code ec = make_error_code(error::timed_out);
         CHECK(ec.message() == std::string("OPC UA operation timed out"));
     }
-} // namespace kmx::aio::test::opc_ua::error_test
+}

@@ -1,24 +1,28 @@
+/// @file src/kmx/aio/sample/spdk/minimal/manager.cpp
+/// @brief Completion-model SPDK minimal probe: writes, reads back and flushes one block on a bdev, with setup hints.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/spdk/minimal/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/spdk/device.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/logger.hpp>
 
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <cstddef>
-#include <cstdint>
-#include <fstream>
-#include <memory>
-#include <source_location>
-#include <string>
-#include <string_view>
-
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/spdk/device.hpp>
-#include <kmx/aio/task.hpp>
-#include <kmx/logger.hpp>
+    #include <algorithm>
+    #include <array>
+    #include <atomic>
+    #include <cstddef>
+    #include <cstdint>
+    #include <fstream>
+    #include <memory>
+    #include <source_location>
+    #include <string>
+    #include <string_view>
+#endif
 
 namespace kmx::aio::sample::spdk::minimal
 {
-    std::uint64_t read_nr_hugepages()
+    [[nodiscard]] std::uint64_t read_nr_hugepages()
     {
         std::ifstream in("/proc/sys/vm/nr_hugepages");
         std::uint64_t value {};
@@ -26,7 +30,7 @@ namespace kmx::aio::sample::spdk::minimal
         return value;
     }
 
-    void log_spdk_runtime_hints(const std::string_view bdev_name)
+    void log_runtime_hints(const std::string_view bdev_name)
     {
         if (bdev_name == "kmx-spdk-fallback")
             return;
@@ -43,7 +47,7 @@ namespace kmx::aio::sample::spdk::minimal
                          "`LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH`.");
     }
 
-    kmx::aio::task<void> run_spdk_probe(kmx::aio::completion::executor& exec, std::shared_ptr<std::atomic_bool> ok, std::string bdev_name)
+    kmx::aio::task<void> run_probe(kmx::aio::completion::executor& exec, std::shared_ptr<std::atomic_bool> ok, std::string bdev_name)
     {
         kmx::aio::completion::spdk::device_config config {
             .bdev_name = bdev_name,
@@ -56,7 +60,7 @@ namespace kmx::aio::sample::spdk::minimal
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK device create failed: {}",
                              device_result.error().message());
-            log_spdk_runtime_hints(bdev_name);
+            log_runtime_hints(bdev_name);
             exec.stop();
             co_return;
         }

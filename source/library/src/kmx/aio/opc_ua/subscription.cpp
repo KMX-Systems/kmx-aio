@@ -1,14 +1,17 @@
+/// @file src/kmx/aio/opc_ua/subscription.cpp
+/// @brief The compiled body of the OPC UA subscription facade: notification queue and idle heartbeats.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/opc_ua/client.hpp>
-#include <kmx/aio/opc_ua/error.hpp>
 #include <kmx/aio/opc_ua/subscription.hpp>
+#ifndef PCH
+    #include <kmx/aio/channel.hpp>
+    #include <kmx/aio/opc_ua/client.hpp>
+    #include <kmx/aio/opc_ua/error.hpp>
 
-#include <kmx/aio/channel.hpp>
-
-#include <chrono>
-#include <memory>
-#include <string>
-#include <utility>
+    #include <chrono>
+    #include <memory>
+    #include <string>
+    #include <utility>
+#endif
 
 namespace kmx::aio::opc_ua
 {
@@ -123,4 +126,4 @@ namespace kmx::aio::opc_ua
         return impl_->config;
     }
 
-} // namespace kmx::aio::opc_ua
+}

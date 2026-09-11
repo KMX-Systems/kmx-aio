@@ -1,18 +1,20 @@
-/// @file aio/benchmark/completion_cases.cpp
+/// @file src/kmx/aio/benchmark/completion_cases.cpp
 /// @brief Completion-executor (io_uring) benchmarks.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/benchmark/cases.hpp>
-
+#include <kmx/aio/benchmark/completion_cases.hpp>
 #if defined(KMX_AIO_FEATURE_COMPLETION)
+    #ifndef PCH
+        #include <kmx/aio/benchmark/feature/catalogue.hpp>
+        #include <kmx/aio/benchmark/feature/completion_backend.hpp>
+        #include <kmx/aio/benchmark/feature/scenarios.hpp>
+        #include <kmx/aio/completion/executor.hpp>
 
-    #include <chrono>
-    #include <cstddef>
-    #include <sys/socket.h>
-    #include <unistd.h>
-    #include <vector>
-
-    #include <kmx/aio/benchmark/feature/scenarios.hpp>
-    #include <kmx/aio/completion/executor.hpp>
+        #include <chrono>
+        #include <cstddef>
+        #include <vector>
+        #include <sys/socket.h>
+        #include <unistd.h>
+    #endif
 
 namespace kmx::aio::benchmark
 {
@@ -32,12 +34,26 @@ namespace kmx::aio::benchmark
             clock_t::time_point end {};     ///< When the last one ended.
         };
 
+        /// @brief One connection's worth of traffic, and where its progress is recorded.
+        struct echo_pair_params
+        {
+            completion::executor& exec;    ///< The executor both operations run on.
+            fd_t write_fd {-1};            ///< The end the byte is written to.
+            fd_t read_fd {-1};             ///< The end the byte is read back from.
+            std::size_t rounds {};         ///< How many round trips to make.
+            std::size_t connections {};    ///< How many connections there are in all, so the last one can close the window.
+            std::atomic_size_t& completed; ///< Counts the operations that finished.
+            run_window& window;            ///< The shared timing window.
+        };
+
         /// @brief One connection's worth of traffic: write a byte, read it back, repeat.
-        static task<void> echo_pair(completion::executor& exec, const fd_t write_fd, const fd_t read_fd, const std::size_t rounds,
-                                    const std::size_t connections, std::atomic_size_t& completed, run_window& window) noexcept(false)
+        /// @param params The executor, the two ends, the work to do and where it is recorded.
+        /// @throws std::bad_alloc (coroutine frame allocation).
+        static task<void> echo_pair(const echo_pair_params params) noexcept(false)
         {
             char out_byte {};
             char in_byte {};
+            auto& window = params.window;
 
             // Timed from the first connection starting to the last one finishing, rather than around
             // run(). The ring's set-up is not per-operation cost, and neither is the 100 ms the loop's
@@ -46,21 +62,21 @@ namespace kmx::aio::benchmark
             if (window.started.fetch_add(1u, std::memory_order_relaxed) == 0u)
                 window.begin = clock_t::now();
 
-            for (std::size_t i {}; i != rounds; ++i)
+            for (std::size_t i {}; i != params.rounds; ++i)
             {
-                if (!co_await exec.async_write(write_fd, cspan_char_t(&out_byte, 1u), 0u))
+                if (!co_await params.exec.async_write(params.write_fd, cspan_char_t(&out_byte, 1u), 0u))
                     break;
 
-                if (!co_await exec.async_read(read_fd, span_char_t(&in_byte, 1u), 0u))
+                if (!co_await params.exec.async_read(params.read_fd, span_char_t(&in_byte, 1u), 0u))
                     break;
 
-                completed.fetch_add(2u, std::memory_order_relaxed);
+                params.completed.fetch_add(2u, std::memory_order_relaxed);
             }
 
-            if ((window.finished.fetch_add(1u, std::memory_order_relaxed) + 1u) == connections)
+            if ((window.finished.fetch_add(1u, std::memory_order_relaxed) + 1u) == params.connections)
                 window.end = clock_t::now();
         }
-    } // namespace completion_detail
+    }
 
     /// @brief The io_uring side of the socketpair round trip.
     /// @details Runs the shared scenario body, which is what makes the pairing mean anything. This
@@ -69,7 +85,7 @@ namespace kmx::aio::benchmark
     ///          to each other. Those are different amounts of work, and the difference was being
     ///          reported as a difference between the executors. Both sides now run the same two
     ///          coroutines; only the waiting differs.
-    static result bench_completion_rtt(const double scale)
+    [[nodiscard]] static result bench_completion_rtt(const double scale)
     {
         using scenario = feature::catalogue::socketpair_rtt_scenario;
 
@@ -78,7 +94,7 @@ namespace kmx::aio::benchmark
                          "one round trip = 4 io_uring operations, one at a time, so nothing to batch");
     }
 
-    static result bench_completion_spawn(const double scale)
+    [[nodiscard]] static result bench_completion_spawn(const double scale)
     {
         const auto iterations = scaled(1'000'000u, scale);
         completion::executor exec {completion::executor_config {.ring_entries = 64u}};
@@ -123,7 +139,7 @@ namespace kmx::aio::benchmark
         }
     }
 
-    static result measure_completion_concurrent(std::string name, const std::size_t connections, const double scale)
+    [[nodiscard]] static result measure_completion_concurrent(std::string name, const std::size_t connections, const double scale)
     {
         // Many coroutines in flight at once, which is the shape a server actually has and the only one
         // in which submission batching can show: every operation prepared between two waits rides into
@@ -143,7 +159,13 @@ namespace kmx::aio::benchmark
         {
             completion::executor exec {completion::executor_config {.ring_entries = 512u}};
             for (std::size_t i {}; i != connections; ++i)
-                exec.spawn(completion_detail::echo_pair(exec, fds[i * 2u], fds[(i * 2u) + 1u], rounds, connections, completed, window));
+                exec.spawn(completion_detail::echo_pair({.exec = exec,
+                                                         .write_fd = fds[i * 2u],
+                                                         .read_fd = fds[(i * 2u) + 1u],
+                                                         .rounds = rounds,
+                                                         .connections = connections,
+                                                         .completed = completed,
+                                                         .window = window}));
 
             exec.run();
         }
@@ -160,27 +182,27 @@ namespace kmx::aio::benchmark
         return out;
     }
 
-    static result bench_completion_concurrent_1(const double scale)
+    [[nodiscard]] static result bench_completion_concurrent_1(const double scale)
     {
         return measure_completion_concurrent("completion/concurrent_echo (1 connection)", 1u, scale);
     }
 
-    static result bench_completion_concurrent_8(const double scale)
+    [[nodiscard]] static result bench_completion_concurrent_8(const double scale)
     {
         return measure_completion_concurrent("completion/concurrent_echo (8 connections)", 8u, scale);
     }
 
-    static result bench_completion_concurrent_64(const double scale)
+    [[nodiscard]] static result bench_completion_concurrent_64(const double scale)
     {
         return measure_completion_concurrent("completion/concurrent_echo (64 connections)", 64u, scale);
     }
 
-    static result bench_completion_concurrent_256(const double scale)
+    [[nodiscard]] static result bench_completion_concurrent_256(const double scale)
     {
         return measure_completion_concurrent("completion/concurrent_echo (256 connections)", 256u, scale);
     }
 
-    static result bench_completion_tcp_echo_1(const double scale)
+    [[nodiscard]] static result bench_completion_tcp_echo_1(const double scale)
     {
         using scenario = feature::catalogue::tcp_echo_scenario;
 
@@ -188,7 +210,7 @@ namespace kmx::aio::benchmark
                                                                   scaled(scenario::single_rounds, scale), scenario::payload_size);
     }
 
-    static result bench_completion_tcp_echo_many(const double scale)
+    [[nodiscard]] static result bench_completion_tcp_echo_many(const double scale)
     {
         using scenario = feature::catalogue::tcp_echo_scenario;
 
@@ -198,7 +220,7 @@ namespace kmx::aio::benchmark
                          "round trips spread over 64 connections, timed first start to last finish");
     }
 
-    static result bench_completion_tcp_throughput_small(const double scale)
+    [[nodiscard]] static result bench_completion_tcp_throughput_small(const double scale)
     {
         using scenario = feature::catalogue::tcp_throughput_scenario;
 
@@ -208,7 +230,7 @@ namespace kmx::aio::benchmark
                          "streamed one way; the sender never waits, so this is the cost of getting one block through");
     }
 
-    static result bench_completion_tcp_throughput_medium(const double scale)
+    [[nodiscard]] static result bench_completion_tcp_throughput_medium(const double scale)
     {
         using scenario = feature::catalogue::tcp_throughput_scenario;
 
@@ -218,7 +240,7 @@ namespace kmx::aio::benchmark
                          "streamed one way; the sender never waits, so this is the cost of getting one block through");
     }
 
-    static result bench_completion_tcp_throughput_large(const double scale)
+    [[nodiscard]] static result bench_completion_tcp_throughput_large(const double scale)
     {
         using scenario = feature::catalogue::tcp_throughput_scenario;
 
@@ -228,7 +250,7 @@ namespace kmx::aio::benchmark
                          "streamed one way; the sender never waits, so this is the cost of getting one block through");
     }
 
-    static result bench_completion_tcp_accept(const double scale)
+    [[nodiscard]] static result bench_completion_tcp_accept(const double scale)
     {
         using scenario = feature::catalogue::tcp_accept_scenario;
 
@@ -236,7 +258,7 @@ namespace kmx::aio::benchmark
                          "connections brought all the way up, as a rate: both ends share one loop");
     }
 
-    static result bench_completion_udp_echo(const double scale)
+    [[nodiscard]] static result bench_completion_udp_echo(const double scale)
     {
         using scenario = feature::catalogue::udp_echo_scenario;
 
@@ -244,7 +266,7 @@ namespace kmx::aio::benchmark
                                                                   scenario::payload_size);
     }
 
-    static result bench_completion_timer(const double scale)
+    [[nodiscard]] static result bench_completion_timer(const double scale)
     {
         using scenario = feature::catalogue::timer_scenario;
 
@@ -282,7 +304,7 @@ namespace kmx::aio::benchmark
         reg.add("completion/concurrent_256", bench_completion_concurrent_256);
     }
 
-} // namespace kmx::aio::benchmark
+}
 
 #else
 
@@ -292,6 +314,6 @@ namespace kmx::aio::benchmark
     {
         // The completion model is not part of this build.
     }
-} // namespace kmx::aio::benchmark
+}
 
 #endif

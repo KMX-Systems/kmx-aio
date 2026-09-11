@@ -1,20 +1,24 @@
+/// @file src/kmx/aio/modbus/integration/client_server_test.cpp
+/// @brief Readiness-model Modbus TCP client against the in-tree server on loopback: registers, coils and exceptions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
 #if defined(KMX_AIO_FEATURE_MODBUS)
-    #include <kmx/aio/modbus/client.hpp>
-    #include <kmx/aio/modbus/error.hpp>
-    #include <kmx/aio/modbus/server.hpp>
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/task.hpp>
+    #ifndef PCH
+        #include <kmx/aio/modbus/client.hpp>
+        #include <kmx/aio/modbus/error.hpp>
+        #include <kmx/aio/modbus/server.hpp>
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/task.hpp>
 
-    #include <array>
-    #include <cstdint>
-    #include <expected>
-    #include <memory>
-    #include <optional>
-    #include <system_error>
-    #include <vector>
+        #include <catch2/catch_test_macros.hpp>
+
+        #include <array>
+        #include <cstdint>
+        #include <expected>
+        #include <memory>
+        #include <optional>
+        #include <system_error>
+        #include <vector>
+    #endif
 
 namespace kmx::aio::test::modbus::integration::client_server_test
 {
@@ -23,8 +27,8 @@ namespace kmx::aio::test::modbus::integration::client_server_test
     using namespace std::literals::chrono_literals;
 
     // Constants
-    static constexpr std::uint16_t test_port = 15502u;
-    static constexpr std::uint8_t test_unit_id = 0x01u;
+    static constexpr std::uint16_t base_port = 15502u;
+    static constexpr std::uint8_t unit_id = 0x01u;
 
     // In-memory register / coil banks for the test server
     struct register_bank
@@ -70,6 +74,7 @@ namespace kmx::aio::test::modbus::integration::client_server_test
                 pdu.push_back(static_cast<std::uint8_t>(v >> 8u));
                 pdu.push_back(static_cast<std::uint8_t>(v & 0xFFu));
             }
+
             co_return pdu;
         }
 
@@ -130,10 +135,8 @@ namespace kmx::aio::test::modbus::integration::client_server_test
             pdu[0] = static_cast<std::uint8_t>(function_code::read_coils);
             pdu[1] = byte_count;
             for (std::uint16_t i = 0u; i < count; ++i)
-            {
                 if (bank.coils[address + i] != 0u)
                     pdu[2u + i / 8u] |= static_cast<std::uint8_t>(1u << (i % 8u));
-            }
             co_return pdu;
         }
 
@@ -156,7 +159,7 @@ namespace kmx::aio::test::modbus::integration::client_server_test
             // Echo back the request PDU (spec §6.5)
             co_return req.pdu;
         }
-    } // namespace detail
+    }
 
     // Server handler factories
     [[nodiscard]] static request_handler make_read_holding_handler(register_bank& bank)
@@ -180,20 +183,47 @@ namespace kmx::aio::test::modbus::integration::client_server_test
     }
 
     // Test fixture helpers
-    struct test_state
+    /// @brief What the connect exchange observed, read by the test once the executor has drained.
+    struct connection_outcome
     {
+        /// @brief Set once the connect attempt finished.
         bool completed {};
+        /// @brief Why the connect failed, if it did.
         std::optional<std::error_code> error;
+    };
+
+    /// @brief What the holding-register exchange observed, read by the test once the executor has drained.
+    struct registers_outcome
+    {
+        /// @brief Set once the exchange ran to its end.
+        bool completed {};
+        /// @brief The registers as last read: after the write when it succeeded, before it otherwise.
+        std::optional<register_values> read_result {};
+        /// @brief The error of the last operation that failed, if any did.
+        std::optional<std::error_code> op_error {};
+    };
+
+    /// @brief What the coil exchange observed, read by the test once the executor has drained.
+    struct coils_outcome
+    {
+        /// @brief Set once the exchange ran to its end.
+        bool completed {};
+        /// @brief The coils as read before the write.
+        std::optional<coil_values> initial_coils {};
+        /// @brief The coils as read after the write.
+        std::optional<coil_values> post_write_coils {};
+        /// @brief The error of the last operation that failed, if any did.
+        std::optional<std::error_code> op_error {};
     };
 
     namespace detail
     {
         /// @brief Waits for the listener, connects, records the outcome, and stops the server.
-        task<void> connect_and_disconnect(test_state& state, const std::shared_ptr<readiness::executor>& exec,
+        task<void> connect_and_disconnect(connection_outcome& state, const std::shared_ptr<readiness::executor>& exec,
                                           const std::shared_ptr<server>& srv) noexcept(false)
         {
             static_cast<void>(co_await exec->async_timeout(5'000'000u)); // 5 ms
-            client c {{.host = "127.0.0.1", .port = test_port, .unit_id = test_unit_id}, *exec};
+            client c {{.host = "127.0.0.1", .port = base_port, .unit_id = unit_id}, *exec};
             const auto r = co_await c.connect();
             state.error = r ? std::optional<std::error_code> {} : std::optional {r.error()};
             state.completed = true;
@@ -202,16 +232,16 @@ namespace kmx::aio::test::modbus::integration::client_server_test
         }
 
         /// @brief Reads the holding registers, writes new values, and reads them back.
-        task<void> exchange_holding_registers(bool& completed, std::optional<register_values>& read_result,
-                                              std::optional<std::error_code>& op_error, const std::shared_ptr<readiness::executor>& exec,
+        /// @param outcome Receives what the exchange observed.
+        task<void> exchange_holding_registers(registers_outcome& outcome, const std::shared_ptr<readiness::executor>& exec,
                                               const std::shared_ptr<server>& srv) noexcept(false)
         {
             static_cast<void>(co_await exec->async_timeout(5'000'000u));
-            client c {{.host = "127.0.0.1", .port = test_port + 1u, .unit_id = test_unit_id}, *exec};
+            client c {{.host = "127.0.0.1", .port = base_port + 1u, .unit_id = unit_id}, *exec};
 
             if (const auto r = co_await c.connect(); !r)
             {
-                op_error = r.error();
+                outcome.op_error = r.error();
                 srv->stop();
                 co_return;
             }
@@ -219,59 +249,59 @@ namespace kmx::aio::test::modbus::integration::client_server_test
             // Read initial values
             const auto read1 = co_await c.read_holding_registers(100u, 3u);
             if (!read1)
-                op_error = read1.error();
+                outcome.op_error = read1.error();
             else
-                read_result = *read1;
+                outcome.read_result = *read1;
 
             // Write new values then read back
             const std::vector<std::uint16_t> new_vals {7u, 8u, 9u};
             const auto write_r = co_await c.write_multiple_registers(100u, new_vals);
             if (!write_r)
-                op_error = write_r.error();
+                outcome.op_error = write_r.error();
             else
             {
                 const auto read2 = co_await c.read_holding_registers(100u, 3u);
                 if (!read2)
-                    op_error = read2.error();
+                    outcome.op_error = read2.error();
                 else
-                    read_result = *read2; // overwrite with post-write read
+                    outcome.read_result = *read2; // overwrite with post-write read
             }
 
-            completed = true;
+            outcome.completed = true;
             static_cast<void>(co_await c.disconnect());
             srv->stop();
         }
 
         /// @brief Reads the coils, flips one off, and reads them back.
-        task<void> exchange_coils(bool& completed, std::optional<coil_values>& initial_coils, std::optional<coil_values>& post_write_coils,
-                                  std::optional<std::error_code>& op_error, const std::shared_ptr<readiness::executor>& exec,
+        /// @param outcome Receives what the exchange observed.
+        task<void> exchange_coils(coils_outcome& outcome, const std::shared_ptr<readiness::executor>& exec,
                                   const std::shared_ptr<server>& srv) noexcept(false)
         {
             static_cast<void>(co_await exec->async_timeout(5'000'000u));
-            client c {{.host = "127.0.0.1", .port = test_port + 2u, .unit_id = test_unit_id}, *exec};
+            client c {{.host = "127.0.0.1", .port = base_port + 2u, .unit_id = unit_id}, *exec};
 
             if (const auto r = co_await c.connect(); !r)
             {
-                op_error = r.error();
+                outcome.op_error = r.error();
                 srv->stop();
                 co_return;
             }
 
             if (const auto r = co_await c.read_coils(0u, 3u); r)
-                initial_coils = *r;
+                outcome.initial_coils = *r;
             else
-                op_error = r.error();
+                outcome.op_error = r.error();
 
             // Flip coil 0 OFF
             if (const auto r = co_await c.write_single_coil(0u, false); !r)
-                op_error = r.error();
+                outcome.op_error = r.error();
 
             if (const auto r = co_await c.read_coils(0u, 3u); r)
-                post_write_coils = *r;
+                outcome.post_write_coils = *r;
             else
-                op_error = r.error();
+                outcome.op_error = r.error();
 
-            completed = true;
+            outcome.completed = true;
             static_cast<void>(co_await c.disconnect());
             srv->stop();
         }
@@ -282,7 +312,7 @@ namespace kmx::aio::test::modbus::integration::client_server_test
                                          const std::shared_ptr<server>& srv) noexcept(false)
         {
             static_cast<void>(co_await exec->async_timeout(5'000'000u));
-            client c {{.host = "127.0.0.1", .port = test_port + 3u, .unit_id = test_unit_id}, *exec};
+            client c {{.host = "127.0.0.1", .port = base_port + 3u, .unit_id = unit_id}, *exec};
 
             if (const auto r = co_await c.connect(); !r)
             {
@@ -299,7 +329,7 @@ namespace kmx::aio::test::modbus::integration::client_server_test
             static_cast<void>(co_await c.disconnect());
             srv->stop();
         }
-    } // namespace detail
+    }
 
     // Integration Tests
     TEST_CASE("modbus integration: client connects and disconnects", "[modbus][integration][slow]")
@@ -309,8 +339,8 @@ namespace kmx::aio::test::modbus::integration::client_server_test
         srv->set_handler(function_code::read_holding_registers, make_read_holding_handler(bank));
 
         auto exec = std::make_shared<readiness::executor>();
-        test_state state {};
-        const server_config config {.bind_address = "127.0.0.1", .port = test_port, .unit_id = test_unit_id};
+        connection_outcome state {};
+        const server_config config {.bind_address = "127.0.0.1", .port = base_port, .unit_id = unit_id};
 
         auto serve = [exec, srv, config]() -> task<void> { static_cast<void>(co_await srv->serve(*exec, config)); };
         exec->spawn(serve());
@@ -336,25 +366,23 @@ namespace kmx::aio::test::modbus::integration::client_server_test
 
         auto exec = std::make_shared<readiness::executor>();
 
-        bool completed {};
-        std::optional<register_values> read_result;
-        std::optional<std::error_code> op_error;
+        registers_outcome outcome {};
 
         auto serve = [exec, srv]() -> task<void>
-        { static_cast<void>(co_await srv->serve(*exec, {.bind_address = "127.0.0.1", .port = test_port + 1u, .unit_id = test_unit_id})); };
+        { static_cast<void>(co_await srv->serve(*exec, {.bind_address = "127.0.0.1", .port = base_port + 1u, .unit_id = unit_id})); };
         exec->spawn(serve());
 
-        exec->spawn(detail::exchange_holding_registers(completed, read_result, op_error, exec, srv));
+        exec->spawn(detail::exchange_holding_registers(outcome, exec, srv));
 
         exec->run();
 
-        REQUIRE(completed);
-        REQUIRE(!op_error.has_value());
-        REQUIRE(read_result.has_value());
-        REQUIRE(read_result->size() == 3u);
-        CHECK(read_result->at(0) == 7u);
-        CHECK(read_result->at(1) == 8u);
-        CHECK(read_result->at(2) == 9u);
+        REQUIRE(outcome.completed);
+        REQUIRE(!outcome.op_error.has_value());
+        REQUIRE(outcome.read_result.has_value());
+        REQUIRE(outcome.read_result->size() == 3u);
+        CHECK(outcome.read_result->at(0) == 7u);
+        CHECK(outcome.read_result->at(1) == 8u);
+        CHECK(outcome.read_result->at(2) == 9u);
     }
 
     TEST_CASE("modbus integration: read and write coils", "[modbus][integration][slow]")
@@ -370,31 +398,28 @@ namespace kmx::aio::test::modbus::integration::client_server_test
 
         auto exec = std::make_shared<readiness::executor>();
 
-        bool completed {};
-        std::optional<coil_values> initial_coils;
-        std::optional<coil_values> post_write_coils;
-        std::optional<std::error_code> op_error;
+        coils_outcome outcome {};
 
         auto serve = [exec, srv]() -> task<void>
-        { static_cast<void>(co_await srv->serve(*exec, {.bind_address = "127.0.0.1", .port = test_port + 2u, .unit_id = test_unit_id})); };
+        { static_cast<void>(co_await srv->serve(*exec, {.bind_address = "127.0.0.1", .port = base_port + 2u, .unit_id = unit_id})); };
         exec->spawn(serve());
 
-        exec->spawn(detail::exchange_coils(completed, initial_coils, post_write_coils, op_error, exec, srv));
+        exec->spawn(detail::exchange_coils(outcome, exec, srv));
 
         exec->run();
 
-        REQUIRE(completed);
-        REQUIRE(!op_error.has_value());
-        REQUIRE(initial_coils.has_value());
-        REQUIRE(initial_coils->size() == 3u);
-        CHECK(initial_coils->at(0) == 1u);
-        CHECK(initial_coils->at(1) == 0u);
-        CHECK(initial_coils->at(2) == 1u);
+        REQUIRE(outcome.completed);
+        REQUIRE(!outcome.op_error.has_value());
+        REQUIRE(outcome.initial_coils.has_value());
+        REQUIRE(outcome.initial_coils->size() == 3u);
+        CHECK(outcome.initial_coils->at(0) == 1u);
+        CHECK(outcome.initial_coils->at(1) == 0u);
+        CHECK(outcome.initial_coils->at(2) == 1u);
 
-        REQUIRE(post_write_coils.has_value());
-        CHECK(post_write_coils->at(0) == 0u); // flipped OFF
-        CHECK(post_write_coils->at(1) == 0u);
-        CHECK(post_write_coils->at(2) == 1u);
+        REQUIRE(outcome.post_write_coils.has_value());
+        CHECK(outcome.post_write_coils->at(0) == 0u); // flipped OFF
+        CHECK(outcome.post_write_coils->at(1) == 0u);
+        CHECK(outcome.post_write_coils->at(2) == 1u);
     }
 
     TEST_CASE("modbus integration: unregistered function code returns exception", "[modbus][integration][slow]")
@@ -408,7 +433,7 @@ namespace kmx::aio::test::modbus::integration::client_server_test
         std::optional<std::error_code> result_error;
 
         auto serve = [exec, srv]() -> task<void>
-        { static_cast<void>(co_await srv->serve(*exec, {.bind_address = "127.0.0.1", .port = test_port + 3u, .unit_id = test_unit_id})); };
+        { static_cast<void>(co_await srv->serve(*exec, {.bind_address = "127.0.0.1", .port = base_port + 3u, .unit_id = unit_id})); };
         exec->spawn(serve());
 
         exec->spawn(detail::exchange_unregistered(completed, result_error, exec, srv));
@@ -420,5 +445,5 @@ namespace kmx::aio::test::modbus::integration::client_server_test
         CHECK(*result_error == make_error_code(error::exception_response));
     }
 
-} // namespace kmx::aio::test::modbus::integration::client_server_test
+}
 #endif // KMX_AIO_FEATURE_MODBUS

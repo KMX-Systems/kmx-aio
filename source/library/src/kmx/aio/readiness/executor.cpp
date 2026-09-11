@@ -1,28 +1,38 @@
-/// @file aio/readiness/executor.cpp
+/// @file src/kmx/aio/readiness/executor.cpp
+/// @brief Readiness-model executor: epoll event loop, fd waiters with deadlines, cancellation and OpenOnload selection.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/detail/syscalls.hpp>
 #include <kmx/aio/readiness/executor.hpp>
-#include <kmx/aio/exception.hpp>
+#ifndef PCH
+    #include <kmx/aio/detail/scope_exit.hpp>
+    #include <kmx/aio/detail/syscalls.hpp>
+    #include <kmx/aio/error_code.hpp>
+    #include <kmx/aio/readiness/descriptor/timer.hpp>
+    #include <kmx/aio/readiness/openonload/extensions.hpp>
+    #include <kmx/aio/system_error.hpp>
+    #include <kmx/logger.hpp>
 
-#include <kmx/aio/error_code.hpp>
-#include <kmx/aio/readiness/descriptor/timer.hpp>
-#include <kmx/aio/readiness/openonload/extensions.hpp>
-#include <kmx/logger.hpp>
-
-#include <array>
-#include <chrono>
-#include <cerrno>
-#include <cstdint>
-#include <cstdlib>
-#include <cstring>
-#include <pthread.h>
-#include <sched.h>
-#include <span>
-#include <sys/eventfd.h>
-#include <sys/socket.h>
-#include <thread>
-#include <unistd.h>
-#include <vector>
+    #include <algorithm>
+    #include <array>
+    #include <atomic>
+    #include <cerrno>
+    #include <chrono>
+    #include <cstdint>
+    #include <cstdlib>
+    #include <cstring>
+    #include <source_location>
+    #include <span>
+    #include <string_view>
+    #include <system_error>
+    #include <thread>
+    #include <utility>
+    #include <vector>
+    #include <pthread.h>
+    #include <sched.h>
+    #include <sys/eventfd.h>
+    #include <sys/socket.h>
+    #include <time.h>
+    #include <unistd.h>
+#endif
 
 namespace kmx::aio::readiness
 {
@@ -58,23 +68,14 @@ namespace kmx::aio::readiness
 
     static constexpr auto mem_order = std::memory_order_relaxed;
 
+    /// @brief The OpenOnload stack the executor places its sockets in when that backend is active.
+    static constexpr const char* const onload_stack_name {"kmxaio_fast_stack"};
+
     /// @brief The executor whose event loop is running on this thread, if any.
     /// @details Set by process_events() on entry and cleared on exit, so a resumption can tell "I am
     ///          already on the core this executor owns" from "I am somewhere else" without reading
     ///          io_thread_, which shutdown moves out from under it.
     thread_local const executor* t_current_io_executor {};
-
-    void statistics::reset() noexcept
-    {
-        total_registrations.store(0u, mem_order);
-        total_unregistrations.store(0u, mem_order);
-        total_epoll_waits.store(0u, mem_order);
-        total_events_received.store(0u, mem_order);
-        timeout_count.store(0u, mem_order);
-        error_count.store(0u, mem_order);
-        total_tasks_spawned.store(0u, mem_order);
-        total_tasks_completed.store(0u, mem_order);
-    }
 
     executor::executor(const executor_config& config) noexcept(false):
         config_(config),
@@ -100,7 +101,7 @@ namespace kmx::aio::readiness
             case backend_mode::openonload_required:
                 if (!openonload_available)
                     throw system_error(to_std_error_code(error_code::openonload_not_available),
-                                            "OpenOnload backend required but runtime was not detected");
+                                       "OpenOnload backend required but runtime was not detected");
 
                 active_backend_ = active_backend::openonload;
                 break;
@@ -109,7 +110,11 @@ namespace kmx::aio::readiness
         if (active_backend_ == active_backend::openonload)
         {
             logger::log(logger::level::info, std::source_location::current(), "Readiness executor backend: OpenOnload");
-            openonload::initialize_runtime_stack("kmxaio_fast_stack");
+            // Not fatal: without the named stack the sockets are still accelerated, on Onload's default stack.
+            if (const auto named = openonload::initialize_runtime_stack(onload_stack_name); !named)
+                logger::log(logger::level::warn, std::source_location::current(),
+                            "OpenOnload stack name '{}' was not applied ({}); sockets use the default Onload stack", onload_stack_name,
+                            named.error().message());
         }
         else
             logger::log(logger::level::info, std::source_location::current(), "Readiness executor backend: epoll");
@@ -257,27 +262,25 @@ namespace kmx::aio::readiness
         }
     }
 
-    bool executor::subscribe(const fd_t fd, const event_type type, coroutine_handle_t handle,
-                             bool* const cancelled, bool* const timed_out,
-                             const std::uint32_t deadline_ms) noexcept(false)
+    bool executor::subscribe(const event_key key, const waiter& entry) noexcept(false)
     {
         const std::lock_guard lock(subscribers_mutex_);
 
         // A cancel that arrived while the caller was deciding to wait must not be lost: refuse the
         // subscription here, under the same lock cancel_waiters() holds, rather than parking on a
         // descriptor that will never be woken.
-        if (cancelled_fds_.contains(fd))
+        if (cancelled_fds_.contains(key.fd))
         {
             // LCOV_EXCL_BR_LINE: subscribe() is called only from wait_io()'s awaiter, which always
             // passes the address of its own member.
-            if (cancelled != nullptr) // LCOV_EXCL_BR_LINE
-                *cancelled = true;
+            if (entry.cancelled != nullptr) // LCOV_EXCL_BR_LINE
+                *entry.cancelled = true;
 
             return false;
         }
 
         // operator[] might throw std::bad_alloc
-        subscribers_[{fd, type}].push_back(waiter {handle, cancelled, timed_out, deadline_ms});
+        subscribers_[key].push_back(entry);
         return true;
     }
 
@@ -358,18 +361,13 @@ namespace kmx::aio::readiness
         if (const auto reg = register_fd(timer_fd.get()); !reg)
             co_return std::unexpected(reg.error());
 
-        const struct unregister_guard
-        {
-            executor& exec;
-            fd_t fd;
-            ~unregister_guard() noexcept
-            {
-                // LCOV_EXCL_BR_LINE: the guard makes the type safe to construct with an invalid
-                // descriptor; async_timeout only builds one around a timerfd it has already checked.
-                if (fd >= 0) // LCOV_EXCL_BR_LINE
-                    exec.unregister_fd(fd);
-            }
-        } guard {*this, timer_fd.get()};
+        // LCOV_EXCL_BR_LINE: the check keeps the guard safe around an invalid descriptor; async_timeout only
+        // builds one around a timerfd it has already checked.
+        const aio::detail::scope_exit guard {[this, fd = timer_fd.get()]() noexcept
+                                             {
+                                                 if (fd >= 0) // LCOV_EXCL_BR_LINE
+                                                     unregister_fd(fd);
+                                             }};
 
         ::itimerspec spec {};
         spec.it_value.tv_sec = static_cast<decltype(::timespec::tv_sec)>(duration_ns / 1'000'000'000ULL);
@@ -601,12 +599,9 @@ namespace kmx::aio::readiness
         std::vector<coroutine_handle_t> handles;
         {
             const std::lock_guard lock(subscribers_mutex_);
-            for (auto& [key, waiters] : subscribers_)
-            {
+            for (auto& [key, waiters]: subscribers_)
                 for (auto it = waiters.begin(); it != waiters.end();)
-                {
-                    if ((it->deadline_ms != 0u) &&
-                        static_cast<std::int32_t>(now_ms - it->deadline_ms) >= 0)
+                    if ((it->deadline_ms != 0u) && static_cast<std::int32_t>(now_ms - it->deadline_ms) >= 0)
                     {
                         if (it->timed_out != nullptr)
                             *it->timed_out = true;
@@ -615,8 +610,6 @@ namespace kmx::aio::readiness
                     }
                     else
                         ++it;
-                }
-            }
         }
         for (const auto handle: handles)
             resume_waiter(handle);
@@ -659,10 +652,7 @@ namespace kmx::aio::readiness
         // Marks this thread as the executor's own for as long as the loop runs, so resume_waiter() can
         // continue a coroutine here instead of handing it away.
         t_current_io_executor = this;
-        const struct io_thread_marker
-        {
-            ~io_thread_marker() noexcept { t_current_io_executor = nullptr; }
-        } marker {};
+        const aio::detail::scope_exit marker {[]() noexcept { t_current_io_executor = nullptr; }};
 
         // Allocated once and waited on over and over. The vector overload of wait_events() resizes to
         // the number of events it received, which means the next wait grows it back - and a vector
@@ -671,8 +661,7 @@ namespace kmx::aio::readiness
         for (std::vector<epoll_event> events(config_.max_events);;)
         {
             const auto now = std::chrono::steady_clock::now().time_since_epoch();
-            const auto now_ms = static_cast<std::uint32_t>(
-                std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
+            const auto now_ms = static_cast<std::uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
             expire_waiters(now_ms);
             std::uint32_t wait_timeout_ms = config_.timeout_ms;
             {
@@ -682,8 +671,8 @@ namespace kmx::aio::readiness
                         if (pending.deadline_ms != 0u)
                         {
                             const auto remaining = static_cast<std::int32_t>(pending.deadline_ms - now_ms);
-                            wait_timeout_ms = std::min<std::uint32_t>(
-                                wait_timeout_ms, remaining > 0 ? static_cast<std::uint32_t>(remaining) : 0u);
+                            wait_timeout_ms =
+                                std::min<std::uint32_t>(wait_timeout_ms, remaining > 0 ? static_cast<std::uint32_t>(remaining) : 0u);
                         }
             }
 
@@ -747,4 +736,4 @@ namespace kmx::aio::readiness
             logger::log(logger::level::info, std::source_location::current(), "Readiness executor pinned to CPU core {}", config_.core_id);
     }
 
-} // namespace kmx::aio::readiness
+}

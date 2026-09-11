@@ -1,5 +1,6 @@
-/// @file aio/completion/knx/tcp_transport.hpp
+/// @file api/kmx/aio/completion/knx/tcp_transport.hpp
 /// @brief Completion TCP adapter for the KNX transport contract: one KNXnet/IP connection over TCP.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// The io_uring twin of the readiness TCP transport, and the same contract: frames are recovered whole from the
 /// stream, sends never interleave, a send's address is ignored, and a receive reports the connection's peer. The
@@ -8,21 +9,21 @@
 /// into step.
 /// @note @ref kmx::aio::completion::knx::tcp_transport::open waits as long as the kernel's own connect does; a
 ///       deadline on the connect is the readiness transport's alone for now.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_COMPLETION) && defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/async_mutex.hpp>
+        #include <kmx/aio/completion/executor.hpp>
+        #include <kmx/aio/file_descriptor.hpp>
+        #include <kmx/aio/knx/datagram_transport.hpp>
+        #include <kmx/aio/knx/detail/frame_reassembler.hpp>
+        #include <kmx/aio/knx/transport.hpp>
+
         #include <cstdint>
         #include <optional>
         #include <sys/socket.h>
     #endif
-
-    #include <kmx/aio/async_mutex.hpp>
-    #include <kmx/aio/completion/executor.hpp>
-    #include <kmx/aio/file_descriptor.hpp>
-    #include <kmx/aio/knx/detail/frame_reassembler.hpp>
-    #include <kmx/aio/knx/transport.hpp>
 
 namespace kmx::aio::completion::knx
 {

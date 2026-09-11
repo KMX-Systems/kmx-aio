@@ -56,7 +56,7 @@ flowchart TB
 ## 1. Core Primitives & Concurrency Subsystems
 
 ### 1.1 Coroutine Frame Routing & Lifetime
-- **Files**: [source/library/api/kmx/aio/task.hpp](source/library/api/kmx/aio/task.hpp#L150-L270), [source/library/src/kmx/aio/task.cpp](source/library/src/kmx/aio/task.cpp#L40-L90)
+- **Files**: [source/library/api/kmx/aio/promise_base.hpp](source/library/api/kmx/aio/promise_base.hpp), [source/library/api/kmx/aio/task.hpp](source/library/api/kmx/aio/task.hpp), [source/library/src/kmx/aio/promise_base.cpp](source/library/src/kmx/aio/promise_base.cpp)
 - **Strengths**:
   - `promise_base::operator new` and `operator delete` route frame allocations to a thread-local slab allocator.
   - Aligned frame headers (`frame_header_size`) preserve the originating slab pointer across thread handoffs, ensuring remote deallocations return to their owner slab via `slab::deallocate_remote`.
@@ -145,7 +145,7 @@ flowchart TB
 
 ## 4. Syscall Seam & Fault Injection Architecture
 
-- **Files**: [source/library/inc/kmx/aio/detail/syscalls.hpp](source/library/inc/kmx/aio/detail/syscalls.hpp#L1-L70), [source/library/src/kmx/aio/detail/syscalls.cpp](source/library/src/kmx/aio/detail/syscalls.cpp#L1-L80)
+- **Files**: [source/library/inc/kmx/aio/detail/basic_syscalls.hpp](source/library/inc/kmx/aio/detail/basic_syscalls.hpp), [source/library/inc/kmx/aio/detail/fault_registry.hpp](source/library/inc/kmx/aio/detail/fault_registry.hpp), [source/library/src/kmx/aio/detail/native_syscalls.cpp](source/library/src/kmx/aio/detail/native_syscalls.cpp)
 - **Architecture**:
   - Uses a template specialization `basic_syscalls<injects_faults>` where `basic_syscalls<false>` expands directly to inline native system calls with zero runtime cost.
   - `basic_syscalls<true>` enables deterministic failure simulation during test runs (e.g., simulating `EINTR` on `epoll_wait`, `ENOMEM` on `io_uring_queue_init`, or core pinning rejections).

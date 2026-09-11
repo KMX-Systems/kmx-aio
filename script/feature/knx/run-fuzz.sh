@@ -42,36 +42,43 @@ fi
 
 # What every target links: the error category and the crypto adapter.
 common_sources=(
-    "$library/src/kmx/aio/net_parse.cpp"
+    "$library/src/kmx/aio/ipv4.cpp"
+    "$library/src/kmx/aio/ipv6.cpp"
+    "$library/src/kmx/aio/mac.cpp"
+    "$library/src/kmx/aio/knx/detail/category.cpp"
     "$library/src/kmx/aio/knx/error.cpp"
-    "$library/src/kmx/aio/knx/secure/ccm.cpp"
-    "$library/src/kmx/aio/knx/secure/crypto.cpp"
+    "$library/src/kmx/aio/knx/secure/detail/ccm.cpp"
+    "$library/src/kmx/aio/knx/secure/detail/crypto.cpp"
+    "$library/src/kmx/aio/knx/secure/detail/system_entropy_source.cpp"
+    "$library/src/kmx/aio/knx/secure/entropy.cpp"
     "$library/src/kmx/aio/knx/secure/key.cpp"
+    "$library/src/kmx/aio/knx/secure/secret_string.cpp"
 )
 
 # The library sources one target covers, beyond the common ones.
 target_sources() {
     local knx="$library/src/kmx/aio/knx"
+    # The keyring loader: the typed document, the signed format and the XML reader under both.
+    local keyring="$knx/keyring.cpp $knx/keyring/document.cpp $knx/secure/detail/keyring_format.cpp"
+    keyring+=" $knx/secure/detail/xml_parser.cpp $knx/secure/detail/xml_reader.cpp"
     case "$1" in
         xml_reader | keyring)
-            echo "$knx/keyring.cpp $knx/secure/keyring_format.cpp $knx/secure/xml_reader.cpp"
+            echo "$keyring"
             ;;
         datagram)
-            # The routing codec shares its translation unit with the routing client, which brings in the core coroutine,
-            # allocator and socket support, and the Data Secure context with the keyring behind it.
-            local core="$library/src/kmx/aio"
-            echo "$core/task.cpp $core/async_mutex.cpp $core/allocator/slab.cpp $core/allocator/counter.cpp" \
-                "$core/allocator/statistics.cpp $core/allocator/detail/thread_state.cpp $core/file_descriptor.cpp" \
-                "$core/error_code.cpp $core/exception.cpp $core/basic_types.cpp $core/detail/syscalls.cpp" \
-                "$knx/address.cpp $knx/datagram.cpp $knx/frame.cpp $knx/connection.cpp $knx/discovery.cpp $knx/dib.cpp" \
-                "$knx/routing.cpp $knx/data_secure.cpp $knx/keyring.cpp $knx/secure/keyring_format.cpp $knx/secure/xml_reader.cpp" \
-                "$knx/secure/routing_timer_state.cpp $knx/secure/session.cpp $knx/secure/wrapper.cpp $knx/secure/timer_notify.cpp"
+            # The datagram codec with the frame codecs it dispatches to - connection, discovery, DIB and routing - plus the
+            # secure session, wrapper and timer notify codecs the target drives. The routing and discovery clients live in
+            # translation units of their own, so none of the coroutine, socket or Data Secure support comes along.
+            echo "$knx/individual_address.cpp $knx/group_address.cpp $knx/datagram.cpp $knx/frame.cpp $knx/connection.cpp" \
+                "$knx/discovery.cpp $knx/dib.cpp $knx/dib/supported_service_families.cpp $knx/routing.cpp" \
+                "$knx/secure/routing_timer_state.cpp $knx/secure/session.cpp $knx/secure/detail/session_crypto.cpp" \
+                "$knx/secure/wrapper.cpp $knx/secure/timer_notify.cpp $knx/secure/detail/wrapper_crypto.cpp"
             ;;
         reassembler)
-            echo "$knx/frame.cpp $knx/frame_reassembler.cpp"
+            echo "$knx/frame.cpp $knx/detail/frame_reassembler.cpp"
             ;;
         data_secure)
-            echo "$knx/address.cpp $knx/data_secure.cpp $knx/keyring.cpp $knx/secure/keyring_format.cpp $knx/secure/xml_reader.cpp"
+            echo "$knx/individual_address.cpp $knx/group_address.cpp $knx/data_secure.cpp $knx/data_secure/context.cpp $keyring"
             ;;
     esac
 }

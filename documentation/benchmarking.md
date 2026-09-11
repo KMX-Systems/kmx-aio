@@ -575,9 +575,9 @@ A scenario measured on both models is written once and registered twice.
    `inc/kmx/aio/benchmark/feature/scenarios.hpp`, using `Backend::make()`, `Backend::adopt()`,
    `Backend::read_exact()` and `Backend::write_exact()` rather than either executor's own API. Wrap
    the run in a `watchdog` so a hang cannot stall the suite.
-2. Add a struct to `feature::catalogue` holding the scenario's key, its one-line description, and its
-   iteration counts. Both sides read their workload from there, so neither side owns it and the two
-   cannot disagree about how much work the row represents.
+2. Add a struct to `feature::catalogue` in `inc/kmx/aio/benchmark/feature/catalogue.hpp` holding the
+   scenario's key, its one-line description, and its iteration counts. Both sides read their workload
+   from there, so neither side owns it and the two cannot disagree about how much work the row represents.
 3. Register its description in `register_paired_cases` in `feature/paired_cases.cpp`, which is
    compiled unconditionally and fixes the order the comparison rows come out in.
 4. Register each side from the file gated on its own model - `readiness_cases.cpp` and

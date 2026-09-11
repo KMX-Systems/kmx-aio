@@ -1,10 +1,15 @@
-#include <exception>
-#include <source_location>
-#include <string>
+/// @file src/main.cpp
+/// @brief Entry point of the readiness-model V4L2 capture sample: parses device, size and frame limit, runs the manager.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#ifndef PCH
+    #include <kmx/aio/readiness/v4l2/capture.hpp>
+    #include <kmx/aio/sample/v4l2/capture/manager.hpp>
+    #include <kmx/logger.hpp>
 
-#include <kmx/aio/readiness/v4l2/capture.hpp>
-#include <kmx/aio/sample/v4l2/capture/manager.hpp>
-#include <kmx/logger.hpp>
+    #include <exception>
+    #include <source_location>
+    #include <string>
+#endif
 
 int main(const int argc, const char* const argv[]) noexcept
 {
@@ -20,6 +25,7 @@ int main(const int argc, const char* const argv[]) noexcept
             cfg.size.width = static_cast<std::uint32_t>(std::stoul(argv[2]));
             cfg.size.height = static_cast<std::uint32_t>(std::stoul(argv[3]));
         }
+
         if (argc > 4)
             cfg.max_frames = std::stoull(argv[4]);
 

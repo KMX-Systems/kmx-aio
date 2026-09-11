@@ -1,6 +1,14 @@
+/// @file inc/kmx/aio/modbus/detail/server_ops.hpp
+/// @brief CRTP mixin with the Modbus TCP request-serving logic shared by the plain and TLS servers.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <kmx/aio/modbus/detail/session.hpp>
+    #include <kmx/aio/modbus/frame.hpp>
+    #include <kmx/aio/modbus/server.hpp>
+    #include <kmx/aio/modbus/types.hpp>
+    #include <kmx/aio/task.hpp>
+
     #include <algorithm>
     #include <array>
     #include <cstdint>
@@ -10,12 +18,6 @@
     #include <utility>
     #include <vector>
 #endif
-
-#include <kmx/aio/modbus/detail/session.hpp>
-#include <kmx/aio/modbus/frame.hpp>
-#include <kmx/aio/modbus/server.hpp>
-#include <kmx/aio/modbus/types.hpp>
-#include <kmx/aio/task.hpp>
 
 namespace kmx::aio::modbus::detail
 {
@@ -140,4 +142,4 @@ namespace kmx::aio::modbus::detail
         }
     };
 
-} // namespace kmx::aio::modbus::detail
+}

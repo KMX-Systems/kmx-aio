@@ -1,19 +1,21 @@
-/// @file aio/integration/readiness_core_pinning_test.cpp
+/// @file src/kmx/aio/integration/readiness_core_pinning_test.cpp
 /// @brief Integration test for readiness executor core pinning parity.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#ifndef PCH
+    #include <kmx/aio/readiness/executor.hpp>
+    #include <kmx/aio/test/system_probe.hpp>
 
-#include <catch2/catch_test_macros.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <kmx/aio/readiness/executor.hpp>
-#include <kmx/aio/test/system_probe.hpp>
-
-#include <atomic>
-#include <chrono>
-#include <expected>
-#include <memory>
-#include <pthread.h>
-#include <sched.h>
-#include <system_error>
-#include <thread>
+    #include <atomic>
+    #include <chrono>
+    #include <expected>
+    #include <memory>
+    #include <system_error>
+    #include <thread>
+    #include <pthread.h>
+    #include <sched.h>
+#endif
 
 namespace kmx::aio::test::integration::readiness_core_pinning_test
 {
@@ -97,4 +99,4 @@ namespace kmx::aio::test::integration::readiness_core_pinning_test
         if (stopper.joinable())
             stopper.join();
     }
-} // namespace kmx::aio::test::integration::readiness_core_pinning_test
+}

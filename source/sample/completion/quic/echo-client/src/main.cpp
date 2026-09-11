@@ -1,9 +1,13 @@
-#include <kmx/aio/sample/quic/echo_client/manager.hpp>
+/// @file src/main.cpp
+/// @brief Entry point of the completion-model QUIC echo client sample: runs async_main() on an executor.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/sample/quic/echo_client/manager.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-
-#include <exception>
-#include <iostream>
+    #include <exception>
+    #include <iostream>
+#endif
 
 using namespace kmx::aio;
 using namespace kmx::aio::completion;

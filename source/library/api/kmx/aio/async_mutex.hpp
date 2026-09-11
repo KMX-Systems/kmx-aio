@@ -1,4 +1,4 @@
-/// @file aio/async_mutex.hpp
+/// @file api/kmx/aio/async_mutex.hpp
 /// @brief A mutex a coroutine can hold across a suspension.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 ///
@@ -176,4 +176,4 @@ namespace kmx::aio
         std::deque<coroutine_handle_t> waiters_;
     };
 
-} // namespace kmx::aio
+}

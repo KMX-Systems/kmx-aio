@@ -1,16 +1,20 @@
+/// @file src/kmx/aio/someip/client_service_test.cpp
+/// @brief Unit tests for the SOME/IP client: start and stop, and method calls with and without the service available.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/someip/client.hpp>
+    #include <kmx/aio/someip/error.hpp>
+    #include <kmx/aio/test/executor_runner.hpp>
+    #include <kmx/aio/test/outcome.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/someip/client.hpp>
-#include <kmx/aio/someip/error.hpp>
-#include <kmx/aio/test/executor_runner.hpp>
-#include <kmx/aio/test/outcome.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <memory>
-#include <optional>
-#include <system_error>
-#include <vector>
+    #include <memory>
+    #include <optional>
+    #include <system_error>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::someip::client_service_test
 {
@@ -18,7 +22,7 @@ namespace kmx::aio::test::someip::client_service_test
 
     namespace detail
     {
-        [[nodiscard]] client_config make_test_config()
+        [[nodiscard]] client_config make_config()
         {
             return client_config {
                 .application_name = "kmx_someip_test_client",
@@ -32,7 +36,7 @@ namespace kmx::aio::test::someip::client_service_test
 
     TEST_CASE("someip client start and stop succeed", "[someip][client][service]")
     {
-        client c {detail::make_test_config()};
+        client c {detail::make_config()};
 
         {
             completion::executor exec;
@@ -56,7 +60,7 @@ namespace kmx::aio::test::someip::client_service_test
 
     TEST_CASE("someip client call fails when service unavailable", "[someip][client][service]")
     {
-        client c {detail::make_test_config()};
+        client c {detail::make_config()};
 
         {
             completion::executor exec;
@@ -76,7 +80,7 @@ namespace kmx::aio::test::someip::client_service_test
 
     TEST_CASE("someip client call returns payload when service requested", "[someip][client][service]")
     {
-        client c {detail::make_test_config()};
+        client c {detail::make_config()};
 
         {
             completion::executor exec;
@@ -106,4 +110,4 @@ namespace kmx::aio::test::someip::client_service_test
             CHECK(stats.dropped_events == 0u);
         }
     }
-} // namespace kmx::aio::test::someip::client_service_test
+}

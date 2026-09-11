@@ -1,5 +1,6 @@
-/// @file aio/benchmark/feature/http_cases.cpp
+/// @file src/kmx/aio/benchmark/feature/http_cases.cpp
 /// @brief HTTP/2 and HTTP/3 codec benchmarks.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details These cases are deliberately *not* paired. Both codecs are backend-neutral - they take no
 ///          executor and touch no descriptor - so there is nothing here for the two execution models
 ///          to differ about, and a row claiming to compare them would be inventing a difference.
@@ -8,26 +9,26 @@
 ///          measured end to end is codec work plus I/O, and only the codec figure says which of those
 ///          the total is mostly made of. Where the codec dominates, the choice of executor is not the
 ///          thing to tune, and that is worth being able to see.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/benchmark/cases.hpp>
-
+#include <kmx/aio/benchmark/feature/http_cases.hpp>
 #if defined(KMX_AIO_FEATURE_HTTP2) || defined(KMX_AIO_FEATURE_HTTP3)
+    #ifndef PCH
+        #include <array>
+        #include <cstdint>
+        #include <string_view>
+        #include <vector>
 
-    #include <array>
-    #include <cstdint>
-    #include <string_view>
-    #include <vector>
+        #if defined(KMX_AIO_FEATURE_HTTP2)
+            #include <kmx/aio/http2/frame_builder.hpp>
+            #include <kmx/aio/http2/hpack.hpp>
+            #include <kmx/aio/http2/hpack_encoder.hpp>
+        #endif
 
-    #if defined(KMX_AIO_FEATURE_HTTP2)
-        #include <kmx/aio/http2/codec.hpp>
-        #include <kmx/aio/http2/hpack.hpp>
+        #if defined(KMX_AIO_FEATURE_HTTP3)
+            #include <kmx/aio/http3/qpack/literal_codec.hpp>
+        #endif
     #endif
 
-    #if defined(KMX_AIO_FEATURE_HTTP3)
-        #include <kmx/aio/http3/qpack.hpp>
-    #endif
-
-namespace kmx::aio::benchmark
+namespace kmx::aio::benchmark::feature
 {
     namespace http_detail
     {
@@ -49,11 +50,11 @@ namespace kmx::aio::benchmark
                 {"cache-control", "no-cache"},
             };
         }
-    } // namespace http_detail
+    }
 
     #if defined(KMX_AIO_FEATURE_HTTP2)
 
-    static result bench_http2_hpack_encode(const double scale)
+    [[nodiscard]] static result bench_http2_hpack_encode(const double scale)
     {
         const auto iterations = scaled(500'000u, scale);
         const auto headers = http_detail::request_headers<http2::header_list>();
@@ -69,7 +70,7 @@ namespace kmx::aio::benchmark
         return out;
     }
 
-    static result bench_http2_headers_frame(const double scale)
+    [[nodiscard]] static result bench_http2_headers_frame(const double scale)
     {
         const auto iterations = scaled(500'000u, scale);
         const auto headers = http_detail::request_headers<http2::header_list>();
@@ -89,7 +90,7 @@ namespace kmx::aio::benchmark
 
     #if defined(KMX_AIO_FEATURE_HTTP3)
 
-    static result bench_http3_qpack_encode(const double scale)
+    [[nodiscard]] static result bench_http3_qpack_encode(const double scale)
     {
         // An order of magnitude fewer iterations than the HPACK cases: this encoder returns a fresh
         // vector per call, so a run of the same length would mostly be measuring the allocator.
@@ -106,7 +107,7 @@ namespace kmx::aio::benchmark
         return out;
     }
 
-    static result bench_http3_qpack_roundtrip(const double scale)
+    [[nodiscard]] static result bench_http3_qpack_roundtrip(const double scale)
     {
         const auto iterations = scaled(100'000u, scale);
         const auto headers = http_detail::request_headers<http3::header_list>();
@@ -143,16 +144,16 @@ namespace kmx::aio::benchmark
     #endif
     }
 
-} // namespace kmx::aio::benchmark
+}
 
 #else
 
-namespace kmx::aio::benchmark
+namespace kmx::aio::benchmark::feature
 {
     void register_http_cases(registry&) noexcept(false)
     {
         // Neither HTTP codec is part of this build.
     }
-} // namespace kmx::aio::benchmark
+}
 
 #endif

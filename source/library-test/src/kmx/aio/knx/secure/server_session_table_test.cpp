@@ -1,29 +1,32 @@
-/// @file kmx/aio/knx/secure/server_session_table_test.cpp
-/// @brief The KNX IP Secure server session table against the in-tree client session: the handshake, users, limits,
-///        timeouts, and the order a wrapper is checked in.
-/// @details The client side is the real client session, so every SESSION_RESPONSE the table writes has to verify under the
+/// @file src/kmx/aio/knx/secure/server_session_table_test.cpp
+/// @brief The KNX IP Secure server session table against the in-tree client session.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+/// @details Covers the handshake, users, limits, timeouts, and the order a wrapper is checked in.
+/// The client side is the real client session, so every SESSION_RESPONSE the table writes has to verify under the
 /// device authentication code, and every wrapper has to open under the key the client derived. Where a test needs a
 /// wrapper no well-behaved client would send, the client's key pair is xknx's fixture and the test seals it itself.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
-#include <kmx/aio/knx/datagram.hpp>
-#include <kmx/aio/knx/error.hpp>
-#include <kmx/aio/knx/frame.hpp>
-#include <kmx/aio/knx/secure/client_session.hpp>
 #include <kmx/aio/knx/secure/server_session_table.hpp>
-#include <kmx/aio/test/knx/secure_vectors.hpp>
-#include <kmx/aio/test/knx/telegram.hpp>
+#ifndef PCH
+    #include <kmx/aio/knx/datagram.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/frame.hpp>
+    #include <kmx/aio/knx/secure/client_session.hpp>
+    #include <kmx/aio/knx/secure/entropy.hpp>
+    #include <kmx/aio/test/knx/secure_vectors.hpp>
+    #include <kmx/aio/test/knx/telegram.hpp>
 
-#include <algorithm>
-#include <array>
-#include <cstdint>
-#include <memory>
-#include <netinet/in.h>
-#include <span>
-#include <string_view>
-#include <variant>
-#include <vector>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <algorithm>
+    #include <array>
+    #include <cstdint>
+    #include <memory>
+    #include <span>
+    #include <string_view>
+    #include <variant>
+    #include <vector>
+    #include <netinet/in.h>
+#endif
 
 namespace kmx::aio::test::knx::secure::server_session_table_test
 {
@@ -39,7 +42,7 @@ namespace kmx::aio::test::knx::secure::server_session_table_test
         using buffer_t = std::array<std::uint8_t, kn::frame::max_datagram_size>;
 
         constexpr ks::serial_number_t client_serial {0x00u, 0xFAu, 0x12u, 0x34u, 0x56u, 0x78u};
-        constexpr ks::serial_number_t server_serial {0x00u, 0xFAu, 0xAAu, 0xAAu, 0xAAu, 0xAAu};
+        constexpr ks::serial_number_t own_serial {0x00u, 0xFAu, 0xAAu, 0xAAu, 0xAAu, 0xAAu};
         /// @brief The TCP HPAI a SESSION_REQUEST names.
         constexpr kn::hpai tcp_endpoint {kn::ipv4_endpoint {}, 0x02u};
         /// @brief The user the tests authenticate as.
@@ -92,7 +95,7 @@ namespace kmx::aio::test::knx::secure::server_session_table_test
         };
 
         template <typename Value>
-        [[nodiscard]] std::error_code error_of(const std::expected<Value, std::error_code>& result) noexcept
+        [[nodiscard]] std::error_code error_of(const expected_t<Value>& result) noexcept
         {
             return result.has_value() ? std::error_code {} : result.error();
         }
@@ -129,7 +132,7 @@ namespace kmx::aio::test::knx::secure::server_session_table_test
             value->device_authentication_code = device_code().clone();
             value->users.push_back(
                 ks::tunnelling_user {.user_id = user_id, .password_key = secret_user_key().clone(), .tunnel_addresses = user_addresses()});
-            value->serial_number = server_serial;
+            value->serial_number = own_serial;
             value->max_sessions = max_sessions;
             return value;
         }
@@ -178,60 +181,66 @@ namespace kmx::aio::test::knx::secure::server_session_table_test
         }
 
         /// @brief Decodes the wrapper in @p wire.
-        [[nodiscard]] ks::secure_wrapper_frame wrapper_in(const cspan_uint8_t wire)
+        [[nodiscard]] ks::wrapper_frame wrapper_in(const cspan_uint8_t wire)
         {
             const auto decoded = kn::decode_datagram(wire);
             REQUIRE(decoded.has_value());
-            const auto* const wrapper = std::get_if<ks::secure_wrapper_frame>(&decoded->payload);
+            const auto* const wrapper = std::get_if<ks::wrapper_frame>(&decoded->payload);
             REQUIRE(wrapper != nullptr);
             return *wrapper;
         }
 
-        /// @brief Opens the wrapper in @p wire with the table, as if it arrived on @p connection.
-        [[nodiscard]] ks::server_opened_frame_result_t open_wire(ks::server_session_table& table, const kn::datagram_transport& connection,
-                                                                 const kn::transport_peer& peer, const cspan_uint8_t wire, buffer_t& plain,
+        /// @brief The table a client reaches, and the connection and address the client reaches it over.
+        struct route
+        {
+            /// @brief The table under test.
+            ks::server_session_table& table;
+            /// @brief The connection the client's frames arrive on.
+            const kn::datagram_transport& connection;
+            /// @brief The client's address.
+            kn::transport_peer from {};
+        };
+
+        /// @brief Opens the wrapper in @p wire with the table, as if it arrived over @p over.
+        [[nodiscard]] ks::server_opened_frame_result_t open_wire(const route& over, const cspan_uint8_t wire, buffer_t& plain,
                                                                  const std::uint64_t now_ms)
         {
-            return table.open(&connection, peer, wrapper_in(wire), plain, now_ms);
+            return over.table.open({&over.connection, over.from}, wrapper_in(wire), plain, now_ms);
         }
 
         /// @brief Sends the client's SESSION_REQUEST to the table.
-        [[nodiscard]] ks::session_response_result_t request(ks::server_session_table& table, ks::client_session& client,
-                                                            const kn::datagram_transport& connection, const kn::transport_peer& from,
-                                                            const std::uint64_t now_ms)
+        [[nodiscard]] ks::session_response_result_t request(const route& over, ks::client_session& client, const std::uint64_t now_ms)
         {
             buffer_t wire {};
             const auto size = client.begin(wire, tcp_endpoint, now_ms);
             REQUIRE(size.has_value());
             const auto decoded = ks::decode_session_request_packet({wire.data(), *size});
             REQUIRE(decoded.has_value());
-            return table.on_session_request(&connection, from, *decoded, now_ms);
+            return over.table.on_session_request({&over.connection, over.from}, *decoded, now_ms);
         }
 
         /// @brief Runs the handshake as far as the table's verdict on SESSION_AUTHENTICATE.
-        [[nodiscard]] ks::server_opened_frame_result_t authenticate(ks::server_session_table& table, ks::client_session& client,
-                                                                    const kn::datagram_transport& connection,
-                                                                    const kn::transport_peer& from, const std::uint64_t now_ms)
+        [[nodiscard]] ks::server_opened_frame_result_t authenticate(const route& over, ks::client_session& client,
+                                                                    const std::uint64_t now_ms)
         {
-            const auto response = request(table, client, connection, from, now_ms);
+            const auto response = request(over, client, now_ms);
             REQUIRE(response.has_value());
             buffer_t wire {};
             const auto size = client.on_session_response(*response, wire, now_ms);
             REQUIRE(size.has_value());
             buffer_t plain {};
-            return open_wire(table, connection, from, {wire.data(), *size}, plain, now_ms);
+            return open_wire(over, {wire.data(), *size}, plain, now_ms);
         }
 
         /// @brief Runs the whole handshake, the server's SESSION_STATUS included, and returns the session id.
-        [[nodiscard]] std::uint16_t establish(ks::server_session_table& table, ks::client_session& client,
-                                              const kn::datagram_transport& connection, const kn::transport_peer& from,
-                                              const std::uint64_t now_ms)
+        [[nodiscard]] std::uint16_t establish(const route& over, ks::client_session& client, const std::uint64_t now_ms)
         {
-            const auto verdict = authenticate(table, client, connection, from, now_ms);
+            const auto verdict = authenticate(over, client, now_ms);
             REQUIRE(verdict.has_value());
             REQUIRE(verdict->kind == ks::server_frame_kind::authenticated);
             buffer_t wire {};
-            const auto status = table.seal_status(&connection, verdict->session_id, ks::session_status::authentication_success, wire);
+            const auto status =
+                over.table.seal_status(&over.connection, verdict->session_id, ks::session_status::authentication_success, wire);
             REQUIRE(status.has_value());
             buffer_t plain {};
             REQUIRE(client.open(wrapper_in({wire.data(), *status}), plain, now_ms).has_value());
@@ -245,7 +254,7 @@ namespace kmx::aio::test::knx::secure::server_session_table_test
         detail::idle_connection connection {};
         ks::server_session_table table {detail::configuration(), ks::system_entropy()};
         ks::client_session client {detail::credentials(), ks::system_entropy()};
-        const auto session_id = detail::establish(table, client, connection, detail::peer(10u, 50'000u), 0u);
+        const auto session_id = detail::establish({table, connection, detail::peer(10u, 50'000u)}, client, 0u);
         CHECK(session_id != 0u);
         CHECK(session_id == client.session_id());
         CHECK(table.authenticated(session_id));
@@ -256,7 +265,7 @@ namespace kmx::aio::test::knx::secure::server_session_table_test
         const auto sealed = client.seal(frame, wire, 1u);
         REQUIRE(sealed.has_value());
         detail::buffer_t plain {};
-        const auto opened = detail::open_wire(table, connection, detail::peer(10u, 50'000u), {wire.data(), *sealed}, plain, 1u);
+        const auto opened = detail::open_wire({table, connection, detail::peer(10u, 50'000u)}, {wire.data(), *sealed}, plain, 1u);
         REQUIRE(opened.has_value());
         CHECK(opened->kind == ks::server_frame_kind::tunnel);
         CHECK(std::ranges::equal(std::span {plain}.first(opened->size), frame));
@@ -277,8 +286,8 @@ namespace kmx::aio::test::knx::secure::server_session_table_test
         ks::server_session_table table {detail::configuration(), ks::system_entropy()};
         ks::client_session wrong_password {detail::credentials(detail::user_id, "not the password"), ks::system_entropy()};
         ks::client_session unknown_user {detail::credentials(9u), ks::system_entropy()};
-        const auto refused = detail::authenticate(table, wrong_password, connection, detail::peer(10u, 50'000u), 0u);
-        const auto unknown = detail::authenticate(table, unknown_user, connection, detail::peer(11u, 50'000u), 0u);
+        const auto refused = detail::authenticate({table, connection, detail::peer(10u, 50'000u)}, wrong_password, 0u);
+        const auto unknown = detail::authenticate({table, connection, detail::peer(11u, 50'000u)}, unknown_user, 0u);
         REQUIRE(refused.has_value());
         REQUIRE(unknown.has_value());
         CHECK(refused->kind == ks::server_frame_kind::refused_authentication);
@@ -303,10 +312,11 @@ namespace kmx::aio::test::knx::secure::server_session_table_test
         for (std::uint8_t host = 1u; host <= 3u; ++host)
         {
             clients.push_back(std::make_unique<ks::client_session>(detail::credentials(), ks::system_entropy()));
-            const auto response = detail::request(table, *clients.back(), connection, detail::peer(host, 50'000u), 0u);
+            const auto response = detail::request({table, connection, detail::peer(host, 50'000u)}, *clients.back(), 0u);
             REQUIRE(response.has_value());
             responses.push_back(*response);
         }
+
         CHECK(std::ranges::none_of(responses, [](const ks::session_response_frame& value) { return value.session_id == 0u; }));
         CHECK(responses[0u].session_id != responses[1u].session_id);
         CHECK(responses[1u].session_id != responses[2u].session_id);
@@ -317,7 +327,7 @@ namespace kmx::aio::test::knx::secure::server_session_table_test
         // An id that has just ended is not handed straight to the next session.
         table.close(responses[1u].session_id);
         ks::client_session next_client {detail::credentials(), ks::system_entropy()};
-        const auto next = detail::request(table, next_client, connection, detail::peer(4u, 50'000u), 0u);
+        const auto next = detail::request({table, connection, detail::peer(4u, 50'000u)}, next_client, 0u);
         REQUIRE(next.has_value());
         CHECK(std::ranges::none_of(responses,
                                    [&next](const ks::session_response_frame& value) { return value.session_id == next->session_id; }));
@@ -334,17 +344,17 @@ namespace kmx::aio::test::knx::secure::server_session_table_test
             client = std::make_unique<ks::client_session>(detail::credentials(), ks::system_entropy());
 
         // An authenticated session takes nothing from its peer's share of handshakes.
-        const auto verdict = detail::authenticate(table, *clients[0u], connection, detail::peer(1u, 50'000u), 0u);
+        const auto verdict = detail::authenticate({table, connection, detail::peer(1u, 50'000u)}, *clients[0u], 0u);
         REQUIRE(verdict.has_value());
         CHECK(verdict->kind == ks::server_frame_kind::authenticated);
-        CHECK(detail::request(table, *clients[1u], connection, detail::peer(1u, 50'001u), 0u).has_value());
-        CHECK(detail::request(table, *clients[2u], connection, detail::peer(1u, 50'002u), 0u).has_value());
+        CHECK(detail::request({table, connection, detail::peer(1u, 50'001u)}, *clients[1u], 0u).has_value());
+        CHECK(detail::request({table, connection, detail::peer(1u, 50'002u)}, *clients[2u], 0u).has_value());
         // A third handshake from the same address is refused, whatever port it comes from.
-        CHECK(detail::error_of(detail::request(table, *clients[3u], connection, detail::peer(1u, 50'003u), 0u)) ==
+        CHECK(detail::error_of(detail::request({table, connection, detail::peer(1u, 50'003u)}, *clients[3u], 0u)) ==
               make_error_code(error::send_queue_full));
-        CHECK(detail::request(table, *clients[4u], connection, detail::peer(2u, 50'000u), 0u).has_value());
+        CHECK(detail::request({table, connection, detail::peer(2u, 50'000u)}, *clients[4u], 0u).has_value());
         // And past the total, anyone is.
-        CHECK(detail::error_of(detail::request(table, *clients[5u], connection, detail::peer(3u, 50'000u), 0u)) ==
+        CHECK(detail::error_of(detail::request({table, connection, detail::peer(3u, 50'000u)}, *clients[5u], 0u)) ==
               make_error_code(error::send_queue_full));
         CHECK(table.sessions() == 4u);
     }
@@ -356,9 +366,9 @@ namespace kmx::aio::test::knx::secure::server_session_table_test
         ks::server_session_table table {detail::configuration(), ks::system_entropy()};
         ks::client_session unfinished {detail::credentials(), ks::system_entropy()};
         ks::client_session client {detail::credentials(), ks::system_entropy()};
-        const auto pending = detail::request(table, unfinished, connection, detail::peer(1u, 50'000u), 0u);
+        const auto pending = detail::request({table, connection, detail::peer(1u, 50'000u)}, unfinished, 0u);
         REQUIRE(pending.has_value());
-        const auto session_id = detail::establish(table, client, connection, detail::peer(2u, 50'000u), 0u);
+        const auto session_id = detail::establish({table, connection, detail::peer(2u, 50'000u)}, client, 0u);
         CHECK(table.reap(9'999u) == 0u);
         CHECK(table.reap(10'000u) == 1u);
         CHECK(!table.alive(pending->session_id));
@@ -369,7 +379,7 @@ namespace kmx::aio::test::knx::secure::server_session_table_test
         const auto keep_alive = client.prepare_keep_alive(wire, 30'000u);
         REQUIRE(keep_alive.has_value());
         detail::buffer_t plain {};
-        const auto kept = detail::open_wire(table, connection, detail::peer(2u, 50'000u), {wire.data(), *keep_alive}, plain, 30'000u);
+        const auto kept = detail::open_wire({table, connection, detail::peer(2u, 50'000u)}, {wire.data(), *keep_alive}, plain, 30'000u);
         REQUIRE(kept.has_value());
         CHECK(kept->kind == ks::server_frame_kind::keep_alive);
         CHECK(table.seal(&connection, session_id, detail::tunnel_frame(0u), wire).has_value());
@@ -386,7 +396,7 @@ namespace kmx::aio::test::knx::secure::server_session_table_test
         ks::server_session_table table {detail::configuration(), ks::system_entropy()};
         detail::fixed_key_entropy entropy {};
         ks::client_session client {detail::credentials(), entropy};
-        const auto response = detail::request(table, client, connection, detail::peer(1u, 50'000u), 0u);
+        const auto response = detail::request({table, connection, detail::peer(1u, 50'000u)}, client, 0u);
         REQUIRE(response.has_value());
         // xknx's key pair lets the test seal what no client would send: a tunnel frame before the user is authenticated.
         const auto key = ks::derive_session_key(detail::fixed_key_entropy::private_key(), response->server_public_key);
@@ -396,15 +406,15 @@ namespace kmx::aio::test::knx::secure::server_session_table_test
         forged.back() ^= 0x01u;
 
         detail::buffer_t plain {};
-        CHECK(detail::error_of(detail::open_wire(table, other, detail::peer(1u, 50'000u), early, plain, 0u)) ==
+        CHECK(detail::error_of(detail::open_wire({table, other, detail::peer(1u, 50'000u)}, early, plain, 0u)) ==
               make_error_code(error::secure_authentication_failed));
-        CHECK(detail::error_of(detail::open_wire(table, connection, detail::peer(2u, 50'000u), early, plain, 0u)) ==
+        CHECK(detail::error_of(detail::open_wire({table, connection, detail::peer(2u, 50'000u)}, early, plain, 0u)) ==
               make_error_code(error::secure_authentication_failed));
-        CHECK(detail::error_of(detail::open_wire(table, connection, detail::peer(1u, 50'000u), forged, plain, 0u)) ==
+        CHECK(detail::error_of(detail::open_wire({table, connection, detail::peer(1u, 50'000u)}, forged, plain, 0u)) ==
               make_error_code(error::secure_authentication_failed));
-        CHECK(detail::error_of(detail::open_wire(table, connection, detail::peer(1u, 50'000u), early, plain, 0u)) ==
+        CHECK(detail::error_of(detail::open_wire({table, connection, detail::peer(1u, 50'000u)}, early, plain, 0u)) ==
               make_error_code(error::unsupported_service));
-        CHECK(detail::error_of(detail::open_wire(table, connection, detail::peer(1u, 50'000u), early, plain, 0u)) ==
+        CHECK(detail::error_of(detail::open_wire({table, connection, detail::peer(1u, 50'000u)}, early, plain, 0u)) ==
               make_error_code(error::secure_replay));
         CHECK(table.counters().authentication_failures == 3u);
         CHECK(table.counters().replays == 1u);
@@ -421,15 +431,15 @@ namespace kmx::aio::test::knx::secure::server_session_table_test
         ks::client_session closing {detail::credentials(), ks::system_entropy()};
         ks::client_session staying {detail::credentials(), ks::system_entropy()};
         ks::client_session elsewhere {detail::credentials(), ks::system_entropy()};
-        const auto session_id = detail::establish(table, closing, connection, detail::peer(1u, 50'000u), 0u);
-        static_cast<void>(detail::establish(table, staying, connection, detail::peer(1u, 50'001u), 0u));
-        const auto kept = detail::establish(table, elsewhere, other, detail::peer(2u, 50'000u), 0u);
+        const auto session_id = detail::establish({table, connection, detail::peer(1u, 50'000u)}, closing, 0u);
+        static_cast<void>(detail::establish({table, connection, detail::peer(1u, 50'001u)}, staying, 0u));
+        const auto kept = detail::establish({table, other, detail::peer(2u, 50'000u)}, elsewhere, 0u);
 
         detail::buffer_t wire {};
         const auto close = closing.prepare_close(wire, 1u);
         REQUIRE(close.has_value());
         detail::buffer_t plain {};
-        const auto closed = detail::open_wire(table, connection, detail::peer(1u, 50'000u), {wire.data(), *close}, plain, 1u);
+        const auto closed = detail::open_wire({table, connection, detail::peer(1u, 50'000u)}, {wire.data(), *close}, plain, 1u);
         REQUIRE(closed.has_value());
         CHECK(closed->kind == ks::server_frame_kind::closed);
         CHECK(!table.alive(session_id));
@@ -449,7 +459,7 @@ namespace kmx::aio::test::knx::secure::server_session_table_test
         ks::server_session_table table {configuration, ks::system_entropy()};
         ks::client_session client {detail::credentials(), ks::system_entropy()};
         // There is no default serial number: a server configured without one answers no SESSION_REQUEST (P8).
-        CHECK(detail::error_of(detail::request(table, client, connection, detail::peer(1u, 50'000u), 0u)) ==
+        CHECK(detail::error_of(detail::request({table, connection, detail::peer(1u, 50'000u)}, client, 0u)) ==
               make_error_code(error::invalid_configuration));
         CHECK(table.sessions() == 0u);
     }

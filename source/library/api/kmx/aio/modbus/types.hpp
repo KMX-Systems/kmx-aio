@@ -1,4 +1,4 @@
-/// @file aio/modbus/types.hpp
+/// @file api/kmx/aio/modbus/types.hpp
 /// @brief Modbus Application Protocol types, configuration, and data primitives.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -123,5 +123,5 @@ namespace kmx::aio::modbus
         std::string sni_hostname;
     };
 
-} // namespace kmx::aio::modbus
+}
 #endif // KMX_AIO_FEATURE_MODBUS

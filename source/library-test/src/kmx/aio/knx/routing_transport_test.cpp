@@ -1,19 +1,24 @@
+/// @file src/kmx/aio/knx/routing_transport_test.cpp
+/// @brief KNX UDP transports joining and leaving a multicast group on the completion and readiness models.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/knx/udp_transport.hpp>
+    #include <kmx/aio/completion/udp/endpoint.hpp>
+    #include <kmx/aio/file_descriptor.hpp>
+    #include <kmx/aio/knx/routing.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/knx/udp_transport.hpp>
-#include <kmx/aio/completion/udp/endpoint.hpp>
-#include <kmx/aio/file_descriptor.hpp>
-#include <kmx/aio/knx/routing.hpp>
-#if defined(KMX_AIO_FEATURE_READINESS)
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/readiness/knx/udp_transport.hpp>
-    #include <kmx/aio/readiness/udp/endpoint.hpp>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <memory>
+    #include <netinet/in.h>
+
+    #if defined(KMX_AIO_FEATURE_READINESS)
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/readiness/knx/udp_transport.hpp>
+        #include <kmx/aio/readiness/udp/endpoint.hpp>
+    #endif
 #endif
-
-#include <memory>
-#include <netinet/in.h>
 
 namespace kmx::aio::test::knx::routing_transport_test
 {

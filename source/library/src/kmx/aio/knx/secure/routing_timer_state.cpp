@@ -1,10 +1,13 @@
+/// @file src/kmx/aio/knx/secure/routing_timer_state.cpp
+/// @brief The compiled body of the KNX IP Secure routing timer: wrapper acceptance, duplicates and TIMER_NOTIFY.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/knx/secure/routing_timer_state.hpp>
-
-#include <algorithm>
-#include <array>
-#include <limits>
-#include <span>
+#ifndef PCH
+    #include <algorithm>
+    #include <array>
+    #include <limits>
+    #include <span>
+#endif
 
 namespace kmx::aio::knx::secure
 {
@@ -93,6 +96,7 @@ namespace kmx::aio::knx::secure
             ++counters_.replays;
             return wrapper_verdict::outdated;
         }
+
         if ((received > (local - sync_latency_ms_)) && !scheduled_update_.has_value()) // E5 and E6; E7 changes nothing.
             reschedule(now_ms, std::nullopt);
         advance(local, received);
@@ -115,6 +119,7 @@ namespace kmx::aio::knx::secure
             timekeeper_ = true;
             finish_synchronisation(now_ms);
         }
+
         if (!notify_deadline_ms_.has_value() || (now_ms < *notify_deadline_ms_))
             return std::nullopt;
 

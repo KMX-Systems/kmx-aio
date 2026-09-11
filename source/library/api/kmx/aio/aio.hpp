@@ -1,5 +1,6 @@
-/// @file aio/aio.hpp
+/// @file api/kmx/aio/aio.hpp
 /// @brief Master include header for the KMX AIO library.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details Provides a single-include entry point for the entire KMX AIO API: the root primitives,
 ///          both I/O models, and every protocol, security and hardware family the library carries.
 ///
@@ -10,39 +11,141 @@
 ///          forgotten - which is how this header came to name only part of the API in the first
 ///          place. Including a header whose feature is off costs nothing: the public headers pull in
 ///          no third-party declarations, so a disabled family expands to an empty file.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #ifndef PCH
-    // Root primitives
+    #include <kmx/aio/allocator/counter.hpp>
+    #include <kmx/aio/allocator/slab.hpp>
+    #include <kmx/aio/allocator/statistics.hpp>
     #include <kmx/aio/async_mutex.hpp>
+    #include <kmx/aio/avb/avb_types.hpp>
+    #include <kmx/aio/avb/avtp/am824.hpp>
+    #include <kmx/aio/avb/generic_eth_socket.hpp>
+    #include <kmx/aio/avb/gptp/generic_clock.hpp>
+    #include <kmx/aio/avb/srp/generic_client.hpp>
+    #include <kmx/aio/bad_alloc.hpp>
     #include <kmx/aio/basic_channel.hpp>
     #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/buffer/handle.hpp>
+    #include <kmx/aio/buffer/pool.hpp>
+    #include <kmx/aio/buffer/view/item.hpp>
     #include <kmx/aio/channel.hpp>
+    #include <kmx/aio/completion/avb/eth_socket.hpp>
+    #include <kmx/aio/completion/avb/gptp/clock.hpp>
+    #include <kmx/aio/completion/avb/srp/client.hpp>
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/io_base.hpp>
+    #include <kmx/aio/completion/knx/client.hpp>
+    #include <kmx/aio/completion/knx/gateway.hpp>
+    #include <kmx/aio/completion/knx/server.hpp>
+    #include <kmx/aio/completion/knx/udp_transport.hpp>
+    #include <kmx/aio/completion/quic/engine.hpp>
+    #include <kmx/aio/completion/spdk/device.hpp>
+    #include <kmx/aio/completion/spdk/runtime.hpp>
+    #include <kmx/aio/completion/statistics.hpp>
+    #include <kmx/aio/completion/tcp/listener.hpp>
+    #include <kmx/aio/completion/tcp/stream.hpp>
+    #include <kmx/aio/completion/timer.hpp>
+    #include <kmx/aio/completion/tls/stream.hpp>
+    #include <kmx/aio/completion/udp/endpoint.hpp>
+    #include <kmx/aio/completion/udp/socket.hpp>
+    #include <kmx/aio/completion/v4l2/capture.hpp>
+    #include <kmx/aio/completion/v4l2/frame_view.hpp>
+    #include <kmx/aio/completion/xdp/socket.hpp>
     #include <kmx/aio/error_code.hpp>
     #include <kmx/aio/exception.hpp>
     #include <kmx/aio/executor_base.hpp>
     #include <kmx/aio/file_descriptor.hpp>
+    #include <kmx/aio/gpu/basic_types.hpp>
+    #include <kmx/aio/gpu/event.hpp>
+    #include <kmx/aio/gpu/executor.hpp>
+    #include <kmx/aio/gpu/statistics.hpp>
+    #include <kmx/aio/gpu/stream.hpp>
+    #include <kmx/aio/http2/frame.hpp>
+    #include <kmx/aio/http2/frame_builder.hpp>
+    #include <kmx/aio/http2/hpack.hpp>
+    #include <kmx/aio/http2/hpack_encoder.hpp>
+    #include <kmx/aio/http2/stream.hpp>
+    #include <kmx/aio/http3/alpn.hpp>
+    #include <kmx/aio/http3/control.hpp>
+    #include <kmx/aio/http3/control_stream_codec.hpp>
+    #include <kmx/aio/http3/data_codec.hpp>
+    #include <kmx/aio/http3/demo/message_builder.hpp>
+    #include <kmx/aio/http3/frame.hpp>
+    #include <kmx/aio/http3/frame_codec.hpp>
+    #include <kmx/aio/http3/goaway_codec.hpp>
+    #include <kmx/aio/http3/headers_codec.hpp>
+    #include <kmx/aio/http3/message.hpp>
+    #include <kmx/aio/http3/protocol_error_category.hpp>
+    #include <kmx/aio/http3/qpack.hpp>
+    #include <kmx/aio/http3/qpack/literal_codec.hpp>
+    #include <kmx/aio/http3/settings.hpp>
+    #include <kmx/aio/http3/settings_codec.hpp>
+    #include <kmx/aio/http3/stream.hpp>
+    #include <kmx/aio/invalid_argument.hpp>
     #include <kmx/aio/ipv4.hpp>
     #include <kmx/aio/ipv6.hpp>
+    #include <kmx/aio/knx/address.hpp>
+    #include <kmx/aio/knx/apdu_payload.hpp>
+    #include <kmx/aio/knx/cemi.hpp>
+    #include <kmx/aio/knx/cemi_bytes_storage.hpp>
+    #include <kmx/aio/knx/cemi_frame.hpp>
+    #include <kmx/aio/knx/connection.hpp>
+    #include <kmx/aio/knx/contract.hpp>
+    #include <kmx/aio/knx/datagram.hpp>
+    #include <kmx/aio/knx/datagram_transport.hpp>
+    #include <kmx/aio/knx/discovery.hpp>
+    #include <kmx/aio/knx/discovery/client.hpp>
+    #include <kmx/aio/knx/dpt.hpp>
+    #include <kmx/aio/knx/dpt/descriptor.hpp>
+    #include <kmx/aio/knx/dpt/payload.hpp>
+    #include <kmx/aio/knx/dpt/string_value.hpp>
+    #include <kmx/aio/knx/dpt/traits.hpp>
+    #include <kmx/aio/knx/dpt/value_view.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/frame.hpp>
+    #include <kmx/aio/knx/gateway.hpp>
+    #include <kmx/aio/knx/generic_server.hpp>
+    #include <kmx/aio/knx/group_address.hpp>
+    #include <kmx/aio/knx/individual_address.hpp>
+    #include <kmx/aio/knx/keyring.hpp>
+    #include <kmx/aio/knx/keyring/document.hpp>
+    #include <kmx/aio/knx/property_frame.hpp>
+    #include <kmx/aio/knx/routing.hpp>
+    #include <kmx/aio/knx/routing/client.hpp>
+    #include <kmx/aio/knx/routing/sender.hpp>
+    #include <kmx/aio/knx/server.hpp>
+    #include <kmx/aio/knx/session.hpp>
+    #include <kmx/aio/knx/telegram.hpp>
+    #include <kmx/aio/knx/transport.hpp>
+    #include <kmx/aio/knx/tunnelling_client.hpp>
+    #include <kmx/aio/knx/tunnelling_feature_value.hpp>
+    #include <kmx/aio/knx/tunnelling_session.hpp>
+    #include <kmx/aio/logic_error.hpp>
     #include <kmx/aio/mac.hpp>
-    #include <kmx/aio/scheduler.hpp>
-    #include <kmx/aio/stream_concepts.hpp>
-    #include <kmx/aio/task.hpp>
-
-    // Allocators and buffers
-    #include <kmx/aio/allocator/counter.hpp>
-    #include <kmx/aio/allocator/slab.hpp>
-    #include <kmx/aio/allocator/statistics.hpp>
-    #include <kmx/aio/buffer/handle.hpp>
-    #include <kmx/aio/buffer/pool.hpp>
-    #include <kmx/aio/buffer/view/item.hpp>
-
-    // TLS
-    #include <kmx/aio/tls/basic_stream.hpp>
-    #include <kmx/aio/tls/stream.hpp>
-
-    // Readiness model (kmx::aio::readiness)
+    #include <kmx/aio/modbus/client.hpp>
+    #include <kmx/aio/modbus/error.hpp>
+    #include <kmx/aio/modbus/frame.hpp>
+    #include <kmx/aio/modbus/server.hpp>
+    #include <kmx/aio/modbus/tls_client.hpp>
+    #include <kmx/aio/modbus/tls_server.hpp>
+    #include <kmx/aio/modbus/types.hpp>
+    #include <kmx/aio/opc_ua/client.hpp>
+    #include <kmx/aio/opc_ua/error.hpp>
+    #include <kmx/aio/opc_ua/server.hpp>
+    #include <kmx/aio/opc_ua/subscription.hpp>
+    #include <kmx/aio/opc_ua/types.hpp>
+    #include <kmx/aio/promise.hpp>
+    #include <kmx/aio/promise_base.hpp>
+    #include <kmx/aio/quic/basic_endpoint.hpp>
+    #include <kmx/aio/quic/byte_buffer.hpp>
+    #include <kmx/aio/quic/endpoint.hpp>
+    #include <kmx/aio/quic/engine.hpp>
+    #include <kmx/aio/quic/generic_engine.hpp>
+    #include <kmx/aio/quic/settings.hpp>
+    #include <kmx/aio/quic/stream.hpp>
+    #include <kmx/aio/quic/stream_payload.hpp>
+    #include <kmx/aio/quic/transport.hpp>
     #include <kmx/aio/readiness/avb/eth_socket.hpp>
     #include <kmx/aio/readiness/avb/gptp/clock.hpp>
     #include <kmx/aio/readiness/avb/srp/client.hpp>
@@ -57,6 +160,7 @@
     #include <kmx/aio/readiness/knx/udp_transport.hpp>
     #include <kmx/aio/readiness/openonload/extensions.hpp>
     #include <kmx/aio/readiness/quic/engine.hpp>
+    #include <kmx/aio/readiness/statistics.hpp>
     #include <kmx/aio/readiness/tcp/listener.hpp>
     #include <kmx/aio/readiness/tcp/stream.hpp>
     #include <kmx/aio/readiness/timer.hpp>
@@ -64,89 +168,19 @@
     #include <kmx/aio/readiness/udp/endpoint.hpp>
     #include <kmx/aio/readiness/udp/socket.hpp>
     #include <kmx/aio/readiness/v4l2/capture.hpp>
+    #include <kmx/aio/readiness/v4l2/frame_view.hpp>
     #include <kmx/aio/readiness/v4l2/v4l2_types.hpp>
-
-    // Completion model (kmx::aio::completion)
-    #include <kmx/aio/completion/avb/eth_socket.hpp>
-    #include <kmx/aio/completion/avb/gptp/clock.hpp>
-    #include <kmx/aio/completion/avb/srp/client.hpp>
-    #include <kmx/aio/completion/executor.hpp>
-    #include <kmx/aio/completion/io_base.hpp>
-    #include <kmx/aio/completion/knx/client.hpp>
-    #include <kmx/aio/completion/knx/gateway.hpp>
-    #include <kmx/aio/completion/knx/server.hpp>
-    #include <kmx/aio/completion/knx/udp_transport.hpp>
-    #include <kmx/aio/completion/quic/engine.hpp>
-    #include <kmx/aio/completion/spdk/device.hpp>
-    #include <kmx/aio/completion/spdk/runtime.hpp>
-    #include <kmx/aio/completion/tcp/listener.hpp>
-    #include <kmx/aio/completion/tcp/stream.hpp>
-    #include <kmx/aio/completion/timer.hpp>
-    #include <kmx/aio/completion/tls/stream.hpp>
-    #include <kmx/aio/completion/udp/endpoint.hpp>
-    #include <kmx/aio/completion/udp/socket.hpp>
-    #include <kmx/aio/completion/v4l2/capture.hpp>
-    #include <kmx/aio/completion/xdp/socket.hpp>
-
-    // Protocol, security and hardware families
-    #include <kmx/aio/avb/avb_types.hpp>
-    #include <kmx/aio/avb/avtp/am824.hpp>
-    #include <kmx/aio/avb/eth_socket.hpp>
-    #include <kmx/aio/avb/gptp/clock.hpp>
-    #include <kmx/aio/avb/srp/client.hpp>
-    #include <kmx/aio/gpu/basic_types.hpp>
-    #include <kmx/aio/gpu/event.hpp>
-    #include <kmx/aio/gpu/executor.hpp>
-    #include <kmx/aio/gpu/stream.hpp>
-    #include <kmx/aio/http2/codec.hpp>
-    #include <kmx/aio/http2/frame.hpp>
-    #include <kmx/aio/http2/hpack.hpp>
-    #include <kmx/aio/http2/stream.hpp>
-    #include <kmx/aio/http3/alpn.hpp>
-    #include <kmx/aio/http3/codec.hpp>
-    #include <kmx/aio/http3/control.hpp>
-    #include <kmx/aio/http3/frame.hpp>
-    #include <kmx/aio/http3/message.hpp>
-    #include <kmx/aio/http3/qpack.hpp>
-    #include <kmx/aio/http3/settings.hpp>
-    #include <kmx/aio/http3/stream.hpp>
-    #include <kmx/aio/knx/address.hpp>
-    #include <kmx/aio/knx/cemi.hpp>
-    #include <kmx/aio/knx/client.hpp>
-    #include <kmx/aio/knx/connection.hpp>
-    #include <kmx/aio/knx/contract.hpp>
-    #include <kmx/aio/knx/datagram.hpp>
-    #include <kmx/aio/knx/discovery.hpp>
-    #include <kmx/aio/knx/dpt.hpp>
-    #include <kmx/aio/knx/error.hpp>
-    #include <kmx/aio/knx/frame.hpp>
-    #include <kmx/aio/knx/gateway.hpp>
-    #include <kmx/aio/knx/keyring.hpp>
-    #include <kmx/aio/knx/routing.hpp>
-    #include <kmx/aio/knx/server.hpp>
-    #include <kmx/aio/knx/session.hpp>
-    #include <kmx/aio/knx/transport.hpp>
-    #include <kmx/aio/modbus/client.hpp>
-    #include <kmx/aio/modbus/error.hpp>
-    #include <kmx/aio/modbus/frame.hpp>
-    #include <kmx/aio/modbus/server.hpp>
-    #include <kmx/aio/modbus/tls_client.hpp>
-    #include <kmx/aio/modbus/tls_server.hpp>
-    #include <kmx/aio/modbus/types.hpp>
-    #include <kmx/aio/opc_ua/client.hpp>
-    #include <kmx/aio/opc_ua/error.hpp>
-    #include <kmx/aio/opc_ua/server.hpp>
-    #include <kmx/aio/opc_ua/subscription.hpp>
-    #include <kmx/aio/opc_ua/types.hpp>
-    #include <kmx/aio/quic/engine.hpp>
-    #include <kmx/aio/quic/settings.hpp>
-    #include <kmx/aio/quic/transport.hpp>
+    #include <kmx/aio/runtime_error.hpp>
+    #include <kmx/aio/scheduler.hpp>
     #include <kmx/aio/someip/client.hpp>
     #include <kmx/aio/someip/error.hpp>
     #include <kmx/aio/someip/server.hpp>
     #include <kmx/aio/someip/subscription.hpp>
     #include <kmx/aio/someip/types.hpp>
-
-    // Logging
+    #include <kmx/aio/stream_concepts.hpp>
+    #include <kmx/aio/system_error.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/aio/tls/basic_stream.hpp>
+    #include <kmx/aio/tls/stream.hpp>
     #include <kmx/logger.hpp>
 #endif

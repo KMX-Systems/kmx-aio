@@ -1,10 +1,13 @@
-/// @file aio/completion/spdk/device.hpp
+/// @file api/kmx/aio/completion/spdk/device.hpp
 /// @brief Completion-model SPDK block device abstraction.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_COMPLETION) && defined(KMX_AIO_FEATURE_SPDK)
     #ifndef PCH
+        #include <kmx/aio/completion/executor.hpp>
+        #include <kmx/aio/task.hpp>
+
         #include <cstddef>
         #include <cstdint>
         #include <expected>
@@ -12,9 +15,6 @@
         #include <span>
         #include <string_view>
         #include <system_error>
-
-        #include <kmx/aio/completion/executor.hpp>
-        #include <kmx/aio/task.hpp>
     #endif
 
 namespace kmx::aio::completion::spdk
@@ -105,5 +105,5 @@ namespace kmx::aio::completion::spdk
         std::unique_ptr<state> state_ {};
     };
 
-} // namespace kmx::aio::completion::spdk
+}
 #endif // KMX_AIO_FEATURE_COMPLETION && KMX_AIO_FEATURE_SPDK

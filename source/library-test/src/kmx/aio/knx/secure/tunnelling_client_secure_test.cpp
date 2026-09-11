@@ -1,30 +1,33 @@
-/// @file kmx/aio/knx/secure/tunnelling_client_secure_test.cpp
-/// @brief The tunnelling client over a KNX IP Secure session: the handshake before anything else, every frame wrapped,
-///        no downgrade, keep-alives, and a fresh session on every reconnect.
-/// @details A stand-in server plays the other end over a fake stream transport, keyed from xknx's fixture. It answers
+/// @file src/kmx/aio/knx/secure/tunnelling_client_secure_test.cpp
+/// @brief The tunnelling client over a KNX IP Secure session.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+/// @details Covers the handshake before anything else, every frame wrapped, no downgrade, keep-alives, and a fresh
+/// session on every reconnect.
+/// A stand-in server plays the other end over a fake stream transport, keyed from xknx's fixture. It answers
 /// SESSION_REQUEST with a genuine SESSION_RESPONSE, opens every wrapper the client sends, and answers the tunnel frames
 /// inside them under wrappers of its own.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/timer.hpp>
+    #include <kmx/aio/knx/datagram.hpp>
+    #include <kmx/aio/knx/secure/session.hpp>
+    #include <kmx/aio/knx/secure/wrapper.hpp>
+    #include <kmx/aio/knx/tunnelling_client.hpp>
+    #include <kmx/aio/test/knx/recording_transport.hpp>
+    #include <kmx/aio/test/knx/secure_vectors.hpp>
+    #include <kmx/aio/test/knx/telegram.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/timer.hpp>
-#include <kmx/aio/knx/client.hpp>
-#include <kmx/aio/knx/datagram.hpp>
-#include <kmx/aio/knx/secure/session.hpp>
-#include <kmx/aio/knx/secure/wrapper.hpp>
-#include <kmx/aio/test/knx/secure_vectors.hpp>
-#include <kmx/aio/test/knx/telegram.hpp>
-#include <kmx/aio/test/knx/transport.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <algorithm>
-#include <array>
-#include <chrono>
-#include <cstdint>
-#include <deque>
-#include <netinet/in.h>
-#include <variant>
-#include <vector>
+    #include <algorithm>
+    #include <array>
+    #include <chrono>
+    #include <cstdint>
+    #include <deque>
+    #include <variant>
+    #include <vector>
+    #include <netinet/in.h>
+#endif
 
 namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
 {
@@ -36,7 +39,7 @@ namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
 
     namespace detail
     {
-        constexpr ks::serial_number_t client_serial {0x00u, 0xFAu, 0x12u, 0x34u, 0x56u, 0x78u};
+        constexpr ks::serial_number_t own_serial {0x00u, 0xFAu, 0x12u, 0x34u, 0x56u, 0x78u};
         constexpr ks::serial_number_t server_serial {0x00u, 0xFAu, 0xAAu, 0xAAu, 0xAAu, 0xAAu};
         /// @brief The tunnelling channel the stand-in server allocates.
         constexpr std::uint8_t channel = 7u;
@@ -86,7 +89,7 @@ namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
         };
 
         template <typename Value>
-        [[nodiscard]] std::error_code error_of(const std::expected<Value, std::error_code>& result) noexcept
+        [[nodiscard]] std::error_code error_of(const expected_t<Value>& result) noexcept
         {
             return result.has_value() ? std::error_code {} : result.error();
         }
@@ -100,7 +103,7 @@ namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
             return ks::tunnelling_credentials {.user_id = 1u,
                                                .user_password_key = std::move(*user_key),
                                                .device_authentication_code = std::move(*device_code),
-                                               .serial_number = client_serial};
+                                               .serial_number = own_serial};
         }
 
         [[nodiscard]] std::uint16_t service_of(const std::vector<std::uint8_t>& wire) noexcept
@@ -146,10 +149,10 @@ namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
         };
 
         /// @brief A stand-in KNX IP Secure tunnelling server behind a fake stream transport.
-        class secure_server_transport final: public recording_transport
+        class stand_in_transport final: public recording_transport
         {
         public:
-            explicit secure_server_transport(const handshake_fixture& fixture): fixture_(fixture)
+            explicit stand_in_transport(const handshake_fixture& fixture): fixture_(fixture)
             {
                 auto key = ks::derive_session_key(fixture.client_private, fixture.server_public);
                 REQUIRE(key.has_value());
@@ -212,6 +215,7 @@ namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
                     completion::timer timer {*wait_executor};
                     static_cast<void>(co_await timer.wait(std::chrono::milliseconds {1}));
                 }
+
                 receiving = false;
                 co_return take(buffer, peer);
             }
@@ -231,12 +235,14 @@ namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
                     answer_request(*request);
                     return;
                 }
-                const auto* const wrapper = std::get_if<ks::secure_wrapper_frame>(&value.payload);
+
+                const auto* const wrapper = std::get_if<ks::wrapper_frame>(&value.payload);
                 if (wrapper == nullptr)
                 {
                     clear.emplace_back(wire.begin(), wire.end());
                     return;
                 }
+
                 std::vector<std::uint8_t> plain(kn::frame::max_datagram_size, 0u);
                 const auto size = ks::open_wrapper(plain, session_key_, *wrapper);
                 REQUIRE(size.has_value());
@@ -336,19 +342,19 @@ namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
         };
 
         /// @brief The keys, the stand-in server, the secure client and the loop each test starts from.
-        struct secure_client_fixture
+        struct session_fixture
         {
             handshake_fixture keys {};
             fixed_key_entropy entropy {keys};
-            secure_server_transport transport {keys};
+            stand_in_transport transport {keys};
             sockaddr_in server = server_address();
-            kn::tunnelling_client client {transport,      reinterpret_cast<const sockaddr*>(&server),
-                                          sizeof(server), kn::tunnelling_config {},
-                                          credentials(),  nullptr,
-                                          session_clock,  &entropy};
+            kn::tunnelling_client client {transport,
+                                          reinterpret_cast<const sockaddr*>(&server),
+                                          sizeof(server),
+                                          {.credentials = credentials(), .clock_ms = session_clock, .entropy = &entropy}};
             completion::executor executor;
 
-            secure_client_fixture()
+            session_fixture()
             {
                 session_now_ms = 0u;
                 transport.wait_executor = &executor;
@@ -362,7 +368,7 @@ namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
         };
     }
 
-    TEST_CASE_METHOD(detail::secure_client_fixture, "knx secure tunnelling client runs the handshake first and wraps everything after it",
+    TEST_CASE_METHOD(detail::session_fixture, "knx secure tunnelling client runs the handshake first and wraps everything after it",
                      "[knx][secure][tunnelling][unit]")
     {
         bool connected {};
@@ -380,6 +386,7 @@ namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
                 received = cemi.has_value() && std::ranges::equal(*cemi, sample_cemi);
                 disconnected = (co_await client.disconnect()).has_value();
             }
+
             executor.stop();
         };
         spawn_and_run(run());
@@ -414,7 +421,7 @@ namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
                                            expectation {detail::server_mode::refused_authentication, error::secure_session_rejected},
                                            expectation {detail::server_mode::silent, error::timeout}})
         {
-            detail::secure_client_fixture fixture {};
+            detail::session_fixture fixture {};
             fixture.transport.mode = mode;
             std::error_code outcome {};
             auto run = [&]() -> task<void>
@@ -434,7 +441,7 @@ namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
         }
     }
 
-    TEST_CASE_METHOD(detail::secure_client_fixture, "knx secure tunnelling client refuses an unencrypted tunnelling request",
+    TEST_CASE_METHOD(detail::session_fixture, "knx secure tunnelling client refuses an unencrypted tunnelling request",
                      "[knx][secure][tunnelling][unit]")
     {
         std::error_code refused {};
@@ -449,6 +456,7 @@ namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
                 transport.push_wrapped(detail::indication(1u));
                 received_after = (co_await client.receive_cemi()).has_value();
             }
+
             executor.stop();
         };
         spawn_and_run(run());
@@ -459,7 +467,7 @@ namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
         CHECK(client.connected());
     }
 
-    TEST_CASE_METHOD(detail::secure_client_fixture, "knx secure tunnelling client keeps its session alive on a quiet bus",
+    TEST_CASE_METHOD(detail::session_fixture, "knx secure tunnelling client keeps its session alive on a quiet bus",
                      "[knx][secure][tunnelling][unit]")
     {
         bool connected {};
@@ -480,6 +488,7 @@ namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
                 executor.stop();
                 co_return;
             }
+
             executor.spawn(receiver());
             // Five minutes of session time while one task waits for a telegram that does not come.
             for (std::uint64_t now = 10'000u; now <= 300'000u; now += 10'000u)
@@ -491,12 +500,14 @@ namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
                 completion::timer timer {executor};
                 static_cast<void>(co_await timer.wait(std::chrono::milliseconds {1}));
             }
+
             transport.push_wrapped(detail::indication(0u));
             for (auto waits = 0u; !receive_done && (waits < 1'000u); ++waits)
             {
                 completion::timer timer {executor};
                 static_cast<void>(co_await timer.wait(std::chrono::milliseconds {1}));
             }
+
             executor.stop();
         };
         spawn_and_run(run());
@@ -509,7 +520,7 @@ namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
         CHECK(client.secure_counters().sessions_timed_out == 0u);
     }
 
-    TEST_CASE_METHOD(detail::secure_client_fixture, "knx secure tunnelling client ends a session that went silent",
+    TEST_CASE_METHOD(detail::session_fixture, "knx secure tunnelling client ends a session that went silent",
                      "[knx][secure][tunnelling][unit]")
     {
         bool connected {};
@@ -530,7 +541,7 @@ namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
         CHECK(client.secure_counters().sessions_timed_out == 1u);
     }
 
-    TEST_CASE_METHOD(detail::secure_client_fixture, "knx secure tunnelling client reconnects through a fresh session",
+    TEST_CASE_METHOD(detail::session_fixture, "knx secure tunnelling client reconnects through a fresh session",
                      "[knx][secure][tunnelling][unit]")
     {
         bool reconnected {};
@@ -555,14 +566,14 @@ namespace kmx::aio::test::knx::secure::tunnelling_client_secure_test
         REQUIRE(second_request != sent.end());
         const auto authenticate = std::next(second_request);
         REQUIRE(authenticate != sent.end());
-        const auto wrapper = ks::decode_secure_wrapper_packet(*authenticate);
+        const auto wrapper = ks::decode_wrapper_packet(*authenticate);
         REQUIRE(wrapper.has_value());
         CHECK(ks::decode_sequence(wrapper->sequence) == 0u);
     }
 
     TEST_CASE("knx secure tunnelling client refuses a datagram transport", "[knx][secure][tunnelling][unit]")
     {
-        detail::secure_client_fixture fixture {};
+        detail::session_fixture fixture {};
         fixture.transport.stream = false;
         std::error_code outcome {};
         auto run = [&]() -> task<void>

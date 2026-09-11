@@ -1,23 +1,27 @@
+/// @file src/kmx/aio/opc_ua/client_service_test.cpp
+/// @brief Unit tests for the OPC UA client read, write and call services, against open62541 or its stand-in.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/opc_ua/client.hpp>
+    #include <kmx/aio/opc_ua/error.hpp>
+    #include <kmx/aio/opc_ua/open62541_compat.hpp>
+    #include <kmx/aio/opc_ua/server.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/aio/test/executor_runner.hpp>
+    #include <kmx/aio/test/outcome.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/opc_ua/client.hpp>
-#include <kmx/aio/opc_ua/error.hpp>
-#include <kmx/aio/opc_ua/open62541_compat.hpp>
-#include <kmx/aio/opc_ua/server.hpp>
-#include <kmx/aio/task.hpp>
-#include <kmx/aio/test/executor_runner.hpp>
-#include <kmx/aio/test/outcome.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <array>
-#include <chrono>
-#include <memory>
-#include <optional>
-#include <string>
-#include <system_error>
-#include <utility>
-#include <vector>
+    #include <array>
+    #include <chrono>
+    #include <memory>
+    #include <optional>
+    #include <string>
+    #include <system_error>
+    #include <utility>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::opc_ua::client_service_test
 {
@@ -25,7 +29,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
 
     namespace detail
     {
-        [[nodiscard]] client_config make_test_config()
+        [[nodiscard]] client_config make_config()
         {
             return client_config {
                 .endpoint_url = "opc.tcp://127.0.0.1:4840",
@@ -37,7 +41,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
             };
         }
 
-        [[maybe_unused]] [[nodiscard]] server_config make_test_server_config()
+        [[maybe_unused]] [[nodiscard]] server_config make_server_config()
         {
             return server_config {
                 .port = 4840u,
@@ -121,7 +125,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
 
         /// @brief Stops the test server on an executor of its own, failing the test if it refuses.
         /// @param s The server to stop.
-        void stop_test_server(server& s)
+        void stop_server(server& s)
         {
             completion::executor exec;
             const auto state = run_awaited(exec, s.stop());
@@ -151,12 +155,12 @@ namespace kmx::aio::test::opc_ua::client_service_test
 
 #endif
 
-    } // namespace detail
+    }
 
 #if defined(KMX_AIO_FEATURE_OPC_UA)
     TEST_CASE("opc_ua client service completes async requests with real backend", "[opc_ua][client][service][slow]")
     {
-        server s {detail::make_test_server_config()};
+        server s {detail::make_server_config()};
         {
             completion::executor exec;
             const auto state = run_awaited(exec, s.start());
@@ -164,7 +168,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
             REQUIRE(state->has_value());
         }
 
-        client c {detail::make_test_config()};
+        client c {detail::make_config()};
         {
             completion::executor exec;
             const auto state = run_awaited(exec, c.connect());
@@ -173,7 +177,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
         }
 
         bool connected {};
-        const auto stop_server = [&s]() { detail::stop_test_server(s); };
+        const auto stop_server = [&s]() { detail::stop_server(s); };
 
         for (int attempt = 0; attempt < 50; ++attempt)
         {
@@ -297,6 +301,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
                 break;
             }
         }
+
         REQUIRE(activated);
 
         detail::compat_call_capture_state capture;
@@ -381,6 +386,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
                 break;
             }
         }
+
         REQUIRE(activated);
 
         detail::compat_call_capture_state capture;
@@ -407,7 +413,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
 #if !defined(KMX_AIO_FEATURE_OPC_UA)
     TEST_CASE("opc_ua client service requests update stats when connected", "[opc_ua][client][service]")
     {
-        client c {make_test_config()};
+        client c {detail::make_config()};
 
         completion::executor connect_exec;
         completion::executor exec;
@@ -465,7 +471,7 @@ namespace kmx::aio::test::opc_ua::client_service_test
 
 TEST_CASE("opc_ua client service requests return disconnected before activation", "[opc_ua][client][service]")
 {
-    client c {make_test_config()};
+    client c {detail::make_config()};
 
     completion::executor connect_exec;
     completion::executor exec;
@@ -497,7 +503,7 @@ TEST_CASE("opc_ua client service requests return disconnected before activation"
 
 TEST_CASE("opc_ua client service maps callback status errors", "[opc_ua][client][service]")
 {
-    client c {make_test_config()};
+    client c {detail::make_config()};
 
     completion::executor connect_exec;
     completion::executor exec;
@@ -510,7 +516,7 @@ TEST_CASE("opc_ua client service maps callback status errors", "[opc_ua][client]
 }
 
 {
-    c.__kmx_test_set_next_request_statuses(UA_STATUSCODE_GOOD, UA_STATUSCODE_BADINTERNALERROR, UA_STATUSCODE_GOOD);
+    c.test_set_next_request_statuses(UA_STATUSCODE_GOOD, UA_STATUSCODE_BADINTERNALERROR, UA_STATUSCODE_GOOD);
     completion::executor exec;
     const auto state = run_awaited(exec, c.write_node("ns=2;s=Demo.Static.Scalar.String", "value"));
     REQUIRE(state.has_value());
@@ -521,7 +527,7 @@ TEST_CASE("opc_ua client service maps callback status errors", "[opc_ua][client]
 }
 
 {
-    c.__kmx_test_set_next_request_statuses(UA_STATUSCODE_GOOD, UA_STATUSCODE_GOOD, UA_STATUSCODE_BADSECURECHANNELCLOSED);
+    c.test_set_next_request_statuses(UA_STATUSCODE_GOOD, UA_STATUSCODE_GOOD, UA_STATUSCODE_BADSECURECHANNELCLOSED);
     completion::executor exec;
     const auto state = run_awaited(exec, c.call_method("ns=2;s=Demo.Object", "ns=2;s=Demo.Method", {"a", "b"}));
     REQUIRE(state.has_value());
@@ -535,7 +541,7 @@ TEST_CASE("opc_ua client service maps callback status errors", "[opc_ua][client]
 
 TEST_CASE("opc_ua client read validates arguments and session", "[opc_ua][client][service]")
 {
-    client c {detail::make_test_config()};
+    client c {detail::make_config()};
     completion::executor exec;
 
     {
@@ -559,7 +565,7 @@ TEST_CASE("opc_ua client read validates arguments and session", "[opc_ua][client
 
 TEST_CASE("opc_ua client write validates arguments and session", "[opc_ua][client][service]")
 {
-    client c {detail::make_test_config()};
+    client c {detail::make_config()};
     completion::executor exec;
 
     {
@@ -592,7 +598,7 @@ TEST_CASE("opc_ua client write validates arguments and session", "[opc_ua][clien
 
 TEST_CASE("opc_ua client call validates arguments and session", "[opc_ua][client][service]")
 {
-    client c {detail::make_test_config()};
+    client c {detail::make_config()};
     completion::executor exec;
 
     {
@@ -622,4 +628,4 @@ TEST_CASE("opc_ua client call validates arguments and session", "[opc_ua][client
         REQUIRE(c.get_stats().call_requests == 0u);
     }
 }
-} // namespace kmx::aio::test::opc_ua::client_service_test
+}

@@ -1,4 +1,4 @@
-/// @file aio/allocator/statistics.hpp
+/// @file api/kmx/aio/allocator/statistics.hpp
 /// @brief Process-wide counters describing coroutine-frame allocation routing.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -25,11 +25,7 @@ namespace kmx::aio::allocator
         void reset() noexcept;
     };
 
-} // namespace kmx::aio::allocator
-
-namespace kmx::aio
-{
-    /// @brief Returns the process-wide allocator statistics.
-    [[nodiscard]] allocator::statistics& get_allocator_statistics() noexcept;
-
-} // namespace kmx::aio
+    /// @brief Returns the process-wide coroutine-frame allocation statistics.
+    /// @return The one set of totals every reader shares.
+    [[nodiscard]] statistics& get_statistics() noexcept;
+}

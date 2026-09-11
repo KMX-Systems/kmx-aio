@@ -1,8 +1,10 @@
-/// @file aio/readiness/udp/endpoint.cpp
+/// @file src/kmx/aio/readiness/udp/endpoint.cpp
+/// @brief Readiness-model UDP endpoint: datagram receive, optionally with a deadline, and send to a peer address.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/readiness/udp/endpoint.hpp>
-
-#include <netinet/in.h>
+#ifndef PCH
+    #include <netinet/in.h>
+#endif
 
 namespace kmx::aio::readiness::udp
 {
@@ -35,8 +37,7 @@ namespace kmx::aio::readiness::udp
         co_return result;
     }
 
-    task_returning_expected_size_t endpoint::recv_until(span_byte_t buffer, sockaddr_storage& peer_addr,
-                                                        ::socklen_t& out_peer_addr_len,
+    task_returning_expected_size_t endpoint::recv_until(span_byte_t buffer, sockaddr_storage& peer_addr, ::socklen_t& out_peer_addr_len,
                                                         const std::uint32_t deadline_ms) noexcept(false)
     {
         out_peer_addr_len = 0u;
@@ -52,42 +53,19 @@ namespace kmx::aio::readiness::udp
         co_return result;
     }
 
-    task_returning_expected_size_t endpoint::recv(span_byte_t buffer, sockaddr_storage& peer_addr, ::socklen_t& out_peer_addr_len,
-                                                  ip_address_t& out_peer_ip, port_t& out_peer_port) noexcept(false)
+    task_returning_expected_size_t endpoint::recv(span_byte_t buffer, socket_address& out_peer_address,
+                                                  endpoint_address& out_peer) noexcept(false)
     {
-        auto result = co_await recv(buffer, peer_addr, out_peer_addr_len);
+        auto result = co_await recv(buffer, out_peer_address.storage, out_peer_address.length);
         if (!result)
             co_return result;
 
-        if (out_peer_addr_len < sizeof(sockaddr))
-            co_return std::unexpected(error_from_errno(EINVAL));
+        const auto peer = parse_socket_address(out_peer_address);
+        if (!peer)
+            co_return std::unexpected(peer.error());
 
-        const auto* addr = reinterpret_cast<const sockaddr*>(&peer_addr);
-        switch (addr->sa_family)
-        {
-            case AF_INET:
-            {
-                if (out_peer_addr_len < sizeof(::sockaddr_in))
-                    co_return std::unexpected(error_from_errno(EINVAL));
-
-                const auto* addr4 = reinterpret_cast<const ::sockaddr_in*>(&peer_addr);
-                out_peer_ip = ipv4::address_t {reinterpret_cast<const std::uint8_t*>(&addr4->sin_addr), 4u};
-                out_peer_port = ::ntohs(addr4->sin_port);
-                co_return result;
-            }
-            case AF_INET6:
-            {
-                if (out_peer_addr_len < sizeof(sockaddr_in6))
-                    co_return std::unexpected(error_from_errno(EINVAL));
-
-                const auto* addr6 = reinterpret_cast<const sockaddr_in6*>(&peer_addr);
-                out_peer_ip = ipv6::address_t {reinterpret_cast<const std::uint8_t*>(&addr6->sin6_addr), 16u};
-                out_peer_port = ::ntohs(addr6->sin6_port);
-                co_return result;
-            }
-            default:
-                co_return std::unexpected(error_from_errno(EAFNOSUPPORT));
-        }
+        out_peer = *peer;
+        co_return result;
     }
 
     task_returning_expected_size_t endpoint::send(cspan_byte_t buffer, const sockaddr* peer_addr,
@@ -118,4 +96,4 @@ namespace kmx::aio::readiness::udp
 
         co_return co_await send(buffer, reinterpret_cast<const sockaddr*>(&peer_addr->storage), peer_addr->length);
     }
-} // namespace kmx::aio::readiness::udp
+}

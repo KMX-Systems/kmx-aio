@@ -1,23 +1,23 @@
-/// @file aio/modbus/tls_client.hpp
+/// @file api/kmx/aio/modbus/tls_client.hpp
 /// @brief Asynchronous Modbus/TLS (Modbus Security) client facade.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// Implements Modbus over TLS as specified by the Modbus Security Protocol
 /// Specification (May 2018).  Mutual TLS (mTLS) is supported for high-security
 /// deployments compliant with IEC 62443.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_MODBUS)
     #ifndef PCH
+        #include <kmx/aio/modbus/types.hpp>
+        #include <kmx/aio/task.hpp>
+
         #include <cstdint>
         #include <expected>
         #include <memory>
         #include <span>
         #include <system_error>
     #endif
-
-    #include <kmx/aio/modbus/types.hpp>
-    #include <kmx/aio/task.hpp>
 
 namespace kmx::aio::readiness
 {
@@ -85,5 +85,5 @@ namespace kmx::aio::modbus
         std::unique_ptr<impl> impl_;
     };
 
-} // namespace kmx::aio::modbus
+}
 #endif // KMX_AIO_FEATURE_MODBUS

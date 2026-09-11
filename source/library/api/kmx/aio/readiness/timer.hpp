@@ -1,4 +1,4 @@
-/// @file aio/readiness/timer.hpp
+/// @file api/kmx/aio/readiness/timer.hpp
 /// @brief Readiness-model timer using timerfd + epoll for coroutine-based scheduling.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -15,5 +15,5 @@ namespace kmx::aio::readiness
     ///          until the timer fires. Exposes `co_await timer.wait(exec)`.
     using timer = kmx::aio::readiness::descriptor::timer;
 
-} // namespace kmx::aio::readiness
+}
 #endif // KMX_AIO_FEATURE_READINESS

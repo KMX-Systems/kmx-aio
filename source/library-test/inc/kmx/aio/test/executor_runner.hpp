@@ -1,28 +1,15 @@
-/// @file aio/test/executor_runner.hpp
-/// @brief Runs a readiness executor on its own thread, with a deadline.
+/// @file inc/kmx/aio/test/executor_runner.hpp
+/// @brief Runs a task to completion on an executor, and waits for a flag with a deadline.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-///
-/// readiness::executor::run() returns when its work drains or when stop() is called, and a test for
-/// shutdown behaviour is precisely a test of whether that happens. Calling run() on the test thread
-/// therefore turns every such regression into a hung test binary, which reports nothing and takes the
-/// rest of the suite with it.
-///
-/// This runs the loop on a separate thread and waits for it with a deadline, so a regression fails the
-/// test instead. The executor is stopped on the way out whatever happened, so the thread is always
-/// joinable and the failure is reported rather than hung.
 #pragma once
 #ifndef PCH
+    #include <kmx/aio/task.hpp>
+
     #include <atomic>
     #include <chrono>
     #include <optional>
     #include <thread>
     #include <utility>
-
-    #include <kmx/aio/completion/executor.hpp>
-    #if defined(KMX_AIO_FEATURE_READINESS)
-        #include <kmx/aio/readiness/executor.hpp>
-    #endif
-    #include <kmx/aio/task.hpp>
 #endif
 
 namespace kmx::aio::test
@@ -42,103 +29,6 @@ namespace kmx::aio::test
 
         return true;
     }
-
-#if defined(KMX_AIO_FEATURE_READINESS)
-    /// @brief Runs an executor's event loop on a separate thread for the lifetime of this object.
-    class scoped_runner
-    {
-    public:
-        explicit scoped_runner(readiness::executor& exec) noexcept(false):
-            exec_(exec),
-            thread_(
-                [this]()
-                {
-                    exec_.run();
-                    finished_.store(true, std::memory_order_release);
-                })
-        {
-        }
-
-        scoped_runner(const scoped_runner&) = delete;
-        scoped_runner& operator=(const scoped_runner&) = delete;
-
-        /// @brief Stops the loop so the thread can be joined even when the test failed.
-        /// @details Asked repeatedly on purpose. executor::stop() does nothing unless the loop is
-        ///          already running, so a stop that lands before run() has begun is silently lost - and
-        ///          the join that follows would then wait for a loop nobody will ever end. Whether that
-        ///          race happens depends only on which of the two threads gets there first, which is why
-        ///          it shows up as an occasional hang rather than a reliable one.
-        ~scoped_runner() noexcept
-        {
-            while (!finished_.load(std::memory_order_acquire))
-            {
-                exec_.stop();
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            }
-        }
-
-        /// @brief Waits for run() to return of its own accord.
-        /// @return True when the loop finished within @p limit, false on timeout - which is the
-        ///         observable form of "a task is still outstanding and nothing will ever complete it".
-        [[nodiscard]] bool wait_until_drained(const std::chrono::milliseconds limit) { return wait_for_flag(finished_, limit); }
-
-    private:
-        readiness::executor& exec_;
-        std::atomic_bool finished_ {false};
-        // Declared last so the flag it writes is constructed first, and joined first on destruction.
-        std::jthread thread_;
-    };
-
-#endif // KMX_AIO_FEATURE_READINESS
-
-    /// @brief Runs a completion executor's event loop on a separate thread for the lifetime of this
-    ///        object, and stops it reliably on the way out.
-    /// @details The same shape as scoped_runner above, and for the same reason. completion::executor
-    ///          arms itself inside run() - `running_.exchange(true)` and the I/O thread are both created
-    ///          there - so a stop() issued by a test before run() has reached that point finds nothing
-    ///          running and is silently discarded. run() then blocks with nobody left to end it, and the
-    ///          join that follows waits forever. Whether that happens depends only on which of the two
-    ///          threads gets there first, so it shows up as an occasional hung test rather than a
-    ///          reliable one - and a hung test binary reports nothing and takes the rest of the suite
-    ///          down with it.
-    ///
-    ///          Asking repeatedly is what closes the window: a stop that arrives too early is simply
-    ///          followed by another.
-    class scoped_completion_runner
-    {
-    public:
-        explicit scoped_completion_runner(completion::executor& exec) noexcept(false):
-            exec_(exec),
-            thread_(
-                [this]()
-                {
-                    exec_.run();
-                    finished_.store(true, std::memory_order_release);
-                })
-        {
-        }
-
-        scoped_completion_runner(const scoped_completion_runner&) = delete;
-        scoped_completion_runner& operator=(const scoped_completion_runner&) = delete;
-
-        ~scoped_completion_runner() noexcept
-        {
-            while (!finished_.load(std::memory_order_acquire))
-            {
-                exec_.stop();
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            }
-        }
-
-        /// @brief Waits for run() to return of its own accord.
-        [[nodiscard]] bool wait_until_drained(const std::chrono::milliseconds limit) { return wait_for_flag(finished_, limit); }
-
-    private:
-        completion::executor& exec_;
-        std::atomic_bool finished_ {false};
-        // Declared last so the flag it writes is constructed first, and joined first on destruction.
-        std::jthread thread_;
-    };
 
     namespace detail
     {
@@ -172,7 +62,7 @@ namespace kmx::aio::test
             done = true;
             exec.stop();
         }
-    } // namespace detail
+    }
 
     /// @brief Runs @p work to completion on @p exec and gives back what it returned.
     /// @details This is the shape almost every test that drives a single operation needs: spawn
@@ -205,7 +95,7 @@ namespace kmx::aio::test
     /// @param work The task to await.
     /// @return True when the task ran to completion.
     template <typename Executor>
-    bool run_awaited_void(Executor& exec, task<void> work) noexcept(false)
+    [[nodiscard]] bool run_awaited_void(Executor& exec, task<void> work) noexcept(false)
     {
         bool done {};
         auto driver = detail::capture_awaited_void(exec, std::move(work), done);
@@ -214,4 +104,4 @@ namespace kmx::aio::test
         return done;
     }
 
-} // namespace kmx::aio::test
+}

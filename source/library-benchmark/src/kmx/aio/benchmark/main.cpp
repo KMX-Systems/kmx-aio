@@ -1,25 +1,30 @@
-/// @file aio/benchmark/main.cpp
+/// @file src/kmx/aio/benchmark/main.cpp
+/// @brief Entry point of the kmx-aio micro-benchmark: parses options, runs the selected cases and writes the report.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/benchmark/cases.hpp>
+#ifndef PCH
+    #include <kmx/aio/benchmark/baseline_cases.hpp>
+    #include <kmx/aio/benchmark/completion_cases.hpp>
+    #include <kmx/aio/benchmark/core_cases.hpp>
+    #include <kmx/aio/benchmark/feature/http_cases.hpp>
+    #include <kmx/aio/benchmark/feature/paired_cases.hpp>
+    #include <kmx/aio/benchmark/feature/single_model_cases.hpp>
+    #include <kmx/aio/benchmark/feature/tls_cases.hpp>
+    #include <kmx/aio/benchmark/readiness_cases.hpp>
 
-#include <algorithm>
-#include <cstddef>
-#include <cstdio>
-#include <cstdlib>
-#include <memory>
-#include <optional>
-#include <print>
-#include <string>
-#include <string_view>
-#include <vector>
+    #include <algorithm>
+    #include <cstddef>
+    #include <cstdio>
+    #include <cstdlib>
+    #include <memory>
+    #include <optional>
+    #include <print>
+    #include <string>
+    #include <string_view>
+    #include <vector>
+#endif
 
 namespace kmx::aio::benchmark
 {
-    /// @brief Parses the command line and runs the matching cases.
-    /// @param argc Argument count.
-    /// @param argv Argument values.
-    /// @return Process exit status.
-    /// @throws std::bad_alloc if the case list cannot be built.
     /// @brief Runs one case and stamps it with where it sits in a pairing.
     /// @details The case function measures and does not need to know it is being compared, so the
     ///          pairing is attached here rather than by the case itself.
@@ -27,7 +32,7 @@ namespace kmx::aio::benchmark
     /// @param scale How much work the case should do.
     /// @return The measured result, with its pairing recorded.
     /// @throws std::bad_alloc if the case cannot allocate.
-    static result measure(const case_entry& item, const double scale) noexcept(false)
+    [[nodiscard]] static result measure(const case_entry& item, const double scale) noexcept(false)
     {
         auto out = item.run(scale);
         out.pair_key = item.pair_key;
@@ -71,6 +76,7 @@ namespace kmx::aio::benchmark
             as_json = true;
             return true;
         }
+
         if (text == "table")
             return true;
 
@@ -124,14 +130,14 @@ namespace kmx::aio::benchmark
     /// @brief Registers every case this build knows.
     void register_all_cases(registry& reg) noexcept(false)
     {
-        register_paired_cases(reg);
+        feature::register_paired_cases(reg);
         register_core_cases(reg);
         register_baseline_cases(reg);
         register_readiness_cases(reg);
         register_completion_cases(reg);
-        register_tls_cases(reg);
-        register_http_cases(reg);
-        register_single_model_cases(reg);
+        feature::register_tls_cases(reg);
+        feature::register_http_cases(reg);
+        feature::register_single_model_cases(reg);
     }
 
     /// @brief Groups the selected cases so both sides of a paired scenario run together.
@@ -160,6 +166,7 @@ namespace kmx::aio::benchmark
             units.push_back({i});
             unit_keys.push_back(key);
         }
+
         return units;
     }
 
@@ -185,6 +192,7 @@ namespace kmx::aio::benchmark
                         results[index] = std::move(next);
                 }
         }
+
         return results;
     }
 
@@ -223,6 +231,11 @@ namespace kmx::aio::benchmark
         return 0;
     }
 
+    /// @brief Parses the command line and runs the matching cases.
+    /// @param argc Argument count.
+    /// @param argv Argument values.
+    /// @return Process exit status.
+    /// @throws std::bad_alloc if the case list cannot be built.
     static int main(const int argc, char** const argv) noexcept(false)
     {
         options opts {};
@@ -239,7 +252,7 @@ namespace kmx::aio::benchmark
 
         return write_report(measure_all(selected, opts), reg, opts);
     }
-} // namespace kmx::aio::benchmark
+}
 
 int main(const int argc, char** const argv)
 {

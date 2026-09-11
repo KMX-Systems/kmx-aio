@@ -1,4 +1,4 @@
-/// @file aio/http3/message.hpp
+/// @file api/kmx/aio/http3/message.hpp
 /// @brief HTTP/3 message definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -59,5 +59,5 @@ namespace kmx::aio::http3
         /// @brief Parsed response body.
         std::string body {};
     };
-} // namespace kmx::aio::http3
+}
 #endif // KMX_AIO_FEATURE_HTTP3

@@ -1,15 +1,19 @@
-#include <atomic>
-#include <exception>
-#include <memory>
-#include <source_location>
-#include <string>
-#include <string_view>
+/// @file src/main.cpp
+/// @brief Entry point of the completion-model SPDK minimal sample: runs the bdev probe and finalizes the SPDK runtime.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/spdk/runtime.hpp>
+    #include <kmx/aio/sample/spdk/minimal/manager.hpp>
+    #include <kmx/logger.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/spdk/runtime.hpp>
-#include <kmx/logger.hpp>
-
-#include <kmx/aio/sample/spdk/minimal/manager.hpp>
+    #include <atomic>
+    #include <exception>
+    #include <memory>
+    #include <source_location>
+    #include <string>
+    #include <string_view>
+#endif
 
 int main(int argc, const char* argv[]) noexcept
 {
@@ -22,13 +26,13 @@ int main(int argc, const char* argv[]) noexcept
         kmx::aio::completion::executor exec;
         auto ok = std::make_shared<std::atomic_bool>(false);
 
-        exec.spawn(kmx::aio::sample::spdk::minimal::run_spdk_probe(exec, ok, std::move(bdev_name)));
+        exec.spawn(kmx::aio::sample::spdk::minimal::run_probe(exec, ok, std::move(bdev_name)));
         exec.run();
 
         // Release hardware resources cleanly via spdk lifecycle
         if (auto fini = kmx::aio::completion::spdk::runtime::finalize(); !fini)
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK finalize failed: {}",
-                         fini.error().message());
+                             fini.error().message());
 
         return ok->load(std::memory_order_relaxed) ? 0 : 1;
     }

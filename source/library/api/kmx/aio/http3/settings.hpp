@@ -1,4 +1,4 @@
-/// @file aio/http3/settings.hpp
+/// @file api/kmx/aio/http3/settings.hpp
 /// @brief HTTP/3 settings definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -24,5 +24,5 @@ namespace kmx::aio::http3
         /// @brief Whether H3 datagrams are enabled.
         bool h3_datagram {false};
     };
-} // namespace kmx::aio::http3
+}
 #endif // KMX_AIO_FEATURE_HTTP3

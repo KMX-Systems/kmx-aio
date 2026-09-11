@@ -1,4 +1,5 @@
-/// @file aio/completion/tcp/stream.cpp
+/// @file src/kmx/aio/completion/tcp/stream.cpp
+/// @brief Completion-model TCP stream implementation: read, write and write-all, plain and with fixed buffers.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/completion/tcp/stream.hpp>
 
@@ -60,4 +61,4 @@ namespace kmx::aio::completion::tcp
         co_return expected_void_t {};
     }
 
-} // namespace kmx::aio::completion::tcp
+}

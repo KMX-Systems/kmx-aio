@@ -1,16 +1,17 @@
-/// @file aio/readiness/descriptor/timer.hpp
+/// @file api/kmx/aio/readiness/descriptor/timer.hpp
+/// @brief Readiness-model RAII timerfd descriptor that arms the timer and awaits its expirations.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_READINESS)
     #ifndef PCH
-        #include <expected>
-        #include <sys/timerfd.h>
-        #include <system_error>
-
         #include <kmx/aio/file_descriptor.hpp>
         #include <kmx/aio/readiness/executor.hpp>
         #include <kmx/aio/task.hpp>
+
+        #include <expected>
+        #include <system_error>
+        #include <sys/timerfd.h>
     #endif
 
 namespace kmx::aio::readiness::descriptor
@@ -58,5 +59,5 @@ namespace kmx::aio::readiness::descriptor
         /// @throws std::bad_alloc Coroutine frame allocation failure.
         [[nodiscard]] task<std::expected<std::uint64_t, std::error_code>> wait(readiness::executor& exec) noexcept(false);
     };
-} // namespace kmx::aio::readiness::descriptor
+}
 #endif // KMX_AIO_FEATURE_READINESS

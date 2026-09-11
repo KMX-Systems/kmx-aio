@@ -1,18 +1,26 @@
+/// @file src/kmx/aio/sample/quic/http3_client/manager.cpp
+/// @brief Completion-model HTTP/3 client sample: sends a GET request over QUIC and decodes the response frames.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/quic/http3_client/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/quic/engine.hpp>
+    #include <kmx/aio/http3/alpn.hpp>
+    #include <kmx/aio/http3/control_stream_codec.hpp>
+    #include <kmx/aio/http3/data_codec.hpp>
+    #include <kmx/aio/http3/frame_codec.hpp>
+    #include <kmx/aio/http3/headers_codec.hpp>
+    #include <kmx/aio/http3/message.hpp>
 
-#include <kmx/aio/completion/quic/engine.hpp>
-#include <kmx/aio/http3/alpn.hpp>
-#include <kmx/aio/http3/codec.hpp>
-#include <kmx/aio/http3/message.hpp>
+    #include <lsquic.h>
+    #include <openssl/err.h>
+    #include <openssl/ssl.h>
 
-#include <array>
-#include <charconv>
-#include <cstdlib>
-#include <iostream>
-#include <lsquic.h>
-#include <openssl/err.h>
-#include <openssl/ssl.h>
-#include <string>
+    #include <array>
+    #include <charconv>
+    #include <cstdlib>
+    #include <iostream>
+    #include <string>
+#endif
 
 namespace kmx::aio::sample::quic::http3_client
 {
@@ -21,7 +29,7 @@ namespace kmx::aio::sample::quic::http3_client
 
     namespace detail
     {
-        std::uint16_t parse_peer_port_from_env()
+        [[nodiscard]] std::uint16_t parse_peer_port_from_env()
         {
             constexpr std::uint16_t default_port = 12345u;
             const char* const env = std::getenv("KMX_QUIC_HTTP3_PORT");
@@ -48,8 +56,8 @@ namespace kmx::aio::sample::quic::http3_client
         {
             if (control_state->saw_settings)
                 std::cout << "[HTTP/3 Client] Received peer control stream SETTINGS"
-                      << " max_field_section_size=" << control_state->negotiated_settings.max_field_section_size
-                      << " qpack_blocked_streams=" << control_state->negotiated_settings.qpack_blocked_streams << "\n";
+                          << " max_field_section_size=" << control_state->negotiated_settings.max_field_section_size
+                          << " qpack_blocked_streams=" << control_state->negotiated_settings.qpack_blocked_streams << "\n";
 
             if (control_state->goaway.has_value())
                 std::cout << "[HTTP/3 Client] Received peer GOAWAY stream_id=" << control_state->goaway->stream_id << "\n";
@@ -67,7 +75,6 @@ namespace kmx::aio::sample::quic::http3_client
         {
             kmx::aio::http3::response_message response {};
             for (const auto& frame: *frames)
-            {
                 if (frame.type == kmx::aio::http3::frame_type::headers)
                 {
                     const auto headers = kmx::aio::http3::headers_codec::decode(frame.payload);
@@ -75,12 +82,10 @@ namespace kmx::aio::sample::quic::http3_client
                         continue;
 
                     for (const auto& [name, value]: *headers)
-                    {
                         if (name == ":status")
                             response.head.status = static_cast<std::uint16_t>(std::stoi(value));
                         else
                             response.head.headers.emplace_back(name, value);
-                    }
                 }
                 else if (frame.type == kmx::aio::http3::frame_type::data)
                 {
@@ -88,7 +93,6 @@ namespace kmx::aio::sample::quic::http3_client
                     if (body)
                         response.body.append(reinterpret_cast<const char*>(body->data()), body->size());
                 }
-            }
 
             std::cout << "[HTTP/3 Client] Parsed status: " << response.head.status << "\n";
             std::cout << "[HTTP/3 Client] Parsed body bytes: " << response.body.size() << "\n";
@@ -108,6 +112,7 @@ namespace kmx::aio::sample::quic::http3_client
             std::cerr << "Failed to create client SSL_CTX\n";
             co_return;
         }
+
         if (::SSL_CTX_set_alpn_protos(ssl_ctx, kmx::aio::http3::alpn::wire.data(),
                                       static_cast<unsigned int>(kmx::aio::http3::alpn::wire.size())) != 0)
         {
@@ -115,6 +120,7 @@ namespace kmx::aio::sample::quic::http3_client
             ::SSL_CTX_free(ssl_ctx);
             co_return;
         }
+
         // For testing purposes, we might not verify the cert directly.
         ::SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_NONE, nullptr);
 
@@ -137,7 +143,8 @@ namespace kmx::aio::sample::quic::http3_client
 
         std::cout << "[HTTP/3 Client] Connecting to 127.0.0.1:" << peer_port << "...\n";
 
-        auto res = co_await engine.connect(peer_ip, peer_port, "localhost", payload, ssl_ctx);
+        auto res = co_await engine.connect(
+            {.peer_ip = peer_ip, .peer_port = peer_port, .hostname = "localhost", .payloads = {payload}, .ssl_ctx = ssl_ctx});
         if (!res)
         {
             std::cerr << "Failed to connect engine: " << res.error().message() << "\n";

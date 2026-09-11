@@ -1,3 +1,5 @@
+/// @file src/kmx/aio/knx/connection.cpp
+/// @brief KNXnet/IP HPAI and connection management codecs: CONNECT, CONNECTIONSTATE and DISCONNECT.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/knx/connection.hpp>
 
@@ -7,19 +9,19 @@ namespace kmx::aio::knx::connection
     {
         constexpr std::uint8_t udp_protocol = 0x01u;
         constexpr std::uint8_t tcp_protocol = 0x02u;
-        constexpr std::uint8_t tunnelling_type = tunnel_connection_type;
+        constexpr std::uint8_t tunnelling_type = tunnel_type;
 
         /// @brief Indicates whether an HPAI names a host protocol KNXnet/IP defines.
         /// @details The decoders accept both, because which one a peer may use is the endpoint's decision and
         ///          not the codec's: a UDP server refuses a TCP HPAI with E_HOST_PROTOCOL_TYPE, which it can
         ///          only do once the request has been read rather than dropped as unreadable.
-        constexpr bool known_protocol(const std::uint8_t value) noexcept
+        [[nodiscard]] constexpr bool known_protocol(const std::uint8_t value) noexcept
         {
             return (value == udp_protocol) || (value == tcp_protocol);
         }
         constexpr std::uint8_t link_layer = tunnel_link_layer;
 
-        bool valid_status(const std::uint8_t value) noexcept
+        [[nodiscard]] bool valid_status(const std::uint8_t value) noexcept
         {
             switch (static_cast<connect_status>(value))
             {
@@ -40,6 +42,7 @@ namespace kmx::aio::knx::connection
                 case connect_status::connection_in_use:
                     return true;
             }
+
             return false;
         }
 
@@ -65,7 +68,7 @@ namespace kmx::aio::knx::connection
             dest[19u] = static_cast<std::uint8_t>(value.endpoint.port & 0xFFu);
         }
 
-        std::expected<ipv6_hpai, std::error_code> decode_ipv6_hpai(const cspan_uint8_t source) noexcept
+        [[nodiscard]] std::expected<ipv6_hpai, std::error_code> decode_ipv6_hpai(const cspan_uint8_t source) noexcept
         {
             if ((source.size() < ipv6_hpai_size) || (source[0] != ipv6_hpai_size))
                 return std::unexpected(make_error_code(error::malformed_frame));
@@ -80,7 +83,7 @@ namespace kmx::aio::knx::connection
             return value;
         }
 
-        std::expected<hpai, std::error_code> decode_hpai(const cspan_uint8_t source) noexcept
+        [[nodiscard]] std::expected<hpai, std::error_code> decode_hpai(const cspan_uint8_t source) noexcept
         {
             if (!source.empty() && (source[0] == 20u))
                 return std::unexpected(make_error_code(error::unsupported_hpai));
@@ -91,29 +94,25 @@ namespace kmx::aio::knx::connection
 
             hpai value {};
             value.protocol = source[1];
-            value.endpoint.address = { source[2], source[3], source[4], source[5] };
-            value.endpoint.port = static_cast<std::uint16_t>((static_cast<std::uint16_t>(source[6]) << 8u) |
-                                                              static_cast<std::uint16_t>(source[7]));
+            value.endpoint.address = {source[2], source[3], source[4], source[5]};
+            value.endpoint.port =
+                static_cast<std::uint16_t>((static_cast<std::uint16_t>(source[6]) << 8u) | static_cast<std::uint16_t>(source[7]));
             return value;
         }
 
-        bool valid_header(const communication_header& header, const std::size_t size, const std::uint16_t service) noexcept
+        [[nodiscard]] bool valid_header(const communication_header& header, const std::size_t size, const std::uint16_t service) noexcept
         {
-            return (header.protocol_version == 0x10u) && (header.service_type == service) &&
-                   (header.total_length == size);
+            return (header.protocol_version == 0x10u) && (header.service_type == service) && (header.total_length == size);
         }
 
-        expected_void_t encode_control_packet(const span_uint8_t dest,
-                                                                   const std::uint16_t service,
-                                                                   const std::uint8_t channel_id,
-                                                                   const std::uint8_t status) noexcept
+        [[nodiscard]] expected_void_t encode_control_packet(const span_uint8_t dest, const std::uint16_t service,
+                                                            const std::uint8_t channel_id, const std::uint8_t status) noexcept
         {
             constexpr std::size_t total_length = frame::communication_header_size + 2u;
             if (dest.size() < total_length)
                 return std::unexpected(make_error_code(error::invalid_length));
 
-            const auto header = frame::encode_communication_header(dest, service,
-                                                                   static_cast<std::uint16_t>(total_length));
+            const auto header = frame::encode_communication_header(dest, service, static_cast<std::uint16_t>(total_length));
             if (!header.has_value())
                 return std::unexpected(header.error());
 
@@ -127,7 +126,7 @@ namespace kmx::aio::knx::connection
         /// @brief The fields of a control packet, or why they could not be read.
         using control_fields_result_t = std::expected<control_fields_t, std::error_code>;
 
-        control_fields_result_t decode_control_packet(const cspan_uint8_t packet, const std::uint16_t service) noexcept
+        [[nodiscard]] control_fields_result_t decode_control_packet(const cspan_uint8_t packet, const std::uint16_t service) noexcept
         {
             const auto header = frame::decode_communication_header(packet);
             if (!header.has_value())
@@ -141,8 +140,8 @@ namespace kmx::aio::knx::connection
         }
 
         /// @brief Encodes a CONNECTIONSTATE_REQUEST or a DISCONNECT_REQUEST: channel, reserved octet, control endpoint.
-        expected_void_t encode_control_request_packet(const span_uint8_t dest, const std::uint16_t service, const std::uint8_t channel_id,
-                                                      const hpai& control_endpoint) noexcept
+        [[nodiscard]] expected_void_t encode_control_request_packet(const span_uint8_t dest, const std::uint16_t service,
+                                                                    const std::uint8_t channel_id, const hpai& control_endpoint) noexcept
         {
             constexpr std::size_t total_length = frame::communication_header_size + control_request_body_size;
             if (dest.size() < total_length)
@@ -167,8 +166,8 @@ namespace kmx::aio::knx::connection
         };
 
         /// @brief Decodes a CONNECTIONSTATE_REQUEST or a DISCONNECT_REQUEST.
-        std::expected<control_request_fields, std::error_code> decode_control_request_packet(const cspan_uint8_t packet,
-                                                                                          const std::uint16_t service) noexcept
+        [[nodiscard]] std::expected<control_request_fields, std::error_code> decode_control_request_packet(
+            const cspan_uint8_t packet, const std::uint16_t service) noexcept
         {
             const auto header = frame::decode_communication_header(packet);
             if (!header.has_value())
@@ -184,13 +183,13 @@ namespace kmx::aio::knx::connection
                 return std::unexpected(control.error());
             return control_request_fields {packet[6u], control.value()};
         }
-    } // namespace internal
+    }
 
     /// @brief Writes a tunnelling connection request information block: four octets, or six with a requested address.
-    static void encode_connection_request_information(const span_uint8_t dest, const connect_request_frame& request) noexcept
+    static void encode_tunnel_request_information(const span_uint8_t dest, const connect_request_frame& request) noexcept
     {
         const auto extended = request.requested_address.has_value();
-        dest[0u] = extended ? extended_connection_information_size : connection_information_size;
+        dest[0u] = extended ? extended_tunnel_information_size : tunnel_information_size;
         dest[1u] = internal::tunnelling_type;
         dest[2u] = request.knx_layer;
         dest[3u] = 0x00u;
@@ -211,17 +210,16 @@ namespace kmx::aio::knx::connection
             (request.data_endpoint.protocol != request.control_endpoint.protocol))
             return std::unexpected(make_error_code(error::unsupported_hpai));
 
-        const auto header = frame::encode_communication_header(dest, connect_request_service,
-                                                               static_cast<std::uint16_t>(total_length));
+        const auto header = frame::encode_communication_header(dest, connect_request_service, static_cast<std::uint16_t>(total_length));
         if (!header.has_value())
             return std::unexpected(header.error());
 
         if (!valid_tunnel_layer(request.knx_layer))
             return std::unexpected(make_error_code(error::invalid_configuration));
 
-        internal::encode_hpai({ dest.data() + 6u, hpai_size }, request.control_endpoint);
-        internal::encode_hpai({ dest.data() + 14u, hpai_size }, request.data_endpoint);
-        encode_connection_request_information(dest.subspan(22u), request);
+        internal::encode_hpai({dest.data() + 6u, hpai_size}, request.control_endpoint);
+        internal::encode_hpai({dest.data() + 14u, hpai_size}, request.data_endpoint);
+        encode_tunnel_request_information(dest.subspan(22u), request);
         return {};
     }
 
@@ -236,13 +234,13 @@ namespace kmx::aio::knx::connection
         if (!extended && (packet.size() != frame::communication_header_size + connect_request_body_size))
             return std::unexpected(make_error_code(error::malformed_frame));
 
-        const auto control = internal::decode_hpai({ packet.data() + 6u, hpai_size });
+        const auto control = internal::decode_hpai({packet.data() + 6u, hpai_size});
         if (!control.has_value())
             return std::unexpected(control.error());
         const auto data = internal::decode_hpai({packet.data() + 14u, hpai_size});
         if (!data.has_value())
             return std::unexpected(data.error());
-        const auto information_size = extended ? extended_connection_information_size : connection_information_size;
+        const auto information_size = extended ? extended_tunnel_information_size : tunnel_information_size;
         if ((packet[22u] != information_size) || (packet[23u] != internal::tunnelling_type) || !valid_tunnel_layer(packet[24u]) ||
             (packet[25u] != 0x00u))
             return std::unexpected(make_error_code(error::unsupported_connection_type));
@@ -261,21 +259,19 @@ namespace kmx::aio::knx::connection
         if ((request.control_endpoint.protocol != internal::udp_protocol) || (request.data_endpoint.protocol != internal::udp_protocol))
             return std::unexpected(make_error_code(error::unsupported_hpai));
 
-        const auto header = frame::encode_communication_header(dest, connect_request_service,
-                                                               static_cast<std::uint16_t>(total_length));
+        const auto header = frame::encode_communication_header(dest, connect_request_service, static_cast<std::uint16_t>(total_length));
         if (!header.has_value())
             return std::unexpected(header.error());
         internal::encode_ipv6_hpai({dest.data() + 6u, ipv6_hpai_size}, request.control_endpoint);
         internal::encode_ipv6_hpai({dest.data() + 26u, ipv6_hpai_size}, request.data_endpoint);
-        dest[46u] = connection_information_size;
+        dest[46u] = tunnel_information_size;
         dest[47u] = internal::tunnelling_type;
         dest[48u] = internal::link_layer;
         dest[49u] = 0u;
         return {};
     }
 
-    std::expected<ipv6_connect_request_frame, std::error_code> decode_ipv6_connect_request_packet(
-        const cspan_uint8_t packet) noexcept
+    std::expected<ipv6_connect_request_frame, std::error_code> decode_ipv6_connect_request_packet(const cspan_uint8_t packet) noexcept
     {
         const auto header = frame::decode_communication_header(packet);
         if (!header.has_value())
@@ -291,7 +287,7 @@ namespace kmx::aio::knx::connection
         const auto data = internal::decode_ipv6_hpai({packet.data() + 26u, ipv6_hpai_size});
         if (!data.has_value())
             return std::unexpected(data.error());
-        if ((packet[46u] != connection_information_size) || (packet[47u] != internal::tunnelling_type) ||
+        if ((packet[46u] != tunnel_information_size) || (packet[47u] != internal::tunnelling_type) ||
             (packet[48u] != internal::link_layer) || (packet[49u] != 0u))
             return std::unexpected(make_error_code(error::unsupported_connection_type));
         return ipv6_connect_request_frame {control.value(), data.value()};
@@ -307,15 +303,14 @@ namespace kmx::aio::knx::connection
         if (!internal::valid_status(static_cast<std::uint8_t>(response.status)))
             return std::unexpected(make_error_code(error::invalid_configuration));
 
-        const auto header = frame::encode_communication_header(dest, connect_response_service,
-                                                               static_cast<std::uint16_t>(total_length));
+        const auto header = frame::encode_communication_header(dest, connect_response_service, static_cast<std::uint16_t>(total_length));
         if (!header.has_value())
             return std::unexpected(header.error());
 
         dest[6u] = response.channel_id;
         dest[7u] = static_cast<std::uint8_t>(response.status);
-        internal::encode_hpai({ dest.data() + 8u, hpai_size }, response.data_endpoint);
-        dest[16u] = connection_information_size;
+        internal::encode_hpai({dest.data() + 8u, hpai_size}, response.data_endpoint);
+        dest[16u] = tunnel_information_size;
         dest[17u] = internal::tunnelling_type;
         dest[18u] = static_cast<std::uint8_t>(response.assigned_address.value() >> 8u);
         dest[19u] = static_cast<std::uint8_t>(response.assigned_address.value() & 0xFFu);
@@ -345,10 +340,10 @@ namespace kmx::aio::knx::connection
         if (packet.size() != frame::communication_header_size + connect_response_body_size)
             return std::unexpected(make_error_code(error::malformed_frame));
 
-        const auto data = internal::decode_hpai({ packet.data() + 8u, hpai_size });
+        const auto data = internal::decode_hpai({packet.data() + 8u, hpai_size});
         if (!data.has_value())
             return std::unexpected(data.error());
-        if ((packet[16u] != connection_information_size) || (packet[17u] != internal::tunnelling_type))
+        if ((packet[16u] != tunnel_information_size) || (packet[17u] != internal::tunnelling_type))
             return std::unexpected(make_error_code(error::unsupported_connection_type));
         if (!internal::valid_status(packet[7u]))
             return std::unexpected(make_error_code(error::malformed_frame));
@@ -370,22 +365,20 @@ namespace kmx::aio::knx::connection
         if (!internal::valid_status(static_cast<std::uint8_t>(response.status)))
             return std::unexpected(make_error_code(error::invalid_configuration));
 
-        const auto header = frame::encode_communication_header(dest, connect_response_service,
-                                                               static_cast<std::uint16_t>(total_length));
+        const auto header = frame::encode_communication_header(dest, connect_response_service, static_cast<std::uint16_t>(total_length));
         if (!header.has_value())
             return std::unexpected(header.error());
         dest[6u] = response.channel_id;
         dest[7u] = static_cast<std::uint8_t>(response.status);
         internal::encode_ipv6_hpai({dest.data() + 8u, ipv6_hpai_size}, response.data_endpoint);
-        dest[28u] = connection_information_size;
+        dest[28u] = tunnel_information_size;
         dest[29u] = internal::tunnelling_type;
         dest[30u] = static_cast<std::uint8_t>(response.assigned_address.value() >> 8u);
         dest[31u] = static_cast<std::uint8_t>(response.assigned_address.value() & 0xFFu);
         return {};
     }
 
-    std::expected<ipv6_connect_response_frame, std::error_code> decode_ipv6_connect_response_packet(
-        const cspan_uint8_t packet) noexcept
+    std::expected<ipv6_connect_response_frame, std::error_code> decode_ipv6_connect_response_packet(const cspan_uint8_t packet) noexcept
     {
         const auto header = frame::decode_communication_header(packet);
         if (!header.has_value())
@@ -398,7 +391,7 @@ namespace kmx::aio::knx::connection
         const auto data = internal::decode_ipv6_hpai({packet.data() + 8u, ipv6_hpai_size});
         if (!data.has_value())
             return std::unexpected(data.error());
-        if ((packet[28u] != connection_information_size) || (packet[29u] != internal::tunnelling_type))
+        if ((packet[28u] != tunnel_information_size) || (packet[29u] != internal::tunnelling_type))
             return std::unexpected(make_error_code(error::unsupported_connection_type));
         if (!internal::valid_status(packet[7u]))
             return std::unexpected(make_error_code(error::malformed_frame));
@@ -412,8 +405,7 @@ namespace kmx::aio::knx::connection
         return internal::encode_control_request_packet(dest, connectionstate_request_service, request.channel_id, request.control_endpoint);
     }
 
-    std::expected<connectionstate_request_frame, std::error_code> decode_connectionstate_request_packet(
-        const cspan_uint8_t packet) noexcept
+    std::expected<connectionstate_request_frame, std::error_code> decode_connectionstate_request_packet(const cspan_uint8_t packet) noexcept
     {
         const auto fields = internal::decode_control_request_packet(packet, connectionstate_request_service);
         if (!fields.has_value())
@@ -422,16 +414,13 @@ namespace kmx::aio::knx::connection
         return connectionstate_request_frame {fields->channel_id, fields->control_endpoint};
     }
 
-    expected_void_t encode_connectionstate_response_packet(
-        const span_uint8_t dest, const connectionstate_response_frame& response) noexcept
+    expected_void_t encode_connectionstate_response_packet(const span_uint8_t dest, const connectionstate_response_frame& response) noexcept
     {
         if (!internal::valid_status(static_cast<std::uint8_t>(response.status)))
             return std::unexpected(make_error_code(error::invalid_configuration));
 
-        return internal::encode_control_packet(dest,
-                                     connectionstate_response_service,
-                                     response.channel_id,
-                                     static_cast<std::uint8_t>(response.status));
+        return internal::encode_control_packet(dest, connectionstate_response_service, response.channel_id,
+                                               static_cast<std::uint8_t>(response.status));
     }
 
     std::expected<connectionstate_response_frame, std::error_code> decode_connectionstate_response_packet(
@@ -444,7 +433,7 @@ namespace kmx::aio::knx::connection
         if (!internal::valid_status(fields->at(1u)))
             return std::unexpected(make_error_code(error::malformed_frame));
 
-        return connectionstate_response_frame { fields->at(0u), static_cast<connect_status>(fields->at(1u)) };
+        return connectionstate_response_frame {fields->at(0u), static_cast<connect_status>(fields->at(1u))};
     }
 
     expected_void_t encode_disconnect_request_packet(const span_uint8_t dest, const disconnect_request_frame& request) noexcept
@@ -452,8 +441,7 @@ namespace kmx::aio::knx::connection
         return internal::encode_control_request_packet(dest, disconnect_request_service, request.channel_id, request.control_endpoint);
     }
 
-    std::expected<disconnect_request_frame, std::error_code> decode_disconnect_request_packet(
-        const cspan_uint8_t packet) noexcept
+    std::expected<disconnect_request_frame, std::error_code> decode_disconnect_request_packet(const cspan_uint8_t packet) noexcept
     {
         const auto fields = internal::decode_control_request_packet(packet, disconnect_request_service);
         if (!fields.has_value())
@@ -467,14 +455,11 @@ namespace kmx::aio::knx::connection
         if (!internal::valid_status(static_cast<std::uint8_t>(response.status)))
             return std::unexpected(make_error_code(error::invalid_configuration));
 
-        return internal::encode_control_packet(dest,
-                         disconnect_response_service,
-                                     response.channel_id,
-                                     static_cast<std::uint8_t>(response.status));
+        return internal::encode_control_packet(dest, disconnect_response_service, response.channel_id,
+                                               static_cast<std::uint8_t>(response.status));
     }
 
-    std::expected<disconnect_response_frame, std::error_code> decode_disconnect_response_packet(
-        const cspan_uint8_t packet) noexcept
+    std::expected<disconnect_response_frame, std::error_code> decode_disconnect_response_packet(const cspan_uint8_t packet) noexcept
     {
         const auto fields = internal::decode_control_packet(packet, disconnect_response_service);
         if (!fields.has_value())
@@ -483,7 +468,7 @@ namespace kmx::aio::knx::connection
         if (!internal::valid_status(fields->at(1u)))
             return std::unexpected(make_error_code(error::malformed_frame));
 
-        return disconnect_response_frame { fields->at(0u), static_cast<connect_status>(fields->at(1u)) };
+        return disconnect_response_frame {fields->at(0u), static_cast<connect_status>(fields->at(1u))};
     }
 
     expected_void_t encode_management_connect_request_packet(const span_uint8_t dest,
@@ -495,8 +480,7 @@ namespace kmx::aio::knx::connection
         if ((request.control_endpoint.protocol != internal::udp_protocol) || (request.data_endpoint.protocol != internal::udp_protocol))
             return std::unexpected(make_error_code(error::unsupported_hpai));
 
-        const auto header =
-            frame::encode_communication_header(dest, connect_request_service, static_cast<std::uint16_t>(total_length));
+        const auto header = frame::encode_communication_header(dest, connect_request_service, static_cast<std::uint16_t>(total_length));
         if (!header.has_value())
             return std::unexpected(header.error());
 
@@ -505,7 +489,7 @@ namespace kmx::aio::knx::connection
         // A management connection information block is two octets: its own length and the type. There is no
         // KNX layer, because nothing is tunnelled onto the bus.
         dest[22u] = management_information_size;
-        dest[23u] = management_connection_type;
+        dest[23u] = management_type;
         return {};
     }
 
@@ -526,7 +510,7 @@ namespace kmx::aio::knx::connection
         const auto data = internal::decode_hpai({packet.data() + 14u, hpai_size});
         if (!data.has_value())
             return std::unexpected(data.error());
-        if ((packet[22u] != management_information_size) || (packet[23u] != management_connection_type))
+        if ((packet[22u] != management_information_size) || (packet[23u] != management_type))
             return std::unexpected(make_error_code(error::unsupported_connection_type));
 
         return management_connect_request_frame {control.value(), data.value()};
@@ -541,8 +525,7 @@ namespace kmx::aio::knx::connection
         if (response.data_endpoint.protocol != internal::udp_protocol)
             return std::unexpected(make_error_code(error::unsupported_hpai));
 
-        const auto header =
-            frame::encode_communication_header(dest, connect_response_service, static_cast<std::uint16_t>(total_length));
+        const auto header = frame::encode_communication_header(dest, connect_response_service, static_cast<std::uint16_t>(total_length));
         if (!header.has_value())
             return std::unexpected(header.error());
 
@@ -550,7 +533,7 @@ namespace kmx::aio::knx::connection
         dest[7u] = static_cast<std::uint8_t>(response.status);
         internal::encode_hpai({dest.data() + 8u, hpai_size}, response.data_endpoint);
         dest[16u] = management_information_size;
-        dest[17u] = management_connection_type;
+        dest[17u] = management_type;
         return {};
     }
 
@@ -581,7 +564,7 @@ namespace kmx::aio::knx::connection
         const auto data = internal::decode_hpai({packet.data() + 8u, hpai_size});
         if (!data.has_value())
             return std::unexpected(data.error());
-        if ((packet[16u] != management_information_size) || (packet[17u] != management_connection_type))
+        if ((packet[16u] != management_information_size) || (packet[17u] != management_type))
             return std::unexpected(make_error_code(error::unsupported_connection_type));
 
         return management_connect_response_frame {packet[6u], static_cast<connect_status>(packet[7u]), data.value()};

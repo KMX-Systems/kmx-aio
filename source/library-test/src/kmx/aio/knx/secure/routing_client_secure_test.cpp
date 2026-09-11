@@ -1,25 +1,32 @@
+/// @file src/kmx/aio/knx/secure/routing_client_secure_test.cpp
+/// @brief Unit tests for the KNX IP Secure routing client: timer synchronisation, wrapped frames and dropped forgeries.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/knx/datagram_transport.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/routing.hpp>
+    #include <kmx/aio/knx/routing/client.hpp>
+    #include <kmx/aio/knx/secure/timer_notify.hpp>
+    #include <kmx/aio/knx/secure/wrapper.hpp>
+    #include <kmx/aio/test/knx/secure_vectors.hpp>
+    #include <kmx/aio/test/knx/secure_vectors/scripted_entropy.hpp>
+    #include <kmx/aio/test/knx/telegram.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/knx/error.hpp>
-#include <kmx/aio/knx/routing.hpp>
-#include <kmx/aio/knx/secure/timer_notify.hpp>
-#include <kmx/aio/knx/secure/wrapper.hpp>
-#include <kmx/aio/test/knx/secure_vectors.hpp>
-#include <kmx/aio/test/knx/telegram.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <algorithm>
-#include <array>
-#include <cstdint>
-#include <deque>
-#include <limits>
-#include <netinet/in.h>
-#include <optional>
-#include <span>
-#include <string_view>
-#include <variant>
-#include <vector>
+    #include <algorithm>
+    #include <array>
+    #include <cstdint>
+    #include <deque>
+    #include <limits>
+    #include <optional>
+    #include <span>
+    #include <string_view>
+    #include <variant>
+    #include <vector>
+    #include <netinet/in.h>
+#endif
 
 namespace kmx::aio::test::knx::secure::routing_client_secure_test
 {
@@ -177,20 +184,21 @@ namespace kmx::aio::test::knx::secure::routing_client_secure_test
             const auto octets = value->cemi_bytes.span();
             return {octets.begin(), octets.end()};
         }
-    } // namespace detail
+    }
 
     TEST_CASE("knx secure routing client refuses to start without a serial number or a key", "[knx][secure][routing][unit]")
     {
         detail::loopback transport {};
         sv::scripted_entropy entropy {};
-        kr::client zero_serial {transport, {}, detail::configuration(ks::serial_number_t {}), detail::clock, &entropy};
+        kr::client zero_serial {
+            transport, {}, {.settings = detail::configuration(ks::serial_number_t {}), .clock_ms = detail::clock, .entropy = &entropy}};
         CHECK(zero_serial.secured());
         CHECK(zero_serial.start().error() == make_error_code(error::invalid_configuration));
         CHECK(!transport.joined);
 
         kr::secure_configuration keyless {};
         keyless.serial_number = detail::own_serial;
-        kr::client without_key {transport, {}, std::move(keyless), detail::clock, &entropy};
+        kr::client without_key {transport, {}, {.settings = std::move(keyless), .clock_ms = detail::clock, .entropy = &entropy}};
         CHECK(without_key.start().error() == make_error_code(error::secure_key_missing));
 
         kr::client plain {transport};
@@ -204,7 +212,7 @@ namespace kmx::aio::test::knx::secure::routing_client_secure_test
     {
         detail::loopback transport {};
         sv::scripted_entropy entropy {};
-        kr::client client {transport, {}, detail::configuration(), detail::clock, &entropy};
+        kr::client client {transport, {}, {.settings = detail::configuration(), .clock_ms = detail::clock, .entropy = &entropy}};
         detail::now_ms = 1'000u;
         detail::synchronise(client, transport, entropy);
 
@@ -221,7 +229,7 @@ namespace kmx::aio::test::knx::secure::routing_client_secure_test
 
         const kr::indication value {sample_cemi};
         REQUIRE(detail::run<expected_void_t>([&] { return client.send_indication(value); }).has_value());
-        const auto sent = ks::decode_secure_wrapper_packet(transport.sent.back());
+        const auto sent = ks::decode_wrapper_packet(transport.sent.back());
         REQUIRE(sent.has_value());
         CHECK(sent->serial_number == detail::own_serial);
         CHECK(ks::decode_sequence(sent->sequence) == detail::one_hour_ms + 10u);
@@ -236,7 +244,7 @@ namespace kmx::aio::test::knx::secure::routing_client_secure_test
     {
         detail::loopback transport {};
         sv::scripted_entropy entropy {};
-        kr::client client {transport, {}, detail::configuration(), detail::clock, &entropy};
+        kr::client client {transport, {}, {.settings = detail::configuration(), .clock_ms = detail::clock, .entropy = &entropy}};
         detail::now_ms = 1'000u;
         detail::synchronise(client, transport, entropy);
 
@@ -263,7 +271,7 @@ namespace kmx::aio::test::knx::secure::routing_client_secure_test
         CHECK(client.next_timer_deadline_ms() >= detail::now_ms + 10'000u);
         const kr::indication value {sample_cemi};
         REQUIRE(detail::run<expected_void_t>([&] { return client.send_indication(value); }).has_value());
-        const auto sent = ks::decode_secure_wrapper_packet(transport.sent.back());
+        const auto sent = ks::decode_wrapper_packet(transport.sent.back());
         REQUIRE(sent.has_value());
         CHECK(ks::decode_sequence(sent->sequence) == detail::one_hour_ms);
     }
@@ -272,7 +280,7 @@ namespace kmx::aio::test::knx::secure::routing_client_secure_test
     {
         detail::loopback transport {};
         sv::scripted_entropy entropy {};
-        kr::client client {transport, {}, detail::configuration(), detail::clock, &entropy};
+        kr::client client {transport, {}, {.settings = detail::configuration(), .clock_ms = detail::clock, .entropy = &entropy}};
         detail::now_ms = 1'000u;
         detail::synchronise(client, transport, entropy);
 
@@ -291,7 +299,7 @@ namespace kmx::aio::test::knx::secure::routing_client_secure_test
     {
         detail::loopback transport {};
         sv::scripted_entropy entropy {};
-        kr::client client {transport, {}, detail::configuration(), detail::clock, &entropy};
+        kr::client client {transport, {}, {.settings = detail::configuration(), .clock_ms = detail::clock, .entropy = &entropy}};
         detail::now_ms = 1'000u;
         detail::synchronise(client, transport, entropy);
 
@@ -308,7 +316,7 @@ namespace kmx::aio::test::knx::secure::routing_client_secure_test
     {
         detail::loopback transport {};
         sv::scripted_entropy entropy {};
-        kr::client client {transport, {}, detail::configuration(), detail::clock, &entropy};
+        kr::client client {transport, {}, {.settings = detail::configuration(), .clock_ms = detail::clock, .entropy = &entropy}};
         detail::now_ms = 1'000u;
         detail::synchronise(client, transport, entropy);
 
@@ -322,7 +330,7 @@ namespace kmx::aio::test::knx::secure::routing_client_secure_test
     {
         detail::loopback transport {};
         sv::scripted_entropy entropy {};
-        kr::client client {transport, {}, detail::configuration(), detail::clock, &entropy};
+        kr::client client {transport, {}, {.settings = detail::configuration(), .clock_ms = detail::clock, .entropy = &entropy}};
         detail::now_ms = 0u;
         REQUIRE(client.start().has_value());
         REQUIRE(detail::run<expected_void_t>([&] { return client.notify_timer(); }).has_value());
@@ -354,7 +362,7 @@ namespace kmx::aio::test::knx::secure::routing_client_secure_test
     {
         detail::loopback transport {};
         sv::scripted_entropy entropy {};
-        kr::client client {transport, {}, detail::configuration(), detail::clock, &entropy};
+        kr::client client {transport, {}, {.settings = detail::configuration(), .clock_ms = detail::clock, .entropy = &entropy}};
         detail::now_ms = 1'000u;
         detail::synchronise(client, transport, entropy);
 

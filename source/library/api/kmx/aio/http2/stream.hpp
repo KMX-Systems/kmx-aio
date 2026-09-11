@@ -1,13 +1,13 @@
-/// @file aio/http2/stream.hpp
+/// @file api/kmx/aio/http2/stream.hpp
 /// @brief HTTP/2 stream state machine definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_HTTP2)
     #ifndef PCH
-        #include <cstdint>
-
         #include <kmx/aio/http2/frame.hpp>
+
+        #include <cstdint>
     #endif
 
 /// @brief HTTP/2 core protocol definitions and utilities
@@ -63,5 +63,5 @@ namespace kmx::aio::http2
         void on_frame_received(frame_type type, bool end_stream) noexcept(false);
     };
 
-} // namespace kmx::aio::http2
+}
 #endif // KMX_AIO_FEATURE_HTTP2

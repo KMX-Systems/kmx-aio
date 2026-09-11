@@ -1,44 +1,51 @@
-/// @file kmx/aio/knx/secure/tunnelling_secure_interop_test.cpp
-/// @brief KNX IP Secure tunnelling against external peers: calimero-server for the in-tree client, xknx for the in-tree
-///        server.
+/// @file src/kmx/aio/knx/secure/tunnelling_secure_interop_test.cpp
+/// @brief KNX IP Secure tunnelling against external peers: calimero-server for the in-tree client, xknx for the in-tree server.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details script/feature/knx/interop/run-secure-tunnelling-interop.sh starts the peer and passes its port in
 /// KMX_KNX_INTEROP_PORT; without it each case is skipped. The client opens a session with the user and passwords the
 /// server was configured with, then tunnels one switch-on to 1/2/3, waits for the server's confirmation, and sends a
 /// heartbeat and a keep-alive before closing both the tunnel and the session. The server is keyed from the keyring in
 /// KMX_KNX_INTEROP_KEYRING, answers description over UDP on its port as well - xknx reads it before a secure tunnel whose
 /// credentials come from a keyring - and confirms the external client's switch-on to 1/2/3, then answers it on 1/2/4.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/knx/tcp_server.hpp>
+    #include <kmx/aio/completion/knx/tcp_transport.hpp>
+    #include <kmx/aio/completion/knx/udp_transport.hpp>
+    #include <kmx/aio/completion/timer.hpp>
+    #include <kmx/aio/completion/udp/endpoint.hpp>
+    #include <kmx/aio/knx/cemi.hpp>
+    #include <kmx/aio/knx/cemi_frame.hpp>
+    #include <kmx/aio/knx/dpt.hpp>
+    #include <kmx/aio/knx/generic_server.hpp>
+    #include <kmx/aio/knx/keyring.hpp>
+    #include <kmx/aio/knx/keyring/document.hpp>
+    #include <kmx/aio/knx/secure/key.hpp>
+    #include <kmx/aio/knx/server.hpp>
+    #include <kmx/aio/knx/telegram.hpp>
+    #include <kmx/aio/knx/tunnelling_client.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/knx/tcp_server.hpp>
-#include <kmx/aio/completion/knx/tcp_transport.hpp>
-#include <kmx/aio/completion/knx/udp_transport.hpp>
-#include <kmx/aio/completion/timer.hpp>
-#include <kmx/aio/completion/udp/endpoint.hpp>
-#include <kmx/aio/knx/client.hpp>
-#include <kmx/aio/knx/keyring.hpp>
-#include <kmx/aio/knx/secure/key.hpp>
-#include <kmx/aio/knx/server.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
-#include <cstdint>
-#include <cstdlib>
-#include <fstream>
-#include <iterator>
-#include <memory>
-#include <mutex>
-#include <netinet/in.h>
-#include <stop_token>
-#include <string>
-#include <string_view>
-#include <sys/socket.h>
-#include <thread>
-#include <unistd.h>
+    #include <algorithm>
+    #include <array>
+    #include <atomic>
+    #include <chrono>
+    #include <condition_variable>
+    #include <cstdint>
+    #include <cstdlib>
+    #include <fstream>
+    #include <iterator>
+    #include <memory>
+    #include <mutex>
+    #include <stop_token>
+    #include <string>
+    #include <string_view>
+    #include <thread>
+    #include <netinet/in.h>
+    #include <sys/socket.h>
+    #include <unistd.h>
+#endif
 
 namespace kmx::aio::test::knx::secure::tunnelling_secure_interop_test
 {
@@ -150,10 +157,12 @@ namespace kmx::aio::test::knx::secure::tunnelling_secure_interop_test
                     observed.confirmed = (telegram->frame.message_code == kn::cemi_message_code::l_data_con) &&
                                          (telegram->frame.destination == request_group);
                 }
+
                 observed.beat = (co_await client.heartbeat()).has_value();
                 observed.kept_alive = (co_await client.keep_alive()).has_value();
                 observed.disconnected = (co_await client.disconnect()).has_value();
             }
+
             executor.stop();
         }
 
@@ -202,9 +211,11 @@ namespace kmx::aio::test::knx::secure::tunnelling_secure_interop_test
             const auto value = kn::dpt::encode<1u>(true);
             REQUIRE(value.has_value());
             std::array<std::uint8_t, kn::cemi::max_l_data_size> message {};
-            const auto size =
-                kn::cemi::encode(message, kn::cemi_message_code::l_data_ind, kn::individual_address {1u, 1u, 1u},
-                                 kn::group_address {answer_group}, kn::apci::group_value_write, value->apdu(), kn::l_data_options {});
+            const auto size = kn::cemi::encode(message, {.code = kn::cemi_message_code::l_data_ind,
+                                                         .source = kn::individual_address {1u, 1u, 1u},
+                                                         .destination = kn::group_address {answer_group}.value(),
+                                                         .service = kn::apci::group_value_write,
+                                                         .payload = value->apdu()});
             REQUIRE(size.has_value());
             return byte_buffer_t(message.begin(), message.begin() + static_cast<std::ptrdiff_t>(*size));
         }
@@ -251,21 +262,34 @@ namespace kmx::aio::test::knx::secure::tunnelling_secure_interop_test
             static_cast<void>(::close(descriptor));
         }
 
+        /// @brief The loop, the server and its accept loop an exchange with the external peer runs on.
+        struct server_side
+        {
+            /// @brief The loop, which the exchange stops once it is over.
+            completion::executor& executor;
+            /// @brief The server the peer tunnels through.
+            kn::generic_server& server;
+            /// @brief The accept loop serving the server.
+            completion::knx::tcp_server& tcp;
+            /// @brief The server's UDP port, which the datagram loop waits on.
+            port_t port {};
+        };
+
         /// @brief Waits for the exchange to finish and the client to close its tunnel and session, then stops everything.
-        task<void> await_peer(completion::executor& executor, kn::generic_server& server, completion::knx::tcp_server& tcp,
-                              const port_t port, server_outcome& observed, const std::atomic_bool& connections_ended,
+        task<void> await_peer(const server_side side, server_outcome& observed, const std::atomic_bool& connections_ended,
                               const std::atomic_bool& datagrams_ended)
         {
-            completion::timer pause {executor};
-            while (!observed.answered || (server.active_channels() != 0u) || (server.secure_sessions() != 0u) || (tcp.connections() != 0u))
+            completion::timer pause {side.executor};
+            while (!observed.answered || (side.server.active_channels() != 0u) || (side.server.secure_sessions() != 0u) ||
+                   (side.tcp.connections() != 0u))
                 static_cast<void>(co_await pause.wait(std::chrono::milliseconds {20}));
             observed.released = true;
-            tcp.stop();
-            static_cast<void>(server.shutdown());
-            wake(port);
+            side.tcp.stop();
+            static_cast<void>(side.server.shutdown());
+            wake(side.port);
             while (!connections_ended || !datagrams_ended)
                 static_cast<void>(co_await pause.wait(std::chrono::milliseconds {5}));
-            executor.stop();
+            side.executor.stop();
         }
     }
 
@@ -280,8 +304,8 @@ namespace kmx::aio::test::knx::secure::tunnelling_secure_interop_test
         completion::executor executor;
         const auto address = detail::loopback(static_cast<port_t>(std::stoul(port)));
         completion::knx::tcp_transport transport {executor, reinterpret_cast<const sockaddr*>(&address), sizeof(address)};
-        kn::tunnelling_client client {transport, reinterpret_cast<const sockaddr*>(&address), sizeof(address), kn::tunnelling_config {},
-                                      detail::credentials()};
+        kn::tunnelling_client client {
+            transport, reinterpret_cast<const sockaddr*>(&address), sizeof(address), {.credentials = detail::credentials()}};
         detail::outcome observed {};
         executor.spawn(detail::tunnel_to_peer(executor, client, *switch_on, observed));
         detail::run_bounded(executor, detail::time_limit());
@@ -327,7 +351,7 @@ namespace kmx::aio::test::knx::secure::tunnelling_secure_interop_test
         std::atomic_bool datagrams_ended {};
         executor.spawn(detail::run_datagrams(server, datagrams_ended));
         executor.spawn(detail::run_connections(tcp, connections_ended));
-        executor.spawn(detail::await_peer(executor, server, tcp, port, observed, connections_ended, datagrams_ended));
+        executor.spawn(detail::await_peer({executor, server, tcp, port}, observed, connections_ended, datagrams_ended));
         detail::run_bounded(executor, detail::time_limit());
 
         const auto counters = server.secure_counters();

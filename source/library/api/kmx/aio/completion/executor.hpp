@@ -1,23 +1,30 @@
-/// @file aio/completion/executor.hpp
+/// @file api/kmx/aio/completion/executor.hpp
 /// @brief Completion-model executor using io_uring for asynchronous I/O.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_COMPLETION)
     #ifndef PCH
-        #include <atomic>
-        #include <cstdint>
-        #include <expected>
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/completion/statistics.hpp>
+        #include <kmx/aio/executor_base.hpp>
+        #include <kmx/aio/promise_base.hpp>
+        #include <kmx/aio/task.hpp>
+
         #include <liburing.h>
+
+        #include <chrono>
+        #include <coroutine>
+        #include <cstdint>
+        #include <exception>
+        #include <expected>
         #include <memory>
         #include <mutex>
         #include <span>
         #include <stop_token>
         #include <system_error>
-
-        #include <kmx/aio/basic_types.hpp>
-        #include <kmx/aio/executor_base.hpp>
-        #include <kmx/aio/task.hpp>
+        #include <sys/socket.h>
+        #include <sys/uio.h>
     #endif
 
 namespace kmx::aio::completion
@@ -29,20 +36,6 @@ namespace kmx::aio::completion
         std::uint32_t max_completions = 256u; ///< Maximum CQE batch size per reap cycle.
         std::uint32_t thread_count = 1u;      ///< Number of worker threads for coroutine resumption.
         std::int16_t core_id = -1;            ///< CPU core affinity (-1 = no pinning). Range: -1 to 16000.
-    };
-
-    /// @brief Statistics for io_uring operations and executor performance.
-    struct statistics
-    {
-        std::atomic_uint64_t total_submissions {};     ///< Total SQEs submitted.
-        std::atomic_uint64_t total_completions {};     ///< Total CQEs reaped.
-        std::atomic_uint64_t total_tasks_spawned {};   ///< Total top-level tasks spawned.
-        std::atomic_uint64_t total_tasks_completed {}; ///< Total top-level tasks completed.
-        std::atomic_uint64_t error_count {};           ///< Total errors encountered.
-        std::atomic_uint64_t submission_full_count {}; ///< Times the SQ was full.
-
-        /// @brief Resets all counters to zero.
-        void reset() noexcept;
     };
 
     /// @brief Completion-model executor using Linux io_uring.
@@ -137,9 +130,8 @@ namespace kmx::aio::completion
         /// @return A task yielding the number of bytes received, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] task_returning_expected_size_t async_recvmsg(const fd_t fd, msghdr* msg, const unsigned flags = 0u) noexcept(false);
-        [[nodiscard]] task_returning_expected_size_t async_recvmsg_until(const fd_t fd, msghdr* msg,
-                                         std::uint64_t timeout_ns,
-                                         const unsigned flags = 0u) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t async_recvmsg_until(const fd_t fd, msghdr* msg, std::uint64_t timeout_ns,
+                                                                         const unsigned flags = 0u) noexcept(false);
 
         /// @brief Prepares an asynchronous sendmsg.
         /// @param fd   Socket file descriptor.
@@ -236,7 +228,7 @@ namespace kmx::aio::completion
 
             /// @brief Never completes synchronously; the CQE always arrives later.
             /// @return Always `false`.
-            bool await_ready() const noexcept { return false; }
+            [[nodiscard]] bool await_ready() const noexcept { return false; }
 
             /// @brief Parks the coroutine in the io_context so process_completions() can resume it.
             /// @param h The coroutine to resume once the CQE arrives.
@@ -300,14 +292,14 @@ namespace kmx::aio::completion
 
                 /// @brief Suspends before the body runs, so the caller decides when to start it.
                 /// @return An always-suspending awaiter.
-                std::suspend_always initial_suspend() const noexcept { return {}; }
+                [[nodiscard]] std::suspend_always initial_suspend() const noexcept { return {}; }
 
                 /// @brief Final awaiter that destroys the coroutine frame instead of resuming anyone.
                 struct final_awaiter
                 {
                     /// @brief Never completes synchronously, so @ref await_suspend always runs.
                     /// @return Always `false`.
-                    bool await_ready() const noexcept { return false; }
+                    [[nodiscard]] bool await_ready() const noexcept { return false; }
                     /// @brief Destroys the finished coroutine frame.
                     /// @param h The handle of the coroutine that just completed.
                     void await_suspend(std::coroutine_handle<promise_type> h) const noexcept { h.destroy(); }
@@ -319,7 +311,7 @@ namespace kmx::aio::completion
 
                 /// @brief Returns the awaiter that tears the frame down.
                 /// @return The @ref final_awaiter.
-                final_awaiter final_suspend() const noexcept { return {}; }
+                [[nodiscard]] final_awaiter final_suspend() const noexcept { return {}; }
                 // LCOV_EXCL_LINE: reaching this ends the process, so no test can take it and return.
                 // execute_task() catches std::exception around the whole body, which leaves only a
                 // throw of something not derived from it - and there is no sane way to continue from
@@ -353,5 +345,5 @@ namespace kmx::aio::completion
         mutable std::mutex io_thread_mutex_;
     };
 
-} // namespace kmx::aio::completion
+}
 #endif // KMX_AIO_FEATURE_COMPLETION

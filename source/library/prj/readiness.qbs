@@ -31,6 +31,7 @@ StaticLibrary {
             "../api/kmx/aio/readiness/tls/**.hpp",
             "../api/kmx/aio/readiness/v4l2/**.hpp",
             "../src/kmx/aio/readiness/executor.cpp",
+            "../src/kmx/aio/readiness/statistics.cpp",
             "../src/kmx/aio/readiness/descriptor/**.cpp",
             "../src/kmx/aio/readiness/tcp/**.cpp",
             "../src/kmx/aio/readiness/udp/**.cpp",
@@ -45,8 +46,9 @@ StaticLibrary {
         if (project.enable_quic)
         {
             entries.push("../api/kmx/aio/readiness/quic/**.hpp");
-            entries.push("../src/kmx/aio/quic/engine.cpp");
             entries.push("../src/kmx/aio/quic/base_engine.cpp");
+            entries.push("../src/kmx/aio/quic/generic_engine.cpp");
+            entries.push("../src/kmx/aio/quic/primary_base_impl.cpp");
         }
 
         return entries;

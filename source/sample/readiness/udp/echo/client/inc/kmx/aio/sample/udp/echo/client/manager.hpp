@@ -1,3 +1,6 @@
+/// @file inc/kmx/aio/sample/udp/echo/client/manager.hpp
+/// @brief Readiness-model UDP echo client sample manager: concurrent workers sending datagrams and awaiting each echo.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <kmx/aio/readiness/executor.hpp>

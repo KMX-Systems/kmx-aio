@@ -1,8 +1,13 @@
-#include <kmx/aio/readiness/udp/endpoint.hpp>
-#include <kmx/aio/readiness/udp/socket.hpp>
+/// @file src/kmx/aio/sample/udp/minimal/client/manager.cpp
+/// @brief Readiness-model minimal UDP client: one request/reply datagram per worker, then a success summary.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/udp/minimal/client/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/readiness/udp/endpoint.hpp>
+    #include <kmx/aio/readiness/udp/socket.hpp>
 
-#include <sys/socket.h>
+    #include <sys/socket.h>
+#endif
 
 namespace kmx::aio::sample::udp::minimal::client
 {
@@ -137,4 +142,4 @@ namespace kmx::aio::sample::udp::minimal::client
         std::println("╚════════════════════════════════════════╝");
     }
 
-} // namespace kmx::aio::sample::udp::minimal::client
+}

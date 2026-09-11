@@ -1,5 +1,6 @@
-/// @file kmx/aio/knx/secure/routing_timer_state.hpp
+/// @file inc/kmx/aio/knx/secure/routing_timer_state.hpp
 /// @brief The KNX IP Secure routing timer: wrapper acceptance, duplicate suppression and TIMER_NOTIFY scheduling.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// Secure routing has no sessions and no sequence counters. Every router keeps a millisecond timer, stamps each
 /// wrapper it sends with it, and accepts a received wrapper whose timer is not too far behind its own; a newer
@@ -14,20 +15,19 @@
 /// The events and delays follow xknx 3.20.0 `SecureSequenceTimer` (AN159 v06 §2.2.2.3, events E1 to E11),
 /// the interoperability peer, with one rule added: a wrapper already accepted - the same serial number, message
 /// tag and timer value - is dropped as a duplicate, which the acceptance window alone would admit again (D17).
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/knx/secure/common.hpp>
+        #include <kmx/aio/knx/secure/entropy_source.hpp>
+
         #include <cstddef>
         #include <cstdint>
         #include <optional>
         #include <utility>
         #include <vector>
     #endif
-
-    #include <kmx/aio/knx/secure/common.hpp>
-    #include <kmx/aio/knx/secure/entropy.hpp>
 
 namespace kmx::aio::knx::secure
 {

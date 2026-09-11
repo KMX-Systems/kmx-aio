@@ -38,7 +38,7 @@ The packed 9-byte `frame_header` struct matches the wire layout:
 `frame_builder` writes complete binary frames into a caller-supplied `std::span<std::uint8_t>`.
 
 ```cpp
-#include <kmx/aio/http2/codec.hpp>
+#include <kmx/aio/http2/frame_builder.hpp>
 
 std::array<std::uint8_t, 256> buf;
 
@@ -66,7 +66,7 @@ n = kmx::aio::http2::frame_builder::make_data(buf, 1u, true, "hello");
 The encoder implements "Literal Header Field without Indexing" (RFC 7541 §6.2.2), which requires no dynamic table and no Huffman tables:
 
 ```cpp
-#include <kmx/aio/http2/hpack.hpp>
+#include <kmx/aio/http2/hpack_encoder.hpp>
 
 using namespace kmx::aio::http2;
 
@@ -147,6 +147,7 @@ qbs build -f source/source.qbs config:debug \
 | File | Purpose |
 | :--- | :--- |
 | [source/library/api/kmx/aio/http2/frame.hpp](../../source/library/api/kmx/aio/http2/frame.hpp) | `frame_type`, `frame_header`, `make_goaway` |
-| [source/library/api/kmx/aio/http2/hpack.hpp](../../source/library/api/kmx/aio/http2/hpack.hpp) | `hpack_encoder`, `header_list`, `header_field` |
+| [source/library/api/kmx/aio/http2/hpack.hpp](../../source/library/api/kmx/aio/http2/hpack.hpp) | `header_list`, `header_field` |
+| [source/library/api/kmx/aio/http2/hpack_encoder.hpp](../../source/library/api/kmx/aio/http2/hpack_encoder.hpp) | `hpack_encoder` |
 | [source/library/api/kmx/aio/http2/stream.hpp](../../source/library/api/kmx/aio/http2/stream.hpp) | `stream`, `stream_state` |
-| [source/library/api/kmx/aio/http2/codec.hpp](../../source/library/api/kmx/aio/http2/codec.hpp) | `frame_builder` (SETTINGS, HEADERS, DATA) |
+| [source/library/api/kmx/aio/http2/frame_builder.hpp](../../source/library/api/kmx/aio/http2/frame_builder.hpp) | `frame_builder` (SETTINGS, HEADERS, DATA) |

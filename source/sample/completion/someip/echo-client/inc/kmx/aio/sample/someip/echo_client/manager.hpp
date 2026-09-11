@@ -1,11 +1,14 @@
+/// @file inc/kmx/aio/sample/someip/echo_client/manager.hpp
+/// @brief Completion-model SOME/IP echo client sample manager.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
-    #include <atomic>
-    #include <memory>
-
     #include <kmx/aio/completion/executor.hpp>
     #include <kmx/aio/someip/client.hpp>
     #include <kmx/aio/task.hpp>
+
+    #include <atomic>
+    #include <memory>
 #endif
 
 namespace kmx::aio::sample::someip::echo_client

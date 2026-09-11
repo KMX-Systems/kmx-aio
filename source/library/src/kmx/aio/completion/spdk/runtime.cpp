@@ -1,19 +1,20 @@
-/// @file aio/completion/spdk/runtime.cpp
+/// @file src/kmx/aio/completion/spdk/runtime.cpp
 /// @brief SPDK runtime initialization and bdev enumeration helpers.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/completion/spdk/runtime.hpp>
+#ifndef PCH
+    #include <kmx/aio/error_code.hpp>
 
-#include <kmx/aio/error_code.hpp>
+    #if defined(KMX_AIO_FEATURE_SPDK)
+        #include <spdk/bdev.h>
+        #include <spdk/env.h>
+        #include <spdk/init.h>
+        #include <spdk/thread.h>
 
-#if defined(KMX_AIO_FEATURE_SPDK)
-    #include <atomic>
-    #include <mutex>
-    #include <thread>
-
-    #include <spdk/bdev.h>
-    #include <spdk/env.h>
-    #include <spdk/init.h>
-    #include <spdk/thread.h>
+        #include <atomic>
+        #include <mutex>
+        #include <thread>
+    #endif
 #endif
 
 namespace kmx::aio::completion::spdk::runtime
@@ -26,7 +27,7 @@ namespace kmx::aio::completion::spdk::runtime
         int rc = -1;
     };
 
-    struct runtime_state
+    struct process_state
     {
         std::mutex mutex {};
         bool env_initialized {};
@@ -34,9 +35,9 @@ namespace kmx::aio::completion::spdk::runtime
         spdk_thread* app_thread {};
     };
 
-    runtime_state& get_runtime() noexcept
+    [[nodiscard]] process_state& get_process_state() noexcept
     {
-        static runtime_state state {};
+        static process_state state {};
         return state;
     }
 
@@ -54,7 +55,7 @@ namespace kmx::aio::completion::spdk::runtime
         init->done.store(true, std::memory_order_release);
     }
 
-    [[nodiscard]] expected_void_t ensure_subsystem_initialized(runtime_state& state) noexcept
+    [[nodiscard]] expected_void_t ensure_subsystem_initialized(process_state& state) noexcept
     {
         if (state.subsystem_initialized)
             return expected_void_t {};
@@ -100,7 +101,7 @@ namespace kmx::aio::completion::spdk::runtime
         return expected_void_t {};
     }
 
-    [[nodiscard]] expected_void_t ensure_subsystem_finalized(runtime_state& state) noexcept
+    [[nodiscard]] expected_void_t ensure_subsystem_finalized(process_state& state) noexcept
     {
         if (!state.subsystem_initialized)
         {
@@ -148,7 +149,7 @@ namespace kmx::aio::completion::spdk::runtime
 #if !defined(KMX_AIO_FEATURE_SPDK)
         return std::unexpected(to_std_error_code(error_code::unsupported_operation));
 #else
-        auto& state = get_runtime();
+        auto& state = get_process_state();
         std::scoped_lock lock(state.mutex);
         return ensure_subsystem_initialized(state);
 #endif
@@ -159,7 +160,7 @@ namespace kmx::aio::completion::spdk::runtime
 #if !defined(KMX_AIO_FEATURE_SPDK)
         return std::unexpected(to_std_error_code(error_code::unsupported_operation));
 #else
-        auto& state = get_runtime();
+        auto& state = get_process_state();
         std::scoped_lock lock(state.mutex);
         return ensure_subsystem_finalized(state);
 #endif
@@ -170,7 +171,7 @@ namespace kmx::aio::completion::spdk::runtime
 #if !defined(KMX_AIO_FEATURE_SPDK)
         return std::unexpected(to_std_error_code(error_code::unsupported_operation));
 #else
-        auto& state = get_runtime();
+        auto& state = get_process_state();
         std::scoped_lock lock(state.mutex);
 
         const auto init_result = ensure_subsystem_initialized(state);
@@ -191,4 +192,4 @@ namespace kmx::aio::completion::spdk::runtime
 #endif
     }
 
-} // namespace kmx::aio::completion::spdk::runtime
+}

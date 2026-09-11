@@ -1,4 +1,4 @@
-/// @file aio/http3/control.hpp
+/// @file api/kmx/aio/http3/control.hpp
 /// @brief HTTP/3 control stream definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -23,5 +23,5 @@ namespace kmx::aio::http3
         /// @brief Optional GOAWAY frame observed on the control stream.
         std::optional<goaway_frame> goaway {};
     };
-} // namespace kmx::aio::http3
+}
 #endif // KMX_AIO_FEATURE_HTTP3

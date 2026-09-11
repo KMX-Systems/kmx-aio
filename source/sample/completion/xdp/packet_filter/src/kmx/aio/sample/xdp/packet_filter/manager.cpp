@@ -1,19 +1,23 @@
+/// @file src/kmx/aio/sample/xdp/packet_filter/manager.cpp
+/// @brief Completion-model AF_XDP packet filter: receives and releases frames on an interface queue, then logs socket stats.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/xdp/packet_filter/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/xdp/socket.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/logger.hpp>
 
-#include <atomic>
-#include <filesystem>
-#include <memory>
-#include <source_location>
-#include <string>
-
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/xdp/socket.hpp>
-#include <kmx/aio/task.hpp>
-#include <kmx/logger.hpp>
+    #include <atomic>
+    #include <filesystem>
+    #include <memory>
+    #include <source_location>
+    #include <string>
+#endif
 
 namespace kmx::aio::sample::xdp::packet_filter
 {
-    void log_xdp_setup_hints(const std::string& interface_name, std::uint32_t queue_id)
+    void log_setup_hints(const std::string& interface_name, std::uint32_t queue_id)
     {
         kmx::logger::log(kmx::logger::level::info, std::source_location::current(),
                          "Hint: ensure CAP_NET_ADMIN/CAP_BPF (or run as root), then verify interface '{}' queue {} exists", interface_name,
@@ -22,14 +26,14 @@ namespace kmx::aio::sample::xdp::packet_filter
         const auto iface_path = std::filesystem::path("/sys/class/net") / interface_name;
         if (!std::filesystem::exists(iface_path))
             kmx::logger::log(kmx::logger::level::info, std::source_location::current(),
-                         "Hint: interface '{}' is not present under /sys/class/net", interface_name);
+                             "Hint: interface '{}' is not present under /sys/class/net", interface_name);
 
         kmx::logger::log(kmx::logger::level::info, std::source_location::current(),
                          "Hint: if XDP program attach is blocked, check driver/offload support and kernel logs via 'dmesg | tail -n 50'");
     }
 
-    kmx::aio::task<void> run_packet_filter(kmx::aio::completion::executor& exec, std::shared_ptr<std::atomic_bool> ok,
-                                           std::string interface_name, std::uint32_t queue_id)
+    kmx::aio::task<void> run(kmx::aio::completion::executor& exec, std::shared_ptr<std::atomic_bool> ok, std::string interface_name,
+                             std::uint32_t queue_id)
     {
         kmx::aio::completion::xdp::socket_config cfg {
             .interface_name = interface_name,
@@ -41,7 +45,7 @@ namespace kmx::aio::sample::xdp::packet_filter
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "AF_XDP socket create failed: {}",
                              sock_result.error().message());
-            log_xdp_setup_hints(interface_name, queue_id);
+            log_setup_hints(interface_name, queue_id);
             exec.stop();
             co_return;
         }

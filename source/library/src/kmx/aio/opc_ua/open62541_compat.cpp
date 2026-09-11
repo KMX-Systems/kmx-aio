@@ -1,12 +1,14 @@
+/// @file src/kmx/aio/opc_ua/open62541_compat.cpp
+/// @brief open62541 async request bridges for the OPC UA wrappers, plus an in-process stand-in when the feature is off.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/opc_ua/open62541_compat.hpp>
-
 #if !defined(KMX_AIO_FEATURE_OPC_UA)
+    #ifndef PCH
+        #include <string>
+        #include <vector>
+    #endif
 
-    #include <string>
-    #include <vector>
-
-namespace compat_internal
+namespace kmx::aio::opc_ua::detail
 {
     struct pending_read_request
     {
@@ -34,7 +36,7 @@ namespace compat_internal
         KMX_UA_CallRequestCallback callback {};
         void* user_data {};
     };
-} // namespace compat_internal
+}
 
 struct UA_ClientConfig
 {
@@ -53,9 +55,9 @@ struct UA_Client
     UA_StatusCode next_read_status {UA_STATUSCODE_GOOD};
     UA_StatusCode next_write_status {UA_STATUSCODE_GOOD};
     UA_StatusCode next_call_status {UA_STATUSCODE_GOOD};
-    std::vector<compat_internal::pending_read_request> pending_reads;
-    std::vector<compat_internal::pending_write_request> pending_writes;
-    std::vector<compat_internal::pending_call_request> pending_calls;
+    std::vector<kmx::aio::opc_ua::detail::pending_read_request> pending_reads;
+    std::vector<kmx::aio::opc_ua::detail::pending_write_request> pending_writes;
+    std::vector<kmx::aio::opc_ua::detail::pending_call_request> pending_calls;
 };
 
 struct UA_Server
@@ -124,19 +126,14 @@ extern "C"
             return UA_STATUSCODE_BADNOTCONNECTED;
 
         for (const auto& request: client->pending_reads)
-        {
             if (request.callback != nullptr)
                 request.callback(request.user_data, request.request_id, client->next_read_status, "opcua_stub_value");
-        }
 
         for (const auto& request: client->pending_writes)
-        {
             if (request.callback != nullptr)
                 request.callback(request.user_data, request.request_id, client->next_write_status);
-        }
 
         for (const auto& request: client->pending_calls)
-        {
             if (request.callback != nullptr)
             {
                 std::vector<const char*> outputs;
@@ -147,7 +144,6 @@ extern "C"
                 request.callback(request.user_data, request.request_id, client->next_call_status,
                                  outputs.empty() ? nullptr : outputs.data(), static_cast<UA_UInt32>(outputs.size()));
             }
-        }
 
         client->next_read_status = UA_STATUSCODE_GOOD;
         client->next_write_status = UA_STATUSCODE_GOOD;
@@ -182,7 +178,7 @@ extern "C"
         if ((client->channel_state != UA_SECURECHANNELSTATE_CONNECTED) || (client->session_state != UA_SESSIONSTATE_ACTIVATED))
             return UA_STATUSCODE_BADNOTCONNECTED;
 
-        client->pending_reads.push_back(compat_internal::pending_read_request {
+        client->pending_reads.push_back(kmx::aio::opc_ua::detail::pending_read_request {
             .request_id = requestId,
             .node_id = nodeId,
             .callback = callback,
@@ -200,7 +196,7 @@ extern "C"
         if ((client->channel_state != UA_SECURECHANNELSTATE_CONNECTED) || (client->session_state != UA_SESSIONSTATE_ACTIVATED))
             return UA_STATUSCODE_BADNOTCONNECTED;
 
-        client->pending_writes.push_back(compat_internal::pending_write_request {
+        client->pending_writes.push_back(kmx::aio::opc_ua::detail::pending_write_request {
             .request_id = requestId,
             .node_id = nodeId,
             .value = value,
@@ -220,7 +216,7 @@ extern "C"
         if ((client->channel_state != UA_SECURECHANNELSTATE_CONNECTED) || (client->session_state != UA_SESSIONSTATE_ACTIVATED))
             return UA_STATUSCODE_BADNOTCONNECTED;
 
-        compat_internal::pending_call_request request {
+        kmx::aio::opc_ua::detail::pending_call_request request {
             .request_id = requestId,
             .object_node_id = objectNodeId,
             .method_node_id = methodNodeId,
@@ -311,7 +307,7 @@ extern "C"
     #include <string>
     #include <vector>
 
-namespace compat_internal
+namespace kmx::aio::opc_ua::detail
 {
     struct read_bridge_context
     {
@@ -400,10 +396,8 @@ namespace compat_internal
             return UA_STATUSCODE_BADINTERNALERROR;
 
         for (std::size_t i = 0; i < method_result.inputArgumentResultsSize; ++i)
-        {
             if (method_result.inputArgumentResults[i] != UA_STATUSCODE_GOOD)
                 return method_result.inputArgumentResults[i];
-        }
 
         return UA_STATUSCODE_GOOD;
     }
@@ -543,6 +537,7 @@ namespace compat_internal
             context->callback(context->user_data, context->request_id, UA_STATUSCODE_BADINTERNALERROR, nullptr, 0u);
             return;
         }
+
         context->output_arguments.clear();
         context->output_arguments.reserve(result.outputArgumentsSize);
         for (std::size_t i = 0; i < result.outputArgumentsSize; ++i)
@@ -554,6 +549,7 @@ namespace compat_internal
                 context->callback(context->user_data, context->request_id, convert_status, nullptr, 0u);
                 return;
             }
+
             context->output_arguments.push_back(std::move(converted));
         }
 
@@ -565,7 +561,7 @@ namespace compat_internal
         context->callback(context->user_data, context->request_id, UA_STATUSCODE_GOOD, outputs.empty() ? nullptr : outputs.data(),
                           static_cast<UA_UInt32>(outputs.size()));
     }
-} // namespace compat_internal
+}
 
 extern "C"
 {
@@ -577,18 +573,18 @@ extern "C"
             return UA_STATUSCODE_BADCONFIGURATIONERROR;
 
         UA_NodeId node_id;
-        const UA_StatusCode parse_status = compat_internal::parse_node_id(nodeId, node_id);
+        const UA_StatusCode parse_status = kmx::aio::opc_ua::detail::parse_node_id(nodeId, node_id);
         if (parse_status != UA_STATUSCODE_GOOD)
             return parse_status;
 
-        auto context = std::make_unique<compat_internal::read_bridge_context>();
+        auto context = std::make_unique<kmx::aio::opc_ua::detail::read_bridge_context>();
         context->request_id = requestId;
         context->callback = callback;
         context->user_data = userData;
 
         UA_UInt32 upstream_request_id {};
-        const UA_StatusCode submit_status = UA_Client_readValueAttribute_async(client, node_id, &compat_internal::on_read_value_attribute,
-                                                                               context.get(), &upstream_request_id);
+        const UA_StatusCode submit_status = UA_Client_readValueAttribute_async(
+            client, node_id, &kmx::aio::opc_ua::detail::on_read_value_attribute, context.get(), &upstream_request_id);
 
         UA_NodeId_clear(&node_id);
 
@@ -606,7 +602,7 @@ extern "C"
             return UA_STATUSCODE_BADCONFIGURATIONERROR;
 
         UA_NodeId node_id;
-        const UA_StatusCode parse_status = compat_internal::parse_node_id(nodeId, node_id);
+        const UA_StatusCode parse_status = kmx::aio::opc_ua::detail::parse_node_id(nodeId, node_id);
         if (parse_status != UA_STATUSCODE_GOOD)
             return parse_status;
 
@@ -620,14 +616,14 @@ extern "C"
             return variant_status;
         }
 
-        auto context = std::make_unique<compat_internal::write_bridge_context>();
+        auto context = std::make_unique<kmx::aio::opc_ua::detail::write_bridge_context>();
         context->request_id = requestId;
         context->callback = callback;
         context->user_data = userData;
 
         UA_UInt32 upstream_request_id {};
         const UA_StatusCode submit_status = UA_Client_writeValueAttribute_async(
-            client, node_id, &variant, &compat_internal::on_write_response, context.get(), &upstream_request_id);
+            client, node_id, &variant, &kmx::aio::opc_ua::detail::on_write_response, context.get(), &upstream_request_id);
 
         UA_Variant_clear(&variant);
         UA_NodeId_clear(&node_id);
@@ -647,19 +643,19 @@ extern "C"
             return UA_STATUSCODE_BADCONFIGURATIONERROR;
 
         UA_NodeId object_node_id;
-        const UA_StatusCode object_parse_status = compat_internal::parse_node_id(objectNodeId, object_node_id);
+        const UA_StatusCode object_parse_status = kmx::aio::opc_ua::detail::parse_node_id(objectNodeId, object_node_id);
         if (object_parse_status != UA_STATUSCODE_GOOD)
             return object_parse_status;
 
         UA_NodeId method_node_id;
-        const UA_StatusCode method_parse_status = compat_internal::parse_node_id(methodNodeId, method_node_id);
+        const UA_StatusCode method_parse_status = kmx::aio::opc_ua::detail::parse_node_id(methodNodeId, method_node_id);
         if (method_parse_status != UA_STATUSCODE_GOOD)
         {
             UA_NodeId_clear(&object_node_id);
             return method_parse_status;
         }
 
-        auto context = std::make_unique<compat_internal::call_bridge_context>();
+        auto context = std::make_unique<kmx::aio::opc_ua::detail::call_bridge_context>();
         context->request_id = requestId;
         context->callback = callback;
         context->user_data = userData;
@@ -679,10 +675,8 @@ extern "C"
             if (variant_status != UA_STATUSCODE_GOOD)
             {
                 if (variants_initialized)
-                {
                     for (UA_UInt32 j = 0; j <= i; ++j)
                         UA_Variant_clear(&input_variants[j]);
-                }
                 UA_NodeId_clear(&object_node_id);
                 UA_NodeId_clear(&method_node_id);
                 return variant_status;
@@ -692,7 +686,7 @@ extern "C"
         UA_UInt32 upstream_request_id {};
         const UA_StatusCode submit_status =
             UA_Client_call_async(client, object_node_id, method_node_id, static_cast<std::size_t>(input_variants.size()),
-                                 input_variants.empty() ? nullptr : input_variants.data(), &compat_internal::on_call_response,
+                                 input_variants.empty() ? nullptr : input_variants.data(), &kmx::aio::opc_ua::detail::on_call_response,
                                  context.get(), &upstream_request_id);
 
         for (auto& variant: input_variants)

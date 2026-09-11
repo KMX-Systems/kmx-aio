@@ -1,4 +1,4 @@
-/// @file aio/branch_edges_test.cpp
+/// @file src/kmx/aio/branch_edges_test.cpp
 /// @brief Tests for conditionals whose other side no existing case takes.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 ///
@@ -6,31 +6,34 @@
 /// log level outside the table, a scheduler asked to wait from one of its own workers, a wait cancelled
 /// before anyone subscribed to it. Each one is cheap to reach directly and expensive to reach by
 /// accident, which is why they were still one-sided.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/channel.hpp>
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/scheduler.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/aio/test/executor_runner.hpp>
+    #include <kmx/aio/test/scoped_completion_runner.hpp>
+    #include <kmx/aio/test/scoped_runner.hpp>
+    #include <kmx/aio/test/socket_pair.hpp>
+    #include <kmx/logger.hpp>
 
-#include <atomic>
-#include <chrono>
-#include <memory>
-#include <thread>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <sys/socket.h>
-#include <unistd.h>
+    #include <array>
+    #include <atomic>
+    #include <chrono>
+    #include <memory>
+    #include <span>
+    #include <stop_token>
+    #include <thread>
+    #include <utility>
+    #include <sys/socket.h>
+    #include <unistd.h>
 
-#include <array>
-#include <span>
-#include <stop_token>
-#include <utility>
-
-#include <kmx/aio/channel.hpp>
-#include <kmx/aio/completion/executor.hpp>
-#if defined(KMX_AIO_FEATURE_READINESS)
-    #include <kmx/aio/readiness/executor.hpp>
+    #if defined(KMX_AIO_FEATURE_READINESS)
+        #include <kmx/aio/readiness/executor.hpp>
+    #endif
 #endif
-#include <kmx/aio/scheduler.hpp>
-#include <kmx/aio/task.hpp>
-#include <kmx/aio/test/executor_runner.hpp>
-#include <kmx/aio/test/fd_pair.hpp>
-#include <kmx/logger.hpp>
 
 namespace kmx::aio::test::branch_edges_test
 {
@@ -108,7 +111,7 @@ namespace kmx::aio::test::branch_edges_test
         task<void> stop_completion_twice_from_task(completion::executor& exec, bool& ran) noexcept(false)
         {
             const auto waited = co_await exec.async_timeout(2'000'000u);
-            (void) waited;
+            static_cast<void>(waited);
             exec.stop();
             exec.stop();
             ran = true;
@@ -126,7 +129,7 @@ namespace kmx::aio::test::branch_edges_test
             completed.fetch_add(1, std::memory_order_acq_rel);
         }
 
-    } // namespace detail
+    }
 
 #if defined(KMX_AIO_FEATURE_READINESS)
     namespace detail
@@ -138,7 +141,7 @@ namespace kmx::aio::test::branch_edges_test
         {
             parked.fetch_add(1, std::memory_order_acq_rel);
             const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
-            (void) event;
+            static_cast<void>(event);
             finished.fetch_add(1, std::memory_order_acq_rel);
         }
 
@@ -148,7 +151,7 @@ namespace kmx::aio::test::branch_edges_test
         {
             read_parked.store(true, std::memory_order_release);
             const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
-            (void) event;
+            static_cast<void>(event);
             read_done.store(true, std::memory_order_release);
         }
 
@@ -156,7 +159,7 @@ namespace kmx::aio::test::branch_edges_test
         task<void> stop_twice_from_task(const std::shared_ptr<readiness::executor>& exec, std::atomic_bool& ran) noexcept(false)
         {
             const auto waited = co_await exec->async_timeout(2'000'000u);
-            (void) waited;
+            static_cast<void>(waited);
             exec->stop(); // wins the exchange, defers the join
             exec->stop(); // running_ already false: the deferred-join path, from an owned thread
             ran.store(true, std::memory_order_release);
@@ -168,7 +171,7 @@ namespace kmx::aio::test::branch_edges_test
         {
             parked.store(true, std::memory_order_release);
             const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
-            (void) event;
+            static_cast<void>(event);
             done.store(true, std::memory_order_release);
         }
 
@@ -178,13 +181,13 @@ namespace kmx::aio::test::branch_edges_test
         {
             parked.store(true, std::memory_order_release);
             const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
-            (void) event;
+            static_cast<void>(event);
             done.store(true, std::memory_order_release);
 
             // A second wait on the same descriptor after the list was erased, so the lookup runs again
             // against a table that no longer holds the entry.
             const auto waited = co_await exec->async_timeout(20'000'000u);
-            (void) waited;
+            static_cast<void>(waited);
         }
 
         /// @brief Parks on a read wait, counting only the coroutines a real event woke.
@@ -196,7 +199,7 @@ namespace kmx::aio::test::branch_edges_test
             if (event)
                 finished.fetch_add(1, std::memory_order_acq_rel);
         }
-    } // namespace detail
+    }
 #endif // KMX_AIO_FEATURE_READINESS
 
 #if defined(KMX_AIO_FEATURE_READINESS)
@@ -451,7 +454,7 @@ namespace kmx::aio::test::branch_edges_test
         {
             // Something for the loop to finish, so run() has work that drains on its own.
             const auto waited = co_await exec->async_timeout(40'000'000u);
-            (void) waited;
+            static_cast<void>(waited);
             ran.store(true, std::memory_order_release);
         };
         exec->spawn(body());
@@ -500,7 +503,7 @@ namespace kmx::aio::test::branch_edges_test
 
         // `original` is moved-from: no handle, nothing to give the token to.
         task<void> ignored = std::move(original).with_stop_token(source.get_token());
-        (void) ignored;
+        static_cast<void>(ignored);
 
         SUCCEED("a moved-from task accepted a stop token without dereferencing a null handle");
     }
@@ -522,7 +525,7 @@ namespace kmx::aio::test::branch_edges_test
         {
             submitted.store(true, std::memory_order_release);
             const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
-            (void) r;
+            static_cast<void>(r);
         };
         exec.spawn(body());
 
@@ -608,4 +611,4 @@ namespace kmx::aio::test::branch_edges_test
 
         CHECK(completed.load(std::memory_order_acquire) == 12);
     }
-} // namespace kmx::aio::test::branch_edges_test
+}

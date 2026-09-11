@@ -33,6 +33,7 @@ StaticLibrary {
             "../inc/kmx/aio/completion/**.hpp",
             "../src/kmx/aio/completion/detail/**.cpp",
             "../src/kmx/aio/completion/executor.cpp",
+            "../src/kmx/aio/completion/statistics.cpp",
             "../src/kmx/aio/completion/timer.cpp",
             "../src/kmx/aio/completion/tcp/**.cpp",
             "../src/kmx/aio/completion/udp/**.cpp",
@@ -43,13 +44,11 @@ StaticLibrary {
         if (project.enable_knx)
             entries.push("../src/kmx/aio/completion/knx/**.cpp");
 
-        if (project.enable_avb)
-            entries.push("../src/kmx/aio/completion/avb/**.cpp");
-
         if (project.enable_quic)
         {
             entries.push("../src/kmx/aio/completion/quic/**.cpp");
             entries.push("../src/kmx/aio/quic/base_engine.cpp");
+            entries.push("../src/kmx/aio/quic/primary_base_impl.cpp");
         }
 
         return entries;

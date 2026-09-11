@@ -1,20 +1,26 @@
-/// @file aio/completion/executor.cpp
+/// @file src/kmx/aio/completion/executor.cpp
+/// @brief The io_uring completion-model executor: async I/O submissions, the event loop, shutdown and core pinning.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/completion/detail/uring_syscalls.hpp>
 #include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/detail/syscalls.hpp>
+#ifndef PCH
+    #include <kmx/aio/allocator/slab.hpp>
+    #include <kmx/aio/completion/detail/uring_syscalls.hpp>
+    #include <kmx/aio/detail/scope_exit.hpp>
+    #include <kmx/aio/detail/syscalls.hpp>
+    #include <kmx/aio/system_error.hpp>
+    #include <kmx/logger.hpp>
 
-#include <kmx/aio/allocator/slab.hpp>
-#include <kmx/aio/exception.hpp>
-#include <kmx/logger.hpp>
-
-#include <algorithm>
-#include <cerrno>
-#include <chrono>
-#include <cstring>
-#include <pthread.h>
-#include <sched.h>
-#include <thread>
+    #include <algorithm>
+    #include <atomic>
+    #include <cerrno>
+    #include <chrono>
+    #include <cstring>
+    #include <source_location>
+    #include <thread>
+    #include <utility>
+    #include <pthread.h>
+    #include <sched.h>
+#endif
 
 namespace kmx::aio::completion
 {
@@ -24,16 +30,6 @@ namespace kmx::aio::completion
     /// @details Lets submit() tell "the loop will flush this in a moment" from "nobody here is going to
     ///          wait, so it has to go now".
     thread_local const executor* t_current_loop_executor {};
-
-    void statistics::reset() noexcept
-    {
-        total_submissions.store(0u, mem_order);
-        total_completions.store(0u, mem_order);
-        total_tasks_spawned.store(0u, mem_order);
-        total_tasks_completed.store(0u, mem_order);
-        error_count.store(0u, mem_order);
-        submission_full_count.store(0u, mem_order);
-    }
 
     executor::executor(const executor_config& config) noexcept(false): config_(config)
     {
@@ -219,8 +215,7 @@ namespace kmx::aio::completion
         co_return static_cast<std::size_t>(*result);
     }
 
-    task_returning_expected_size_t executor::async_recvmsg_until(const fd_t fd, msghdr* msg,
-                                                                 const std::uint64_t timeout_ns,
+    task_returning_expected_size_t executor::async_recvmsg_until(const fd_t fd, msghdr* msg, const std::uint64_t timeout_ns,
                                                                  const unsigned flags) noexcept(false)
     {
         io_context ctx {};
@@ -574,8 +569,8 @@ namespace kmx::aio::completion
         ::io_uring_prep_cancel(cancel_sqe, nullptr, IORING_ASYNC_CANCEL_ANY | IORING_ASYNC_CANCEL_ALL);
         ::io_uring_sqe_set_data(cancel_sqe, nullptr);
         if (const auto sub = submit(); !sub)
-            logger::log(logger::level::error, std::source_location::current(),
-                        "Failed to submit shutdown cancel-all request: {}", sub.error().message());
+            logger::log(logger::level::error, std::source_location::current(), "Failed to submit shutdown cancel-all request: {}",
+                        sub.error().message());
     }
 
     bool executor::drain_expired(bool& cancel_issued, std::chrono::steady_clock::time_point& deadline) noexcept
@@ -593,8 +588,7 @@ namespace kmx::aio::completion
             return false;
 
         logger::log(logger::level::error, std::source_location::current(),
-                    "Forced shutdown with {} task(s) still active after cancellation drain timeout",
-                    active_work_.load(mem_order));
+                    "Forced shutdown with {} task(s) still active after cancellation drain timeout", active_work_.load(mem_order));
         return true;
     }
 
@@ -629,15 +623,12 @@ namespace kmx::aio::completion
         // Marks this thread as the executor's own for as long as the loop runs, so submit() can leave
         // its entries for the wait below to carry into the kernel.
         t_current_loop_executor = this;
-        const struct loop_thread_marker
-        {
-            ~loop_thread_marker() noexcept { t_current_loop_executor = nullptr; }
-        } marker {};
+        const aio::detail::scope_exit marker {[]() noexcept { t_current_loop_executor = nullptr; }};
 
         // Coroutine frames are cut from a slab owned by this thread: 1024-byte frames, enough of them
         // for the ring to be full of work.
         allocator::slab coro_allocator {1024u, std::max(1024u, config_.ring_entries * 4u)};
-        set_thread_allocator(&coro_allocator);
+        allocator::set_thread_slab(&coro_allocator);
 
         // A stop request does not end the loop: spawned tasks may still be suspended on in-flight
         // operations, and leaving now would abandon their frames and tear the ring down underneath
@@ -654,7 +645,7 @@ namespace kmx::aio::completion
         }
 
         process_completions();
-        set_thread_allocator(nullptr);
+        allocator::set_thread_slab(nullptr);
     }
 
     void executor::pin_to_core() const noexcept
@@ -710,4 +701,4 @@ namespace kmx::aio::completion
         return instance;
     }
 
-} // namespace kmx::aio::completion
+}

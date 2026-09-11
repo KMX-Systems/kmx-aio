@@ -1,17 +1,17 @@
-/// @file aio/readiness/udp/socket.hpp
+/// @file api/kmx/aio/readiness/udp/socket.hpp
 /// @brief Readiness-model UDP socket using epoll-based async I/O.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_READINESS)
     #ifndef PCH
-        #include <expected>
-        #include <sys/socket.h>
-        #include <system_error>
-
         #include <kmx/aio/readiness/executor.hpp>
         #include <kmx/aio/readiness/io_base.hpp>
         #include <kmx/aio/task.hpp>
+
+        #include <expected>
+        #include <system_error>
+        #include <sys/socket.h>
     #endif
 
 namespace kmx::aio::readiness::udp
@@ -49,8 +49,7 @@ namespace kmx::aio::readiness::udp
         /// @return A task yielding the number of bytes received, or an error.
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] task_returning_expected_size_t recvmsg(::msghdr* msg, int flags = 0) noexcept(false);
-        [[nodiscard]] task_returning_expected_size_t recvmsg_until(::msghdr* msg, std::uint32_t deadline_ms,
-                                       int flags = 0) noexcept(false);
+        [[nodiscard]] task_returning_expected_size_t recvmsg_until(::msghdr* msg, std::uint32_t deadline_ms, int flags = 0) noexcept(false);
         /// @brief Suspends until the socket is writable, then sends one message.
         /// @param msg   Message descriptor for buffers and ancillary data.
         /// @param flags Flags forwarded to `sendmsg`.
@@ -58,7 +57,7 @@ namespace kmx::aio::readiness::udp
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] task_returning_expected_size_t sendmsg(const ::msghdr* msg, int flags = 0) noexcept(false);
     };
-} // namespace kmx::aio::readiness::udp
+}
 
     #ifndef PCH
     #endif

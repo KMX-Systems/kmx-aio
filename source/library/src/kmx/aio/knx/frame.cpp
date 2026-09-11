@@ -1,7 +1,21 @@
+/// @file src/kmx/aio/knx/frame.cpp
+/// @brief KNXnet/IP header, tunnelling, device configuration and tunnelling feature frame codecs.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/knx/frame.hpp>
+#ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/knx/cemi.hpp>
+    #include <kmx/aio/knx/cemi_bytes_storage.hpp>
+    #include <kmx/aio/knx/cemi_frame.hpp>
+    #include <kmx/aio/knx/contract.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/tunnelling_feature_value.hpp>
 
-#include <algorithm>
+    #include <algorithm>
+    #include <cstdint>
+    #include <expected>
+    #include <system_error>
+#endif
 
 namespace kmx::aio::knx::frame
 {
@@ -19,18 +33,15 @@ namespace kmx::aio::knx::frame
             return std::unexpected(make_error_code(error::unsupported_service));
 
         hdr.protocol_version = buf[1];
-        hdr.service_type = static_cast<std::uint16_t>((static_cast<std::uint16_t>(buf[2]) << 8u) |
-                                                    static_cast<std::uint16_t>(buf[3]));
+        hdr.service_type = static_cast<std::uint16_t>((static_cast<std::uint16_t>(buf[2]) << 8u) | static_cast<std::uint16_t>(buf[3]));
         hdr.total_length = static_cast<std::uint16_t>((static_cast<std::uint16_t>(buf[4]) << 8u) | static_cast<std::uint16_t>(buf[5]));
         if (hdr.total_length < communication_header_size)
             return std::unexpected(make_error_code(error::malformed_frame));
         return hdr;
     }
 
-    expected_void_t encode_communication_header(const span_uint8_t dest,
-                                                                    const std::uint16_t service_type,
-                                                                    const std::uint16_t total_length,
-                                                                    const std::uint8_t protocol_version) noexcept
+    expected_void_t encode_communication_header(const span_uint8_t dest, const std::uint16_t service_type, const std::uint16_t total_length,
+                                                const std::uint8_t protocol_version) noexcept
     {
         if ((dest.size() < communication_header_size) || (total_length < communication_header_size))
             return std::unexpected(make_error_code(error::invalid_length));
@@ -59,10 +70,8 @@ namespace kmx::aio::knx::frame
         return decoded.value();
     }
 
-    expected_void_t encode_tunnelling_request(const span_uint8_t dest,
-                                                                   const std::uint8_t channel_id,
-                                                                   const std::uint8_t sequence_number,
-                                                                   const cspan_uint8_t cemi_bytes) noexcept
+    expected_void_t encode_tunnelling_request(const span_uint8_t dest, const std::uint8_t channel_id, const std::uint8_t sequence_number,
+                                              const cspan_uint8_t cemi_bytes) noexcept
     {
         if (channel_id == 0u)
             return std::unexpected(make_error_code(error::invalid_configuration));
@@ -146,32 +155,23 @@ namespace kmx::aio::knx::frame
         return decoded;
     }
 
-    expected_void_t encode_tunnelling_request_packet(const span_uint8_t dest,
-                                                                         const std::uint8_t channel_id,
-                                                                         const std::uint8_t sequence_number,
-                                                                         const cspan_uint8_t cemi_bytes) noexcept
+    expected_void_t encode_tunnelling_request_packet(const span_uint8_t dest, const std::uint8_t channel_id,
+                                                     const std::uint8_t sequence_number, const cspan_uint8_t cemi_bytes) noexcept
     {
         const auto body_length = tunnelling_request_header_size + cemi_bytes.size();
         const auto total_length = communication_header_size + body_length;
-        if ((total_length > max_frame_size) || (dest.size() < total_length))
+        if ((total_length > max_total_length) || (dest.size() < total_length))
             return std::unexpected(make_error_code(error::invalid_length));
 
-        const auto header = encode_communication_header(dest,
-                                                        tunnelling_request_service,
-                                                        static_cast<std::uint16_t>(total_length));
+        const auto header = encode_communication_header(dest, tunnelling_request_service, static_cast<std::uint16_t>(total_length));
         if (!header.has_value())
             return std::unexpected(header.error());
 
-        return encode_tunnelling_request({ dest.data() + communication_header_size, body_length },
-                                         channel_id,
-                                         sequence_number,
-                                         cemi_bytes);
+        return encode_tunnelling_request({dest.data() + communication_header_size, body_length}, channel_id, sequence_number, cemi_bytes);
     }
 
-    expected_void_t encode_tunnelling_ack_packet(const span_uint8_t dest,
-                                                                      const std::uint8_t channel_id,
-                                                                      const std::uint8_t sequence_number,
-                                                                      const std::uint8_t status) noexcept
+    expected_void_t encode_tunnelling_ack_packet(const span_uint8_t dest, const std::uint8_t channel_id, const std::uint8_t sequence_number,
+                                                 const std::uint8_t status) noexcept
     {
         if (channel_id == 0u)
             return std::unexpected(make_error_code(error::invalid_configuration));
@@ -179,9 +179,7 @@ namespace kmx::aio::knx::frame
         if (dest.size() < total_length)
             return std::unexpected(make_error_code(error::invalid_length));
 
-        const auto header = encode_communication_header(dest,
-                                                        tunnelling_ack_service,
-                                                        static_cast<std::uint16_t>(total_length));
+        const auto header = encode_communication_header(dest, tunnelling_ack_service, static_cast<std::uint16_t>(total_length));
         if (!header.has_value())
             return std::unexpected(header.error());
 
@@ -205,8 +203,7 @@ namespace kmx::aio::knx::frame
         if ((header->total_length != buf.size()) || (header->total_length < communication_header_size))
             return std::unexpected(make_error_code(error::malformed_frame));
 
-        return decode_tunnelling_request({ buf.data() + communication_header_size,
-                                           buf.size() - communication_header_size });
+        return decode_tunnelling_request({buf.data() + communication_header_size, buf.size() - communication_header_size});
     }
 
     std::expected<tunnelling_ack_frame, std::error_code> decode_tunnelling_ack_packet(const cspan_uint8_t buf) noexcept
@@ -222,7 +219,7 @@ namespace kmx::aio::knx::frame
         if ((header->total_length != buf.size()) || (buf.size() != communication_header_size + tunnelling_ack_size))
             return std::unexpected(make_error_code(error::malformed_frame));
 
-        return decode_tunnelling_ack({ buf.data() + communication_header_size, tunnelling_ack_size });
+        return decode_tunnelling_ack({buf.data() + communication_header_size, tunnelling_ack_size});
     }
 
     /// @brief Reads the connection header both tunnelling and device management services begin with.
@@ -245,8 +242,8 @@ namespace kmx::aio::knx::frame
     }
 
     /// @brief Writes the connection header both tunnelling and device management services begin with.
-    static void encode_connection_header(const span_uint8_t dest, const std::uint8_t channel_id,
-                                          const std::uint8_t sequence_number, const std::uint8_t trailing) noexcept
+    static void encode_connection_header(const span_uint8_t dest, const std::uint8_t channel_id, const std::uint8_t sequence_number,
+                                         const std::uint8_t trailing) noexcept
     {
         dest[0] = connection_header_structure_length;
         dest[1] = channel_id;
@@ -255,8 +252,7 @@ namespace kmx::aio::knx::frame
     }
 
     expected_void_t encode_device_configuration_request_packet(const span_uint8_t dest, const std::uint8_t channel_id,
-                                                                const std::uint8_t sequence_number,
-                                                                const cspan_uint8_t cemi_bytes) noexcept
+                                                               const std::uint8_t sequence_number, const cspan_uint8_t cemi_bytes) noexcept
     {
         if (channel_id == 0u)
             return std::unexpected(make_error_code(error::invalid_configuration));
@@ -268,20 +264,18 @@ namespace kmx::aio::knx::frame
         if (dest.size() < total_length)
             return std::unexpected(make_error_code(error::invalid_length));
 
-        const auto header = encode_communication_header(dest, device_configuration_request_service,
-                                                        static_cast<std::uint16_t>(total_length));
+        const auto header =
+            encode_communication_header(dest, device_configuration_request_service, static_cast<std::uint16_t>(total_length));
         if (!header.has_value())
             return std::unexpected(header.error());
 
         encode_connection_header({dest.data() + communication_header_size, tunnelling_request_header_size}, channel_id, sequence_number,
                                  0x00u);
-        std::copy_n(cemi_bytes.begin(), cemi_bytes.size(),
-                    dest.begin() + communication_header_size + tunnelling_request_header_size);
+        std::copy_n(cemi_bytes.begin(), cemi_bytes.size(), dest.begin() + communication_header_size + tunnelling_request_header_size);
         return {};
     }
 
-    std::expected<device_configuration_frame, std::error_code> decode_device_configuration_request_packet(
-        const cspan_uint8_t buf) noexcept
+    std::expected<device_configuration_frame, std::error_code> decode_device_configuration_request_packet(const cspan_uint8_t buf) noexcept
     {
         const auto header = decode_communication_header(buf);
         if (!header.has_value())
@@ -310,7 +304,7 @@ namespace kmx::aio::knx::frame
     }
 
     expected_void_t encode_device_configuration_ack_packet(const span_uint8_t dest, const std::uint8_t channel_id,
-                                                            const std::uint8_t sequence_number, const std::uint8_t status) noexcept
+                                                           const std::uint8_t sequence_number, const std::uint8_t status) noexcept
     {
         if (channel_id == 0u)
             return std::unexpected(make_error_code(error::invalid_configuration));
@@ -318,8 +312,7 @@ namespace kmx::aio::knx::frame
         if (dest.size() < total_length)
             return std::unexpected(make_error_code(error::invalid_length));
 
-        const auto header =
-            encode_communication_header(dest, device_configuration_ack_service, static_cast<std::uint16_t>(total_length));
+        const auto header = encode_communication_header(dest, device_configuration_ack_service, static_cast<std::uint16_t>(total_length));
         if (!header.has_value())
             return std::unexpected(header.error());
 
@@ -355,6 +348,7 @@ namespace kmx::aio::knx::frame
             case tunnelling_feature::info_service_enable:
                 return true;
         }
+
         return false;
     }
 
@@ -365,8 +359,7 @@ namespace kmx::aio::knx::frame
     /// @details A get asks a question and carries nothing. A set and an unsolicited info both carry the
     ///          value they are about. A response carries one only when it succeeded: a failing response
     ///          reports the return code instead.
-    [[nodiscard]] static constexpr bool feature_service_carries_value(const std::uint16_t service,
-                                                                      const std::uint8_t return_code) noexcept
+    [[nodiscard]] static constexpr bool feature_service_carries_value(const std::uint16_t service, const std::uint8_t return_code) noexcept
     {
         if ((service == tunnelling_feature_set_service) || (service == tunnelling_feature_info_service))
             return true;
@@ -379,8 +372,7 @@ namespace kmx::aio::knx::frame
     /// @param value The frame naming the service, channel and feature.
     /// @param feature_value The value the service carries, which may be empty.
     /// @return Nothing, or why the pair cannot be encoded.
-    [[nodiscard]] static expected_void_t validate_feature(const tunnelling_feature_frame& value,
-                                                           const cspan_uint8_t feature_value) noexcept
+    [[nodiscard]] static expected_void_t validate_feature(const tunnelling_feature_frame& value, const cspan_uint8_t feature_value) noexcept
     {
         if (!is_tunnelling_feature_service(value.service_type))
             return std::unexpected(make_error_code(error::unsupported_service));
@@ -399,7 +391,7 @@ namespace kmx::aio::knx::frame
     }
 
     expected_void_t encode_tunnelling_feature_packet(const span_uint8_t dest, const tunnelling_feature_frame& value,
-                                                      const cspan_uint8_t feature_value) noexcept
+                                                     const cspan_uint8_t feature_value) noexcept
     {
         if (const auto valid = validate_feature(value, feature_value); !valid.has_value())
             return std::unexpected(valid.error());
@@ -459,7 +451,7 @@ namespace kmx::aio::knx::frame
     /// @param decoded The frame to fill in; its service type and return code select what is expected.
     /// @return Nothing, or why the value does not match the service that carries it.
     [[nodiscard]] static expected_void_t decode_feature_value(const cspan_uint8_t buf, const std::size_t minimum,
-                                                               tunnelling_feature_frame& decoded) noexcept
+                                                              tunnelling_feature_frame& decoded) noexcept
     {
         const auto value_size = buf.size() - minimum;
         if (value_size > tunnelling_feature_value::capacity)

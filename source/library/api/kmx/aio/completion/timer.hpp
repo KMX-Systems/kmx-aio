@@ -1,15 +1,15 @@
-/// @file aio/completion/timer.hpp
+/// @file api/kmx/aio/completion/timer.hpp
 /// @brief Completion-model timer using io_uring IORING_OP_TIMEOUT.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_COMPLETION)
     #ifndef PCH
-        #include <chrono>
-        #include <cstdint>
-
         #include <kmx/aio/completion/executor.hpp>
         #include <kmx/aio/task.hpp>
+
+        #include <chrono>
+        #include <cstdint>
     #endif
 
 namespace kmx::aio::completion
@@ -60,5 +60,5 @@ namespace kmx::aio::completion
         executor& exec_;
     };
 
-} // namespace kmx::aio::completion
+}
 #endif // KMX_AIO_FEATURE_COMPLETION

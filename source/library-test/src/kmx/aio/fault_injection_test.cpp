@@ -1,4 +1,4 @@
-/// @file aio/fault_injection_test.cpp
+/// @file src/kmx/aio/fault_injection_test.cpp
 /// @brief Tests for the branches that only run when a system call fails.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 ///
@@ -9,39 +9,43 @@
 ///
 /// The whole file is compiled out otherwise, so a build without the seam still builds and runs the
 /// suite - it just does not carry these cases.
-#include <catch2/catch_test_macros.hpp>
-
-#include <kmx/aio/detail/syscalls.hpp>
-
 #if defined(KMX_AIO_FAULT_INJECTION)
+    #ifndef PCH
+        #include <kmx/aio/completion/detail/basic_uring_syscalls.hpp>
+        #include <kmx/aio/completion/executor.hpp>
+        #include <kmx/aio/completion/udp/endpoint.hpp>
+        #include <kmx/aio/completion/udp/socket.hpp>
+        #include <kmx/aio/detail/basic_syscalls.hpp>
+        #include <kmx/aio/detail/fault_registry.hpp>
+        #include <kmx/aio/detail/scoped_fault.hpp>
+        #include <kmx/aio/file_descriptor.hpp>
+        #include <kmx/aio/readiness/descriptor/epoll.hpp>
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/task.hpp>
+        #include <kmx/aio/test/executor_runner.hpp>
+        #include <kmx/aio/test/outcome.hpp>
+        #include <kmx/aio/test/pipe_pair.hpp>
+        #include <kmx/aio/test/scoped_completion_runner.hpp>
+        #include <kmx/aio/test/scoped_runner.hpp>
+        #include <kmx/aio/test/socket_pair.hpp>
+        #include <kmx/aio/tls/stream.hpp>
 
-    #include <array>
-    #include <atomic>
-    #include <cerrno>
-    #include <chrono>
-    #include <memory>
-    #include <span>
-    #include <system_error>
-    #include <thread>
-    #include <vector>
+        #include <catch2/catch_test_macros.hpp>
+        #include <openssl/ssl.h>
 
-    #include <fcntl.h>
-    #include <sys/socket.h>
-    #include <unistd.h>
-
-    #include <kmx/aio/completion/detail/uring_syscalls.hpp>
-    #include <openssl/ssl.h>
-
-    #include <kmx/aio/completion/executor.hpp>
-    #include <kmx/aio/completion/udp/endpoint.hpp>
-    #include <kmx/aio/completion/udp/socket.hpp>
-    #include <kmx/aio/file_descriptor.hpp>
-    #include <kmx/aio/readiness/descriptor/epoll.hpp>
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/task.hpp>
-    #include <kmx/aio/test/executor_runner.hpp>
-    #include <kmx/aio/test/fd_pair.hpp>
-    #include <kmx/aio/tls/stream.hpp>
+        #include <array>
+        #include <atomic>
+        #include <cerrno>
+        #include <chrono>
+        #include <memory>
+        #include <span>
+        #include <system_error>
+        #include <thread>
+        #include <vector>
+        #include <fcntl.h>
+        #include <sys/socket.h>
+        #include <unistd.h>
+    #endif
 
 namespace kmx::aio::test::fault_injection_test
 {
@@ -80,49 +84,60 @@ namespace kmx::aio::test::fault_injection_test
         }
 
         /// @brief Reads with the next io_uring_submit made to fail, and records what came back.
-        task<void> read_with_refused_submission(completion::executor& exec, bool& completed, bool& ok, std::error_code& error,
-                                                const std::span<char> buffer, const int fd) noexcept(false)
+        /// @param outcome Records that the read completed, whether it succeeded, and its error.
+        task<void> read_with_refused_submission(completion::executor& exec, void_outcome& outcome, const std::span<char> buffer,
+                                                const int fd) noexcept(false)
         {
             const scoped_fault fault {syscall_id::io_uring_submit, EAGAIN, 1u};
             const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
-            completed = true;
+            outcome.completed = true;
             if (r)
-                ok = true;
+                outcome.ok = true;
             else
-                error = r.error();
+                outcome.error = r.error();
 
             exec.stop();
         }
 
-        /// @brief Reads while the completion wait is interrupted, and records that it still finished.
-        task<void> read_until_interrupted(completion::executor& exec, std::atomic_bool& submitted, std::atomic_bool& finished,
-                                          const std::span<char> buffer, const int fd) noexcept(false)
+        /// @brief A read whose completion wait is interrupted, and where its progress is recorded.
+        struct read_until_interrupted_params
         {
-            submitted.store(true, std::memory_order_release);
-            const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
-            (void) r;
-            finished.store(true, std::memory_order_release);
+            completion::executor& exec;  ///< The executor the read is submitted to.
+            int fd {-1};                 ///< The pipe end the read waits on.
+            std::span<char> buffer {};   ///< Where the read lands.
+            std::atomic_bool& submitted; ///< Set just before the read is submitted.
+            std::atomic_bool& finished;  ///< Set once the read has completed.
+        };
+
+        /// @brief Reads while the completion wait is interrupted, and records that it still finished.
+        /// @param params The executor, the descriptor, the buffer and where the progress is recorded.
+        task<void> read_until_interrupted(const read_until_interrupted_params params) noexcept(false)
+        {
+            params.submitted.store(true, std::memory_order_release);
+            const auto r = co_await params.exec.async_read(params.fd, std::span<char>(params.buffer.data(), params.buffer.size()));
+            static_cast<void>(r);
+            params.finished.store(true, std::memory_order_release);
         }
 
         /// @brief Reads once on an executor whose core pin was refused, then ends the loop.
         task<void> read_then_stop(completion::executor& exec, bool& completed, const std::span<char> buffer, const int fd) noexcept(false)
         {
             const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
-            (void) r;
+            static_cast<void>(r);
             completed = true;
             exec.stop();
         }
 
         /// @brief Parks on a read wait and records that it started, what it saw, and that it ended.
-        task<void> park_and_record(std::atomic_bool& parked, std::atomic_bool& fired, std::atomic_bool& done,
-                                   const std::shared_ptr<readiness::executor>& exec, const int fd) noexcept(false)
+        /// @param outcome Records that the wait parked, what it reported and that it ended.
+        task<void> park_and_record(wait_outcome& outcome, const std::shared_ptr<readiness::executor>& exec, const int fd) noexcept(false)
         {
-            parked.store(true, std::memory_order_release);
+            outcome.parked.store(true, std::memory_order_release);
             const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
-            fired.store(event, std::memory_order_release);
-            done.store(true, std::memory_order_release);
+            outcome.fired.store(event, std::memory_order_release);
+            outcome.completed.store(true, std::memory_order_release);
         }
-    } // namespace detail
+    }
 
     // the seam itself
     TEST_CASE("the production seam carries no fault-checking code", "[fault][seam]")
@@ -132,7 +147,7 @@ namespace kmx::aio::test::fault_injection_test
         // discarded branch, not a folded one. What is left is the forward into the native wrapper.
         static_assert(!detail::basic_syscalls<false>::injects_faults);
         static_assert(!completion::detail::basic_uring_syscalls<false>::injects_faults);
-        static_assert(!tls::detail::basic_tls_syscalls<false>::injects_faults);
+        static_assert(!tls::detail::basic_openssl_syscalls<false>::injects_faults);
         static_assert(detail::basic_syscalls<true>::injects_faults);
         SUCCEED("the <false> specializations carry nothing but the forward");
     }
@@ -213,14 +228,12 @@ namespace kmx::aio::test::fault_injection_test
         auto exec = std::make_shared<readiness::executor>();
         REQUIRE(exec->register_fd(sockets.local()).has_value());
 
-        std::atomic_bool parked {false};
-        std::atomic_bool fired {false};
-        std::atomic_bool done {false};
+        wait_outcome outcome;
 
-        exec->spawn(detail::park_and_record(parked, fired, done, exec, sockets.local()));
+        exec->spawn(detail::park_and_record(outcome, exec, sockets.local()));
 
         scoped_runner runner {*exec};
-        REQUIRE(wait_for_flag(parked, 2s));
+        REQUIRE(wait_for_flag(outcome.parked, 2s));
 
         {
             const scoped_fault fault {syscall_id::epoll_wait, EINTR, 3u};
@@ -230,8 +243,8 @@ namespace kmx::aio::test::fault_injection_test
         const char byte = 'x';
         REQUIRE(::write(sockets.peer(), &byte, 1u) == 1);
 
-        REQUIRE(wait_for_flag(done, 5s));
-        CHECK(fired.load(std::memory_order_acquire));
+        REQUIRE(wait_for_flag(outcome.completed, 5s));
+        CHECK(outcome.fired.load(std::memory_order_acquire));
         CHECK(exec->get_stats().error_count.load() == 0u);
     }
 
@@ -250,7 +263,7 @@ namespace kmx::aio::test::fault_injection_test
         {
             parked.store(true, std::memory_order_release);
             const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
-            (void) event;
+            static_cast<void>(event);
         };
         exec->spawn(body());
 
@@ -311,17 +324,15 @@ namespace kmx::aio::test::fault_injection_test
         REQUIRE(::pipe(fds) == 0);
 
         completion::executor exec;
-        bool completed {};
-        bool ok {};
-        std::error_code error {};
+        void_outcome outcome {};
         std::array<char, 8> buffer {};
 
-        exec.spawn(detail::read_with_refused_submission(exec, completed, ok, error, buffer, fds[0]));
+        exec.spawn(detail::read_with_refused_submission(exec, outcome, buffer, fds[0]));
         exec.run();
 
-        CHECK(completed);
-        CHECK_FALSE(ok);
-        CHECK(error == std::errc::resource_unavailable_try_again);
+        CHECK(outcome.completed);
+        CHECK_FALSE(outcome.ok);
+        CHECK(outcome.error == std::errc::resource_unavailable_try_again);
         CHECK(exec.get_stats().error_count.load() > 0u);
 
         ::close(fds[0]);
@@ -343,7 +354,7 @@ namespace kmx::aio::test::fault_injection_test
         {
             submitted.store(true, std::memory_order_release);
             const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
-            (void) r;
+            static_cast<void>(r);
         };
         exec.spawn(body());
 
@@ -380,7 +391,8 @@ namespace kmx::aio::test::fault_injection_test
         std::atomic_bool finished {false};
         std::array<char, 8> buffer {};
 
-        exec.spawn(detail::read_until_interrupted(exec, submitted, finished, buffer, fds[0]));
+        exec.spawn(
+            detail::read_until_interrupted({.exec = exec, .fd = fds[0], .buffer = buffer, .submitted = submitted, .finished = finished}));
 
         kmx::aio::test::scoped_completion_runner runner {exec};
         REQUIRE(wait_for_flag(submitted, 2s));
@@ -450,20 +462,18 @@ namespace kmx::aio::test::fault_injection_test
         auto exec = std::make_shared<readiness::executor>(config);
         REQUIRE(exec->register_fd(sockets.local()).has_value());
 
-        std::atomic_bool parked {false};
-        std::atomic_bool fired {false};
-        std::atomic_bool done {false};
+        wait_outcome outcome;
 
-        exec->spawn(detail::park_and_record(parked, fired, done, exec, sockets.local()));
+        exec->spawn(detail::park_and_record(outcome, exec, sockets.local()));
 
         scoped_runner runner {*exec};
-        REQUIRE(wait_for_flag(parked, 2s));
+        REQUIRE(wait_for_flag(outcome.parked, 2s));
 
         const char byte = 'x';
         REQUIRE(::write(sockets.peer(), &byte, 1u) == 1);
 
-        REQUIRE(wait_for_flag(done, 5s));
-        CHECK(fired.load(std::memory_order_acquire));
+        REQUIRE(wait_for_flag(outcome.completed, 5s));
+        CHECK(outcome.fired.load(std::memory_order_acquire));
     }
 
     TEST_CASE("is_io_thread_affined_to forwards a failing query", "[fault][completion][affinity]")
@@ -479,7 +489,7 @@ namespace kmx::aio::test::fault_injection_test
         {
             submitted.store(true, std::memory_order_release);
             const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
-            (void) r;
+            static_cast<void>(r);
         };
         exec.spawn(body());
 
@@ -495,7 +505,7 @@ namespace kmx::aio::test::fault_injection_test
         }
 
         const char byte = 'x';
-        (void) ::write(fds[1], &byte, 1u);
+        static_cast<void>(::write(fds[1], &byte, 1u));
         exec.stop();
         REQUIRE(runner.wait_until_drained(std::chrono::seconds(5)));
 
@@ -516,7 +526,7 @@ namespace kmx::aio::test::fault_injection_test
         {
             parked.store(true, std::memory_order_release);
             const bool event = co_await exec->wait_io(fd, readiness::event_type::read);
-            (void) event;
+            static_cast<void>(event);
         };
         exec->spawn(body());
 
@@ -638,7 +648,7 @@ namespace kmx::aio::test::fault_injection_test
             // Nothing is ever written, so only a cancellation could end this - and the fault below is
             // what stops that cancellation from being submitted.
             const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
-            (void) r;
+            static_cast<void>(r);
         };
         exec.spawn(body());
 
@@ -659,6 +669,6 @@ namespace kmx::aio::test::fault_injection_test
 
         CHECK(exec.get_stats().error_count.load() > errors_before);
     }
-} // namespace kmx::aio::test::fault_injection_test
+}
 
 #endif // KMX_AIO_FAULT_INJECTION

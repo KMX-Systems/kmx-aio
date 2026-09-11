@@ -1,16 +1,20 @@
+/// @file src/kmx/aio/modbus/server.cpp
+/// @brief The compiled body of the Modbus TCP server: readiness accept loop and per-connection request handling.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/modbus/server.hpp>
 #if defined(KMX_AIO_FEATURE_MODBUS)
-    #include <kmx/aio/modbus/detail/server_ops.hpp>
-    #include <kmx/aio/modbus/error.hpp>
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/readiness/tcp/listener.hpp>
-    #include <kmx/aio/readiness/tcp/stream.hpp>
+    #ifndef PCH
+        #include <kmx/aio/modbus/detail/server_ops.hpp>
+        #include <kmx/aio/modbus/error.hpp>
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/readiness/tcp/listener.hpp>
+        #include <kmx/aio/readiness/tcp/stream.hpp>
 
-    #include <cstdint>
-    #include <stop_token>
-    #include <unordered_map>
-    #include <utility>
+        #include <cstdint>
+        #include <stop_token>
+        #include <unordered_map>
+        #include <utility>
+    #endif
 
 namespace kmx::aio::modbus
 {
@@ -35,10 +39,8 @@ namespace kmx::aio::modbus
             const std::stop_callback cancel_on_stop {stop_token, [&exec, connection_fd]() noexcept { exec.cancel_io(connection_fd); }};
 
             while (!stop_token.stop_requested())
-            {
                 if (!co_await process_request(stream, config))
                     break;
-            }
         }
     };
 
@@ -97,5 +99,5 @@ namespace kmx::aio::modbus
         impl_->stop_source_.request_stop();
     }
 
-} // namespace kmx::aio::modbus
+}
 #endif // KMX_AIO_FEATURE_MODBUS

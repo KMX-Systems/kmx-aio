@@ -1,17 +1,22 @@
+/// @file src/kmx/aio/opc_ua/server.cpp
+/// @brief The compiled body of the OPC UA server facade over open62541.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/opc_ua/error.hpp>
-#include <kmx/aio/opc_ua/open62541_compat.hpp>
 #include <kmx/aio/opc_ua/server.hpp>
+#ifndef PCH
+    #include <kmx/aio/opc_ua/error.hpp>
+    #include <kmx/aio/opc_ua/open62541_compat.hpp>
 
-#include <chrono>
-#include <memory>
-#include <utility>
+    #include <chrono>
+    #include <cstdint>
+    #include <memory>
+    #include <utility>
+#endif
 
 namespace kmx::aio::opc_ua
 {
     namespace server_internal
     {
-        enum class lifecycle_state
+        enum class lifecycle_state : std::uint8_t
         {
             idle,
             running,
@@ -32,7 +37,7 @@ namespace kmx::aio::opc_ua
                     return make_error_code(error::internal_error);
             }
         }
-    } // namespace server_internal
+    }
 
     struct server::impl
     {
@@ -128,4 +133,4 @@ namespace kmx::aio::opc_ua
         return impl_->stats;
     }
 
-} // namespace kmx::aio::opc_ua
+}

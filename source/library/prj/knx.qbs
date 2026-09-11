@@ -22,14 +22,30 @@ StaticLibrary {
     // A qbs "**.cpp" matches only the named directory, not the ones below it, so each subdirectory is listed.
     files: [
         "../api/kmx/aio/knx/**.hpp",
+        "../api/kmx/aio/knx/data_secure/**.hpp",
         "../api/kmx/aio/knx/detail/**.hpp",
+        "../api/kmx/aio/knx/dib/**.hpp",
+        "../api/kmx/aio/knx/discovery/**.hpp",
+        "../api/kmx/aio/knx/dpt/**.hpp",
+        "../api/kmx/aio/knx/keyring/**.hpp",
+        "../api/kmx/aio/knx/routing/**.hpp",
         "../api/kmx/aio/knx/secure/**.hpp",
         "../inc/kmx/aio/knx/**.hpp",
+        "../inc/kmx/aio/knx/data_secure/detail/**.hpp",
         "../inc/kmx/aio/knx/detail/**.hpp",
+        "../inc/kmx/aio/knx/routing/detail/**.hpp",
         "../inc/kmx/aio/knx/secure/**.hpp",
         "../inc/kmx/aio/knx/secure/detail/**.hpp",
         "../src/kmx/aio/knx/**.cpp",
+        "../src/kmx/aio/knx/data_secure/**.cpp",
+        "../src/kmx/aio/knx/detail/**.cpp",
+        "../src/kmx/aio/knx/dib/**.cpp",
+        "../src/kmx/aio/knx/discovery/**.cpp",
+        "../src/kmx/aio/knx/keyring/**.cpp",
+        "../src/kmx/aio/knx/routing/**.cpp",
+        "../src/kmx/aio/knx/routing/detail/**.cpp",
         "../src/kmx/aio/knx/secure/**.cpp",
+        "../src/kmx/aio/knx/secure/detail/**.cpp",
     ]
 
     Export {

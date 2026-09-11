@@ -1,11 +1,12 @@
-/// @file aio/completion/knx/client.hpp
+/// @file api/kmx/aio/completion/knx/client.hpp
 /// @brief Completion-facing KNX tunnelling client alias.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_COMPLETION) && defined(KMX_AIO_FEATURE_KNX)
-
-    #include <kmx/aio/knx/client.hpp>
+    #ifndef PCH
+        #include <kmx/aio/knx/tunnelling_client.hpp>
+    #endif
 
 namespace kmx::aio::completion::knx
 {

@@ -1,34 +1,38 @@
-/// @file kmx/aio/knx/tcp_transport_test.cpp
+/// @file src/kmx/aio/knx/tcp_transport_test.cpp
 /// @brief The KNX TCP transports on real loopback connections, on both executor pillars.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details A blocking server on its own thread writes KNXnet/IP frames cut at awkward places - inside a header,
 /// inside a body, two frames at once - stalls in the middle of one, and closes in the middle of another. The
 /// transports must hand each frame over whole, lose nothing to a deadline, and tell a clean close from a cut one.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/knx/tcp_transport.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/knx/tcp_transport.hpp>
-#include <kmx/aio/file_descriptor.hpp>
-#include <kmx/aio/knx/connection.hpp>
-#include <kmx/aio/knx/frame.hpp>
-#include <kmx/aio/test/knx/telegram.hpp>
-#if defined(KMX_AIO_FEATURE_READINESS)
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/readiness/knx/tcp_transport.hpp>
-    #include <kmx/aio/readiness/timer.hpp>
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/file_descriptor.hpp>
+    #include <kmx/aio/knx/connection.hpp>
+    #include <kmx/aio/knx/frame.hpp>
+    #include <kmx/aio/test/knx/telegram.hpp>
+
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <array>
+    #include <chrono>
+    #include <cstdint>
+    #include <memory>
+    #include <span>
+    #include <system_error>
+    #include <thread>
+    #include <vector>
+    #include <netinet/in.h>
+    #include <poll.h>
+    #include <sys/socket.h>
+
+    #if defined(KMX_AIO_FEATURE_READINESS)
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/readiness/knx/tcp_transport.hpp>
+        #include <kmx/aio/readiness/timer.hpp>
+    #endif
 #endif
-
-#include <array>
-#include <chrono>
-#include <cstdint>
-#include <memory>
-#include <netinet/in.h>
-#include <poll.h>
-#include <span>
-#include <sys/socket.h>
-#include <system_error>
-#include <thread>
-#include <vector>
 
 namespace kmx::aio::test::knx::tcp_transport_test
 {
@@ -83,7 +87,7 @@ namespace kmx::aio::test::knx::tcp_transport_test
         }
 
         template <typename Value>
-        [[nodiscard]] std::error_code error_of(const std::expected<Value, std::error_code>& result) noexcept
+        [[nodiscard]] std::error_code error_of(const expected_t<Value>& result) noexcept
         {
             return result.has_value() ? std::error_code {} : result.error();
         }
@@ -125,6 +129,7 @@ namespace kmx::aio::test::knx::tcp_transport_test
                     return false;
                 octets = octets.subspan(static_cast<std::size_t>(written));
             }
+
             return true;
         }
 
@@ -141,6 +146,7 @@ namespace kmx::aio::test::knx::tcp_transport_test
                     return {};
                 filled += static_cast<std::size_t>(received);
             }
+
             return octets;
         }
 
@@ -200,6 +206,7 @@ namespace kmx::aio::test::knx::tcp_transport_test
                 begin = end;
                 let_the_client_read();
             }
+
             observed.echoed = read_exactly(connection, echo_size);
         }
 
@@ -221,15 +228,23 @@ namespace kmx::aio::test::knx::tcp_transport_test
             let_the_client_read();
         }
 
-        /// @brief Receives every frame the server writes, sends @p echo back, and waits for the server to close.
+        /// @brief How many frames a client expects the server to write, and the frames it sends back.
+        struct exchange_plan
+        {
+            /// @brief How many frames the server writes.
+            std::size_t expected {};
+            /// @brief The frames sent back once they have arrived.
+            frames_t echo {};
+        };
+
+        /// @brief Receives every frame the server writes, sends the planned echo back, and waits for the server to close.
         template <typename Executor, typename Transport>
-        task<void> exchange_frames(Executor& executor, Transport& transport, const std::size_t expected, const frames_t& echo,
-                                   client_observation& observed)
+        task<void> exchange_frames(Executor& executor, Transport& transport, const exchange_plan plan, client_observation& observed)
         {
             observed.opened = (co_await transport.open()).has_value();
             std::array<std::byte, frame::max_datagram_size> buffer {};
             transport_peer peer {};
-            for (std::size_t count {}; observed.opened && (count < expected); ++count)
+            for (std::size_t count {}; observed.opened && (count < plan.expected); ++count)
             {
                 const auto received = co_await transport.receive_until(buffer, peer, now_ms() + patience_ms);
                 if (!received.has_value())
@@ -240,11 +255,12 @@ namespace kmx::aio::test::knx::tcp_transport_test
             }
 
             observed.sent = observed.opened;
-            for (const auto& octets: echo)
+            for (const auto& octets: plan.echo)
             {
                 const auto sent = co_await transport.send({reinterpret_cast<const std::byte*>(octets.data()), octets.size()}, nullptr, 0u);
                 observed.sent = sent.has_value() && observed.sent;
             }
+
             observed.end = error_of(co_await transport.receive_until(buffer, peer, now_ms() + patience_ms));
             executor.stop();
         }
@@ -262,6 +278,7 @@ namespace kmx::aio::test::knx::tcp_transport_test
                 const auto* octets = reinterpret_cast<const std::uint8_t*>(buffer.data());
                 observed.frame.assign(octets, octets + *rest);
             }
+
             observed.truncated = error_of(co_await transport.receive_until(buffer, peer, now_ms() + patience_ms));
             executor.stop();
         }
@@ -337,7 +354,7 @@ namespace kmx::aio::test::knx::tcp_transport_test
         completion::executor executor;
         completion::knx::tcp_transport transport {executor, reinterpret_cast<const sockaddr*>(&listener.address), sizeof(listener.address)};
         detail::client_observation client_side {};
-        executor.spawn(detail::exchange_frames(executor, transport, frames.size(), echo, client_side));
+        executor.spawn(detail::exchange_frames(executor, transport, {frames.size(), echo}, client_side));
         executor.run();
         server.join();
         detail::check_exchange(frames, echo, server_side, client_side);
@@ -384,7 +401,7 @@ namespace kmx::aio::test::knx::tcp_transport_test
         auto executor = std::make_shared<readiness::executor>(readiness::executor_config {.thread_count = 1u, .timeout_ms = 20u});
         readiness::knx::tcp_transport transport {*executor, reinterpret_cast<const sockaddr*>(&listener.address), sizeof(listener.address)};
         detail::client_observation client_side {};
-        executor->spawn(detail::exchange_frames(*executor, transport, frames.size(), echo, client_side));
+        executor->spawn(detail::exchange_frames(*executor, transport, {frames.size(), echo}, client_side));
         std::jthread runner([executor]() { executor->run(); });
         runner.join();
         server.join();

@@ -1,23 +1,23 @@
-/// @file aio/knx/secure/credentials.hpp
+/// @file api/kmx/aio/knx/secure/credentials.hpp
 /// @brief What an endpoint needs to join a KNX IP Secure profile: tunnelling credentials and routing configuration.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// Both hold derived keys only, never the passwords they came from, so nothing on a network path runs a
 /// password hash (P4). @ref kmx::aio::knx::keyring::credentials_for and
 /// @ref kmx::aio::knx::keyring::routing_configuration_for build them from an ETS keyring; an application whose
 /// keys come from elsewhere fills them in directly.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/ipv4.hpp>
+        #include <kmx/aio/knx/secure/common.hpp>
+        #include <kmx/aio/knx/secure/key.hpp>
+
         #include <cstdint>
         #include <expected>
         #include <system_error>
     #endif
-
-    #include <kmx/aio/ipv4.hpp>
-    #include <kmx/aio/knx/secure/common.hpp>
-    #include <kmx/aio/knx/secure/key.hpp>
 
 namespace kmx::aio::knx::secure
 {

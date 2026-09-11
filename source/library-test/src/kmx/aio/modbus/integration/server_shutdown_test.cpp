@@ -1,5 +1,6 @@
-/// @file aio/modbus/integration/server_shutdown_test.cpp
+/// @file src/kmx/aio/modbus/integration/server_shutdown_test.cpp
 /// @brief Regression tests for: modbus server::stop() must actually stop the server.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 ///
 /// Bug reproduced: stop() only requested its stop token, and the token was read at the top of the
 /// accept loop. serve() spends its life suspended inside that accept, so the request was never
@@ -18,22 +19,24 @@
 ///
 /// Each test asserts that run() returns on its own. No executor::stop() is called anywhere here - that
 /// is the whole point, and calling it would restore exactly the blind spot these tests exist to cover.
-
-#include <catch2/catch_test_macros.hpp>
-
 #if defined(KMX_AIO_FEATURE_MODBUS)
-    #include <kmx/aio/modbus/client.hpp>
-    #include <kmx/aio/modbus/server.hpp>
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/task.hpp>
-    #include <kmx/aio/test/executor_runner.hpp>
+    #ifndef PCH
+        #include <kmx/aio/modbus/client.hpp>
+        #include <kmx/aio/modbus/server.hpp>
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/task.hpp>
+        #include <kmx/aio/test/executor_runner.hpp>
+        #include <kmx/aio/test/scoped_runner.hpp>
 
-    #include <atomic>
-    #include <chrono>
-    #include <cstdint>
-    #include <memory>
-    #include <optional>
-    #include <vector>
+        #include <catch2/catch_test_macros.hpp>
+
+        #include <atomic>
+        #include <chrono>
+        #include <cstdint>
+        #include <memory>
+        #include <optional>
+        #include <vector>
+    #endif
 
 namespace kmx::aio::test::modbus::integration::server_shutdown_test
 {
@@ -43,8 +46,19 @@ namespace kmx::aio::test::modbus::integration::server_shutdown_test
     using kmx::aio::test::scoped_runner;
     using kmx::aio::test::wait_for_flag;
 
-    static constexpr std::uint16_t shutdown_base_port = 15910u;
-    static constexpr std::uint8_t shutdown_unit_id = 0x01u;
+    static constexpr std::uint16_t base_port = 15910u;
+    static constexpr std::uint8_t unit_id = 0x01u;
+
+    /// @brief What a connect-read-disconnect exchange observed, polled by the test while the executor runs.
+    struct exchange_outcome
+    {
+        /// @brief Set once the exchange finished, successfully or not.
+        std::atomic_bool exchanged {false};
+        /// @brief The registers read, if the read succeeded.
+        std::optional<register_values> values {};
+        /// @brief Why the exchange failed, if it did.
+        std::optional<std::error_code> op_error {};
+    };
 
     namespace detail
     {
@@ -61,31 +75,31 @@ namespace kmx::aio::test::modbus::integration::server_shutdown_test
         }
 
         /// @brief Connects, reads one register, and disconnects, so the server session must end.
+        /// @param outcome Receives what the exchange observed.
         task<void> exchange_then_disconnect(const std::shared_ptr<readiness::executor>& exec, const std::uint16_t port,
-                                            std::atomic_bool& exchanged, std::optional<register_values>& values,
-                                            std::optional<std::error_code>& op_error) noexcept(false)
+                                            exchange_outcome& outcome) noexcept(false)
         {
             static_cast<void>(co_await exec->async_timeout(20'000'000u));
-            client c {{.host = "127.0.0.1", .port = port, .unit_id = shutdown_unit_id}, *exec};
+            client c {{.host = "127.0.0.1", .port = port, .unit_id = unit_id}, *exec};
 
             if (const auto r = co_await c.connect(); !r)
             {
-                op_error = r.error();
-                exchanged.store(true, std::memory_order_release);
+                outcome.op_error = r.error();
+                outcome.exchanged.store(true, std::memory_order_release);
                 co_return;
             }
 
             if (const auto r = co_await c.read_holding_registers(0u, 1u); r)
-                values = *r;
+                outcome.values = *r;
             else
-                op_error = r.error();
+                outcome.op_error = r.error();
 
             // The server's session task must notice this and finish. Before the fix it could not tell a
             // closed connection from a served request, so it kept reading from a socket that was gone.
             static_cast<void>(co_await c.disconnect());
-            exchanged.store(true, std::memory_order_release);
+            outcome.exchanged.store(true, std::memory_order_release);
         }
-    } // namespace detail
+    }
 
     namespace detail
     {
@@ -102,7 +116,7 @@ namespace kmx::aio::test::modbus::integration::server_shutdown_test
 
             co_return std::vector<std::uint8_t> {fc, 2u, 0x00u, 0x2Au}; // one register, value 42
         }
-    } // namespace detail
+    }
 
     /// @brief Answers every read of holding registers with a fixed value, so a test can confirm that a
     ///        request really was served before shutdown is examined.
@@ -113,13 +127,13 @@ namespace kmx::aio::test::modbus::integration::server_shutdown_test
 
     [[nodiscard]] static server_config config_for(const std::uint16_t port) noexcept
     {
-        return server_config {.bind_address = "127.0.0.1", .port = port, .unit_id = shutdown_unit_id};
+        return server_config {.bind_address = "127.0.0.1", .port = port, .unit_id = unit_id};
     }
 
     // 1. stop() while the server is waiting for a connection
     TEST_CASE("modbus server: stop ends an idle accept loop", "[modbus][server][shutdown][integration]")
     {
-        constexpr std::uint16_t port = shutdown_base_port;
+        constexpr std::uint16_t port = base_port;
 
         auto srv = std::make_shared<server>();
         auto exec = std::make_shared<readiness::executor>();
@@ -152,7 +166,7 @@ namespace kmx::aio::test::modbus::integration::server_shutdown_test
     // 2. stop() while a peer is connected but sending nothing
     TEST_CASE("modbus server: stop ends a connected idle session", "[modbus][server][shutdown][integration]")
     {
-        constexpr std::uint16_t port = shutdown_base_port + 1u;
+        constexpr std::uint16_t port = base_port + 1u;
 
         auto srv = std::make_shared<server>();
         auto exec = std::make_shared<readiness::executor>();
@@ -168,7 +182,7 @@ namespace kmx::aio::test::modbus::integration::server_shutdown_test
         // session on the server side stays parked in the read it performs between requests - without a
         // task of its own being left outstanding. A coroutine holding the socket open by sleeping would
         // have to be waited for as well, and would then be measuring its own sleep rather than stop().
-        auto peer = std::make_shared<client>(client_config {.host = "127.0.0.1", .port = port, .unit_id = shutdown_unit_id}, *exec);
+        auto peer = std::make_shared<client>(client_config {.host = "127.0.0.1", .port = port, .unit_id = unit_id}, *exec);
 
         exec->spawn(detail::connect_only(exec, peer, connected, connect_error));
 
@@ -185,27 +199,25 @@ namespace kmx::aio::test::modbus::integration::server_shutdown_test
     // 3. a peer that disconnects must not leave its session behind
     TEST_CASE("modbus server: a disconnected peer leaves no session behind", "[modbus][server][shutdown][integration]")
     {
-        constexpr std::uint16_t port = shutdown_base_port + 2u;
+        constexpr std::uint16_t port = base_port + 2u;
 
         auto srv = std::make_shared<server>();
         auto exec = std::make_shared<readiness::executor>();
         srv->set_handler(function_code::read_holding_registers, make_constant_holding_handler());
 
-        std::atomic_bool exchanged {false};
-        std::optional<register_values> values;
-        std::optional<std::error_code> op_error;
+        exchange_outcome outcome {};
 
         auto serve = [exec, srv]() -> task<void> { static_cast<void>(co_await srv->serve(*exec, config_for(port))); };
         exec->spawn(serve());
 
-        exec->spawn(detail::exchange_then_disconnect(exec, port, exchanged, values, op_error));
+        exec->spawn(detail::exchange_then_disconnect(exec, port, outcome));
 
         scoped_runner runner {*exec};
-        REQUIRE(wait_for_flag(exchanged, 5s));
-        REQUIRE_FALSE(op_error.has_value());
-        REQUIRE(values.has_value());
-        REQUIRE(values->size() == 1u);
-        CHECK(values->at(0) == 42u);
+        REQUIRE(wait_for_flag(outcome.exchanged, 5s));
+        REQUIRE_FALSE(outcome.op_error.has_value());
+        REQUIRE(outcome.values.has_value());
+        REQUIRE(outcome.values->size() == 1u);
+        CHECK(outcome.values->at(0) == 42u);
 
         // Only the accept loop should still be outstanding by now; stopping it must drain the executor.
         std::this_thread::sleep_for(100ms);
@@ -214,5 +226,5 @@ namespace kmx::aio::test::modbus::integration::server_shutdown_test
         REQUIRE(runner.wait_until_drained(5s));
     }
 
-} // namespace kmx::aio::test::modbus::integration::server_shutdown_test
+}
 #endif // KMX_AIO_FEATURE_MODBUS

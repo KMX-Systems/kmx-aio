@@ -1,15 +1,15 @@
-/// @file aio/channel.hpp
+/// @file api/kmx/aio/channel.hpp
 /// @brief Lock-free Single-Producer Single-Consumer (SPSC) channel for cross-thread dispatch.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <kmx/aio/basic_channel.hpp>
+
     #include <cstddef>
     #include <memory>
     #include <optional>
     #include <type_traits>
     #include <utility>
-
-    #include <kmx/aio/basic_channel.hpp>
 #endif
 
 namespace kmx::aio
@@ -129,4 +129,4 @@ namespace kmx::aio
         alignas(cache_line_size) std::unique_ptr<element_slot[]> storage_;
     };
 
-} // namespace kmx::aio
+}

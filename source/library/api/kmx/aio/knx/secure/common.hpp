@@ -1,15 +1,15 @@
-/// @file aio/knx/secure/common.hpp
+/// @file api/kmx/aio/knx/secure/common.hpp
 /// @brief Types shared by every KNX Secure profile: sequence fields, serial numbers, clocks and counters.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/knx/dib/device_info.hpp>
+
         #include <array>
         #include <cstdint>
     #endif
-
-    #include <kmx/aio/knx/dib.hpp>
 
 namespace kmx::aio::knx::secure
 {

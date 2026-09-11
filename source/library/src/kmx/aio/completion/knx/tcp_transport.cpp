@@ -1,18 +1,19 @@
-/// @file kmx/aio/completion/knx/tcp_transport.cpp
+/// @file src/kmx/aio/completion/knx/tcp_transport.cpp
 /// @brief The compiled body of the io_uring KNX TCP transport.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/completion/knx/tcp_transport.hpp>
+#ifndef PCH
+    #include <kmx/aio/knx/error.hpp>
 
-#include <kmx/aio/knx/error.hpp>
-
-#include <cerrno>
-#include <chrono>
-#include <cstring>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <sys/uio.h>
-#include <system_error>
-#include <utility>
+    #include <cerrno>
+    #include <chrono>
+    #include <cstring>
+    #include <system_error>
+    #include <utility>
+    #include <netinet/in.h>
+    #include <netinet/tcp.h>
+    #include <sys/uio.h>
+#endif
 
 namespace kmx::aio::completion::knx
 {
@@ -163,6 +164,7 @@ namespace kmx::aio::completion::knx
                 co_return refuse(kn::error::connection_failed);
             sent += *written;
         }
+
         co_return payload.size();
     }
 

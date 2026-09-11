@@ -1,14 +1,19 @@
-#include <kmx/aio/sample/tcp/echo/common.hpp>
+/// @file src/kmx/aio/sample/tls/echo_completion_client/manager.cpp
+/// @brief Completion-model TLS echo stress client: many concurrent TLS connections with send and receive coroutines.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/tls/echo_completion_client/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/sample/tcp/echo/common.hpp>
 
-#include <algorithm>
-#include <csignal>
-#include <iostream>
-#include <span>
-#include <string_view>
-#include <sys/socket.h>
-#include <thread>
-#include <vector>
+    #include <algorithm>
+    #include <csignal>
+    #include <iostream>
+    #include <span>
+    #include <string_view>
+    #include <thread>
+    #include <vector>
+    #include <sys/socket.h>
+#endif
 
 namespace kmx::aio::sample::tls::echo_completion_client
 {
@@ -263,7 +268,7 @@ namespace kmx::aio::sample::tls::echo_completion_client
                 if (sent_bytes >= transfer_limit_bytes)
                     break;
 
-                common::generate_random_buffer(buffer);
+                tcp::echo::common::generate_random_buffer(buffer);
                 const auto remaining = transfer_limit_bytes - sent_bytes;
                 if (buffer.size() > remaining)
                     buffer.resize(remaining);
@@ -387,13 +392,14 @@ namespace kmx::aio::sample::tls::echo_completion_client
                         state = "RX";
 
                     std::cout << std::format("Connection {:07}: TX {:>10} | RX {:>10} | EC {:05} | {}\n", entry.worker_id,
-                                             common::format_bytes(entry.tx), common::format_bytes(entry.rx), entry.errors, state);
+                                             tcp::echo::common::format_bytes(entry.tx), tcp::echo::common::format_bytes(entry.rx),
+                                             entry.errors, state);
                 }
 
             std::cout << "────────────────────────────────────────────────────────────────────────\n";
             std::cout << std::format("Client Totals: TX {} | RX {} | EC {} | Completed {} | Total {} | OK {} | Fail {}\n",
-                                     common::format_bytes(bytes_sent), common::format_bytes(bytes_recv), errors, completed, total,
-                                     successes, failures);
+                                     tcp::echo::common::format_bytes(bytes_sent), tcp::echo::common::format_bytes(bytes_recv), errors,
+                                     completed, total, successes, failures);
             std::cout << std::flush;
 
             std::this_thread::sleep_for(250ms);
@@ -419,4 +425,4 @@ namespace kmx::aio::sample::tls::echo_completion_client
         std::cout << "╚════════════════════════════════════════╝\n";
     }
 
-} // namespace kmx::aio::sample::tls::echo_completion_client
+}

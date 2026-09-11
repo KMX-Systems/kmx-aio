@@ -1,10 +1,12 @@
-/// @file aio/readiness/udp/socket.cpp
+/// @file src/kmx/aio/readiness/udp/socket.cpp
+/// @brief Readiness-model UDP socket: creation and registration, plus epoll-driven recvmsg and sendmsg.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/readiness/udp/socket.hpp>
+#ifndef PCH
+    #include <kmx/aio/error_code.hpp>
 
-#include <kmx/aio/error_code.hpp>
-
-#include <cerrno>
+    #include <cerrno>
+#endif
 
 namespace kmx::aio::readiness::udp
 {
@@ -42,8 +44,7 @@ namespace kmx::aio::readiness::udp
         }
     }
 
-    task_returning_expected_size_t socket::recvmsg_until(::msghdr* msg, const std::uint32_t deadline_ms,
-                                                         const int flags) noexcept(false)
+    task_returning_expected_size_t socket::recvmsg_until(::msghdr* msg, const std::uint32_t deadline_ms, const int flags) noexcept(false)
     {
         if (msg == nullptr)
             co_return std::unexpected(error_from_errno(EINVAL));
@@ -62,6 +63,7 @@ namespace kmx::aio::readiness::udp
                     co_return std::unexpected(to_std_error_code(error_code::operation_cancelled));
                 continue;
             }
+
             co_return std::unexpected(error_from_errno());
         }
     }
@@ -87,4 +89,4 @@ namespace kmx::aio::readiness::udp
             co_return std::unexpected(error_from_errno());
         }
     }
-} // namespace kmx::aio::readiness::udp
+}

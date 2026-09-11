@@ -1,10 +1,10 @@
-/// @file aio/test/sample_process.hpp
+/// @file inc/kmx/aio/test/sample_process.hpp
 /// @brief Locating and running the built sample binaries from a smoke test.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details The smoke tests do not link the samples; they run them as processes and read what they
 ///          printed. That means every one of them has to find the repository, find a binary inside a
 ///          build tree whose layout depends on how it was built, quote paths safely into a shell
 ///          command, and decode what std::system() returned - none of which is what the test is about.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <chrono>
@@ -19,7 +19,6 @@
     #include <string_view>
     #include <system_error>
     #include <vector>
-
     #include <sys/wait.h>
 #endif
 
@@ -49,12 +48,10 @@ namespace kmx::aio::test
         quoted.reserve(raw.size() + 2u);
         quoted.push_back('\'');
         for (const char ch: raw)
-        {
             if (ch == '\'')
                 quoted += "'\\''";
             else
                 quoted.push_back(ch);
-        }
 
         quoted.push_back('\'');
         return quoted;
@@ -216,7 +213,7 @@ namespace kmx::aio::test
 
             return resolved.parent_path().string();
         }
-    } // namespace detail
+    }
 
     /// @brief The directory holding the libstdc++ that the compiler which built this tree ships.
     /// @details A sample built by a compiler newer than the system one dies at startup on
@@ -254,10 +251,8 @@ namespace kmx::aio::test
         std::string assignment = "LD_LIBRARY_PATH=";
 
         for (const auto dir: extra_dirs)
-        {
             if (!dir.empty())
                 assignment += shell_quote(dir) + ":";
-        }
 
         const std::string& runtime_dir = toolchain_cxx_runtime_dir();
         if (!runtime_dir.empty())
@@ -267,4 +262,4 @@ namespace kmx::aio::test
         return assignment;
     }
 
-} // namespace kmx::aio::test
+}

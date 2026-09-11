@@ -1,16 +1,17 @@
-/// @file kmx/aio/completion/knx/tcp_server.cpp
+/// @file src/kmx/aio/completion/knx/tcp_server.cpp
 /// @brief The compiled body of the io_uring KNXnet/IP TCP accept loop.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/completion/knx/tcp_server.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/knx/tcp_transport.hpp>
 
-#include <kmx/aio/completion/knx/tcp_transport.hpp>
-
-#include <cerrno>
-#include <cstring>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <system_error>
-#include <utility>
+    #include <cerrno>
+    #include <cstring>
+    #include <system_error>
+    #include <utility>
+    #include <netinet/in.h>
+    #include <netinet/tcp.h>
+#endif
 
 namespace kmx::aio::completion::knx
 {
@@ -82,6 +83,7 @@ namespace kmx::aio::completion::knx
             connections_.fetch_add(1u, std::memory_order_relaxed);
             exec_.spawn(serve_connection(std::move(connection), peer, peer_length));
         }
+
         co_return expected_void_t {};
     }
 

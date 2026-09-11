@@ -1,27 +1,33 @@
+/// @file src/kmx/aio/knx/integration_test.cpp
+/// @brief KNX UDP transports on real loopback sockets, on both models: tunnelling lifecycle, deadlines and IPv6 SEARCH.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/knx/udp_transport.hpp>
+    #include <kmx/aio/completion/udp/endpoint.hpp>
+    #include <kmx/aio/file_descriptor.hpp>
+    #include <kmx/aio/knx/connection.hpp>
+    #include <kmx/aio/knx/discovery/client.hpp>
+    #include <kmx/aio/knx/frame.hpp>
+    #include <kmx/aio/knx/tunnelling_client.hpp>
+    #include <kmx/aio/test/knx/telegram.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/knx/udp_transport.hpp>
-#include <kmx/aio/completion/udp/endpoint.hpp>
-#include <kmx/aio/file_descriptor.hpp>
-#include <kmx/aio/knx/client.hpp>
-#include <kmx/aio/knx/frame.hpp>
-#include <kmx/aio/knx/connection.hpp>
-#if defined(KMX_AIO_FEATURE_READINESS)
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/readiness/knx/udp_transport.hpp>
-    #include <kmx/aio/readiness/udp/endpoint.hpp>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <array>
+    #include <chrono>
+    #include <cstdint>
+    #include <thread>
+    #include <vector>
+
+    #if defined(KMX_AIO_FEATURE_READINESS)
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/readiness/knx/udp_transport.hpp>
+        #include <kmx/aio/readiness/udp/endpoint.hpp>
+    #endif
 #endif
-#include <kmx/aio/test/knx/telegram.hpp>
 
-#include <array>
-#include <chrono>
-#include <cstdint>
-#include <thread>
-#include <vector>
-
-namespace kmx::aio::test::knx::integration
+namespace kmx::aio::test::knx::integration_test
 {
     using namespace kmx::aio::knx;
 
@@ -102,8 +108,7 @@ namespace kmx::aio::test::knx::integration
         {
             peer = {};
             peer_length = sizeof(peer);
-            const auto received =
-                ::recvfrom(fd, buffer.data(), buffer.size(), 0, reinterpret_cast<sockaddr*>(&peer), &peer_length);
+            const auto received = ::recvfrom(fd, buffer.data(), buffer.size(), 0, reinterpret_cast<sockaddr*>(&peer), &peer_length);
             if (received <= 0)
                 return {};
             return {buffer.data(), static_cast<std::size_t>(received)};
@@ -111,8 +116,7 @@ namespace kmx::aio::test::knx::integration
 
         /// @brief Sends one datagram back to the peer a request came from.
         /// @return `true` when the datagram was handed to the kernel.
-        [[nodiscard]] bool send_to(const fd_t fd, const cspan_uint8_t packet, const sockaddr_storage& peer,
-                                   const ::socklen_t peer_length)
+        [[nodiscard]] bool send_to(const fd_t fd, const cspan_uint8_t packet, const sockaddr_storage& peer, const ::socklen_t peer_length)
         {
             return ::sendto(fd, packet.data(), packet.size(), 0, reinterpret_cast<const sockaddr*>(&peer), peer_length) >= 0;
         }
@@ -141,8 +145,7 @@ namespace kmx::aio::test::knx::integration
         }
 
         /// @brief Acknowledges one TUNNELLING_REQUEST on the data socket.
-        [[nodiscard]] bool serve_tunnelling_request(const udp_socket_binding& data, std::span<std::uint8_t> buffer,
-                                                    server_observation& out)
+        [[nodiscard]] bool serve_tunnelling_request(const udp_socket_binding& data, std::span<std::uint8_t> buffer, server_observation& out)
         {
             sockaddr_storage peer {};
             ::socklen_t peer_length {};
@@ -294,8 +297,7 @@ namespace kmx::aio::test::knx::integration
     TEST_CASE("knx full packet decoder rejects a truncated declared length", "[knx][integration]")
     {
         const std::array<std::uint8_t, 10u> packet {
-            0x06u, 0x10u, 0x04u, 0x20u, 0x00u, 0x12u,
-            0x04u, 0x07u, 0x02u, 0x00u,
+            0x06u, 0x10u, 0x04u, 0x20u, 0x00u, 0x12u, 0x04u, 0x07u, 0x02u, 0x00u,
         };
 
         const auto decoded = frame::decode_tunnelling_request_packet(packet);
@@ -320,7 +322,7 @@ namespace kmx::aio::test::knx::integration
         REQUIRE(::bind(endpoint->raw().get_fd(), reinterpret_cast<const sockaddr*>(&local_bind), sizeof(local_bind)) == 0);
 
         completion::knx::udp_transport transport {*endpoint};
-        tunnelling_client client { transport, control_binding.address, control_binding.length };
+        tunnelling_client client {transport, control_binding.address, control_binding.length};
         bool succeeded {};
 
         executor.spawn(detail::run_completion_lifecycle(client, succeeded, executor, endpoint->raw().get_fd()));
@@ -351,7 +353,7 @@ namespace kmx::aio::test::knx::integration
             transport,
             peer_binding.address,
             peer_binding.length,
-            tunnelling_config {.max_retries = 0u, .ack_timeout_ms = 50u, .connect_timeout_ms = 50u},
+            {.config = {.max_retries = 0u, .ack_timeout_ms = 50u, .connect_timeout_ms = 50u}},
         };
         bool timed_out {};
         auto run = [&]() -> task<void>
@@ -428,7 +430,7 @@ namespace kmx::aio::test::knx::integration
             transport,
             reinterpret_cast<const sockaddr*>(&peer_address),
             sizeof(peer_address),
-            tunnelling_config {.max_retries = 0u, .ack_timeout_ms = 50u, .connect_timeout_ms = 50u},
+            {.config = {.max_retries = 0u, .ack_timeout_ms = 50u, .connect_timeout_ms = 50u}},
         };
         bool timed_out {};
 
@@ -463,7 +465,7 @@ namespace kmx::aio::test::knx::integration
         REQUIRE(::bind(endpoint->raw().get_fd(), reinterpret_cast<const sockaddr*>(&local_bind), sizeof(local_bind)) == 0);
 
         readiness::knx::udp_transport transport {*endpoint};
-        tunnelling_client client { transport, control_binding.address, control_binding.length };
+        tunnelling_client client {transport, control_binding.address, control_binding.length};
         bool succeeded {};
 
         executor->spawn(detail::run_readiness_lifecycle(executor, client, endpoint->raw().get_fd(), succeeded));

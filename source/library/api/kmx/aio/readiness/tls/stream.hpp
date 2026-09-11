@@ -1,4 +1,4 @@
-/// @file aio/readiness/tls/stream.hpp
+/// @file api/kmx/aio/readiness/tls/stream.hpp
 /// @brief Readiness-model TLS stream using BoringSSL Memory BIOs over epoll.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -14,5 +14,5 @@ namespace kmx::aio::readiness::tls
     /// @brief Asynchronous TLS stream for the readiness (epoll) model.
     using stream = kmx::aio::tls::stream<kmx::aio::readiness::tcp::stream>;
 
-} // namespace kmx::aio::readiness::tls
+}
 #endif // KMX_AIO_FEATURE_READINESS

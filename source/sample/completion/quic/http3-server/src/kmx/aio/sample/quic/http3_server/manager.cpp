@@ -1,19 +1,27 @@
+/// @file src/kmx/aio/sample/quic/http3_server/manager.cpp
+/// @brief Completion-model HTTP/3 server sample: decodes requests over QUIC and answers with a fixed HTML page.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/quic/http3_server/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/quic/engine.hpp>
+    #include <kmx/aio/http3/alpn.hpp>
+    #include <kmx/aio/http3/control_stream_codec.hpp>
+    #include <kmx/aio/http3/data_codec.hpp>
+    #include <kmx/aio/http3/frame_codec.hpp>
+    #include <kmx/aio/http3/headers_codec.hpp>
+    #include <kmx/aio/http3/message.hpp>
 
-#include <kmx/aio/completion/quic/engine.hpp>
-#include <kmx/aio/http3/alpn.hpp>
-#include <kmx/aio/http3/codec.hpp>
-#include <kmx/aio/http3/message.hpp>
+    #include <lsquic.h>
+    #include <openssl/err.h>
+    #include <openssl/ssl.h>
 
-#include <array>
-#include <cerrno>
-#include <charconv>
-#include <cstdlib>
-#include <iostream>
-#include <lsquic.h>
-#include <openssl/err.h>
-#include <openssl/ssl.h>
-#include <string>
+    #include <array>
+    #include <cerrno>
+    #include <charconv>
+    #include <cstdlib>
+    #include <iostream>
+    #include <string>
+#endif
 
 namespace kmx::aio::sample::quic::http3_server
 {
@@ -22,7 +30,7 @@ namespace kmx::aio::sample::quic::http3_server
 
     namespace detail
     {
-        std::uint16_t parse_listen_port_from_env()
+        [[nodiscard]] std::uint16_t parse_listen_port_from_env()
         {
             constexpr std::uint16_t default_port = 12345u;
             const char* const env = std::getenv("KMX_QUIC_HTTP3_PORT");
@@ -39,8 +47,8 @@ namespace kmx::aio::sample::quic::http3_server
         }
     }
 
-    static int select_http3_alpn(::SSL* /*ssl*/, const unsigned char** out, unsigned char* outlen, const unsigned char* in,
-                                 unsigned int inlen, void* /*arg*/)
+    static int select_alpn(::SSL* /*ssl*/, const unsigned char** out, unsigned char* outlen, const unsigned char* in, unsigned int inlen,
+                           void* /*arg*/)
     {
         const int selected =
             ::SSL_select_next_proto(reinterpret_cast<unsigned char**>(const_cast<unsigned char**>(out)), outlen, in, inlen,
@@ -58,8 +66,8 @@ namespace kmx::aio::sample::quic::http3_server
         {
             if (control_state->saw_settings)
                 std::cout << "[HTTP/3 Server] Received peer control stream SETTINGS"
-                      << " max_field_section_size=" << control_state->negotiated_settings.max_field_section_size
-                      << " qpack_blocked_streams=" << control_state->negotiated_settings.qpack_blocked_streams << "\n";
+                          << " max_field_section_size=" << control_state->negotiated_settings.max_field_section_size
+                          << " qpack_blocked_streams=" << control_state->negotiated_settings.qpack_blocked_streams << "\n";
 
             if (control_state->goaway.has_value())
                 std::cout << "[HTTP/3 Server] Received peer GOAWAY stream_id=" << control_state->goaway->stream_id << "\n";
@@ -72,7 +80,6 @@ namespace kmx::aio::sample::quic::http3_server
         {
             kmx::aio::http3::request_message request {};
             for (const auto& frame: *frames)
-            {
                 if (frame.type == kmx::aio::http3::frame_type::headers)
                 {
                     const auto headers = kmx::aio::http3::headers_codec::decode(frame.payload);
@@ -80,7 +87,6 @@ namespace kmx::aio::sample::quic::http3_server
                         continue;
 
                     for (const auto& [name, value]: *headers)
-                    {
                         if (name == ":method")
                             request.head.method = value;
                         else if (name == ":path")
@@ -91,7 +97,6 @@ namespace kmx::aio::sample::quic::http3_server
                             request.head.scheme = value;
                         else
                             request.head.headers.emplace_back(name, value);
-                    }
                 }
                 else if (frame.type == kmx::aio::http3::frame_type::data)
                 {
@@ -99,7 +104,6 @@ namespace kmx::aio::sample::quic::http3_server
                     if (body)
                         request.body.append(reinterpret_cast<const char*>(body->data()), body->size());
                 }
-            }
 
             std::cout << "[HTTP/3 Server] Parsed request method=" << request.head.method << " target=" << request.head.target
                       << " authority=" << request.head.authority << "\n";
@@ -125,6 +129,7 @@ namespace kmx::aio::sample::quic::http3_server
                 std::cerr << "Failed to write HTTP3 response on QUIC stream. errno=" << errno << "\n";
                 co_return;
             }
+
             written += static_cast<std::size_t>(chunk);
         }
 
@@ -141,13 +146,15 @@ namespace kmx::aio::sample::quic::http3_server
             std::cerr << "Failed to create server SSL_CTX\n";
             co_return;
         }
-        ::SSL_CTX_set_alpn_select_cb(ssl_ctx, select_http3_alpn, nullptr);
+
+        ::SSL_CTX_set_alpn_select_cb(ssl_ctx, select_alpn, nullptr);
         if (::SSL_CTX_use_certificate_chain_file(ssl_ctx, "/tmp/quic_cert.pem") != 1)
         {
             std::cerr << "Failed to load /tmp/quic_cert.pem\n";
             ::SSL_CTX_free(ssl_ctx);
             co_return;
         }
+
         if (::SSL_CTX_use_PrivateKey_file(ssl_ctx, "/tmp/quic_key.pem", SSL_FILETYPE_PEM) != 1)
         {
             std::cerr << "Failed to load /tmp/quic_key.pem\n";

@@ -1,24 +1,27 @@
+/// @file src/kmx/aio/modbus/tls_client.cpp
+/// @brief The compiled body of the Modbus/TLS client, running over a readiness TLS stream.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/modbus/tls_client.hpp>
-
-#include <kmx/aio/error_code.hpp>
 #if defined(KMX_AIO_FEATURE_MODBUS)
-    #include <kmx/aio/modbus/detail/client_ops.hpp>
-    #include <kmx/aio/modbus/frame.hpp>
-    #include <kmx/aio/readiness/basic_types.hpp>
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/readiness/tcp/connect.hpp>
-    #include <kmx/aio/readiness/tcp/stream.hpp>
-    #include <kmx/aio/readiness/tls/stream.hpp>
+    #ifndef PCH
+        #include <kmx/aio/error_code.hpp>
+        #include <kmx/aio/modbus/detail/client_ops.hpp>
+        #include <kmx/aio/modbus/frame.hpp>
+        #include <kmx/aio/readiness/basic_types.hpp>
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/readiness/tcp/connect.hpp>
+        #include <kmx/aio/readiness/tcp/stream.hpp>
+        #include <kmx/aio/readiness/tls/stream.hpp>
 
-    #include <netinet/in.h>
-    #include <openssl/ssl.h>
-    #include <sys/socket.h>
+        #include <openssl/ssl.h>
 
-    #include <cstdint>
-    #include <cstring>
-    #include <optional>
-    #include <utility>
+        #include <cstdint>
+        #include <cstring>
+        #include <optional>
+        #include <utility>
+        #include <netinet/in.h>
+        #include <sys/socket.h>
+    #endif
 
 namespace kmx::aio::modbus
 {
@@ -66,6 +69,7 @@ namespace kmx::aio::modbus
                     ::SSL_CTX_free(ctx);
                     return std::unexpected(make_error_code(error::tls_handshake_failed));
                 }
+
                 if (::SSL_CTX_use_PrivateKey_file(ctx, tls_config_.key_path.c_str(), SSL_FILETYPE_PEM) != 1)
                 {
                     ::SSL_CTX_free(ctx);
@@ -75,13 +79,11 @@ namespace kmx::aio::modbus
 
             // Load CA for server certificate verification
             if (!tls_config_.ca_cert_path.empty())
-            {
                 if (::SSL_CTX_load_verify_locations(ctx, tls_config_.ca_cert_path.c_str(), nullptr) != 1)
                 {
                     ::SSL_CTX_free(ctx);
                     return std::unexpected(make_error_code(error::tls_handshake_failed));
                 }
-            }
 
             // Peer verification (verify server cert)
             if (tls_config_.verify_peer)
@@ -256,5 +258,5 @@ namespace kmx::aio::modbus
         return impl_->stream_.has_value();
     }
 
-} // namespace kmx::aio::modbus
+}
 #endif // KMX_AIO_FEATURE_MODBUS

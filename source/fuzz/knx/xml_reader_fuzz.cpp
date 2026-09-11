@@ -1,16 +1,18 @@
 /// @file fuzz/knx/xml_reader_fuzz.cpp
 /// @brief libFuzzer target for the bounded XML reader behind the ETS keyring loader.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details Beyond surviving every input, a document the reader accepts must keep the reader's promises: its
 ///          events balance, and no element, attribute or nesting level exceeds the limits. A broken promise
 ///          aborts, so the fuzzer reports it as a finding. Built and run by script/feature/knx/run-fuzz.sh.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/knx/secure/detail/keyring_format.hpp>
-#include <kmx/aio/knx/secure/detail/xml_reader.hpp>
+#ifndef PCH
+    #include <kmx/aio/knx/secure/detail/keyring_format.hpp>
+    #include <kmx/aio/knx/secure/detail/xml_reader.hpp>
 
-#include <cstddef>
-#include <cstdint>
-#include <cstdlib>
-#include <string_view>
+    #include <cstddef>
+    #include <cstdint>
+    #include <cstdlib>
+    #include <string_view>
+#endif
 
 namespace kmx::aio::fuzz::knx::xml_reader_fuzz
 {
@@ -25,7 +27,7 @@ namespace kmx::aio::fuzz::knx::xml_reader_fuzz
         {
             if ((attribute.value.size() > limits.max_value_size) || (kd::find_attribute(event, attribute.name) != &attribute.value))
                 std::abort();
-            (void) kd::base64_decode(attribute.value);
+            static_cast<void>(kd::base64_decode(attribute.value));
         }
     }
 
@@ -43,6 +45,7 @@ namespace kmx::aio::fuzz::knx::xml_reader_fuzz
                 std::abort();
             check_element(event, limits);
         }
+
         if ((depth != 0u) || (events.size() > (2u * limits.max_elements)))
             std::abort();
     }

@@ -1,0 +1,52 @@
+/// @file api/kmx/aio/http2/frame_builder.hpp
+/// @brief HTTP/2 frame builder definitions.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#pragma once
+#include <kmx/aio/config.hpp>
+#if defined(KMX_AIO_FEATURE_HTTP2)
+    #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/http2/hpack.hpp>
+
+        #include <cstddef>
+        #include <cstdint>
+        #include <span>
+        #include <string_view>
+    #endif
+
+namespace kmx::aio::http2
+{
+    /// @brief Utility class to dynamically build HTTP/2 frames.
+    class frame_builder
+    {
+    public:
+        /// @brief Format an HTTP/2 SETTINGS frame into a buffer
+        /// @param buffer Destination buffer
+        /// @return Number of bytes written
+        static std::size_t make_settings(span_uint8_t buffer) noexcept(false);
+
+        /// @brief Format an HTTP/2 SETTINGS ACK frame into a buffer
+        /// @param buffer Destination buffer
+        /// @return Number of bytes written
+        static std::size_t make_settings_ack(span_uint8_t buffer) noexcept(false);
+
+        /// @brief Format an HTTP/2 HEADERS frame dynamically using HPACK
+        /// @param buffer Destination buffer
+        /// @param stream_id The internal stream identifier
+        /// @param end_stream True if this frame also signals END_STREAM
+        /// @param headers List of key-value string pairs to encode
+        /// @return Number of bytes written
+        static std::size_t make_headers(span_uint8_t buffer, const std::uint32_t stream_id, const bool end_stream,
+                                        const header_list& headers) noexcept(false);
+
+        /// @brief Format an HTTP/2 DATA frame into a buffer
+        /// @param buffer Destination buffer
+        /// @param stream_id The internal stream identifier
+        /// @param end_stream True if this is the final data frame
+        /// @param data The raw data to append
+        /// @return Number of bytes written
+        static std::size_t make_data(span_uint8_t buffer, const std::uint32_t stream_id, const bool end_stream,
+                                     std::string_view data) noexcept(false);
+    };
+}
+#endif // KMX_AIO_FEATURE_HTTP2

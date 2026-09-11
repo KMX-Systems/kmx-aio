@@ -1,4 +1,4 @@
-/// @file aio/ipv4.hpp
+/// @file api/kmx/aio/ipv4.hpp
 /// @brief IPv4 address storage and view types.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -37,4 +37,4 @@ namespace kmx::aio::ipv4
     /// @return true if parsing succeeded, false otherwise.
     [[nodiscard]] bool parse_address(std::string_view text, storage_t& out) noexcept;
 
-} // namespace kmx::aio::ipv4
+}

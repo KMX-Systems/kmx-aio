@@ -5,7 +5,7 @@ SOME/IP (Scalable service-Oriented MiddlewarE over IP, [AUTOSAR PRS_SOMEIP](http
 ## Scope
 
 - Async coroutine facades: `client`, `server`, `subscription`
-- vsomeip compatibility boundary (`compat::client_runtime`, `compat::server_runtime`)
+- vsomeip compatibility boundary (`vsomeip_compat::client_runtime`, `vsomeip_compat::server_runtime`)
 - In-process stub backend for deterministic testing
 - Echo server/client, event publisher/subscriber, diagnostics samples
 
@@ -18,7 +18,7 @@ SOME/IP (Scalable service-Oriented MiddlewarE over IP, [AUTOSAR PRS_SOMEIP](http
                          │ kmx::aio::someip facade
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  compat::client_runtime / compat::server_runtime            │
+│  vsomeip_compat::client_runtime / vsomeip_compat::server_runtime │
 │  (internal; not part of the public API)                     │
 ├──────────────────────────────┬──────────────────────────────┤
 │   Stub backend               │   vsomeip backend            │
@@ -30,7 +30,7 @@ SOME/IP (Scalable service-Oriented MiddlewarE over IP, [AUTOSAR PRS_SOMEIP](http
 
 The backend is selected at compile time:
 
-- **Stub** (default when `project.someip_link_backend:false`): all operations succeed immediately in-process; `__kmx_test_push_event` is available for injecting synthetic notifications.
+- **Stub** (default when `project.someip_link_backend:false`): all operations succeed immediately in-process; `test_push_event` is available for injecting synthetic notifications.
 - **vsomeip** (`project.someip_link_backend:true`): vsomeip's application thread, Service Discovery, and real IPC are activated. vsomeip headers must be on the include path.
 
 ## Key Types (`kmx::aio::someip`)
@@ -255,14 +255,17 @@ bash script/feature/someip/run-smoke.sh --skip-build
 | [source/library/api/kmx/aio/someip/client.hpp](../../source/library/api/kmx/aio/someip/client.hpp) | Client facade |
 | [source/library/api/kmx/aio/someip/server.hpp](../../source/library/api/kmx/aio/someip/server.hpp) | Server facade |
 | [source/library/api/kmx/aio/someip/subscription.hpp](../../source/library/api/kmx/aio/someip/subscription.hpp) | Subscription facade |
-| [source/library/inc/kmx/aio/someip/vsomeip_compat.hpp](../../source/library/inc/kmx/aio/someip/vsomeip_compat.hpp) | Internal compat layer (stub + vsomeip) |
-| [source/library/src/kmx/aio/someip/vsomeip_compat.cpp](../../source/library/src/kmx/aio/someip/vsomeip_compat.cpp) | Stub and vsomeip backend implementations |
+| [source/library/inc/kmx/aio/someip/vsomeip_compat.hpp](../../source/library/inc/kmx/aio/someip/vsomeip_compat.hpp) | Internal compat layer: vsomeip header detection and `rpc_message` |
+| [source/library/inc/kmx/aio/someip/vsomeip_compat/client_runtime.hpp](../../source/library/inc/kmx/aio/someip/vsomeip_compat/client_runtime.hpp) | Compat-layer client runtime (stub + vsomeip) |
+| [source/library/inc/kmx/aio/someip/vsomeip_compat/server_runtime.hpp](../../source/library/inc/kmx/aio/someip/vsomeip_compat/server_runtime.hpp) | Compat-layer server runtime (stub + vsomeip) |
+| [source/library/src/kmx/aio/someip/vsomeip_compat/client_runtime.cpp](../../source/library/src/kmx/aio/someip/vsomeip_compat/client_runtime.cpp) | Stub and vsomeip client runtime implementations |
+| [source/library/src/kmx/aio/someip/vsomeip_compat/server_runtime.cpp](../../source/library/src/kmx/aio/someip/vsomeip_compat/server_runtime.cpp) | Stub and vsomeip server runtime implementations |
 | [source/library/src/kmx/aio/someip/client.cpp](../../source/library/src/kmx/aio/someip/client.cpp) | Client facade implementation |
 | [source/library/src/kmx/aio/someip/server.cpp](../../source/library/src/kmx/aio/someip/server.cpp) | Server facade implementation |
 | [source/library/src/kmx/aio/someip/subscription.cpp](../../source/library/src/kmx/aio/someip/subscription.cpp) | Subscription facade implementation |
 | [source/library-test/src/kmx/aio/someip/client_service_test.cpp](../../source/library-test/src/kmx/aio/someip/client_service_test.cpp) | Client start/stop/call unit tests |
 | [source/library-test/src/kmx/aio/someip/subscription_test.cpp](../../source/library-test/src/kmx/aio/someip/subscription_test.cpp) | Subscription queue and lifecycle unit tests |
-| [source/library-test/src/kmx/aio/someip/compat_queue_test.cpp](../../source/library-test/src/kmx/aio/someip/compat_queue_test.cpp) | Compat-layer queue overflow/capacity unit tests |
+| [source/library-test/src/kmx/aio/someip/vsomeip_compat/client_runtime_test.cpp](../../source/library-test/src/kmx/aio/someip/vsomeip_compat/client_runtime_test.cpp) | Compat-layer queue overflow/capacity unit tests |
 | [source/library-test/src/kmx/aio/someip/error_test.cpp](../../source/library-test/src/kmx/aio/someip/error_test.cpp) | Error category and message tests |
 | [source/library-test/src/kmx/aio/integration/someip_smoke_test.cpp](../../source/library-test/src/kmx/aio/integration/someip_smoke_test.cpp) | Echo server/client integration smoke test |
 | [source/sample/completion/someip/echo-server/src/main.cpp](../../source/sample/completion/someip/echo-server/src/main.cpp) | Echo server sample |

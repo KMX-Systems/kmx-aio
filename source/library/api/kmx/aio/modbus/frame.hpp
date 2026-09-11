@@ -1,15 +1,18 @@
-/// @file aio/modbus/frame.hpp
+/// @file api/kmx/aio/modbus/frame.hpp
 /// @brief Modbus TCP ADU/PDU encode and decode utilities.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// All functions are pure and stateless — they operate on caller-provided
 /// buffers and spans with no I/O or heap allocation.  Big-endian byte order
 /// is used throughout, as required by the Modbus Application Protocol
 /// Specification V1.1b3 §4.3.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_MODBUS)
     #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/modbus/types.hpp>
+
         #include <array>
         #include <cstdint>
         #include <expected>
@@ -17,9 +20,6 @@
         #include <system_error>
         #include <vector>
     #endif
-
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/modbus/types.hpp>
 
 namespace kmx::aio::modbus::frame
 {
@@ -153,5 +153,5 @@ namespace kmx::aio::modbus::frame
     /// @brief Decode a Write Multiple Registers or Write Multiple Coils response PDU.
     [[nodiscard]] expected_void_t decode_write_multiple_response(cspan_uint8_t pdu, function_code expected_fc) noexcept;
 
-} // namespace kmx::aio::modbus::frame
+}
 #endif // KMX_AIO_FEATURE_MODBUS

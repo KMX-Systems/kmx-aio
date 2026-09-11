@@ -1,4 +1,4 @@
-/// @file aio/quic/settings.hpp
+/// @file api/kmx/aio/quic/settings.hpp
 /// @brief Common settings for QUIC engines.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -17,6 +17,6 @@ namespace kmx::aio::quic
         /// @brief Max connection flow control window in bytes.
         unsigned max_cfcwnd {32u * 1024u * 1024u}; // 32 MiB
     };
-} // namespace kmx::aio::quic
+}
 
 #endif // KMX_AIO_FEATURE_QUIC

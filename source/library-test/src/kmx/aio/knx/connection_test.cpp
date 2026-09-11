@@ -1,27 +1,31 @@
+/// @file src/kmx/aio/knx/connection_test.cpp
+/// @brief Unit tests for KNXnet/IP CONNECT, CONNECTIONSTATE and DISCONNECT frames with IPv4, IPv6 and TCP HPAIs.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
 #include <kmx/aio/knx/connection.hpp>
-#include <kmx/aio/knx/datagram.hpp>
+#ifndef PCH
+    #include <kmx/aio/knx/datagram.hpp>
 
-#include <array>
-#include <cstdint>
-#include <variant>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <array>
+    #include <cstdint>
+    #include <variant>
+#endif
 
 namespace kmx::aio::test::knx::connection_test
 {
     using namespace kmx::aio::knx;
 
-    constexpr ipv4_endpoint control_address {{ 127u, 0u, 0u, 1u }, 3671u };
-    constexpr ipv4_endpoint data_address {{ 127u, 0u, 0u, 1u }, 3672u };
+    constexpr ipv4_endpoint control_address {{127u, 0u, 0u, 1u}, 3671u};
+    constexpr ipv4_endpoint data_address {{127u, 0u, 0u, 1u}, 3672u};
     constexpr ipv6_endpoint ipv6_control_address {{0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u}, 3671u};
     constexpr ipv6_endpoint ipv6_data_address {{15u, 14u, 13u, 12u, 11u, 10u, 9u, 8u, 7u, 6u, 5u, 4u, 3u, 2u, 1u, 0u}, 3672u};
 
     TEST_CASE("knx connect request round-trips IPv4 HPAI", "[knx][connection][integration]")
     {
         const connect_request_frame request {
-            .control_endpoint = hpai { control_address, 0x01u },
-            .data_endpoint = hpai { data_address, 0x01u },
+            .control_endpoint = hpai {control_address, 0x01u},
+            .data_endpoint = hpai {data_address, 0x01u},
         };
         std::array<std::uint8_t, 26u> packet {};
 
@@ -38,7 +42,7 @@ namespace kmx::aio::test::knx::connection_test
         const connect_response_frame response {
             .channel_id = 9u,
             .status = connect_status::no_error,
-            .data_endpoint = hpai { data_address, 0x01u },
+            .data_endpoint = hpai {data_address, 0x01u},
         };
         std::array<std::uint8_t, 20u> packet {};
 
@@ -93,7 +97,7 @@ namespace kmx::aio::test::knx::connection_test
         const connect_response_frame response {
             .channel_id = 9u,
             .status = connect_status::no_error,
-            .data_endpoint = hpai { data_address, 0x01u },
+            .data_endpoint = hpai {data_address, 0x01u},
         };
         std::array<std::uint8_t, 20u> packet {};
         REQUIRE(connection::encode_connect_response_packet(packet, response).has_value());
@@ -136,10 +140,10 @@ namespace kmx::aio::test::knx::connection_test
         REQUIRE(connection::encode_connect_request_packet(packet, request).has_value());
 
         constexpr std::array<std::uint8_t, 26u> expected {
-            0x06u, 0x10u, 0x02u, 0x05u, 0x00u, 0x1Au,                                    // header
-            0x08u, 0x01u, 127u,  0u,    0u,    1u,    0x0Eu, 0x57u,                      // control HPAI
-            0x08u, 0x01u, 127u,  0u,    0u,    1u,    0x0Eu, 0x58u,                      // data HPAI
-            0x04u, 0x04u, 0x02u, 0x00u,                                                  // CRI
+            0x06u, 0x10u, 0x02u, 0x05u, 0x00u, 0x1Au,               // header
+            0x08u, 0x01u, 127u,  0u,    0u,    1u,    0x0Eu, 0x57u, // control HPAI
+            0x08u, 0x01u, 127u,  0u,    0u,    1u,    0x0Eu, 0x58u, // data HPAI
+            0x04u, 0x04u, 0x02u, 0x00u,                             // CRI
         };
         CHECK(packet == expected);
     }
@@ -240,8 +244,8 @@ namespace kmx::aio::test::knx::connection_test
         CHECK(too_short.error() == make_error_code(error::invalid_length));
 
         std::array<std::uint8_t, 8u> response_packet {};
-        REQUIRE(connection::encode_disconnect_response_packet(response_packet,
-                                                             disconnect_response_frame { 9u, connect_status::no_error }).has_value());
+        REQUIRE(connection::encode_disconnect_response_packet(response_packet, disconnect_response_frame {9u, connect_status::no_error})
+                    .has_value());
         const auto response = connection::decode_disconnect_response_packet(response_packet);
         REQUIRE(response.has_value());
         CHECK(response->channel_id == 9u);
@@ -258,9 +262,8 @@ namespace kmx::aio::test::knx::connection_test
         CHECK(heartbeat.error() == make_error_code(error::malformed_frame));
 
         const std::array<std::uint8_t, 20u> connect_packet {
-            0x06u, 0x10u, 0x02u, 0x06u, 0x00u, 0x14u, 0x01u, 0xFFu,
-            0x08u, 0x01u, 127u, 0u, 0u, 1u, 0x0Eu, 0x58u,
-            0x04u, 0x04u, 0x00u, 0x02u,
+            0x06u, 0x10u, 0x02u, 0x06u, 0x00u, 0x14u, 0x01u, 0xFFu, 0x08u, 0x01u,
+            127u,  0u,    0u,    1u,    0x0Eu, 0x58u, 0x04u, 0x04u, 0x00u, 0x02u,
         };
         const auto connect = connection::decode_connect_response_packet(connect_packet);
         REQUIRE(!connect.has_value());
@@ -329,13 +332,13 @@ namespace kmx::aio::test::knx::connection_test
     {
         std::array<std::uint8_t, 8u> heartbeat {};
         const auto heartbeat_result = connection::encode_connectionstate_response_packet(
-            heartbeat, connectionstate_response_frame { 1u, static_cast<connect_status>(0xFFu) });
+            heartbeat, connectionstate_response_frame {1u, static_cast<connect_status>(0xFFu)});
         REQUIRE(!heartbeat_result.has_value());
         CHECK(heartbeat_result.error() == make_error_code(error::invalid_configuration));
 
         std::array<std::uint8_t, 8u> disconnect {};
-        const auto disconnect_result = connection::encode_disconnect_response_packet(
-            disconnect, disconnect_response_frame { 1u, static_cast<connect_status>(0xFFu) });
+        const auto disconnect_result =
+            connection::encode_disconnect_response_packet(disconnect, disconnect_response_frame {1u, static_cast<connect_status>(0xFFu)});
         REQUIRE(!disconnect_result.has_value());
         CHECK(disconnect_result.error() == make_error_code(error::invalid_configuration));
     }
@@ -344,16 +347,16 @@ namespace kmx::aio::test::knx::connection_test
     {
         // Endpoints on two protocols, or on one KNXnet/IP does not define, cannot describe a connection.
         const connect_request_frame mixed {
-            .control_endpoint = hpai { control_address, 0x02u },
-            .data_endpoint = hpai { data_address, 0x01u },
+            .control_endpoint = hpai {control_address, 0x02u},
+            .data_endpoint = hpai {data_address, 0x01u},
         };
         std::array<std::uint8_t, 26u> packet {};
         const auto mixed_result = connection::encode_connect_request_packet(packet, mixed);
         REQUIRE(!mixed_result.has_value());
         CHECK(mixed_result.error() == make_error_code(error::unsupported_hpai));
         const connect_request_frame undefined {
-            .control_endpoint = hpai { control_address, 0x03u },
-            .data_endpoint = hpai { data_address, 0x03u },
+            .control_endpoint = hpai {control_address, 0x03u},
+            .data_endpoint = hpai {data_address, 0x03u},
         };
         const auto undefined_result = connection::encode_connect_request_packet(packet, undefined);
         REQUIRE(!undefined_result.has_value());
@@ -363,7 +366,7 @@ namespace kmx::aio::test::knx::connection_test
         connect_response_frame response {
             .channel_id = 3u,
             .status = connect_status::no_error,
-            .data_endpoint = hpai { {}, 0x02u },
+            .data_endpoint = hpai {{}, 0x02u},
         };
         std::array<std::uint8_t, 20u> response_packet {};
         REQUIRE(connection::encode_connect_response_packet(response_packet, response).has_value());
@@ -381,17 +384,17 @@ namespace kmx::aio::test::knx::connection_test
         // Over TCP both HPAIs are protocol 0x02 with address and port zero. The extended CRI appends the individual
         // address asked for - 1.1.5 here - and grows the information block from four octets to six.
         const connect_request_frame request {
-            .control_endpoint = hpai { {}, 0x02u },
-            .data_endpoint = hpai { {}, 0x02u },
+            .control_endpoint = hpai {{}, 0x02u},
+            .data_endpoint = hpai {{}, 0x02u},
             .requested_address = individual_address {1u, 1u, 5u},
         };
         std::array<std::uint8_t, 28u> packet {};
         REQUIRE(connection::encode_connect_request_packet(packet, request).has_value());
         constexpr std::array<std::uint8_t, 28u> expected {
-            0x06u, 0x10u, 0x02u, 0x05u, 0x00u, 0x1Cu,                  // header, 28 octets
-            0x08u, 0x02u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u,    // control HPAI over TCP
-            0x08u, 0x02u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u,    // data HPAI over TCP
-            0x06u, 0x04u, 0x02u, 0x00u, 0x11u, 0x05u,                  // extended CRI: tunnel, link layer, 1.1.5
+            0x06u, 0x10u, 0x02u, 0x05u, 0x00u, 0x1Cu,               // header, 28 octets
+            0x08u, 0x02u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, // control HPAI over TCP
+            0x08u, 0x02u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, // data HPAI over TCP
+            0x06u, 0x04u, 0x02u, 0x00u, 0x11u, 0x05u,               // extended CRI: tunnel, link layer, 1.1.5
         };
         CHECK(packet == expected);
 
@@ -442,7 +445,9 @@ namespace kmx::aio::test::knx::connection_test
     TEST_CASE("knx management connect response round-trips", "[knx][connection][unit]")
     {
         const management_connect_response_frame response {
-            9u, connect_status::no_error, hpai {ipv4_endpoint {{192u, 0u, 2u, 20u}, 3671u}, 0x01u},
+            9u,
+            connect_status::no_error,
+            hpai {ipv4_endpoint {{192u, 0u, 2u, 20u}, 3671u}, 0x01u},
         };
 
         std::array<std::uint8_t, frame::communication_header_size + connection::management_connect_response_body_size> packet {};
@@ -492,7 +497,6 @@ namespace kmx::aio::test::knx::connection_test
         // A layer nobody defines is refused rather than sent.
         auto rejected = request;
         rejected.knx_layer = 0x7Fu;
-        CHECK(connection::encode_connect_request_packet(packet, rejected).error() ==
-              make_error_code(error::invalid_configuration));
+        CHECK(connection::encode_connect_request_packet(packet, rejected).error() == make_error_code(error::invalid_configuration));
     }
 }

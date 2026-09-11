@@ -1,11 +1,12 @@
-/// @file aio/readiness/knx/server.hpp
+/// @file api/kmx/aio/readiness/knx/server.hpp
 /// @brief Readiness-facing KNX tunnelling server alias.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_READINESS) && defined(KMX_AIO_FEATURE_KNX)
-
-    #include <kmx/aio/knx/server.hpp>
+    #ifndef PCH
+        #include <kmx/aio/knx/generic_server.hpp>
+    #endif
 
 namespace kmx::aio::readiness::knx
 {

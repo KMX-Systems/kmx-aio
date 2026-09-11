@@ -1,5 +1,6 @@
-/// @file aio/completion/knx/tcp_server.hpp
+/// @file api/kmx/aio/completion/knx/tcp_server.hpp
 /// @brief Completion accept loop for KNXnet/IP over TCP: one serving task per connection.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// The io_uring twin of the readiness TCP server, with the same contract: listen, accept, wrap each connection in a
 /// @ref kmx::aio::completion::knx::tcp_transport, and spawn the task that serves it through
@@ -8,24 +9,24 @@
 /// @ref kmx::aio::completion::knx::tcp_server::stop shuts the listening socket and every connection down, which
 /// completes the accept and the receives they wait in.
 /// @note The server and this loop must outlive the executor's run, since every connection task refers to both.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_COMPLETION) && defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/completion/executor.hpp>
+        #include <kmx/aio/file_descriptor.hpp>
+        #include <kmx/aio/ipv4.hpp>
+        #include <kmx/aio/knx/generic_server.hpp>
+        #include <kmx/aio/knx/server.hpp>
+        #include <kmx/aio/task.hpp>
+
         #include <atomic>
         #include <cstddef>
         #include <cstdint>
         #include <stop_token>
         #include <sys/socket.h>
     #endif
-
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/completion/executor.hpp>
-    #include <kmx/aio/file_descriptor.hpp>
-    #include <kmx/aio/ipv4.hpp>
-    #include <kmx/aio/knx/server.hpp>
-    #include <kmx/aio/task.hpp>
 
 namespace kmx::aio::completion::knx
 {

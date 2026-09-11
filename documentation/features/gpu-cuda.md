@@ -8,7 +8,8 @@ This feature provides a lightweight executor model for awaiting CUDA event compl
 
 | Type | Header |
 | :--- | :--- |
-| `gpu::executor`, `gpu::executor_config`, `gpu::statistics` | `<kmx/aio/gpu/executor.hpp>` |
+| `gpu::executor`, `gpu::executor_config` | `<kmx/aio/gpu/executor.hpp>` |
+| `gpu::statistics` | `<kmx/aio/gpu/statistics.hpp>` (pulled in by `executor.hpp`) |
 | `gpu::stream` | `<kmx/aio/gpu/stream.hpp>` |
 | `gpu::event` | `<kmx/aio/gpu/event.hpp>` (pulled in by `stream.hpp`) |
 | `gpu::stream_handle`, `gpu::event_handle` | `<kmx/aio/gpu/basic_types.hpp>` |
@@ -45,7 +46,7 @@ kmx::aio::gpu::stream stream;
 auto event = stream.create_event();
 co_await event;
 
-gpu_exec->spawn(gpu_process_frame(std::move(host_frame)));
+gpu_exec->spawn(offload_frame(std::move(host_frame)));
 const auto& stats = gpu_exec->get_statistics();
 ```
 

@@ -1,12 +1,16 @@
+/// @file src/kmx/aio/someip/subscription.cpp
+/// @brief The compiled body of the SOME/IP event subscription facade and its bounded notification queue.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/someip/client.hpp>
-#include <kmx/aio/someip/error.hpp>
 #include <kmx/aio/someip/subscription.hpp>
-#include <kmx/aio/someip/vsomeip_compat.hpp>
+#ifndef PCH
+    #include <kmx/aio/someip/client.hpp>
+    #include <kmx/aio/someip/error.hpp>
+    #include <kmx/aio/someip/vsomeip_compat/client_runtime.hpp>
 
-#include <deque>
-#include <optional>
-#include <utility>
+    #include <deque>
+    #include <optional>
+    #include <utility>
+#endif
 
 namespace kmx::aio::someip
 {
@@ -18,7 +22,7 @@ namespace kmx::aio::someip
         client* bound_client {};
         bool opened {};
         std::deque<event_notification> queue;
-        std::optional<compat::client_runtime> runtime;
+        std::optional<vsomeip_compat::client_runtime> runtime;
         std::uint64_t local_dropped_events {};
 
         /// @brief Appends one notification, dropping the oldest entries once the queue is full.
@@ -77,15 +81,14 @@ namespace kmx::aio::someip
 
         if (!impl_->runtime->request_service(impl_->config.service_id, impl_->config.instance_id))
         {
-            (void) impl_->runtime->stop();
+            static_cast<void>(impl_->runtime->stop());
             impl_->runtime.reset();
             co_return std::unexpected(make_error_code(error::request_failed));
         }
 
-        if (!impl_->runtime->subscribe(impl_->config.service_id, impl_->config.instance_id, impl_->config.event_group_id,
-                                       impl_->config.event_ids, impl_->config.notification_queue_capacity))
+        if (!impl_->runtime->subscribe(impl_->config))
         {
-            (void) impl_->runtime->stop();
+            static_cast<void>(impl_->runtime->stop());
             impl_->runtime.reset();
             co_return std::unexpected(make_error_code(error::request_failed));
         }
@@ -101,10 +104,10 @@ namespace kmx::aio::someip
 
         if (impl_->runtime.has_value())
         {
-            (void) impl_->runtime->unsubscribe(impl_->config.service_id, impl_->config.instance_id, impl_->config.event_group_id,
-                                               impl_->config.event_ids);
-            (void) impl_->runtime->release_service(impl_->config.service_id, impl_->config.instance_id);
-            (void) impl_->runtime->stop();
+            static_cast<void>(impl_->runtime->unsubscribe(impl_->config.service_id, impl_->config.instance_id, impl_->config.event_group_id,
+                                                          impl_->config.event_ids));
+            static_cast<void>(impl_->runtime->release_service(impl_->config.service_id, impl_->config.instance_id));
+            static_cast<void>(impl_->runtime->stop());
             impl_->runtime.reset();
         }
 
@@ -170,13 +173,13 @@ namespace kmx::aio::someip
     }
 
 #if !defined(KMX_AIO_HAS_VSOMEIP_HEADER)
-    void subscription::__kmx_test_push_event(event_notification notification)
+    void subscription::test_push_event(event_notification notification)
     {
         if (!impl_->runtime.has_value())
             return;
 
-        impl_->runtime->__kmx_test_push_event(std::move(notification));
+        impl_->runtime->test_push_event(std::move(notification));
     }
 #endif
 
-} // namespace kmx::aio::someip
+}

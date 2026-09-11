@@ -1,10 +1,14 @@
+/// @file src/kmx/aio/someip/server.cpp
+/// @brief The compiled body of the backend-neutral SOME/IP server facade.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/someip/error.hpp>
 #include <kmx/aio/someip/server.hpp>
-#include <kmx/aio/someip/vsomeip_compat.hpp>
+#ifndef PCH
+    #include <kmx/aio/someip/error.hpp>
+    #include <kmx/aio/someip/vsomeip_compat/server_runtime.hpp>
 
-#include <unordered_set>
-#include <utility>
+    #include <unordered_set>
+    #include <utility>
+#endif
 
 namespace kmx::aio::someip
 {
@@ -18,7 +22,7 @@ namespace kmx::aio::someip
         explicit impl(server_config cfg) noexcept: config(std::move(cfg)), runtime(config.application_name, config.config_file_path) {}
 
         server_config config;
-        compat::server_runtime runtime;
+        vsomeip_compat::server_runtime runtime;
         statistics stats;
         bool started {};
         std::unordered_set<std::uint32_t> offered_services;
@@ -53,7 +57,7 @@ namespace kmx::aio::someip
         if (!impl_->started)
             co_return std::unexpected(make_error_code(error::stopped));
 
-        (void) impl_->runtime.stop();
+        static_cast<void>(impl_->runtime.stop());
         impl_->started = false;
         impl_->offered_services.clear();
         co_return expected_void_t {};
@@ -153,4 +157,4 @@ namespace kmx::aio::someip
         return impl_->stats;
     }
 
-} // namespace kmx::aio::someip
+}

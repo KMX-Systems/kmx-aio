@@ -1,25 +1,25 @@
-/// @file aio/modbus/detail/session.hpp
+/// @file inc/kmx/aio/modbus/detail/session.hpp
 /// @brief Transport-agnostic Modbus TCP request/response exchange helpers.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// Provides two free function templates that operate on any stream type
 /// exposing `read(span_char_t)` and `write_all(cspan_char_t)`
 /// coroutine methods.  The session layer is intentionally stateless — the
 /// transaction-ID counter and stream ownership live in the caller (client or
 /// server pimpl).
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #if defined(KMX_AIO_FEATURE_MODBUS)
     #ifndef PCH
+        #include <kmx/aio/modbus/error.hpp>
+        #include <kmx/aio/modbus/frame.hpp>
+        #include <kmx/aio/task.hpp>
+
         #include <cstdint>
         #include <expected>
         #include <span>
         #include <system_error>
         #include <vector>
     #endif
-
-    #include <kmx/aio/modbus/error.hpp>
-    #include <kmx/aio/modbus/frame.hpp>
-    #include <kmx/aio/task.hpp>
 
 namespace kmx::aio::modbus::detail
 {
@@ -43,6 +43,7 @@ namespace kmx::aio::modbus::detail
                 co_return std::unexpected(make_error_code(error::disconnected));
             total += *result;
         }
+
         co_return expected_void_t();
     }
 
@@ -102,5 +103,5 @@ namespace kmx::aio::modbus::detail
         co_return pdu;
     }
 
-} // namespace kmx::aio::modbus::detail
+}
 #endif // KMX_AIO_FEATURE_MODBUS

@@ -1,23 +1,25 @@
-/// @file kmx/aio/knx/secure/client_session_test.cpp
+/// @file src/kmx/aio/knx/secure/client_session_test.cpp
 /// @brief The KNX IP Secure client session: xknx's handshake end to end, refused frames, and its clock.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details The client's key pair is xknx's fixture, handed out by a fixed-key entropy source, so the handshake the
 /// session runs is the one whose MACs xknx computes. The server side is played with the session key derived from the
 /// same fixture.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
-#include <kmx/aio/knx/error.hpp>
-#include <kmx/aio/knx/frame.hpp>
 #include <kmx/aio/knx/secure/client_session.hpp>
-#include <kmx/aio/knx/secure/detail/ccm.hpp>
-#include <kmx/aio/test/knx/secure_vectors.hpp>
-#include <kmx/aio/test/knx/telegram.hpp>
+#ifndef PCH
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/frame.hpp>
+    #include <kmx/aio/knx/secure/detail/ccm.hpp>
+    #include <kmx/aio/test/knx/secure_vectors.hpp>
+    #include <kmx/aio/test/knx/telegram.hpp>
 
-#include <algorithm>
-#include <array>
-#include <cstdint>
-#include <span>
-#include <vector>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <algorithm>
+    #include <array>
+    #include <cstdint>
+    #include <span>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::knx::secure::client_session_test
 {
@@ -34,7 +36,7 @@ namespace kmx::aio::test::knx::secure::client_session_test
         using buffer_t = std::array<std::uint8_t, kn::frame::max_datagram_size>;
 
         /// @brief The client's serial number, and the server's.
-        constexpr ks::serial_number_t client_serial {0x00u, 0xFAu, 0x12u, 0x34u, 0x56u, 0x78u};
+        constexpr ks::serial_number_t own_serial {0x00u, 0xFAu, 0x12u, 0x34u, 0x56u, 0x78u};
         constexpr ks::serial_number_t server_serial {0x00u, 0xFAu, 0xAAu, 0xAAu, 0xAAu, 0xAAu};
 
         /// @brief xknx's session fixture.
@@ -75,7 +77,7 @@ namespace kmx::aio::test::knx::secure::client_session_test
 
         /// @brief Returns the error a result carries, or no error.
         template <typename Value>
-        [[nodiscard]] std::error_code error_of(const std::expected<Value, std::error_code>& result) noexcept
+        [[nodiscard]] std::error_code error_of(const expected_t<Value>& result) noexcept
         {
             return result.has_value() ? std::error_code {} : result.error();
         }
@@ -90,7 +92,7 @@ namespace kmx::aio::test::knx::secure::client_session_test
                                                .user_password_key = std::move(*user_key),
                                                .device_authentication_code = std::move(*device_code),
                                                .skip_device_authentication = skip_device_authentication,
-                                               .serial_number = client_serial};
+                                               .serial_number = own_serial};
         }
 
         /// @brief The server's SESSION_RESPONSE for session 1, with its genuine MAC.
@@ -139,10 +141,12 @@ namespace kmx::aio::test::knx::secure::client_session_test
             std::ranges::copy(ks::tunnelling_message_tag, wire.begin() + 20u);
             const auto payload = std::span {wire}.subspan(22u, plain.size());
             std::ranges::copy(plain, payload.begin());
-            const auto mac = kd::seal(
-                kd::evp_backend(), *key,
-                kd::wrapper_block_0(sequence_octets, server_serial, ks::tunnelling_message_tag, static_cast<std::uint16_t>(plain.size())),
-                kd::wrapper_counter_0(sequence_octets, server_serial, ks::tunnelling_message_tag), std::span {wire}.first(8u), payload);
+            const auto mac = kd::seal({kd::evp_backend(), *key},
+                                      {.block_0 = kd::wrapper_block_0(sequence_octets, server_serial, ks::tunnelling_message_tag,
+                                                                      static_cast<std::uint16_t>(plain.size())),
+                                       .counter_0 = kd::wrapper_counter_0(sequence_octets, server_serial, ks::tunnelling_message_tag),
+                                       .associated_data = std::span {wire}.first(8u),
+                                       .payload = payload});
             REQUIRE(mac.has_value());
             std::ranges::copy(*mac, wire.end() - static_cast<std::ptrdiff_t>(ks::mac_size));
             return wire;
@@ -166,7 +170,7 @@ namespace kmx::aio::test::knx::secure::client_session_test
         [[nodiscard]] ks::opened_frame_result_t deliver(ks::client_session& session, const std::vector<std::uint8_t>& wire, buffer_t& plain,
                                                         const std::uint64_t now_ms)
         {
-            const auto wrapper = ks::decode_secure_wrapper_packet(wire);
+            const auto wrapper = ks::decode_wrapper_packet(wire);
             REQUIRE(wrapper.has_value());
             return session.open(*wrapper, plain, now_ms);
         }
@@ -200,11 +204,11 @@ namespace kmx::aio::test::knx::secure::client_session_test
         // SESSION_AUTHENTICATE goes out as the session's first wrapper, and carries xknx's MAC.
         const auto authenticate_size = session.on_session_response(detail::response(fixture), wire, 0u);
         REQUIRE(authenticate_size.has_value());
-        const auto wrapper = ks::decode_secure_wrapper_packet(std::span {wire}.first(*authenticate_size));
+        const auto wrapper = ks::decode_wrapper_packet(std::span {wire}.first(*authenticate_size));
         REQUIRE(wrapper.has_value());
         CHECK(wrapper->session_id == 1u);
         CHECK(ks::decode_sequence(wrapper->sequence) == 0u);
-        CHECK(wrapper->serial_number == detail::client_serial);
+        CHECK(wrapper->serial_number == detail::own_serial);
         CHECK(wrapper->message_tag == ks::tunnelling_message_tag);
         const auto key = ks::derive_session_key(fixture.client_private, fixture.server_public);
         REQUIRE(key.has_value());
@@ -225,7 +229,7 @@ namespace kmx::aio::test::knx::secure::client_session_test
         // Tunnel traffic follows under the next sequence number.
         const auto sealed = session.seal(detail::tunnelling_request(), wire, 1u);
         REQUIRE(sealed.has_value());
-        const auto next = ks::decode_secure_wrapper_packet(std::span {wire}.first(*sealed));
+        const auto next = ks::decode_wrapper_packet(std::span {wire}.first(*sealed));
         REQUIRE(next.has_value());
         CHECK(ks::decode_sequence(next->sequence) == 1u);
     }
@@ -324,7 +328,7 @@ namespace kmx::aio::test::knx::secure::client_session_test
 
         // A wrapper too short to read never reaches the session; its owner counts it.
         const std::vector<std::uint8_t> truncated(fifth.begin(), fifth.end() - 1);
-        CHECK(!ks::decode_secure_wrapper_packet(truncated).has_value());
+        CHECK(!ks::decode_wrapper_packet(truncated).has_value());
         session.note_unauthenticated();
         CHECK(session.counters().authentication_failures == 3u);
 
@@ -350,7 +354,7 @@ namespace kmx::aio::test::knx::secure::client_session_test
 
         const auto keep_alive = session.prepare_keep_alive(wire, 90'000u);
         REQUIRE(keep_alive.has_value());
-        const auto wrapper = ks::decode_secure_wrapper_packet(std::span {wire}.first(*keep_alive));
+        const auto wrapper = ks::decode_wrapper_packet(std::span {wire}.first(*keep_alive));
         REQUIRE(wrapper.has_value());
         const auto key = ks::derive_session_key(fixture.client_private, fixture.server_public);
         REQUIRE(key.has_value());
@@ -390,7 +394,7 @@ namespace kmx::aio::test::knx::secure::client_session_test
         CHECK(entropy.pairs == 2u);
         const auto authenticate = session.on_session_response(detail::response(fixture), wire, 2u);
         REQUIRE(authenticate.has_value());
-        const auto wrapper = ks::decode_secure_wrapper_packet(std::span {wire}.first(*authenticate));
+        const auto wrapper = ks::decode_wrapper_packet(std::span {wire}.first(*authenticate));
         REQUIRE(wrapper.has_value());
         CHECK(ks::decode_sequence(wrapper->sequence) == 0u);
 

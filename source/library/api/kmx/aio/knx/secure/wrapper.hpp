@@ -1,5 +1,6 @@
-/// @file aio/knx/secure/wrapper.hpp
+/// @file api/kmx/aio/knx/secure/wrapper.hpp
 /// @brief SECURE_WRAPPER, the frame KNX IP Secure carries every protected KNXnet/IP datagram in.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// A wrapper is the KNXnet/IP header, a two-octet session id, six octets of sequence information, the sender's
 /// serial number, a message tag, the encrypted datagram and a sixteen-octet MAC. What it encrypts is a complete
@@ -11,26 +12,25 @@
 /// under the backbone key for routing. The MAC covers the wrapper's header and session id as associated data and
 /// the plain datagram as payload.
 /// @reference KNX System Specifications, 03/08/09 "KNXnet/IP Security"; KNX AN159 "KNXnet/IP Secure".
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/knx/frame.hpp>
+        #include <kmx/aio/knx/secure/common.hpp>
+        #include <kmx/aio/knx/secure/key.hpp>
+
         #include <cstddef>
         #include <cstdint>
         #include <expected>
         #include <system_error>
     #endif
 
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/knx/frame.hpp>
-    #include <kmx/aio/knx/secure/common.hpp>
-    #include <kmx/aio/knx/secure/key.hpp>
-
 namespace kmx::aio::knx::secure
 {
     /// @brief Service type of a SECURE_WRAPPER.
-    inline constexpr std::uint16_t secure_wrapper_service = 0x0950u;
+    inline constexpr std::uint16_t wrapper_service = 0x0950u;
     /// @brief The session id, sequence information, serial number and message tag ahead of the encrypted datagram.
     inline constexpr std::size_t wrapper_security_header_size = 16u;
     /// @brief Everything a wrapper adds around the datagram it carries: KNXnet/IP header, security header and MAC.
@@ -42,7 +42,7 @@ namespace kmx::aio::knx::secure
 
     /// @brief One SECURE_WRAPPER as it travels.
     /// @warning @ref encrypted_frame views the decoded packet, which must outlive this frame.
-    struct secure_wrapper_frame
+    struct wrapper_frame
     {
         /// @brief The secure session id; zero for routing.
         std::uint16_t session_id {};
@@ -72,7 +72,7 @@ namespace kmx::aio::knx::secure
     };
 
     /// @brief A decoded wrapper, or why the octets are not one.
-    using secure_wrapper_result_t = std::expected<secure_wrapper_frame, std::error_code>;
+    using wrapper_result_t = std::expected<wrapper_frame, std::error_code>;
     /// @brief A KNXnet/IP header, or why a datagram may not travel inside a wrapper.
     using communication_header_result_t = std::expected<communication_header, std::error_code>;
 
@@ -82,13 +82,13 @@ namespace kmx::aio::knx::secure
     /// @retval kmx::aio::knx::error::unsupported_service The datagram is another service.
     /// @retval kmx::aio::knx::error::malformed_frame The length disagrees with the datagram, or leaves no room for
     ///         a KNXnet/IP header inside.
-    [[nodiscard]] secure_wrapper_result_t decode_secure_wrapper_packet(cspan_uint8_t packet) noexcept;
+    [[nodiscard]] wrapper_result_t decode_wrapper_packet(cspan_uint8_t packet) noexcept;
 
     /// @brief Encodes a SECURE_WRAPPER from fields that are already encrypted.
-    /// @param destination The destination octets; must not overlap @ref secure_wrapper_frame::encrypted_frame.
+    /// @param destination The destination octets; must not overlap @ref wrapper_frame::encrypted_frame.
     /// @param value The wrapper.
     /// @return Nothing, or why the wrapper could not be encoded.
-    [[nodiscard]] expected_void_t encode_secure_wrapper_packet(span_uint8_t destination, const secure_wrapper_frame& value) noexcept;
+    [[nodiscard]] expected_void_t encode_wrapper_packet(span_uint8_t destination, const wrapper_frame& value) noexcept;
 
     /// @brief Checks that a plain datagram may travel inside a wrapper.
     /// @param plain_frame The complete KNXnet/IP datagram.
@@ -121,6 +121,6 @@ namespace kmx::aio::knx::secure
     /// @retval kmx::aio::knx::error::invalid_length @p destination is too small.
     /// @retval kmx::aio::knx::error::crypto_failure The backend failed; @p destination is wiped.
     /// @note Authentication only: whether the datagram may be wrapped at all is @ref check_wrapped_frame's question.
-    [[nodiscard]] expected_size_t open_wrapper(span_uint8_t destination, const secret_key& key, const secure_wrapper_frame& value) noexcept;
+    [[nodiscard]] expected_size_t open_wrapper(span_uint8_t destination, const secret_key& key, const wrapper_frame& value) noexcept;
 }
 #endif // KMX_AIO_FEATURE_KNX

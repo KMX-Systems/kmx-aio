@@ -1,18 +1,22 @@
+/// @file src/kmx/aio/modbus/tls_server.cpp
+/// @brief The compiled body of the Modbus/TLS server: SSL context setup, readiness accept loop and TLS handshake.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/modbus/tls_server.hpp>
 #if defined(KMX_AIO_FEATURE_MODBUS)
-    #include <kmx/aio/modbus/detail/server_ops.hpp>
-    #include <kmx/aio/modbus/error.hpp>
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/readiness/tcp/listener.hpp>
-    #include <kmx/aio/readiness/tcp/stream.hpp>
-    #include <kmx/aio/readiness/tls/stream.hpp>
+    #ifndef PCH
+        #include <kmx/aio/modbus/detail/server_ops.hpp>
+        #include <kmx/aio/modbus/error.hpp>
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/readiness/tcp/listener.hpp>
+        #include <kmx/aio/readiness/tcp/stream.hpp>
+        #include <kmx/aio/readiness/tls/stream.hpp>
 
-    #include <openssl/ssl.h>
+        #include <openssl/ssl.h>
 
-    #include <stop_token>
-    #include <unordered_map>
-    #include <utility>
+        #include <stop_token>
+        #include <unordered_map>
+        #include <utility>
+    #endif
 
 namespace kmx::aio::modbus
 {
@@ -39,6 +43,7 @@ namespace kmx::aio::modbus
                     ::SSL_CTX_free(ctx);
                     return std::unexpected(make_error_code(error::tls_handshake_failed));
                 }
+
                 if (::SSL_CTX_use_PrivateKey_file(ctx, tls.key_path.c_str(), SSL_FILETYPE_PEM) != 1)
                 {
                     ::SSL_CTX_free(ctx);
@@ -53,6 +58,7 @@ namespace kmx::aio::modbus
                     ::SSL_CTX_free(ctx);
                     return std::unexpected(make_error_code(error::tls_handshake_failed));
                 }
+
                 // Use the same CA as trusted client CA list
                 ::SSL_CTX_set_client_CA_list(ctx, ::SSL_load_client_CA_file(tls.ca_cert_path.c_str()));
             }
@@ -86,10 +92,8 @@ namespace kmx::aio::modbus
             const std::stop_callback cancel_on_stop {stop_token, [&exec, connection_fd]() noexcept { exec.cancel_io(connection_fd); }};
 
             while (!stop_token.stop_requested())
-            {
                 if (!co_await process_request(tls_stream, config))
                     break;
-            }
         }
     };
 
@@ -176,5 +180,5 @@ namespace kmx::aio::modbus
         impl_->stop_source_.request_stop();
     }
 
-} // namespace kmx::aio::modbus
+}
 #endif // KMX_AIO_FEATURE_MODBUS

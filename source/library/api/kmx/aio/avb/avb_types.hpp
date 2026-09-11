@@ -1,13 +1,14 @@
-/// @file avb/avb_types.hpp
+/// @file api/kmx/aio/avb/avb_types.hpp
 /// @brief AVB-specific types shared across the AVB pillar.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_AVB)
     #ifndef PCH
+        #include <kmx/aio/mac.hpp>
+
         #include <array>
         #include <cstdint>
-        #include <kmx/aio/mac.hpp>
     #endif
 
 namespace kmx::aio::avb
@@ -39,7 +40,7 @@ namespace kmx::aio::avb
 
     /// @brief Hardware-precise timestamp in nanoseconds since the TAI epoch.
     /// @note Use CLOCK_TAI (not CLOCK_REALTIME) for AVB/PTP operations.
-    using avb_timestamp_t = std::uint64_t;
+    using tai_timestamp_t = std::uint64_t;
 
     /// @brief EtherType constants used in AVB.
     namespace ethertype

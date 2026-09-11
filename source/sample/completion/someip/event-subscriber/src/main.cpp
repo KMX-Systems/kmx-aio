@@ -1,12 +1,17 @@
-#include <atomic>
-#include <chrono>
-#include <exception>
-#include <memory>
-#include <source_location>
+/// @file src/main.cpp
+/// @brief Entry point of the completion-model SOME/IP event subscriber sample: sets up the subscription and runs the manager.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/sample/someip/event_subscriber/manager.hpp>
+    #include <kmx/logger.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/sample/someip/event_subscriber/manager.hpp>
-#include <kmx/logger.hpp>
+    #include <atomic>
+    #include <chrono>
+    #include <exception>
+    #include <memory>
+    #include <source_location>
+#endif
 
 int main() noexcept
 {

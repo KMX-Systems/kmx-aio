@@ -1,16 +1,20 @@
+/// @file src/kmx/aio/sample/spdk/discovery/manager.cpp
+/// @brief Completion-model SPDK bdev discovery: lists registered bdevs and probes the names given on the command line.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/spdk/discovery/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/spdk/device.hpp>
+    #include <kmx/aio/completion/spdk/runtime.hpp>
+    #include <kmx/logger.hpp>
 
-#include <cstddef>
-#include <source_location>
-#include <string>
-#include <string_view>
-#include <unordered_set>
-#include <vector>
-
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/spdk/device.hpp>
-#include <kmx/aio/completion/spdk/runtime.hpp>
-#include <kmx/logger.hpp>
+    #include <cstddef>
+    #include <source_location>
+    #include <string>
+    #include <string_view>
+    #include <unordered_set>
+    #include <vector>
+#endif
 
 namespace kmx::aio::sample::spdk::discovery
 {
@@ -35,7 +39,7 @@ namespace kmx::aio::sample::spdk::discovery
         return out;
     }
 
-    int run_discovery(int argc, const char* argv[])
+    int run(int argc, const char* argv[])
     {
         kmx::aio::completion::executor exec;
         const auto requested = collect_requested(argc, argv);
@@ -70,13 +74,11 @@ namespace kmx::aio::sample::spdk::discovery
         targets.reserve(requested.size());
 
         for (const auto& candidate: requested)
-        {
             if (available_set.contains(candidate))
                 targets.emplace_back(candidate);
             else
                 kmx::logger::log(kmx::logger::level::warn, std::source_location::current(),
                                  "Requested bdev '{}' is not in registered list.", candidate);
-        }
 
         if (targets.empty())
         {
@@ -124,7 +126,7 @@ namespace kmx::aio::sample::spdk::discovery
         // Release hardware resources cleanly via spdk lifecycle
         if (auto fini = kmx::aio::completion::spdk::runtime::finalize(); !fini)
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SPDK finalize failed: {}",
-                         fini.error().message());
+                             fini.error().message());
 
         return 0;
     }

@@ -3,6 +3,9 @@ import qbs
 StaticLibrary {
     Depends { name: "cpp" }
     Depends { name: "kmx-aio-core" }
+    // The generic AVB components are explicitly instantiated here for both execution models;
+    // completion/avb and readiness/avb only alias those instantiations.
+    Depends { name: "kmx-aio-completion"; condition: project.enable_completion }
     Depends { name: "kmx-aio-readiness" }
     Depends { name: "kmx_instrumentation" }
     Depends { name: "kmx_features" }
@@ -33,6 +36,7 @@ StaticLibrary {
     Export {
         Depends { name: "cpp" }
         Depends { name: "kmx-aio-core" }
+        Depends { name: "kmx-aio-completion"; condition: project.enable_completion }
         Depends { name: "kmx-aio-readiness" }
         Depends { name: "kmx_instrumentation" }
         Depends { name: "kmx_features" }

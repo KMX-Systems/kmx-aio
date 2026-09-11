@@ -1,3 +1,6 @@
+/// @file inc/kmx/aio/sample/tls/echo_completion_server/manager.hpp
+/// @brief Completion-model TLS echo server sample manager, with its config and metrics.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <kmx/aio/completion/executor.hpp>
@@ -59,4 +62,4 @@ namespace kmx::aio::sample::tls::echo_completion_server
         static inline std::atomic<kmx::aio::completion::executor*> g_executor_ptr {};
     };
 
-} // namespace kmx::aio::sample::tls::echo_completion_server
+}

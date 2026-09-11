@@ -1,5 +1,6 @@
-/// @file aio/knx/secure/timer_notify.hpp
+/// @file api/kmx/aio/knx/secure/timer_notify.hpp
 /// @brief TIMER_NOTIFY, the frame secure routers keep their timers aligned with.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// A TIMER_NOTIFY carries a timer value, a serial number, a message tag and a MAC under the backbone key, and
 /// nothing encrypted. The MAC's B0 is the timer value, serial number and message tag followed by a zero length,
@@ -9,21 +10,20 @@
 /// with an update notify carrying the outdated sender's serial number and message tag, so that sender can tell
 /// the update is meant for it, and the answer to a synchronisation request echoes the requester's the same way.
 /// @reference KNX AN159 v06 §2.2.2.3; xknx 3.20.0 `SecureSequenceTimer`.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/knx/frame.hpp>
+        #include <kmx/aio/knx/secure/common.hpp>
+        #include <kmx/aio/knx/secure/key.hpp>
+
         #include <cstddef>
         #include <cstdint>
         #include <expected>
         #include <system_error>
     #endif
-
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/knx/frame.hpp>
-    #include <kmx/aio/knx/secure/common.hpp>
-    #include <kmx/aio/knx/secure/key.hpp>
 
 namespace kmx::aio::knx::secure
 {

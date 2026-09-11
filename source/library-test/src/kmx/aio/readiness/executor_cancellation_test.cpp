@@ -1,5 +1,6 @@
-/// @file aio/readiness/executor_cancellation_test.cpp
+/// @file src/kmx/aio/readiness/executor_cancellation_test.cpp
 /// @brief Regression tests for: a wait_io() suspension must always be resumed.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 ///
 /// Bug reproduced: executor::unregister_fd() erased the subscriptions for a descriptor without
 /// resuming the coroutines waiting in them. Once the descriptor left epoll no event could ever arrive
@@ -15,21 +16,22 @@
 ///   2. cancel_io() does the same for a descriptor that stays registered.
 ///   3. A cancel that lands before the wait subscribes is not lost.
 ///   4. register_fd() re-arms a cancelled descriptor, so a later wait is woken by a real event.
+#ifndef PCH
+    #include <kmx/aio/readiness/executor.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/aio/test/executor_runner.hpp>
+    #include <kmx/aio/test/outcome.hpp>
+    #include <kmx/aio/test/scoped_runner.hpp>
+    #include <kmx/aio/test/socket_pair.hpp>
 
-#include <catch2/catch_test_macros.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <atomic>
-#include <chrono>
-#include <memory>
-
-#include <sys/socket.h>
-#include <unistd.h>
-
-#include <kmx/aio/readiness/executor.hpp>
-#include <kmx/aio/task.hpp>
-#include <kmx/aio/test/executor_runner.hpp>
-#include <kmx/aio/test/fd_pair.hpp>
-#include <kmx/aio/test/outcome.hpp>
+    #include <atomic>
+    #include <chrono>
+    #include <memory>
+    #include <sys/socket.h>
+    #include <unistd.h>
+#endif
 
 namespace kmx::aio::test::readiness::executor_cancellation_test
 {
@@ -55,7 +57,7 @@ namespace kmx::aio::test::readiness::executor_cancellation_test
             outcome.fired.store(fired, std::memory_order_release);
             outcome.completed.store(true, std::memory_order_release);
         }
-    } // namespace detail
+    }
 
     TEST_CASE("readiness executor: unregister_fd resumes a parked wait", "[readiness][executor][cancellation]")
     {
@@ -160,4 +162,4 @@ namespace kmx::aio::test::readiness::executor_cancellation_test
         CHECK(outcome.fired.load(std::memory_order_acquire));
     }
 
-} // namespace kmx::aio::test::readiness::executor_cancellation_test
+}

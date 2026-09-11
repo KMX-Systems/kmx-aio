@@ -1,5 +1,10 @@
-#include <kmx/aio/detail/syscalls.hpp>
+/// @file src/kmx/aio/readiness/descriptor/epoll.cpp
+/// @brief The readiness epoll descriptor wrapper: create, add, modify and remove monitored fds, and wait for events.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/readiness/descriptor/epoll.hpp>
+#ifndef PCH
+    #include <kmx/aio/detail/syscalls.hpp>
+#endif
 
 namespace kmx::aio::readiness::descriptor
 {
@@ -102,4 +107,4 @@ namespace kmx::aio::readiness::descriptor
         events.resize(ready);
         return events;
     }
-} // kmx::aio::readiness::descriptor
+}

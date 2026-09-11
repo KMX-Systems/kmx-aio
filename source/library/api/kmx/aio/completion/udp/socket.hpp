@@ -1,17 +1,17 @@
-/// @file aio/completion/udp/socket.hpp
+/// @file api/kmx/aio/completion/udp/socket.hpp
 /// @brief Completion-model UDP socket using io_uring for async recvmsg/sendmsg.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_COMPLETION)
     #ifndef PCH
-        #include <expected>
-        #include <sys/socket.h>
-        #include <system_error>
-
         #include <kmx/aio/basic_types.hpp>
         #include <kmx/aio/completion/io_base.hpp>
         #include <kmx/aio/task.hpp>
+
+        #include <expected>
+        #include <system_error>
+        #include <sys/socket.h>
     #endif
 
 namespace kmx::aio::completion::udp
@@ -59,7 +59,7 @@ namespace kmx::aio::completion::udp
         /// @throws std::bad_alloc (coroutine frame allocation).
         [[nodiscard]] task_returning_expected_size_t recvmsg(::msghdr* msg, const unsigned flags = 0u) noexcept(false);
         [[nodiscard]] task_returning_expected_size_t recvmsg_until(::msghdr* msg, std::uint64_t timeout_ns,
-                                       const unsigned flags = 0u) noexcept(false);
+                                                                   const unsigned flags = 0u) noexcept(false);
 
         /// @brief Asynchronously sends a datagram via io_uring.
         /// @param msg   Message header describing payload buffers and peer address.
@@ -75,7 +75,7 @@ namespace kmx::aio::completion::udp
         [[nodiscard]] expected_void_t bind(const ip_address_t ip, const port_t port) noexcept;
     };
 
-} // namespace kmx::aio::completion::udp
+}
 
     #ifndef PCH
     #endif

@@ -1,11 +1,15 @@
-#include <kmx/aio/readiness/v4l2/capture.hpp>
+/// @file src/kmx/aio/sample/v4l2/capture/manager.cpp
+/// @brief Readiness-model V4L2 capture sample manager implementation: frame loop, signal stop and statistics.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/v4l2/capture/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/error_code.hpp>
+    #include <kmx/aio/readiness/v4l2/capture.hpp>
 
-#include <csignal>
-#include <print>
-#include <source_location>
-
-#include <kmx/aio/error_code.hpp>
+    #include <csignal>
+    #include <print>
+    #include <source_location>
+#endif
 
 namespace kmx::aio::sample::v4l2::capture
 {
@@ -90,6 +94,7 @@ namespace kmx::aio::sample::v4l2::capture
                                      "Too many consecutive errors. Aborting capture loop.");
                     break;
                 }
+
                 continue;
             }
 
@@ -103,7 +108,7 @@ namespace kmx::aio::sample::v4l2::capture
             // Progress log every 30 frames (~1 second at 30 fps).
             if (const auto n = metrics_.frames_captured.load(mem_order); (n > 0u) && ((n % 30u) == 0u))
                 kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "Frame #{} | seq={} | ts={}ns | {} bytes", n,
-                             meta.sequence, meta.timestamp_ns, meta.bytes_used);
+                                 meta.sequence, meta.timestamp_ns, meta.bytes_used);
 
             // `frame` destructs here → VIDIOC_QBUF re-enqueues the buffer automatically.
         }
@@ -127,4 +132,4 @@ namespace kmx::aio::sample::v4l2::capture
 
         kmx::logger::log(kmx::logger::level::info, std::source_location::current(), "Signal {} received, stopping capture.", signum);
     }
-} // namespace kmx::aio::sample::v4l2::capture
+}

@@ -1,4 +1,4 @@
-/// @file aio/http3/frame.hpp
+/// @file api/kmx/aio/http3/frame.hpp
 /// @brief HTTP/3 frame definitions.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -6,7 +6,6 @@
 #if defined(KMX_AIO_FEATURE_HTTP3)
     #ifndef PCH
         #include <cstdint>
-        #include <string>
         #include <system_error>
         #include <vector>
     #endif
@@ -127,28 +126,15 @@ namespace kmx::aio::http3
         version_fallback = 0x110u
     };
 
-    /// @brief `std::error_category` describing HTTP/3 protocol errors.
-    class http3_error_category final: public std::error_category
-    {
-    public:
-        /// @brief Returns the stable error-category name.
-        [[nodiscard]] const char* name() const noexcept override;
-
-        /// @brief Returns the human-readable message for an HTTP/3 error code.
-        /// @param ev The encoded error value.
-        /// @return A descriptive error string.
-        [[nodiscard]] std::string message(int ev) const override;
-    };
-
     /// @brief Returns the singleton HTTP/3 error category instance.
     /// @return The HTTP/3 error category.
-    [[nodiscard]] const std::error_category& http3_error_category_instance() noexcept;
+    [[nodiscard]] const std::error_category& error_category() noexcept;
 
     /// @brief Builds a `std::error_code` from an HTTP/3 protocol error value.
     /// @param code The HTTP/3 protocol error.
     /// @return The corresponding error code object.
     [[nodiscard]] std::error_code make_error_code(error_code code) noexcept;
-} // namespace kmx::aio::http3
+}
 
 namespace std
 {
@@ -157,5 +143,5 @@ namespace std
     struct is_error_code_enum<kmx::aio::http3::error_code>: true_type
     {
     };
-} // namespace std
+}
 #endif // KMX_AIO_FEATURE_HTTP3

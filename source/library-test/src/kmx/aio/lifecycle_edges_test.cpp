@@ -1,35 +1,38 @@
-/// @file aio/lifecycle_edges_test.cpp
-/// @brief Unit tests for the ownership and shutdown edges the per-component suites do not reach:
-///        stream/io_base teardown, the scheduler's exception guard, deferred executor joins, and the
-///        descriptor failures that only a wrongly-typed file descriptor produces.
+/// @file src/kmx/aio/lifecycle_edges_test.cpp
+/// @brief Unit tests for the ownership and shutdown edges the per-component suites do not reach.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+/// @details Covers stream/io_base teardown, the scheduler's exception guard, deferred executor joins, and the descriptor
+///          failures that only a wrongly-typed file descriptor produces.
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/tcp/stream.hpp>
+    #include <kmx/aio/file_descriptor.hpp>
+    #include <kmx/aio/scheduler.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/aio/test/executor_runner.hpp>
+    #include <kmx/aio/test/scoped_runner.hpp>
+    #include <kmx/aio/test/socket_pair.hpp>
 
-#include <atomic>
-#include <chrono>
-#include <cstring>
-#include <memory>
-#include <stdexcept>
-#include <string>
-#include <thread>
-#include <vector>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <unistd.h>
+    #include <atomic>
+    #include <chrono>
+    #include <cstring>
+    #include <memory>
+    #include <stdexcept>
+    #include <string>
+    #include <thread>
+    #include <vector>
+    #include <sys/socket.h>
+    #include <sys/un.h>
+    #include <unistd.h>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/tcp/stream.hpp>
-#include <kmx/aio/file_descriptor.hpp>
-#if defined(KMX_AIO_FEATURE_READINESS)
-    #include <kmx/aio/readiness/descriptor/epoll.hpp>
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/readiness/tcp/stream.hpp>
+    #if defined(KMX_AIO_FEATURE_READINESS)
+        #include <kmx/aio/readiness/descriptor/epoll.hpp>
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/readiness/tcp/stream.hpp>
+    #endif
 #endif
-#include <kmx/aio/scheduler.hpp>
-#include <kmx/aio/task.hpp>
-#include <kmx/aio/test/executor_runner.hpp>
-#include <kmx/aio/test/fd_pair.hpp>
 
 namespace kmx::aio::test::lifecycle_edges_test
 {
@@ -46,11 +49,11 @@ namespace kmx::aio::test::lifecycle_edges_test
         task<void> stop_completion_after_timeout(completion::executor& exec, std::atomic_bool& ran) noexcept(false)
         {
             const auto waited = co_await exec.async_timeout(5'000'000u); // 5ms
-            (void) waited;
+            static_cast<void>(waited);
             ran.store(true, std::memory_order_release);
             exec.stop();
         }
-    } // namespace detail
+    }
 
 #if defined(KMX_AIO_FEATURE_READINESS)
     namespace detail
@@ -60,7 +63,7 @@ namespace kmx::aio::test::lifecycle_edges_test
         task<void> stop_after_short_timeout(const std::shared_ptr<readiness::executor>& exec, std::atomic_bool& ran) noexcept(false)
         {
             const auto waited = co_await exec->async_timeout(2'000'000u);
-            (void) waited;
+            static_cast<void>(waited);
             ran.store(true, std::memory_order_release);
             exec->stop();
         }
@@ -69,11 +72,11 @@ namespace kmx::aio::test::lifecycle_edges_test
         task<void> stop_after_timeout(const std::shared_ptr<readiness::executor>& exec, std::atomic_bool& ran) noexcept(false)
         {
             const auto waited = co_await exec->async_timeout(5'000'000u);
-            (void) waited;
+            static_cast<void>(waited);
             ran.store(true, std::memory_order_release);
             exec->stop();
         }
-    } // namespace detail
+    }
 #endif // KMX_AIO_FEATURE_READINESS
 
     // io_base teardown, through the two stream types that derive from it
@@ -92,7 +95,7 @@ namespace kmx::aio::test::lifecycle_edges_test
 
         {
             readiness::tcp::stream stream {exec, file_descriptor {sockets.release_local()}};
-            (void) stream;
+            static_cast<void>(stream);
         }
 
         CHECK(exec.get_stats().total_unregistrations.load() == 1u);
@@ -104,7 +107,7 @@ namespace kmx::aio::test::lifecycle_edges_test
 
         {
             readiness::tcp::stream stream {exec, file_descriptor {}};
-            (void) stream;
+            static_cast<void>(stream);
         }
 
         // Nothing was registered, so nothing may be unregistered - the destructor's is_valid() guard.
@@ -120,7 +123,7 @@ namespace kmx::aio::test::lifecycle_edges_test
         completion::executor exec;
         {
             completion::tcp::stream stream {exec, file_descriptor {sockets.release_local()}};
-            (void) stream;
+            static_cast<void>(stream);
         }
 
         SUCCEED("the stream closed its descriptor and left the executor alone");
@@ -223,7 +226,7 @@ namespace kmx::aio::test::lifecycle_edges_test
                 auto body = [exec]() -> task<void>
                 {
                     const auto waited = co_await exec->async_timeout(1'000'000u);
-                    (void) waited;
+                    static_cast<void>(waited);
                     exec->stop();
                 };
                 exec->spawn(body());
@@ -325,4 +328,4 @@ namespace kmx::aio::test::lifecycle_edges_test
 
         ::unlink(path.c_str());
     }
-} // namespace kmx::aio::test::lifecycle_edges_test
+}

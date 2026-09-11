@@ -1,11 +1,13 @@
-/// @file aio/descriptor/timer.cpp
+/// @file src/kmx/aio/readiness/descriptor/timer.cpp
+/// @brief The readiness timerfd descriptor wrapper: create, arm and asynchronously wait for expirations.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/readiness/descriptor/timer.hpp>
+#ifndef PCH
+    #include <kmx/aio/error_code.hpp>
 
-#include <kmx/aio/error_code.hpp>
-
-#include <cerrno>
-#include <unistd.h>
+    #include <cerrno>
+    #include <unistd.h>
+#endif
 
 namespace kmx::aio::readiness::descriptor
 {
@@ -54,4 +56,4 @@ namespace kmx::aio::readiness::descriptor
             co_return std::unexpected(error_from_errno(EIO));
         }
     }
-} // namespace kmx::aio::readiness::descriptor
+}

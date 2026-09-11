@@ -1,8 +1,12 @@
+/// @file src/kmx/aio/error_code.cpp
+/// @brief Text, errno mapping and std::error_code conversion for kmx::aio::error_code.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/error_code.hpp>
-
-#include <cerrno>
-#include <optional>
-#include <string_view>
+#ifndef PCH
+    #include <cerrno>
+    #include <optional>
+    #include <string_view>
+#endif
 
 namespace kmx::aio
 {
@@ -130,8 +134,8 @@ namespace kmx::aio
 
     std::string_view to_string(const error_code ec) noexcept
     {
-        for (const auto text: {stream_error_text(ec), resource_error_text(ec), security_error_text(ec),
-                               offload_error_text(ec), storage_error_text(ec)})
+        for (const auto text:
+             {stream_error_text(ec), resource_error_text(ec), security_error_text(ec), offload_error_text(ec), storage_error_text(ec)})
             if (!text.empty())
                 return text;
         return "unknown error";
@@ -254,4 +258,4 @@ namespace kmx::aio
         // error rather than as success, so a caller that only checks for truthiness is not misled.
         return std::make_error_code(std::errc::io_error);
     }
-} // namespace kmx::aio
+}

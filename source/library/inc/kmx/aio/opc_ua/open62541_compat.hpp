@@ -1,4 +1,4 @@
-/// @file aio/opc_ua/open62541_compat.hpp
+/// @file inc/kmx/aio/opc_ua/open62541_compat.hpp
 /// @brief Minimal open62541 declarations used by the OPC UA wrappers.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -195,8 +195,8 @@ extern "C"
     /// @param callback Completion callback.
     /// @param userData Opaque callback context.
     /// @return Submission status code.
-    UA_StatusCode KMX_UA_Client_sendAsyncReadRequest(UA_Client* client, const char* nodeId, UA_UInt32 requestId,
-                                                     KMX_UA_ReadRequestCallback callback, void* userData);
+    [[nodiscard]] UA_StatusCode KMX_UA_Client_sendAsyncReadRequest(UA_Client* client, const char* nodeId, UA_UInt32 requestId,
+                                                                   KMX_UA_ReadRequestCallback callback, void* userData);
     /// @brief Submit asynchronous write request through compatibility bridge.
     /// @param client Client pointer.
     /// @param nodeId OPC UA node id string.
@@ -205,8 +205,9 @@ extern "C"
     /// @param callback Completion callback.
     /// @param userData Opaque callback context.
     /// @return Submission status code.
-    UA_StatusCode KMX_UA_Client_sendAsyncWriteRequest(UA_Client* client, const char* nodeId, const char* value, UA_UInt32 requestId,
-                                                      KMX_UA_WriteRequestCallback callback, void* userData);
+    [[nodiscard]] UA_StatusCode KMX_UA_Client_sendAsyncWriteRequest(UA_Client* client, const char* nodeId, const char* value,
+                                                                    UA_UInt32 requestId, KMX_UA_WriteRequestCallback callback,
+                                                                    void* userData);
     /// @brief Submit asynchronous method call request through compatibility bridge.
     /// @param client Client pointer.
     /// @param objectNodeId Object node id for call context.
@@ -217,9 +218,10 @@ extern "C"
     /// @param callback Completion callback.
     /// @param userData Opaque callback context.
     /// @return Submission status code.
-    UA_StatusCode KMX_UA_Client_sendAsyncCallRequest(UA_Client* client, const char* objectNodeId, const char* methodNodeId,
-                                                     const char* const* inputArguments, UA_UInt32 inputArgumentsSize, UA_UInt32 requestId,
-                                                     KMX_UA_CallRequestCallback callback, void* userData);
+    [[nodiscard]] UA_StatusCode KMX_UA_Client_sendAsyncCallRequest(UA_Client* client, const char* objectNodeId, const char* methodNodeId,
+                                                                   const char* const* inputArguments, UA_UInt32 inputArgumentsSize,
+                                                                   UA_UInt32 requestId, KMX_UA_CallRequestCallback callback,
+                                                                   void* userData);
 
     /// @brief Test hook: inject next read completion status in shim mode.
     /// @param client Client pointer.

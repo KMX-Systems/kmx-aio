@@ -1,31 +1,37 @@
+/// @file src/kmx/aio/knx/secure/routing_secure_integration_test.cpp
+/// @brief KNX IP Secure routers exchanging wrapped indications over loopback multicast on both execution models.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/knx/udp_transport.hpp>
+    #include <kmx/aio/completion/udp/endpoint.hpp>
+    #include <kmx/aio/file_descriptor.hpp>
+    #include <kmx/aio/knx/routing.hpp>
+    #include <kmx/aio/knx/routing/client.hpp>
+    #include <kmx/aio/test/knx/secure_vectors.hpp>
+    #include <kmx/aio/test/knx/telegram.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/knx/udp_transport.hpp>
-#include <kmx/aio/completion/udp/endpoint.hpp>
-#include <kmx/aio/file_descriptor.hpp>
-#include <kmx/aio/knx/routing.hpp>
-#if defined(KMX_AIO_FEATURE_READINESS)
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/readiness/knx/udp_transport.hpp>
-    #include <kmx/aio/readiness/udp/endpoint.hpp>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <algorithm>
+    #include <atomic>
+    #include <chrono>
+    #include <condition_variable>
+    #include <cstdint>
+    #include <memory>
+    #include <mutex>
+    #include <stop_token>
+    #include <string_view>
+    #include <thread>
+    #include <net/if.h>
+    #include <netinet/in.h>
+
+    #if defined(KMX_AIO_FEATURE_READINESS)
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/readiness/knx/udp_transport.hpp>
+        #include <kmx/aio/readiness/udp/endpoint.hpp>
+    #endif
 #endif
-#include <kmx/aio/test/knx/secure_vectors.hpp>
-#include <kmx/aio/test/knx/telegram.hpp>
-
-#include <algorithm>
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
-#include <cstdint>
-#include <memory>
-#include <mutex>
-#include <net/if.h>
-#include <netinet/in.h>
-#include <stop_token>
-#include <string_view>
-#include <thread>
 
 namespace kmx::aio::test::knx::secure::routing_secure_integration_test
 {
@@ -99,7 +105,7 @@ namespace kmx::aio::test::knx::secure::routing_secure_integration_test
                     std::mutex mutex;
                     std::condition_variable_any wake;
                     std::unique_lock lock(mutex);
-                    (void) wake.wait_for(lock, stop, limit, [] { return false; });
+                    static_cast<void>(wake.wait_for(lock, stop, limit, [] { return false; }));
                     if (!stop.stop_requested())
                         executor.stop();
                 });
@@ -116,7 +122,7 @@ namespace kmx::aio::test::knx::secure::routing_secure_integration_test
             sent = (co_await first.notify_timer()).has_value() && sent;
             sent = (co_await second.notify_timer()).has_value() && sent;
             const auto synchronised = first.timer_synchronised() && second.timer_synchronised();
-            co_return sent && synchronised;
+            co_return sent&& synchronised;
         }
 
         /// @brief How many frames the concurrent scenario has the peer send.
@@ -146,6 +152,7 @@ namespace kmx::aio::test::knx::secure::routing_secure_integration_test
                 outcome.delivered.fetch_add(carries(received, off_cemi) ? 1u : 0u);
                 outcome.own_delivered.fetch_add(carries(received, sample_cemi) ? 1u : 0u);
             }
+
             // Whichever task finishes last stops the executor, so nothing is read while the other still runs.
             outcome.receiver_done.store(true);
             if (outcome.sender_done.load())
@@ -164,9 +171,10 @@ namespace kmx::aio::test::knx::secure::routing_secure_integration_test
             for (std::size_t frame {}; frame < concurrent_frames; ++frame)
             {
                 outcome.sent.fetch_add((co_await peer.send_indication(off)).has_value() ? 1u : 0u);
-                (void) co_await router.notify_timer();
-                (void) co_await router.send_indication(on);
+                static_cast<void>(co_await router.notify_timer());
+                static_cast<void>(co_await router.send_indication(on));
             }
+
             outcome.sender_done.store(true);
             if (outcome.receiver_done.load())
                 executor.stop();
@@ -207,7 +215,7 @@ namespace kmx::aio::test::knx::secure::routing_secure_integration_test
                 CHECK(router->secure_counters().refused_services == 0u);
             }
         }
-    } // namespace detail
+    }
 
     TEST_CASE("knx secure routers exchange wrapped indications over loopback multicast", "[knx][secure][routing][completion][integration]")
     {
@@ -219,8 +227,8 @@ namespace kmx::aio::test::knx::secure::routing_secure_integration_test
         REQUIRE(second_endpoint.has_value());
         completion::knx::udp_transport first_transport {*first_endpoint};
         completion::knx::udp_transport second_transport {*second_endpoint};
-        kr::client first {first_transport, group, detail::settings(1u), detail::clock};
-        kr::client second {second_transport, group, detail::settings(2u), detail::clock};
+        kr::client first {first_transport, group, {.settings = detail::settings(1u), .clock_ms = detail::clock}};
+        kr::client second {second_transport, group, {.settings = detail::settings(2u), .clock_ms = detail::clock}};
         REQUIRE(first.start().has_value());
         REQUIRE(second.start().has_value());
 
@@ -247,8 +255,8 @@ namespace kmx::aio::test::knx::secure::routing_secure_integration_test
         REQUIRE(second_endpoint.has_value());
         readiness::knx::udp_transport first_transport {*first_endpoint};
         readiness::knx::udp_transport second_transport {*second_endpoint};
-        kr::client first {first_transport, group, detail::settings(3u), detail::clock};
-        kr::client second {second_transport, group, detail::settings(4u), detail::clock};
+        kr::client first {first_transport, group, {.settings = detail::settings(3u), .clock_ms = detail::clock}};
+        kr::client second {second_transport, group, {.settings = detail::settings(4u), .clock_ms = detail::clock}};
         REQUIRE(first.start().has_value());
         REQUIRE(second.start().has_value());
 
@@ -275,8 +283,8 @@ namespace kmx::aio::test::knx::secure::routing_secure_integration_test
         REQUIRE(peer_endpoint.has_value());
         readiness::knx::udp_transport router_transport {*router_endpoint};
         readiness::knx::udp_transport peer_transport {*peer_endpoint};
-        kr::client router {router_transport, group, detail::settings(5u), detail::clock};
-        kr::client peer {peer_transport, group, detail::settings(6u), detail::clock};
+        kr::client router {router_transport, group, {.settings = detail::settings(5u), .clock_ms = detail::clock}};
+        kr::client peer {peer_transport, group, {.settings = detail::settings(6u), .clock_ms = detail::clock}};
         REQUIRE(router.start().has_value());
         REQUIRE(peer.start().has_value());
 

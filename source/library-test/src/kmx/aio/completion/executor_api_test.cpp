@@ -1,4 +1,4 @@
-/// @file completion/executor_api_test.cpp
+/// @file src/kmx/aio/completion/executor_api_test.cpp
 /// @brief Unit tests for the completion executor's operation surface and lifecycle accessors.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 ///
@@ -6,33 +6,35 @@
 /// outcome into a shared state object and calls exec.stop() on the way out, driven by exec.run() on the
 /// test thread. The executor's io_uring loop returns from run() when its work drains, and the explicit
 /// stop() keeps a test that never completes its operation from hanging the whole binary.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/statistics.hpp>
+    #include <kmx/aio/file_descriptor.hpp>
+    #include <kmx/aio/task.hpp>
+    #include <kmx/aio/test/outcome.hpp>
+    #include <kmx/aio/test/pipe_pair.hpp>
+    #include <kmx/aio/test/scoped_completion_runner.hpp>
+    #include <kmx/aio/test/system_probe.hpp>
 
-#include <array>
-#include <atomic>
-#include <chrono>
-#include <cstring>
-#include <expected>
-#include <memory>
-#include <string>
-#include <system_error>
-#include <thread>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <fcntl.h>
-#include <netinet/in.h>
-#include <poll.h>
-#include <pthread.h>
-#include <sched.h>
-#include <sys/socket.h>
-#include <unistd.h>
-
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/file_descriptor.hpp>
-#include <kmx/aio/task.hpp>
-#include <kmx/aio/test/executor_runner.hpp>
-#include <kmx/aio/test/fd_pair.hpp>
-#include <kmx/aio/test/outcome.hpp>
-#include <kmx/aio/test/system_probe.hpp>
+    #include <array>
+    #include <atomic>
+    #include <chrono>
+    #include <cstring>
+    #include <expected>
+    #include <memory>
+    #include <string>
+    #include <system_error>
+    #include <thread>
+    #include <fcntl.h>
+    #include <netinet/in.h>
+    #include <poll.h>
+    #include <pthread.h>
+    #include <sched.h>
+    #include <sys/socket.h>
+    #include <unistd.h>
+#endif
 
 namespace kmx::aio::test::completion::executor_api_test
 {
@@ -55,33 +57,43 @@ namespace kmx::aio::test::completion::executor_api_test
             exec.stop();
         }
 
+        /// @brief A payload written into a pipe and read back, and where both outcomes are recorded.
+        struct round_trip_params
+        {
+            executor& exec;                           ///< The executor both operations run on.
+            std::shared_ptr<size_outcome> written {}; ///< Records the write.
+            std::shared_ptr<size_outcome> read {};    ///< Records the read.
+            std::span<char> buffer {};                ///< Where the payload is read back into; the fixed variant writes it from here too.
+            const pipe_pair& pipes;                   ///< The pipe the payload travels through.
+        };
+
         /// @brief Writes a payload into the pipe and reads it back, recording both outcomes.
-        task<void> write_then_read_pipe(executor& exec, const std::shared_ptr<size_outcome>& written,
-                                        const std::shared_ptr<size_outcome>& read, const std::span<char> buffer,
-                                        const pipe_pair& pipes) noexcept(false)
+        /// @param params The executor, the pipe, the read buffer and where the outcomes go.
+        task<void> write_then_read_pipe(const round_trip_params params) noexcept(false)
         {
             const std::string payload {"kmx-aio"};
-            const auto w = co_await exec.async_write(pipes.write_end(), cspan_char_t(payload.data(), payload.size()));
-            written->completed = true;
+            const auto w = co_await params.exec.async_write(params.pipes.write_end(), cspan_char_t(payload.data(), payload.size()));
+            params.written->completed = true;
             if (w)
             {
-                written->ok = true;
-                written->value = *w;
+                params.written->ok = true;
+                params.written->value = *w;
             }
             else
-                written->error = w.error();
+                params.written->error = w.error();
 
-            const auto r = co_await exec.async_read(pipes.read_end(), std::span<char>(buffer.data(), buffer.size()));
-            read->completed = true;
+            const auto r =
+                co_await params.exec.async_read(params.pipes.read_end(), std::span<char>(params.buffer.data(), params.buffer.size()));
+            params.read->completed = true;
             if (r)
             {
-                read->ok = true;
-                read->value = *r;
+                params.read->ok = true;
+                params.read->value = *r;
             }
             else
-                read->error = r.error();
+                params.read->error = r.error();
 
-            exec.stop();
+            params.exec.stop();
         }
 
         /// @brief Reads from a pipe whose write end is closed, so the read reports end of stream.
@@ -130,34 +142,37 @@ namespace kmx::aio::test::completion::executor_api_test
         }
 
         /// @brief Writes and reads through the registered buffer, recording both outcomes.
-        task<void> write_then_read_fixed(executor& exec, const std::shared_ptr<size_outcome>& written,
-                                         const std::shared_ptr<size_outcome>& read, const std::span<char> storage,
-                                         const pipe_pair& pipes) noexcept(false)
+        /// @param params The executor, the pipe, the registered buffer the payload is written from and read back into,
+        ///               and where the outcomes go.
+        task<void> write_then_read_fixed(const round_trip_params params) noexcept(false)
         {
             const std::string payload {"fixed"};
+            const auto storage = params.buffer;
             std::memcpy(storage.data(), payload.data(), payload.size());
 
-            const auto w = co_await exec.async_write_fixed(pipes.write_end(), cspan_char_t(storage.data(), payload.size()), 0u, 0);
-            written->completed = true;
+            const auto w =
+                co_await params.exec.async_write_fixed(params.pipes.write_end(), cspan_char_t(storage.data(), payload.size()), 0u, 0);
+            params.written->completed = true;
             if (w)
             {
-                written->ok = true;
-                written->value = *w;
+                params.written->ok = true;
+                params.written->value = *w;
             }
             else
-                written->error = w.error();
+                params.written->error = w.error();
 
-            const auto r = co_await exec.async_read_fixed(pipes.read_end(), std::span<char>(storage.data(), storage.size()), 0u, 0);
-            read->completed = true;
+            const auto r =
+                co_await params.exec.async_read_fixed(params.pipes.read_end(), std::span<char>(storage.data(), storage.size()), 0u, 0);
+            params.read->completed = true;
             if (r)
             {
-                read->ok = true;
-                read->value = *r;
+                params.read->ok = true;
+                params.read->value = *r;
             }
             else
-                read->error = r.error();
+                params.read->error = r.error();
 
-            exec.stop();
+            params.exec.stop();
         }
 
         /// @brief Reads with a buffer index nothing was registered under, and records the error.
@@ -175,10 +190,11 @@ namespace kmx::aio::test::completion::executor_api_test
         }
 
         /// @brief Accepts one loopback connection and records the descriptor it produced.
-        task<void> accept_loopback(executor& exec, const std::shared_ptr<fd_outcome>& accepted, ::sockaddr_storage& peer,
-                                   ::socklen_t& peer_len, const int fd) noexcept(false)
+        /// @param peer Receives the connecting peer's address; its length must say how much storage there is.
+        task<void> accept_loopback(executor& exec, const std::shared_ptr<fd_outcome>& accepted, socket_address& peer,
+                                   const int fd) noexcept(false)
         {
-            const auto a = co_await exec.async_accept(fd, peer, peer_len);
+            const auto a = co_await exec.async_accept(fd, peer.storage, peer.length);
             accepted->completed = true;
             if (a)
             {
@@ -204,10 +220,11 @@ namespace kmx::aio::test::completion::executor_api_test
         }
 
         /// @brief Accepts on a descriptor that is not a listening socket, and records the error.
-        task<void> accept_non_listening(executor& exec, const std::shared_ptr<fd_outcome>& state, ::sockaddr_storage& peer,
-                                        ::socklen_t& peer_len, const int fd) noexcept(false)
+        /// @param peer Would receive the peer's address; its length must say how much storage there is.
+        task<void> accept_non_listening(executor& exec, const std::shared_ptr<fd_outcome>& state, socket_address& peer,
+                                        const int fd) noexcept(false)
         {
-            const auto a = co_await exec.async_accept(fd, peer, peer_len);
+            const auto a = co_await exec.async_accept(fd, peer.storage, peer.length);
             state->completed = true;
             if (a)
                 state->ok = true;
@@ -249,26 +266,36 @@ namespace kmx::aio::test::completion::executor_api_test
         {
             started.store(true, std::memory_order_release);
             const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
-            (void) r;
+            static_cast<void>(r);
             exec.stop();
         }
 
-        /// @brief Suspends on a read only the shutdown cancellation can end, and records what it reported.
-        task<void> read_until_cancelled(executor& exec, const std::shared_ptr<size_outcome>& state, std::atomic_bool& submitted,
-                                        const std::span<char> buffer, const int fd) noexcept(false)
+        /// @brief A read only the shutdown cancellation can end, and where its progress is recorded.
+        struct read_until_cancelled_params
         {
-            submitted.store(true, std::memory_order_release);
+            executor& exec;                         ///< The executor the read is submitted to.
+            std::shared_ptr<size_outcome> state {}; ///< Records what the read reported.
+            std::atomic_bool& submitted;            ///< Set just before the read is submitted.
+            std::span<char> buffer {};              ///< Where the read would land.
+            int fd {-1};                            ///< The descriptor nothing is ever written to.
+        };
+
+        /// @brief Suspends on a read only the shutdown cancellation can end, and records what it reported.
+        /// @param params The executor, the descriptor, the buffer and where the progress is recorded.
+        task<void> read_until_cancelled(const read_until_cancelled_params params) noexcept(false)
+        {
+            params.submitted.store(true, std::memory_order_release);
 
             // Nothing is ever written to the pipe, so only the shutdown cancellation ends this read.
-            const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
-            state->completed = true;
+            const auto r = co_await params.exec.async_read(params.fd, std::span<char>(params.buffer.data(), params.buffer.size()));
+            params.state->completed = true;
             if (r)
             {
-                state->ok = true;
-                state->value = *r;
+                params.state->ok = true;
+                params.state->value = *r;
             }
             else
-                state->error = r.error();
+                params.state->error = r.error();
         }
 
         /// @brief Suspends on a poll only the shutdown cancellation can end.
@@ -277,10 +304,10 @@ namespace kmx::aio::test::completion::executor_api_test
         {
             submitted.store(true, std::memory_order_release);
             const auto r = co_await exec.async_poll(fd, POLLIN);
-            (void) r;
+            static_cast<void>(r);
             finished.store(true, std::memory_order_release);
         }
-    } // namespace detail
+    }
 
     // statistics
     TEST_CASE("reset_stats clears every counter", "[completion][executor][statistics]")
@@ -342,7 +369,7 @@ namespace kmx::aio::test::completion::executor_api_test
         auto read = std::make_shared<size_outcome>();
         std::array<char, 32> buffer {};
 
-        exec.spawn(detail::write_then_read_pipe(exec, written, read, buffer, pipes));
+        exec.spawn(detail::write_then_read_pipe({.exec = exec, .written = written, .read = read, .buffer = buffer, .pipes = pipes}));
         exec.run();
 
         REQUIRE(written->ok);
@@ -436,7 +463,7 @@ namespace kmx::aio::test::completion::executor_api_test
         auto written = std::make_shared<size_outcome>();
         auto read = std::make_shared<size_outcome>();
 
-        exec.spawn(detail::write_then_read_fixed(exec, written, read, storage, pipes));
+        exec.spawn(detail::write_then_read_fixed({.exec = exec, .written = written, .read = read, .buffer = storage, .pipes = pipes}));
         exec.run();
 
         REQUIRE(written->ok);
@@ -491,12 +518,11 @@ namespace kmx::aio::test::completion::executor_api_test
         auto accepted = std::make_shared<fd_outcome>();
         auto connected = std::make_shared<void_outcome>();
 
-        ::sockaddr_storage peer {};
-        ::socklen_t peer_len = sizeof(peer);
+        socket_address peer {.length = sizeof(::sockaddr_storage)};
 
         // The accept is spawned first so it is already in the ring when the connect arrives.
 
-        exec.spawn(detail::accept_loopback(exec, accepted, peer, peer_len, listener->get()));
+        exec.spawn(detail::accept_loopback(exec, accepted, peer, listener->get()));
         exec.spawn(detail::connect_loopback(exec, connected, bound, client->get()));
         exec.run();
 
@@ -505,7 +531,7 @@ namespace kmx::aio::test::completion::executor_api_test
         REQUIRE(accepted->completed);
         REQUIRE(accepted->ok);
         CHECK(accepted->value >= 0);
-        CHECK(peer.ss_family == AF_INET);
+        CHECK(peer.storage.ss_family == AF_INET);
 
         if (accepted->ok)
             ::close(accepted->value);
@@ -518,10 +544,9 @@ namespace kmx::aio::test::completion::executor_api_test
 
         executor exec;
         auto state = std::make_shared<fd_outcome>();
-        ::sockaddr_storage peer {};
-        ::socklen_t peer_len = sizeof(peer);
+        socket_address peer {.length = sizeof(::sockaddr_storage)};
 
-        exec.spawn(detail::accept_non_listening(exec, state, peer, peer_len, pipes.read_end()));
+        exec.spawn(detail::accept_non_listening(exec, state, peer, pipes.read_end()));
         exec.run();
 
         REQUIRE(state->completed);
@@ -680,7 +705,7 @@ namespace kmx::aio::test::completion::executor_api_test
 
         // Release the read so run() returns, whatever the assertion above found.
         const char byte = 'x';
-        (void) ::write(pipes.write_end(), &byte, 1u);
+        static_cast<void>(::write(pipes.write_end(), &byte, 1u));
         exec.stop();
         REQUIRE(runner.wait_until_drained(std::chrono::seconds(5)));
 
@@ -700,7 +725,7 @@ namespace kmx::aio::test::completion::executor_api_test
         auto body = [&exec, &buffer, fd = pipes.read_end()]() -> task<void>
         {
             const auto r = co_await exec.async_read(fd, std::span<char>(buffer.data(), buffer.size()));
-            (void) r;
+            static_cast<void>(r);
             exec.stop();
         };
         exec.spawn(body());
@@ -713,7 +738,7 @@ namespace kmx::aio::test::completion::executor_api_test
         const auto affined = exec.is_io_thread_affined_to(*core);
 
         const char byte = 'x';
-        (void) ::write(pipes.write_end(), &byte, 1u);
+        static_cast<void>(::write(pipes.write_end(), &byte, 1u));
         exec.stop();
         REQUIRE(runner.wait_until_drained(std::chrono::seconds(5)));
 
@@ -737,7 +762,8 @@ namespace kmx::aio::test::completion::executor_api_test
         std::atomic_bool submitted {false};
         std::array<char, 8> buffer {};
 
-        exec.spawn(detail::read_until_cancelled(exec, state, submitted, buffer, pipes.read_end()));
+        exec.spawn(
+            detail::read_until_cancelled({.exec = exec, .state = state, .submitted = submitted, .buffer = buffer, .fd = pipes.read_end()}));
 
         kmx::aio::test::scoped_completion_runner runner {exec};
 
@@ -785,4 +811,4 @@ namespace kmx::aio::test::completion::executor_api_test
 
         CHECK(finished.load(std::memory_order_acquire));
     }
-} // namespace kmx::aio::test::completion::executor_api_test
+}

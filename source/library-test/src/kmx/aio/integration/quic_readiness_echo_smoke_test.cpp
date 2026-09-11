@@ -1,22 +1,22 @@
-/// @file aio/integration/quic_readiness_echo_smoke_test.cpp
+/// @file src/kmx/aio/integration/quic_readiness_echo_smoke_test.cpp
 /// @brief Readiness QUIC echo smoke test validating handshake -> multi-stream responses -> close.
-
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #if defined(KMX_AIO_FEATURE_QUIC)
+    #ifndef PCH
+        #include <kmx/aio/test/sample_process.hpp>
+        #include <kmx/aio/test/tls_certs.hpp>
 
-    #include <catch2/catch_test_macros.hpp>
+        #include <catch2/catch_test_macros.hpp>
 
-    #include <kmx/aio/test/tls_certs.hpp>
-
-    #include <kmx/aio/test/sample_process.hpp>
-
-    #include <chrono>
-    #include <cstdlib>
-    #include <filesystem>
-    #include <fstream>
-    #include <optional>
-    #include <string>
-    #include <string_view>
-    #include <vector>
+        #include <chrono>
+        #include <cstdlib>
+        #include <filesystem>
+        #include <fstream>
+        #include <optional>
+        #include <string>
+        #include <string_view>
+        #include <vector>
+    #endif
 
 namespace kmx::aio::test::integration::quic_readiness_echo_smoke_test
 {
@@ -144,6 +144,6 @@ namespace kmx::aio::test::integration::quic_readiness_echo_smoke_test
         INFO(attempt_summary);
         REQUIRE(success);
     }
-} // namespace kmx::aio::test::integration::quic_readiness_echo_smoke_test
+}
 
 #endif // KMX_AIO_FEATURE_QUIC

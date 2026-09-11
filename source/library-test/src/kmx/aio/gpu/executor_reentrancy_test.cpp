@@ -1,5 +1,6 @@
-/// @file aio/gpu/executor_reentrancy_test.cpp
+/// @file src/kmx/aio/gpu/executor_reentrancy_test.cpp
 /// @brief Covers what a coroutine resumed by the GPU executor is allowed to do while it runs.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details Every case here drives the executor's poll loop and has the resumed coroutine call back
 ///          into the executor - awaiting another event, spawning a task, or waiting on the same event
 ///          handle again. All three take the executor's queue mutex, so they are exactly what a
@@ -8,22 +9,24 @@
 ///       std::mutex from the thread that already owns it is undefined behaviour, and on this platform
 ///       it blocks forever. script/feature/cuda/run-unit-tests.sh runs the binary under `timeout 90s`,
 ///       which is what turns that hang into a failing build.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/gpu/event.hpp>
+    #include <kmx/aio/gpu/executor.hpp>
+    #include <kmx/aio/gpu/stream.hpp>
+    #include <kmx/aio/promise_base.hpp>
+    #include <kmx/aio/task.hpp>
 
-#include <kmx/aio/gpu/event.hpp>
-#include <kmx/aio/gpu/executor.hpp>
-#include <kmx/aio/gpu/stream.hpp>
-#include <kmx/aio/task.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <coroutine>
-#include <cstddef>
-#include <exception>
-#include <functional>
-#include <memory>
-#include <stop_token>
-#include <utility>
-#include <vector>
+    #include <coroutine>
+    #include <cstddef>
+    #include <exception>
+    #include <functional>
+    #include <memory>
+    #include <stop_token>
+    #include <utility>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::gpu::executor_reentrancy_test
 {
@@ -43,10 +46,10 @@ namespace kmx::aio::test::gpu::executor_reentrancy_test
                 probe get_return_object() noexcept { return probe {std::coroutine_handle<promise_type>::from_promise(*this)}; }
                 /// @brief Suspends before the body runs, so the first resume() is the test's.
                 /// @return An always-suspending awaiter.
-                std::suspend_always initial_suspend() const noexcept { return {}; }
+                [[nodiscard]] std::suspend_always initial_suspend() const noexcept { return {}; }
                 /// @brief Suspends instead of destroying the frame, leaving ownership with the test.
                 /// @return An always-suspending awaiter.
-                std::suspend_always final_suspend() const noexcept { return {}; }
+                [[nodiscard]] std::suspend_always final_suspend() const noexcept { return {}; }
                 /// @brief Completes the coroutine; the probe returns nothing.
                 void return_void() const noexcept {}
                 /// @brief Terminates: a probe action that throws is a broken test, not a case to handle.
@@ -133,7 +136,7 @@ namespace kmx::aio::test::gpu::executor_reentrancy_test
             source.request_stop();
             exec.run(source.get_token());
         }
-    } // namespace detail
+    }
 
     TEST_CASE("GPU executor resumption may await a second event", "[gpu][executor][poll][reentrancy]")
     {
@@ -291,4 +294,4 @@ namespace kmx::aio::test::gpu::executor_reentrancy_test
         REQUIRE(waiter_ran);
     }
 
-} // namespace kmx::aio::test::gpu::executor_reentrancy_test
+}

@@ -1,5 +1,6 @@
-/// @file kmx/aio/knx/secure/detail/keyring_format.hpp
+/// @file inc/kmx/aio/knx/secure/detail/keyring_format.hpp
 /// @brief The cryptographic layer of an ETS keyring: base64, the signature, and key and password decryption.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// An ETS keyring (`.knxkeys`) signs itself and encrypts every key and password it holds. The signature is
 /// the first sixteen octets of a SHA-256 over a canonical stream built from the document's elements: for each
@@ -14,22 +15,22 @@
 /// with the count, and ETS 5.7.5 and earlier pad every password to two blocks, so the count can exceed one
 /// block: only that last octet is read, and it is bounded by what follows the prefix, not by the block size.
 /// @reference xknx 3.20.0 `xknx/secure/keyring.py`, whose fixtures the tests pin these rules to.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/knx/secure/detail/ccm.hpp>
+        #include <kmx/aio/knx/secure/detail/crypto.hpp>
+        #include <kmx/aio/knx/secure/detail/xml_reader.hpp>
+        #include <kmx/aio/knx/secure/key.hpp>
+        #include <kmx/aio/knx/secure/secret_string.hpp>
+
         #include <expected>
         #include <string>
         #include <string_view>
         #include <system_error>
     #endif
-
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/knx/secure/detail/ccm.hpp>
-    #include <kmx/aio/knx/secure/detail/crypto.hpp>
-    #include <kmx/aio/knx/secure/detail/xml_reader.hpp>
-    #include <kmx/aio/knx/secure/key.hpp>
 
 namespace kmx::aio::knx::secure::detail
 {

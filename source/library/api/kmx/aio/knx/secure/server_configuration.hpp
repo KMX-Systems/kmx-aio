@@ -1,23 +1,23 @@
-/// @file kmx/aio/knx/secure/server_configuration.hpp
+/// @file api/kmx/aio/knx/secure/server_configuration.hpp
 /// @brief What a KNX IP Secure tunnelling server needs: its device authentication code, its users, and its limits.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// Handed to @ref kmx::aio::knx::server_config::secure. Users are held as derived keys only (P4), each with the tunnel
 /// addresses it may be given. @ref kmx::aio::knx::keyring::server_configuration_for builds one from an ETS keyring.
 /// @reference KNX System Specifications, 03/08/09 "KNXnet/IP Security".
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/knx/individual_address.hpp>
+        #include <kmx/aio/knx/secure/common.hpp>
+        #include <kmx/aio/knx/secure/key.hpp>
+
         #include <cstdint>
         #include <expected>
         #include <system_error>
         #include <vector>
     #endif
-
-    #include <kmx/aio/knx/address.hpp>
-    #include <kmx/aio/knx/secure/common.hpp>
-    #include <kmx/aio/knx/secure/key.hpp>
 
 namespace kmx::aio::knx::secure
 {

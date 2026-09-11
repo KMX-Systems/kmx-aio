@@ -1,18 +1,19 @@
-/// @file aio/integration/tls_mtls_smoke_test.cpp
+/// @file src/kmx/aio/integration/tls_mtls_smoke_test.cpp
 /// @brief Smoke test for Mutual TLS (mTLS) handshake with client certificate verification.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#ifndef PCH
+    #include <kmx/aio/test/sample_process.hpp>
+    #include <kmx/aio/test/scoped_temp_dir.hpp>
+    #include <kmx/aio/test/tls_certs.hpp>
 
-#include <catch2/catch_test_macros.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <kmx/aio/test/temp_dir.hpp>
-#include <kmx/aio/test/tls_certs.hpp>
-
-#include <kmx/aio/test/sample_process.hpp>
-
-#include <cstdlib>
-#include <filesystem>
-#include <fstream>
-#include <string>
-#include <string_view>
+    #include <cstdlib>
+    #include <filesystem>
+    #include <fstream>
+    #include <string>
+    #include <string_view>
+#endif
 
 namespace kmx::aio::test::integration::tls_mtls_smoke_test
 {
@@ -71,4 +72,4 @@ namespace kmx::aio::test::integration::tls_mtls_smoke_test
         REQUIRE(!client_key_text.empty());
     }
 
-} // namespace kmx::aio::test::integration::tls_mtls_smoke_test
+}

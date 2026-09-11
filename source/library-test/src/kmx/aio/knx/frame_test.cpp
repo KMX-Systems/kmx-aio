@@ -1,14 +1,23 @@
+/// @file src/kmx/aio/knx/frame_test.cpp
+/// @brief Unit tests for KNXnet/IP headers, tunnelling and device configuration frames, and tunnelling feature services.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
-#include <kmx/aio/knx/error.hpp>
 #include <kmx/aio/knx/frame.hpp>
-#include <kmx/aio/test/knx/telegram.hpp>
+#ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/knx/cemi.hpp>
+    #include <kmx/aio/knx/cemi_bytes_storage.hpp>
+    #include <kmx/aio/knx/cemi_frame.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/tunnelling_feature_value.hpp>
+    #include <kmx/aio/test/knx/telegram.hpp>
 
-#include <algorithm>
-#include <array>
-#include <cstdint>
-#include <vector>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <algorithm>
+    #include <array>
+    #include <cstdint>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::knx::frame_test
 {
@@ -43,7 +52,7 @@ namespace kmx::aio::test::knx::frame_test
 
     TEST_CASE("knx frame rejects a total length below the header size", "[knx][frame][unit]")
     {
-        const std::array<std::uint8_t, 6u> bad { 0x06u, 0x10u, 0x01u, 0x02u, 0x00u, 0x05u };
+        const std::array<std::uint8_t, 6u> bad {0x06u, 0x10u, 0x01u, 0x02u, 0x00u, 0x05u};
         const auto result = frame::decode_communication_header(bad);
         REQUIRE(!result.has_value());
         CHECK(result.error() == make_error_code(error::malformed_frame));
@@ -51,7 +60,7 @@ namespace kmx::aio::test::knx::frame_test
 
     TEST_CASE("knx frame rejects an unsupported protocol version", "[knx][frame][unit]")
     {
-        const std::array<std::uint8_t, 6u> bad { 0x06u, 0x06u, 0x01u, 0x02u, 0x00u, 0x06u };
+        const std::array<std::uint8_t, 6u> bad {0x06u, 0x06u, 0x01u, 0x02u, 0x00u, 0x06u};
         const auto result = frame::decode_communication_header(bad);
         REQUIRE(!result.has_value());
         CHECK(result.error() == make_error_code(error::unsupported_service));
@@ -145,10 +154,9 @@ namespace kmx::aio::test::knx::frame_test
         // 06 10 | 04 20 | 00 15, then 04 (structure length) 07 (channel) 02 (sequence) 00 (reserved).
         const std::array<std::uint8_t, frame::communication_header_size + frame::tunnelling_request_header_size + sample_cemi_size>
             expected {
-                0x06u, 0x10u, 0x04u, 0x20u, 0x00u, 0x15u,
-                0x04u, 0x07u, 0x02u, 0x00u,
-                0x11u, 0x00u, 0xBCu, 0xE0u, 0x11u, 0x01u, 0x0Au, 0x03u, 0x01u, 0x00u, 0x81u,
-            };
+                0x06u, 0x10u, 0x04u, 0x20u, 0x00u, 0x15u, 0x04u, 0x07u, 0x02u, 0x00u, 0x11u,
+                0x00u, 0xBCu, 0xE0u, 0x11u, 0x01u, 0x0Au, 0x03u, 0x01u, 0x00u, 0x81u,
+        };
 
         std::array<std::uint8_t, expected.size()> encoded {};
         REQUIRE(frame::encode_tunnelling_request_packet(encoded, 7u, 2u, sample_cemi).has_value());
@@ -181,7 +189,7 @@ namespace kmx::aio::test::knx::frame_test
     TEST_CASE("knx tunnelling ack decodes channel sequence and status", "[knx][frame][unit]")
     {
         // [structure length, channel id, sequence counter, status]
-        const std::array<std::uint8_t, 4u> packet { 0x04u, 7u, 2u, 0u };
+        const std::array<std::uint8_t, 4u> packet {0x04u, 7u, 2u, 0u};
         const auto decoded = frame::decode_tunnelling_ack(packet);
 
         REQUIRE(decoded.has_value());
@@ -217,7 +225,7 @@ namespace kmx::aio::test::knx::frame_test
     // length octet emits - the channel id lands where the length belongs.
     TEST_CASE("knx tunnelling ack rejects a bad structure length", "[knx][frame][unit]")
     {
-        const std::array<std::uint8_t, 4u> ack { 3u, 5u, 0u, 0x00u };
+        const std::array<std::uint8_t, 4u> ack {3u, 5u, 0u, 0x00u};
         const auto result = frame::decode_tunnelling_ack(ack);
         REQUIRE(!result.has_value());
         CHECK(result.error() == make_error_code(error::malformed_frame));
@@ -225,7 +233,7 @@ namespace kmx::aio::test::knx::frame_test
 
     TEST_CASE("knx tunnelling ack carries a non-zero status", "[knx][frame][unit]")
     {
-        const std::array<std::uint8_t, 4u> ack { 0x04u, 3u, 5u, 0x21u };
+        const std::array<std::uint8_t, 4u> ack {0x04u, 3u, 5u, 0x21u};
         const auto decoded = frame::decode_tunnelling_ack(ack);
         REQUIRE(decoded.has_value());
         CHECK(decoded->channel_id == 3u);
@@ -255,7 +263,7 @@ namespace kmx::aio::test::knx::frame_test
         REQUIRE(!request_result.has_value());
         CHECK(request_result.error() == make_error_code(error::malformed_frame));
 
-        const std::array<std::uint8_t, 4u> ack { 0x04u, 0u, 1u, 0u };
+        const std::array<std::uint8_t, 4u> ack {0x04u, 0u, 1u, 0u};
         const auto ack_result = frame::decode_tunnelling_ack(ack);
         REQUIRE(!ack_result.has_value());
         CHECK(ack_result.error() == make_error_code(error::malformed_frame));
@@ -263,8 +271,8 @@ namespace kmx::aio::test::knx::frame_test
 
     TEST_CASE("knx tunnelling encoder rejects an oversized frame", "[knx][frame][unit]")
     {
-        const std::vector<std::uint8_t> cemi(frame::max_frame_size, 0u);
-        std::vector<std::uint8_t> packet(frame::max_frame_size + frame::communication_header_size, 0u);
+        const std::vector<std::uint8_t> cemi(frame::max_total_length, 0u);
+        std::vector<std::uint8_t> packet(frame::max_total_length + frame::communication_header_size, 0u);
         const auto result = frame::encode_tunnelling_request_packet(packet, 1u, 1u, cemi);
         REQUIRE(!result.has_value());
         CHECK(result.error() == make_error_code(error::invalid_length));
@@ -274,16 +282,15 @@ namespace kmx::aio::test::knx::frame_test
     /// @param additional_info_length The additional information block length octet.
     /// @param data_length The cEMI data length octet.
     /// @return The complete KNXnet/IP packet.
-    [[nodiscard]] static std::vector<std::uint8_t> tunnelling_packet_with(
-        const std::uint8_t additional_info_length, const std::uint8_t data_length)
+    [[nodiscard]] static std::vector<std::uint8_t> tunnelling_packet_with(const std::uint8_t additional_info_length,
+                                                                          const std::uint8_t data_length)
     {
         const std::size_t cemi_size = cemi::encoded_size(additional_info_length, data_length);
         const std::size_t total = frame::communication_header_size + frame::tunnelling_request_header_size + cemi_size;
 
         std::vector<std::uint8_t> packet(total, 0x5Au);
-        REQUIRE(frame::encode_communication_header(packet, frame::tunnelling_request_service,
-                                                   static_cast<std::uint16_t>(total))
-                    .has_value());
+        REQUIRE(
+            frame::encode_communication_header(packet, frame::tunnelling_request_service, static_cast<std::uint16_t>(total)).has_value());
         packet[6u] = 0x04u; // connection header structure length
         packet[7u] = 0x01u; // channel id
         packet[8u] = 0x00u; // sequence counter
@@ -352,14 +359,11 @@ namespace kmx::aio::test::knx::frame_test
     TEST_CASE("knx device configuration request round-trips a property read", "[knx][frame][unit]")
     {
         std::array<std::uint8_t, cemi::property_header_size> message {};
-        REQUIRE(cemi::encode_property_read(message, 0u, 1u, 0x33u).has_value());
+        REQUIRE(cemi::encode_property_read(message, {.object_type = 0u, .object_instance = 1u, .property_id = 0x33u}).has_value());
 
-        const std::array<std::uint8_t, frame::communication_header_size + frame::tunnelling_request_header_size + message.size()>
-            expected {
-                0x06u, 0x10u, 0x03u, 0x10u, 0x00u, 0x11u,
-                0x04u, 0x07u, 0x02u, 0x00u,
-                0xFCu, 0x00u, 0x00u, 0x01u, 0x33u, 0x10u, 0x01u,
-            };
+        const std::array<std::uint8_t, frame::communication_header_size + frame::tunnelling_request_header_size + message.size()> expected {
+            0x06u, 0x10u, 0x03u, 0x10u, 0x00u, 0x11u, 0x04u, 0x07u, 0x02u, 0x00u, 0xFCu, 0x00u, 0x00u, 0x01u, 0x33u, 0x10u, 0x01u,
+        };
 
         std::array<std::uint8_t, expected.size()> encoded {};
         REQUIRE(frame::encode_device_configuration_request_packet(encoded, 7u, 2u, message).has_value());
@@ -425,7 +429,10 @@ namespace kmx::aio::test::knx::frame_test
         };
 
         const tunnelling_feature_frame request {
-            frame::tunnelling_feature_get_service, 7u, 2u, tunnelling_feature::bus_connection_status,
+            frame::tunnelling_feature_get_service,
+            7u,
+            2u,
+            tunnelling_feature::bus_connection_status,
         };
         std::array<std::uint8_t, expected.size()> encoded {};
         REQUIRE(frame::encode_tunnelling_feature_packet(encoded, request).has_value());
@@ -444,7 +451,10 @@ namespace kmx::aio::test::knx::frame_test
     {
         const std::array<std::uint8_t, 2u> value {0x11u, 0x01u};
         const tunnelling_feature_frame response {
-            frame::tunnelling_feature_response_service, 7u, 3u, tunnelling_feature::individual_address,
+            frame::tunnelling_feature_response_service,
+            7u,
+            3u,
+            tunnelling_feature::individual_address,
         };
 
         std::array<std::uint8_t, 14u> encoded {};
@@ -464,7 +474,10 @@ namespace kmx::aio::test::knx::frame_test
     {
         // A failing response carries the return code instead of the value it could not produce.
         tunnelling_feature_frame response {
-            frame::tunnelling_feature_response_service, 7u, 3u, tunnelling_feature::max_apdu_length,
+            frame::tunnelling_feature_response_service,
+            7u,
+            3u,
+            tunnelling_feature::max_apdu_length,
         };
         response.return_code = 0x21u;
 
@@ -485,15 +498,14 @@ namespace kmx::aio::test::knx::frame_test
 
         // A get asks a question; a value in it is not a get.
         CHECK(frame::encode_tunnelling_feature_packet(
-                  encoded, tunnelling_feature_frame {frame::tunnelling_feature_get_service, 7u, 0u,
-                                                      tunnelling_feature::bus_connection_status},
+                  encoded,
+                  tunnelling_feature_frame {frame::tunnelling_feature_get_service, 7u, 0u, tunnelling_feature::bus_connection_status},
                   value)
                   .error() == make_error_code(error::malformed_frame));
 
         // A set without a value names nothing to write.
-        CHECK(frame::encode_tunnelling_feature_packet(
-                  encoded, tunnelling_feature_frame {frame::tunnelling_feature_set_service, 7u, 0u,
-                                                      tunnelling_feature::info_service_enable})
+        CHECK(frame::encode_tunnelling_feature_packet(encoded, tunnelling_feature_frame {frame::tunnelling_feature_set_service, 7u, 0u,
+                                                                                         tunnelling_feature::info_service_enable})
                   .error() == make_error_code(error::malformed_frame));
 
         // And the same rules on the way in.

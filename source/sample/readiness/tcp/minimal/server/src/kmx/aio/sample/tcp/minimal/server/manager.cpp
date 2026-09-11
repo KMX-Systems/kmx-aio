@@ -1,7 +1,12 @@
-#include <kmx/aio/readiness/tcp/listener.hpp>
+/// @file src/kmx/aio/sample/tcp/minimal/server/manager.cpp
+/// @brief Readiness-model minimal TCP echo server: accept loop, per-client ECHO replies and shutdown statistics.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/tcp/minimal/server/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/readiness/tcp/listener.hpp>
 
-#include <csignal>
+    #include <csignal>
+#endif
 
 namespace kmx::aio::sample::tcp::minimal::server
 {
@@ -98,6 +103,7 @@ namespace kmx::aio::sample::tcp::minimal::server
                                     read_result.error().message());
                         metrics_.errors.fetch_add(1u, std::memory_order_relaxed);
                     }
+
                     break;
                 }
 
@@ -294,4 +300,4 @@ namespace kmx::aio::sample::tcp::minimal::server
         }
     }
 
-} // namespace kmx::aio::sample::tcp::minimal::server
+}

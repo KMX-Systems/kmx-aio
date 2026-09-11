@@ -1,4 +1,5 @@
-/// @file aio/readiness/basic_types.hpp
+/// @file api/kmx/aio/readiness/basic_types.hpp
+/// @brief Readiness-model epoll event types and type-safe event mask operators.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
@@ -6,7 +7,6 @@
     #ifndef PCH
         #include <cstdint>
         #include <sys/epoll.h>
-
     #endif
 
 namespace kmx::aio::readiness

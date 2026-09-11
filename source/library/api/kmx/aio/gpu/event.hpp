@@ -1,4 +1,4 @@
-/// @file aio/gpu/event.hpp
+/// @file api/kmx/aio/gpu/event.hpp
 /// @brief GPU event awaiter for coroutine suspension on GPU completion.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -6,7 +6,7 @@
 #if defined(KMX_AIO_FEATURE_CUDA)
     #ifndef PCH
         #include <kmx/aio/gpu/basic_types.hpp>
-        #include <kmx/aio/task.hpp>
+        #include <kmx/aio/promise_base.hpp>
     #endif
 
 namespace kmx::aio::gpu
@@ -29,7 +29,7 @@ namespace kmx::aio::gpu
 
             /// @brief Tells whether the event has already fired, letting the coroutine continue without suspending.
             /// @return `true` when the event is already signaled.
-            bool await_ready() const noexcept;
+            [[nodiscard]] bool await_ready() const noexcept;
             /// @brief Registers @p h with the executor so it resumes once the event fires.
             /// @param h The coroutine to resume.
             void await_suspend(coroutine_handle_t h) noexcept;
@@ -80,5 +80,5 @@ namespace kmx::aio::gpu
         friend class stream;
     };
 
-} // namespace kmx::aio::gpu
+}
 #endif // KMX_AIO_FEATURE_CUDA

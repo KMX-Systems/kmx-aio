@@ -1,5 +1,6 @@
-/// @file kmx/aio/knx/secure/detail/crypto.hpp
+/// @file inc/kmx/aio/knx/secure/detail/crypto.hpp
 /// @brief The cryptographic primitives KNX Secure is built from, as a table of backend calls.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// AES-128, SHA-256, PBKDF2-HMAC-SHA256 and X25519 come from the project's TLS backend - OpenSSL 3, or
 /// BoringSSL when QUIC is enabled - through the EVP calls both provide. This header names them without
@@ -8,16 +9,15 @@
 /// The table exists for testing rather than for pluggability. Production code always passes
 /// @ref kmx::aio::knx::secure::detail::evp_backend; a test passes a table whose entries fail, to reach the
 /// error branches of the code built on top. Nothing installs a table globally.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+
         #include <cstddef>
         #include <cstdint>
     #endif
-
-    #include <kmx/aio/basic_types.hpp>
 
 namespace kmx::aio::knx::secure::detail
 {

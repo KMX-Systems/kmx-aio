@@ -72,20 +72,18 @@ auto ep_result = kmx::aio::readiness::udp::endpoint::create(exec);
 auto& ep = *ep_result;
 
 std::array<std::byte, 1500> buf;
-::sockaddr_storage peer {};
-::socklen_t peer_len = sizeof(peer);
-kmx::aio::ip_address_t peer_ip;
-kmx::aio::port_t peer_port;
+kmx::aio::socket_address peer {};
+kmx::aio::endpoint_address sender {};
 
 // Receive with IP/port decoding
-auto n = co_await ep.recv(buf, peer, peer_len, peer_ip, peer_port);
+auto n = co_await ep.recv(buf, peer, sender);
 
 // Echo back using IP/port overload
-co_await ep.send(std::span{buf.data(), *n}, peer_ip, peer_port);
+co_await ep.send(std::span{buf.data(), *n}, kmx::aio::to_ip_address_view(sender.ip), sender.port);
 
 // Or send to a raw sockaddr
 co_await ep.send(std::span{buf.data(), *n},
-                 reinterpret_cast<const sockaddr*>(&peer), peer_len);
+                 reinterpret_cast<const sockaddr*>(&peer.storage), peer.length);
 ```
 
 ### `completion::udp::endpoint`

@@ -1,24 +1,25 @@
-/// @file aio/buffer/pool_test.cpp
+/// @file src/kmx/aio/buffer/pool_test.cpp
 /// @brief Integration tests for buffer::pool and buffer::handle.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
 #include <kmx/aio/buffer/pool.hpp>
+#ifndef PCH
+    #include <catch2/catch_test_macros.hpp>
 
-#include <string>
-#include <thread>
-#include <vector>
+    #include <string>
+    #include <thread>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::buffer::pool_test::detail
 {
-    inline int unstable_buffer_ctor_calls {};
+    inline int unstable_value_ctor_calls {};
 
-    struct unstable_buffer
+    struct unstable_value
     {
-        unstable_buffer()
+        unstable_value()
         {
-            ++unstable_buffer_ctor_calls;
-            if (unstable_buffer_ctor_calls == 1)
+            ++unstable_value_ctor_calls;
+            if (unstable_value_ctor_calls == 1)
                 throw std::runtime_error("constructor failed");
         }
     };
@@ -28,8 +29,7 @@ namespace kmx::aio::test::buffer::pool_test::detail
     /// @param errors Incremented once if the pool ran out.
     /// @param value_mismatches Incremented for every handle that did not read back what was written.
     /// @param id Distinguishes this worker's values from the other workers'.
-    inline void hammer_pool(kmx::aio::buffer::pool<int, 50u>& pool, std::atomic<int>& errors, std::atomic<int>& value_mismatches,
-                            const int id)
+    inline void hammer(kmx::aio::buffer::pool<int, 50u>& pool, std::atomic<int>& errors, std::atomic<int>& value_mismatches, const int id)
     {
         try
         {
@@ -51,7 +51,7 @@ namespace kmx::aio::test::buffer::pool_test::detail
             errors.fetch_add(1, std::memory_order_relaxed);
         }
     }
-} // namespace kmx::aio::test::buffer::pool_test::detail
+}
 
 namespace kmx::aio::test::buffer::pool_test
 {
@@ -130,8 +130,8 @@ namespace kmx::aio::test::buffer::pool_test
 
     TEST_CASE("buffer::pool preserves free-list on constructor throw", "[buffer_pool][exception-safety]")
     {
-        detail::unstable_buffer_ctor_calls = 0;
-        kmx::aio::buffer::pool<detail::unstable_buffer, 2> pool;
+        detail::unstable_value_ctor_calls = 0;
+        kmx::aio::buffer::pool<detail::unstable_value, 2> pool;
 
         REQUIRE_THROWS_AS(pool.acquire(), std::runtime_error);
         REQUIRE(pool.allocated() == 0u);
@@ -165,8 +165,8 @@ namespace kmx::aio::test::buffer::pool_test
 
     TEST_CASE("buffer::pool try_acquire propagates constructor failures", "[buffer_pool][exception-safety][try_acquire]")
     {
-        detail::unstable_buffer_ctor_calls = 0;
-        kmx::aio::buffer::pool<detail::unstable_buffer, 2> pool;
+        detail::unstable_value_ctor_calls = 0;
+        kmx::aio::buffer::pool<detail::unstable_value, 2> pool;
 
         // A failing constructor is not exhaustion and must not be reported as one, or a caller waiting for
         // buffers to come back would wait for buffers that were never taken.
@@ -367,7 +367,7 @@ namespace kmx::aio::test::buffer::pool_test
         std::atomic<int> errors {};
         std::atomic<int> value_mismatches {};
 
-        auto worker = [&](int id) { detail::hammer_pool(pool, errors, value_mismatches, id); };
+        auto worker = [&](int id) { detail::hammer(pool, errors, value_mismatches, id); };
 
         // Spawn multiple threads
         std::vector<std::thread> threads;
@@ -402,4 +402,4 @@ namespace kmx::aio::test::buffer::pool_test
         REQUIRE(*ptr == "hello");
     }
 
-} // namespace kmx::aio::test::buffer::pool_test
+}

@@ -1,22 +1,22 @@
-/// @file aio/integration/gpu_image_processing_smoke_test.cpp
+/// @file src/kmx/aio/integration/gpu_image_processing_smoke_test.cpp
 /// @brief GPU image processing sample smoke test.
-
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #if defined(KMX_AIO_FEATURE_CUDA)
+    #ifndef PCH
+        #include <kmx/aio/test/sample_process.hpp>
 
-    #include <catch2/catch_test_macros.hpp>
+        #include <catch2/catch_test_macros.hpp>
 
-    #include <kmx/aio/test/sample_process.hpp>
-
-    #include <sys/wait.h>
-    #include <unistd.h>
-
-    #include <cstdlib>
-    #include <filesystem>
-    #include <fstream>
-    #include <optional>
-    #include <string>
-    #include <string_view>
-    #include <vector>
+        #include <cstdlib>
+        #include <filesystem>
+        #include <fstream>
+        #include <optional>
+        #include <string>
+        #include <string_view>
+        #include <vector>
+        #include <sys/wait.h>
+        #include <unistd.h>
+    #endif
 
 namespace kmx::aio::test::integration::gpu_image_processing_smoke_test
 {
@@ -36,8 +36,8 @@ namespace kmx::aio::test::integration::gpu_image_processing_smoke_test
 
         const fs::path run_log = fs::path("/tmp") / ("kmx_gpu_image_processing_smoke_" + std::to_string(::getpid()) + ".log");
 
-        const std::string cmd = "env " + toolchain_library_path() + " " + shell_quote(sample_bin_opt->string()) +
-                                " --max-frames 1 > " + shell_quote(run_log.string()) + " 2>&1";
+        const std::string cmd = "env " + toolchain_library_path() + " " + shell_quote(sample_bin_opt->string()) + " --max-frames 1 > " +
+                                shell_quote(run_log.string()) + " 2>&1";
         const std::string full_cmd = "bash -lc " + shell_quote(cmd);
         const int run_rc = std::system(full_cmd.c_str());
 
@@ -52,6 +52,6 @@ namespace kmx::aio::test::integration::gpu_image_processing_smoke_test
         REQUIRE(run_text.find("[GPU Image Processing] frame_bytes=") != std::string::npos);
         REQUIRE(run_text.find("[GPU Image Processing] tasks_spawned=") != std::string::npos);
     }
-} // namespace kmx::aio::test::integration::gpu_image_processing_smoke_test
+}
 
 #endif // KMX_AIO_FEATURE_CUDA

@@ -1,4 +1,4 @@
-/// @file aio/someip/types.hpp
+/// @file api/kmx/aio/someip/types.hpp
 /// @brief Backend-neutral configuration and payload types for SOME/IP support.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -189,5 +189,5 @@ namespace kmx::aio::someip
         std::uint64_t dropped_events {};
     };
 
-} // namespace kmx::aio::someip
+}
 #endif // KMX_AIO_FEATURE_SOMEIP

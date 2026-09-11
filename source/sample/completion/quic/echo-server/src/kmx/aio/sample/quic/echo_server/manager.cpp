@@ -1,24 +1,30 @@
+/// @file src/kmx/aio/sample/quic/echo_server/manager.cpp
+/// @brief Completion-model QUIC echo server sample: listens on localhost and answers each stream with a summary of it.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/quic/echo_server/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/quic/engine.hpp>
 
-#include <algorithm>
-#include <array>
-#include <cstdint>
-#include <format>
-#include <iostream>
-#include <kmx/aio/completion/quic/engine.hpp>
-#include <lsquic.h>
-#include <openssl/err.h>
-#include <openssl/ssl.h>
-#include <string>
-#include <string_view>
+    #include <lsquic.h>
+    #include <openssl/err.h>
+    #include <openssl/ssl.h>
+
+    #include <algorithm>
+    #include <array>
+    #include <cstdint>
+    #include <format>
+    #include <iostream>
+    #include <string>
+    #include <string_view>
+#endif
 
 namespace kmx::aio::sample::quic::echo_server
 {
     using namespace kmx::aio;
     using namespace kmx::aio::completion;
 
-    static int select_kmx_alpn(::SSL* /*ssl*/, const unsigned char** out, unsigned char* outlen, const unsigned char* in,
-                               unsigned int inlen, void* /*arg*/)
+    static int select_alpn(::SSL* /*ssl*/, const unsigned char** out, unsigned char* outlen, const unsigned char* in, unsigned int inlen,
+                           void* /*arg*/)
     {
         static constexpr std::array<unsigned char, 8u> kmx_alpn_wire = {7u, 'k', 'm', 'x', '-', 'a', 'i', 'o'};
         const int selected = ::SSL_select_next_proto(reinterpret_cast<unsigned char**>(const_cast<unsigned char**>(out)), outlen, in, inlen,
@@ -63,13 +69,15 @@ namespace kmx::aio::sample::quic::echo_server
             std::cerr << "Failed to create server SSL_CTX\n";
             co_return;
         }
-        ::SSL_CTX_set_alpn_select_cb(ssl_ctx, select_kmx_alpn, nullptr);
+
+        ::SSL_CTX_set_alpn_select_cb(ssl_ctx, select_alpn, nullptr);
         if (::SSL_CTX_use_certificate_chain_file(ssl_ctx, "/tmp/quic_cert.pem") != 1)
         {
             std::cerr << "Failed to load /tmp/quic_cert.pem\n";
             ::SSL_CTX_free(ssl_ctx);
             co_return;
         }
+
         if (::SSL_CTX_use_PrivateKey_file(ssl_ctx, "/tmp/quic_key.pem", SSL_FILETYPE_PEM) != 1)
         {
             std::cerr << "Failed to load /tmp/quic_key.pem\n";

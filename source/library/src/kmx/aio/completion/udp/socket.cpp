@@ -1,4 +1,5 @@
-/// @file aio/completion/udp/socket.cpp
+/// @file src/kmx/aio/completion/udp/socket.cpp
+/// @brief Completion-model UDP socket implementation: creation, bind, and recvmsg/sendmsg over io_uring.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/completion/udp/socket.hpp>
 
@@ -34,4 +35,4 @@ namespace kmx::aio::completion::udp
         return fd_.bind(ip, port);
     }
 
-} // namespace kmx::aio::completion::udp
+}

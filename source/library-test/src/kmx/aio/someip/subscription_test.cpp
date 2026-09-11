@@ -1,16 +1,20 @@
+/// @file src/kmx/aio/someip/subscription_test.cpp
+/// @brief Unit tests for SOME/IP event subscriptions: opening, receive timeout and bounded notification queue drops.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/someip/client.hpp>
-#include <kmx/aio/someip/error.hpp>
 #include <kmx/aio/someip/subscription.hpp>
-#include <kmx/aio/test/executor_runner.hpp>
-#include <kmx/aio/test/outcome.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/someip/client.hpp>
+    #include <kmx/aio/someip/error.hpp>
+    #include <kmx/aio/test/executor_runner.hpp>
+    #include <kmx/aio/test/outcome.hpp>
 
-#include <memory>
-#include <optional>
-#include <system_error>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <memory>
+    #include <optional>
+    #include <system_error>
+#endif
 
 namespace kmx::aio::test::someip::subscription_test
 {
@@ -18,7 +22,7 @@ namespace kmx::aio::test::someip::subscription_test
 
     namespace detail
     {
-        [[nodiscard]] client_config make_test_client_config()
+        [[nodiscard]] client_config make_client_config()
         {
             return client_config {
                 .application_name = "kmx_someip_subscription_client",
@@ -28,7 +32,7 @@ namespace kmx::aio::test::someip::subscription_test
             };
         }
 
-        [[nodiscard]] subscription_config make_test_subscription_config()
+        [[nodiscard]] subscription_config make_event_group_config()
         {
             return subscription_config {
                 .service_id = 0x1111u,
@@ -42,7 +46,7 @@ namespace kmx::aio::test::someip::subscription_test
 
     TEST_CASE("someip subscription open fails when not bound", "[someip][subscription]")
     {
-        subscription s {detail::make_test_subscription_config()};
+        subscription s {detail::make_event_group_config()};
         completion::executor exec;
         const auto state = run_awaited(exec, s.open());
 
@@ -53,8 +57,8 @@ namespace kmx::aio::test::someip::subscription_test
 
     TEST_CASE("someip subscription next times out when queue is empty", "[someip][subscription]")
     {
-        client c {detail::make_test_client_config()};
-        subscription s {c, detail::make_test_subscription_config()};
+        client c {detail::make_client_config()};
+        subscription s {c, detail::make_event_group_config()};
 
         {
             completion::executor exec;
@@ -82,9 +86,9 @@ namespace kmx::aio::test::someip::subscription_test
 #if defined(KMX_AIO_FEATURE_SOMEIP) && (!__has_include(<vsomeip/vsomeip.hpp>) && !__has_include(<vsomeip3/vsomeip.hpp>))
     TEST_CASE("someip subscription dropped_events increases when capacity is zero", "[someip][subscription][queue]")
     {
-        client c {detail::make_test_client_config()};
+        client c {detail::make_client_config()};
 
-        subscription_config cfg = detail::make_test_subscription_config();
+        subscription_config cfg = detail::make_event_group_config();
         cfg.notification_queue_capacity = 0u;
         subscription s {c, cfg};
 
@@ -102,7 +106,7 @@ namespace kmx::aio::test::someip::subscription_test
             REQUIRE(state->has_value());
         }
 
-        s.__kmx_test_push_event(event_notification {
+        s.test_push_event(event_notification {
             .service_id = 0x1111u,
             .instance_id = 0x2222u,
             .event_id = 0x1001u,
@@ -115,9 +119,9 @@ namespace kmx::aio::test::someip::subscription_test
 
     TEST_CASE("someip subscription drops oldest when capacity is one", "[someip][subscription][queue]")
     {
-        client c {detail::make_test_client_config()};
+        client c {detail::make_client_config()};
 
-        subscription_config cfg = detail::make_test_subscription_config();
+        subscription_config cfg = detail::make_event_group_config();
         cfg.notification_queue_capacity = 1u;
         subscription s {c, cfg};
 
@@ -135,7 +139,7 @@ namespace kmx::aio::test::someip::subscription_test
             REQUIRE(state->has_value());
         }
 
-        s.__kmx_test_push_event(event_notification {
+        s.test_push_event(event_notification {
             .service_id = 0x1111u,
             .instance_id = 0x2222u,
             .event_id = 0x1001u,
@@ -143,7 +147,7 @@ namespace kmx::aio::test::someip::subscription_test
             .source_timestamp = std::chrono::system_clock::now(),
         });
 
-        s.__kmx_test_push_event(event_notification {
+        s.test_push_event(event_notification {
             .service_id = 0x1111u,
             .instance_id = 0x2222u,
             .event_id = 0x1002u,
@@ -166,9 +170,9 @@ namespace kmx::aio::test::someip::subscription_test
 
     TEST_CASE("someip subscription dropped_events resets across reopen", "[someip][subscription][queue][lifecycle]")
     {
-        client c {detail::make_test_client_config()};
+        client c {detail::make_client_config()};
 
-        subscription_config cfg = detail::make_test_subscription_config();
+        subscription_config cfg = detail::make_event_group_config();
         cfg.notification_queue_capacity = 0u;
         subscription s {c, cfg};
 
@@ -186,7 +190,7 @@ namespace kmx::aio::test::someip::subscription_test
             REQUIRE(state->has_value());
         }
 
-        s.__kmx_test_push_event(event_notification {
+        s.test_push_event(event_notification {
             .service_id = 0x1111u,
             .instance_id = 0x2222u,
             .event_id = 0x1001u,
@@ -209,7 +213,7 @@ namespace kmx::aio::test::someip::subscription_test
             REQUIRE(state->has_value());
         }
 
-        s.__kmx_test_push_event(event_notification {
+        s.test_push_event(event_notification {
             .service_id = 0x1111u,
             .instance_id = 0x2222u,
             .event_id = 0x1002u,
@@ -220,4 +224,4 @@ namespace kmx::aio::test::someip::subscription_test
         CHECK(s.dropped_events() == 1u);
     }
 #endif
-} // namespace kmx::aio::test::someip::subscription_test
+}

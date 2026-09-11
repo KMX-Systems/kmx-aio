@@ -1,3 +1,6 @@
+/// @file inc/kmx/aio/sample/tls/echo_readiness_server/manager.hpp
+/// @brief Readiness-model TLS echo server sample manager: accepts TLS clients, echoes their data and shows live stats.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <kmx/aio/readiness/executor.hpp>
@@ -69,4 +72,4 @@ namespace kmx::aio::sample::tls::echo_readiness_server
         static inline std::atomic<kmx::aio::readiness::executor*> g_executor_ptr {};
     };
 
-} // namespace kmx::aio::sample::tls::echo_readiness_server
+}

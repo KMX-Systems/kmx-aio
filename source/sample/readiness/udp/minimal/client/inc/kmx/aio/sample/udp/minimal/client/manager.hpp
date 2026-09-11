@@ -1,3 +1,6 @@
+/// @file inc/kmx/aio/sample/udp/minimal/client/manager.hpp
+/// @brief Readiness-model minimal UDP client sample manager: many workers each send one datagram and await a reply.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <kmx/aio/readiness/executor.hpp>
@@ -39,7 +42,7 @@ namespace kmx::aio::sample::udp::minimal::client
     public:
         explicit manager(config config = {}): config_(std::move(config)) {}
 
-        const metric_data& metrics() const noexcept { return metrics_; }
+        [[nodiscard]] const metric_data& metrics() const noexcept { return metrics_; }
 
         /// @brief Run the stress test.
         /// @return true when all requests succeed; otherwise false.

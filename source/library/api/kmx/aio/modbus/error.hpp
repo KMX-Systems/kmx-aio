@@ -1,4 +1,4 @@
-/// @file aio/modbus/error.hpp
+/// @file api/kmx/aio/modbus/error.hpp
 /// @brief Modbus-specific error domain for framing and transport failures.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -53,7 +53,7 @@ namespace kmx::aio::modbus
     /// @return @c std::error_code bound to @ref error_category.
     [[nodiscard]] std::error_code make_error_code(error code) noexcept;
 
-} // namespace kmx::aio::modbus
+}
 
 namespace std
 {

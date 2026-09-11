@@ -1,10 +1,13 @@
-/// @file aio/modbus/server.hpp
+/// @file api/kmx/aio/modbus/server.hpp
 /// @brief Asynchronous Modbus TCP server facade.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_MODBUS)
     #ifndef PCH
+        #include <kmx/aio/modbus/types.hpp>
+        #include <kmx/aio/task.hpp>
+
         #include <cstdint>
         #include <expected>
         #include <functional>
@@ -12,9 +15,6 @@
         #include <system_error>
         #include <vector>
     #endif
-
-    #include <kmx/aio/modbus/types.hpp>
-    #include <kmx/aio/task.hpp>
 
 namespace kmx::aio::readiness
 {
@@ -82,5 +82,5 @@ namespace kmx::aio::modbus
         std::unique_ptr<impl> impl_;
     };
 
-} // namespace kmx::aio::modbus
+}
 #endif // KMX_AIO_FEATURE_MODBUS

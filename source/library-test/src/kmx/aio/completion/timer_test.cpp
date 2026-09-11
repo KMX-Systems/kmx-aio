@@ -1,21 +1,22 @@
-/// @file completion/timer_test.cpp
+/// @file src/kmx/aio/completion/timer_test.cpp
 /// @brief Regression tests for completion::timer native io_uring timeout waits.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-
-#include <chrono>
-#include <memory>
-
-#include <catch2/catch_test_macros.hpp>
-
-#include <kmx/aio/completion/executor.hpp>
 #include <kmx/aio/completion/timer.hpp>
-#include <kmx/aio/task.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/task.hpp>
+
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <chrono>
+    #include <memory>
+#endif
 
 namespace kmx::aio::test::completion::timer_test
 {
     using namespace kmx::aio::completion;
 
-    struct timer_state
+    struct wait_state
     {
         bool completed {};
         bool ok {};
@@ -24,7 +25,7 @@ namespace kmx::aio::test::completion::timer_test
         std::chrono::steady_clock::time_point end {};
     };
 
-    auto run_timer_wait(executor& exec, std::shared_ptr<timer_state> state) -> task<void>
+    auto run_wait(executor& exec, std::shared_ptr<wait_state> state) -> task<void>
     {
         timer tmr {exec};
         state->start = std::chrono::steady_clock::now();
@@ -43,9 +44,9 @@ namespace kmx::aio::test::completion::timer_test
     TEST_CASE("completion timer waits for the requested duration", "[completion][timer]")
     {
         executor exec;
-        auto state = std::make_shared<timer_state>();
+        auto state = std::make_shared<wait_state>();
 
-        exec.spawn(run_timer_wait(exec, state));
+        exec.spawn(run_wait(exec, state));
         exec.run();
 
         REQUIRE(state->completed);
@@ -55,4 +56,4 @@ namespace kmx::aio::test::completion::timer_test
         REQUIRE(elapsed.count() >= 10);
     }
 
-} // namespace kmx::aio::test::completion::timer_test
+}

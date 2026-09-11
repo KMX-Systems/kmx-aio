@@ -1,17 +1,23 @@
-#include <kmx/aio/mac.hpp>
-#include <kmx/aio/sample/avb/talker/manager.hpp>
-#include <kmx/aio/sample/common/cli_parse.hpp>
+/// @file src/main.cpp
+/// @brief Entry point of the readiness-model AVB talker sample: parses stream and timing options and runs the manager.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#ifndef PCH
+    #include <kmx/aio/mac.hpp>
+    #include <kmx/aio/sample/avb/talker/manager.hpp>
+    #include <kmx/aio/sample/common/cli_parse.hpp>
+    #include <kmx/logger.hpp>
 
-#include <exception>
-#include <kmx/logger.hpp>
-#include <print>
-#include <source_location>
-#include <string_view>
-#include <unordered_map>
+    #include <cstdint>
+    #include <exception>
+    #include <print>
+    #include <source_location>
+    #include <string_view>
+    #include <unordered_map>
+#endif
 
 namespace kmx::aio::sample::avb::talker::detail
 {
-    enum class parse_status
+    enum class parse_status : std::uint8_t
     {
         ok,
         help,
@@ -33,7 +39,7 @@ namespace kmx::aio::sample::avb::talker::detail
         std::println("  --help            Show this help");
     }
 
-    static parse_status parse_dest_mac_option(const std::string_view value, kmx::aio::sample::avb::talker::config& cfg)
+    [[nodiscard]] static parse_status parse_dest_mac_option(const std::string_view value, kmx::aio::sample::avb::talker::config& cfg)
     {
         if (!kmx::aio::mac::parse_address(value, cfg.dest_mac))
         {
@@ -44,7 +50,7 @@ namespace kmx::aio::sample::avb::talker::detail
         return parse_status::ok;
     }
 
-    static parse_status parse_stream_id_option(const std::string_view value, kmx::aio::sample::avb::talker::config& cfg)
+    [[nodiscard]] static parse_status parse_stream_id_option(const std::string_view value, kmx::aio::sample::avb::talker::config& cfg)
     {
         std::uint16_t parsed {};
         if (!kmx::aio::sample::common::parse_unsigned_u16(value, parsed))
@@ -58,7 +64,7 @@ namespace kmx::aio::sample::avb::talker::detail
         return parse_status::ok;
     }
 
-    static parse_status parse_max_frames_option(const std::string_view value, kmx::aio::sample::avb::talker::config& cfg)
+    [[nodiscard]] static parse_status parse_max_frames_option(const std::string_view value, kmx::aio::sample::avb::talker::config& cfg)
     {
         std::uint64_t parsed {};
         if (!kmx::aio::sample::common::parse_unsigned_u64(value, parsed))
@@ -71,8 +77,8 @@ namespace kmx::aio::sample::avb::talker::detail
         return parse_status::ok;
     }
 
-    static parse_status parse_period_us_option(const std::string_view value, kmx::aio::sample::avb::talker::config& cfg,
-                                               std::uint64_t min_period_us, std::uint64_t max_period_us)
+    [[nodiscard]] static parse_status parse_period_us_option(const std::string_view value, kmx::aio::sample::avb::talker::config& cfg,
+                                                             std::uint64_t min_period_us, std::uint64_t max_period_us)
     {
         std::uint64_t parsed {};
         if (!kmx::aio::sample::common::parse_unsigned_u64(value, parsed))
@@ -92,8 +98,8 @@ namespace kmx::aio::sample::avb::talker::detail
         return parse_status::ok;
     }
 
-    static parse_status parse_sync_timeout_s_option(const std::string_view value, kmx::aio::sample::avb::talker::config& cfg,
-                                                    std::uint64_t min_sync_timeout_s, std::uint64_t max_sync_timeout_s)
+    [[nodiscard]] static parse_status parse_sync_timeout_s_option(const std::string_view value, kmx::aio::sample::avb::talker::config& cfg,
+                                                                  std::uint64_t min_sync_timeout_s, std::uint64_t max_sync_timeout_s)
     {
         std::uint64_t parsed {};
         if (!kmx::aio::sample::common::parse_unsigned_u64(value, parsed))
@@ -113,9 +119,9 @@ namespace kmx::aio::sample::avb::talker::detail
         return parse_status::ok;
     }
 
-    static parse_status parse_args(int argc, const char* argv[], kmx::aio::sample::avb::talker::config& cfg)
+    [[nodiscard]] static parse_status parse_args(int argc, const char* argv[], kmx::aio::sample::avb::talker::config& cfg)
     {
-        enum class option_kind
+        enum class option_kind : std::uint8_t
         {
             iface,
             dest_mac,
@@ -216,7 +222,7 @@ namespace kmx::aio::sample::avb::talker::detail
 
         return parse_status::ok;
     }
-} // namespace kmx::aio::sample::avb::talker::detail
+}
 
 int main(int argc, const char* argv[]) noexcept
 {

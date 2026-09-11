@@ -1,18 +1,18 @@
-/// @file aio/tls/basic_stream.cpp
+/// @file src/kmx/aio/tls/basic_stream.cpp
 /// @brief The single compiled copy of the TLS handshake and record loops.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/tls/basic_stream.hpp>
-#include <kmx/aio/exception.hpp>
-
 #ifndef PCH
-    #include <array>
-    #include <new>
-    #include <utility>
+    #include <kmx/aio/bad_alloc.hpp>
+    #include <kmx/aio/invalid_argument.hpp>
+    #include <kmx/aio/tls/detail/tls_syscalls.hpp>
 
     #include <openssl/bio.h>
     #include <openssl/ssl.h>
 
-    #include <kmx/aio/tls/detail/tls_syscalls.hpp>
+    #include <array>
+    #include <new>
+    #include <utility>
 #endif
 
 namespace kmx::aio::tls
@@ -23,8 +23,8 @@ namespace kmx::aio::tls
         if (!ssl_)
             throw bad_alloc();
 
-        net_read_bio_ = detail::tls_syscalls::bio_new(::BIO_s_mem());
-        net_write_bio_ = detail::tls_syscalls::bio_new(::BIO_s_mem());
+        net_read_bio_ = detail::openssl_syscalls::bio_new(::BIO_s_mem());
+        net_write_bio_ = detail::openssl_syscalls::bio_new(::BIO_s_mem());
 
         if (!net_read_bio_ || !net_write_bio_)
         {
@@ -225,6 +225,7 @@ namespace kmx::aio::tls
                 co_return std::unexpected(std::make_error_code(std::errc::connection_aborted));
             written += *res;
         }
+
         co_return expected_void_t {};
     }
 
@@ -297,4 +298,4 @@ namespace kmx::aio::tls
         co_return expected_void_t {};
     }
 
-} // namespace kmx::aio::tls
+}

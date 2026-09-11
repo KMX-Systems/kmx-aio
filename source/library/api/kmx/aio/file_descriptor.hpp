@@ -1,19 +1,20 @@
-/// @file aio/file_descriptor.hpp
+/// @file api/kmx/aio/file_descriptor.hpp
+/// @brief RAII owner of a POSIX file descriptor, with socket, fcntl and read/write syscall wrappers.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
-    #include <arpa/inet.h>
+    #include <kmx/aio/basic_types.hpp>
+
     #include <concepts>
     #include <expected>
+    #include <system_error>
+    #include <utility>
+    #include <arpa/inet.h>
     #include <fcntl.h>
     #include <sys/epoll.h>
     #include <sys/socket.h>
     #include <sys/types.h>
-    #include <system_error>
     #include <unistd.h>
-    #include <utility>
-
-    #include <kmx/aio/basic_types.hpp>
 #endif
 
 namespace kmx::aio
@@ -168,7 +169,8 @@ namespace kmx::aio
     /// @brief Concept for types that can be awaited.
     /// @tparam T The type to test.
     template <typename T>
-    concept awaitable = requires(T t) {
+    concept awaitable = requires(T t)
+    {
         { t.await_ready() } -> std::convertible_to<bool>;
         { t.await_resume() };
     };
@@ -179,4 +181,4 @@ namespace kmx::aio
     /// @param codst Destination storage for the parsed binary address.
     /// @return Empty on success or an error.
     [[nodiscard]] expected_void_t inet_pton(const int af, const char* const src, void* const codst) noexcept;
-} // namespace kmx::aio
+}

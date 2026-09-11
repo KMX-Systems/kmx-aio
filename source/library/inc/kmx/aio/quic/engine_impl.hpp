@@ -1,8 +1,20 @@
-/// @file aio/quic/engine_impl.hpp
+/// @file inc/kmx/aio/quic/engine_impl.hpp
 /// @brief Private generic QUIC engine template definitions shared by model-specific instantiation units.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
     #include <kmx/aio/quic/base_engine.hpp>
+    #include <kmx/aio/quic/base_impl.hpp>
+    #include <kmx/aio/quic/engine.hpp>
+    #include <kmx/aio/quic/generic_engine.hpp>
+    #include <kmx/aio/quic/settings.hpp>
+    #include <kmx/aio/task.hpp>
+
+    #include <cstddef>
+    #include <memory>
+    #include <string>
+    #include <utility>
 #endif
 
 namespace kmx::aio::quic
@@ -52,37 +64,20 @@ namespace kmx::aio::quic
     task_returning_expected_void_t generic_engine<Executor, UdpSocket>::start(const ip_address_t ip, const port_t port, void* ssl_ctx,
                                                                               const settings& config) noexcept(false)
     {
+        const start_params params {.ip = ip, .port = port, .ssl_ctx = ssl_ctx, .config = config};
         if constexpr (requires { UdpSocket::create(impl_->exec_, ip_family(ip)); })
-            co_return impl_->setup(UdpSocket::create(impl_->exec_, ip_family(ip)), ip, port, ssl_ctx, config);
+            co_return impl_->setup(UdpSocket::create(impl_->exec_, ip_family(ip)), params);
         else
-            co_return impl_->setup(UdpSocket::create(impl_->exec_.shared_from_this(), ip_family(ip)), ip, port, ssl_ctx, config);
+            co_return impl_->setup(UdpSocket::create(impl_->exec_.shared_from_this(), ip_family(ip)), params);
     }
 
     template <typename Executor, typename UdpSocket>
-    task_returning_expected_void_t generic_engine<Executor, UdpSocket>::connect(const ip_address_t peer_ip, const port_t peer_port,
-                                                                                const std::string& hostname, const std::string& payload,
-                                                                                void* ssl_ctx, const settings& config) noexcept(false)
+    task_returning_expected_void_t generic_engine<Executor, UdpSocket>::connect(const connect_params params) noexcept(false)
     {
-        if constexpr (requires { UdpSocket::create(impl_->exec_, ip_family(peer_ip)); })
-            co_return impl_->connect_setup(UdpSocket::create(impl_->exec_, ip_family(peer_ip)), peer_ip, peer_port, hostname, payload,
-                                           ssl_ctx, config);
+        if constexpr (requires { UdpSocket::create(impl_->exec_, ip_family(params.peer_ip)); })
+            co_return impl_->connect_setup(UdpSocket::create(impl_->exec_, ip_family(params.peer_ip)), params);
         else
-            co_return impl_->connect_setup(UdpSocket::create(impl_->exec_.shared_from_this(), ip_family(peer_ip)), peer_ip, peer_port,
-                                           hostname, payload, ssl_ctx, config);
-    }
-
-    template <typename Executor, typename UdpSocket>
-    task_returning_expected_void_t generic_engine<Executor, UdpSocket>::connect(const ip_address_t peer_ip, const port_t peer_port,
-                                                                                const std::string& hostname,
-                                                                                const std::vector<std::string>& payloads, void* ssl_ctx,
-                                                                                const settings& config) noexcept(false)
-    {
-        if constexpr (requires { UdpSocket::create(impl_->exec_, ip_family(peer_ip)); })
-            co_return impl_->connect_setup(UdpSocket::create(impl_->exec_, ip_family(peer_ip)), peer_ip, peer_port, hostname, payloads,
-                                           ssl_ctx, config);
-        else
-            co_return impl_->connect_setup(UdpSocket::create(impl_->exec_.shared_from_this(), ip_family(peer_ip)), peer_ip, peer_port,
-                                           hostname, payloads, ssl_ctx, config);
+            co_return impl_->connect_setup(UdpSocket::create(impl_->exec_.shared_from_this(), ip_family(params.peer_ip)), params);
     }
 
     template <typename Executor, typename UdpSocket>
@@ -90,4 +85,4 @@ namespace kmx::aio::quic
     {
         co_return co_await impl_->process();
     }
-} // namespace kmx::aio::quic
+}

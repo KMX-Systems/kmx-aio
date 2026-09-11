@@ -1,10 +1,12 @@
+/// @file inc/kmx/aio/sample/tcp/echo_uring/server/manager.hpp
+/// @brief Completion-model TCP echo server sample manager with registered io_uring buffers and live stats.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <kmx/aio/completion/executor.hpp>
     #include <kmx/aio/completion/tcp/listener.hpp>
     #include <kmx/aio/completion/tcp/stream.hpp>
     #include <kmx/logger.hpp>
-    #include <unistd.h>
 
     #include <atomic>
     #include <memory>
@@ -13,6 +15,7 @@
     #include <thread>
     #include <unordered_map>
     #include <vector>
+    #include <unistd.h>
 #endif
 
 namespace kmx::aio::sample::tcp::echo_uring::server
@@ -88,4 +91,4 @@ namespace kmx::aio::sample::tcp::echo_uring::server
         void free_buffer(int index);
     };
 
-} // namespace kmx::aio::sample::tcp::echo_uring::server
+}

@@ -1,15 +1,15 @@
-/// @file aio/stream_concepts.hpp
+/// @file api/kmx/aio/stream_concepts.hpp
 /// @brief Polymorphic stream interfaces for backend-agnostic I/O consumption.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <kmx/aio/error_code.hpp>
+    #include <kmx/aio/task.hpp>
+
     #include <concepts>
     #include <cstddef>
     #include <expected>
     #include <span>
-
-    #include <kmx/aio/error_code.hpp>
-    #include <kmx/aio/task.hpp>
 #endif
 
 namespace kmx::aio
@@ -20,7 +20,8 @@ namespace kmx::aio
     ///          (HTTP, WebSocket, etc.) without knowledge of the underlying backend.
     /// @tparam T The type to check against the stream_reader concept.
     template <typename T>
-    concept stream_reader = requires(T& t, span_char_t buf) {
+    concept stream_reader = requires(T& t, span_char_t buf)
+    {
         { t.read(buf) } -> std::same_as<task_returning_expected_size_t>;
     };
 
@@ -29,7 +30,8 @@ namespace kmx::aio
     ///          this concept can be used as a sink by higher-level protocol encoders.
     /// @tparam T The type to check against the stream_writer concept.
     template <typename T>
-    concept stream_writer = requires(T& t, cspan_char_t buf) {
+    concept stream_writer = requires(T& t, cspan_char_t buf)
+    {
         { t.write(buf) } -> std::same_as<task_returning_expected_size_t>;
     };
 
@@ -38,4 +40,4 @@ namespace kmx::aio
     template <typename T>
     concept stream = stream_reader<T> && stream_writer<T>;
 
-} // namespace kmx::aio
+}

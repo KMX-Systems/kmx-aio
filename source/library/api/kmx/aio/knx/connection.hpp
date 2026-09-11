@@ -1,5 +1,6 @@
-/// @file aio/knx/connection.hpp
+/// @file api/kmx/aio/knx/connection.hpp
 /// @brief KNXnet/IP HPAI and tunnelling connection frame helpers.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// The four exchanges that open, keep and close a KNXnet/IP channel - CONNECT, CONNECTIONSTATE, DISCONNECT
 /// and their responses - together with the host protocol address information (HPAI) they are built from.
@@ -13,11 +14,14 @@
 /// bus, and a device management connection, which is not because nothing it carries reaches the bus. The
 /// decoders here are the only place the two are told apart on the wire.
 /// @reference KNX System Specifications, 03/08/02 "Core", connection management.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
     #ifndef PCH
+        #include <kmx/aio/basic_types.hpp>
+        #include <kmx/aio/knx/frame.hpp>
+        #include <kmx/aio/knx/individual_address.hpp>
+
         #include <array>
         #include <cstdint>
         #include <expected>
@@ -25,10 +29,6 @@
         #include <span>
         #include <system_error>
     #endif
-
-    #include <kmx/aio/basic_types.hpp>
-    #include <kmx/aio/knx/address.hpp>
-    #include <kmx/aio/knx/frame.hpp>
 
 namespace kmx::aio::knx
 {
@@ -127,10 +127,8 @@ namespace kmx::aio::knx
         if (value.endpoint.port != 0u)
             return false;
         for (const auto octet: value.endpoint.address)
-        {
             if (octet != 0u)
                 return false;
-        }
         return true;
     }
 
@@ -140,10 +138,8 @@ namespace kmx::aio::knx
         if (value.endpoint.port != 0u)
             return false;
         for (const auto octet: value.endpoint.address)
-        {
             if (octet != 0u)
                 return false;
-        }
         return true;
     }
 
@@ -292,10 +288,10 @@ namespace kmx::aio::knx
         /// @brief Body size of an IPv6 tunnelling CONNECT_RESPONSE.
         inline constexpr std::size_t ipv6_connect_response_body_size = 26u;
         /// @brief Structure length of the tunnelling connection request and response information blocks.
-        inline constexpr std::uint8_t connection_information_size = 0x04u;
+        inline constexpr std::uint8_t tunnel_information_size = 0x04u;
         /// @brief Structure length of the extended tunnelling connection request information block, which adds the
         ///        requested individual address.
-        inline constexpr std::uint8_t extended_connection_information_size = 0x06u;
+        inline constexpr std::uint8_t extended_tunnel_information_size = 0x06u;
         /// @brief Body size of a tunnelling CONNECT_REQUEST carrying the extended CRI.
         inline constexpr std::size_t extended_connect_request_body_size = connect_request_body_size + 2u;
         /// @brief Structure length of a device management connection information block.
@@ -310,9 +306,9 @@ namespace kmx::aio::knx
         /// @brief Body size of a device management CONNECT_RESPONSE: channel, status, HPAI and a CRD.
         inline constexpr std::size_t management_connect_response_body_size = 2u + hpai_size + management_information_size;
         /// @brief Connection type code of a tunnelling connection.
-        inline constexpr std::uint8_t tunnel_connection_type = 0x04u;
+        inline constexpr std::uint8_t tunnel_type = 0x04u;
         /// @brief Connection type code of a device management connection.
-        inline constexpr std::uint8_t management_connection_type = 0x03u;
+        inline constexpr std::uint8_t management_type = 0x03u;
         /// @brief KNX layer code of a link layer tunnel, the layer ordinary group traffic uses.
         inline constexpr std::uint8_t tunnel_link_layer = 0x02u;
         /// @brief KNX layer code of a raw tunnel.
@@ -335,8 +331,8 @@ namespace kmx::aio::knx
         /// @param dest The destination octets; must be large enough for the encoded frame.
         /// @param request The request to encode.
         /// @return Nothing, or the reason the frame could not be encoded.
-        [[nodiscard]] expected_void_t encode_management_connect_request_packet(
-            span_uint8_t dest, const management_connect_request_frame& request) noexcept;
+        [[nodiscard]] expected_void_t encode_management_connect_request_packet(span_uint8_t dest,
+                                                                               const management_connect_request_frame& request) noexcept;
         /// @brief Decodes a device management CONNECT_REQUEST.
         /// @param packet The received octets, header included.
         /// @return The decoded frame, or the reason the octets could not be read.
@@ -348,8 +344,8 @@ namespace kmx::aio::knx
         /// @param dest The destination octets; must be large enough for the encoded frame.
         /// @param response The response to encode.
         /// @return Nothing, or the reason the frame could not be encoded.
-        [[nodiscard]] expected_void_t encode_management_connect_response_packet(
-            span_uint8_t dest, const management_connect_response_frame& response) noexcept;
+        [[nodiscard]] expected_void_t encode_management_connect_response_packet(span_uint8_t dest,
+                                                                                const management_connect_response_frame& response) noexcept;
         /// @brief Decodes a device management CONNECT_RESPONSE.
         /// @param packet The received octets, header included.
         /// @return The decoded frame, or the reason the octets could not be read.
@@ -360,14 +356,13 @@ namespace kmx::aio::knx
         /// @return The decoded frame, or the reason the octets could not be read.
         /// @note Fails on a request that names a device management connection, which
         ///       @ref decode_management_connect_request_packet reads instead.
-        [[nodiscard]] std::expected<connect_request_frame, std::error_code> decode_connect_request_packet(
-            cspan_uint8_t packet) noexcept;
+        [[nodiscard]] std::expected<connect_request_frame, std::error_code> decode_connect_request_packet(cspan_uint8_t packet) noexcept;
         /// @brief Encodes a tunnelling CONNECT_REQUEST over IPv6.
         /// @param dest The destination octets; must be large enough for the encoded frame.
         /// @param request The request to encode.
         /// @return Nothing, or the reason the frame could not be encoded.
-        [[nodiscard]] expected_void_t encode_ipv6_connect_request_packet(
-            span_uint8_t dest, const ipv6_connect_request_frame& request) noexcept;
+        [[nodiscard]] expected_void_t encode_ipv6_connect_request_packet(span_uint8_t dest,
+                                                                         const ipv6_connect_request_frame& request) noexcept;
         /// @brief Decodes a tunnelling CONNECT_REQUEST over IPv6.
         /// @param packet The received octets, header included.
         /// @return The decoded frame, or the reason the octets could not be read.
@@ -385,14 +380,13 @@ namespace kmx::aio::knx
         /// @return The decoded frame, or the reason the octets could not be read.
         /// @note The assigned address is read as data rather than checked against a fixed value, because
         ///       every interface hands out an address from its own line.
-        [[nodiscard]] std::expected<connect_response_frame, std::error_code> decode_connect_response_packet(
-            cspan_uint8_t packet) noexcept;
+        [[nodiscard]] std::expected<connect_response_frame, std::error_code> decode_connect_response_packet(cspan_uint8_t packet) noexcept;
         /// @brief Encodes a tunnelling CONNECT_RESPONSE over IPv6.
         /// @param dest The destination octets; must be large enough for the encoded frame.
         /// @param response The response to encode.
         /// @return Nothing, or the reason the frame could not be encoded.
-        [[nodiscard]] expected_void_t encode_ipv6_connect_response_packet(
-            span_uint8_t dest, const ipv6_connect_response_frame& response) noexcept;
+        [[nodiscard]] expected_void_t encode_ipv6_connect_response_packet(span_uint8_t dest,
+                                                                          const ipv6_connect_response_frame& response) noexcept;
         /// @brief Decodes a tunnelling CONNECT_RESPONSE over IPv6.
         /// @param packet The received octets, header included.
         /// @return The decoded frame, or the reason the octets could not be read.
@@ -402,8 +396,8 @@ namespace kmx::aio::knx
         /// @param dest The destination octets; must be large enough for the encoded frame.
         /// @param request The request to encode.
         /// @return Nothing, or the reason the frame could not be encoded.
-        [[nodiscard]] expected_void_t encode_connectionstate_request_packet(
-            span_uint8_t dest, const connectionstate_request_frame& request) noexcept;
+        [[nodiscard]] expected_void_t encode_connectionstate_request_packet(span_uint8_t dest,
+                                                                            const connectionstate_request_frame& request) noexcept;
         /// @brief Decodes a CONNECTIONSTATE_REQUEST.
         /// @param packet The received octets, header included.
         /// @return The decoded frame, or the reason the octets could not be read.
@@ -413,8 +407,8 @@ namespace kmx::aio::knx
         /// @param dest The destination octets; must be large enough for the encoded frame.
         /// @param response The response to encode.
         /// @return Nothing, or the reason the frame could not be encoded.
-        [[nodiscard]] expected_void_t encode_connectionstate_response_packet(
-            span_uint8_t dest, const connectionstate_response_frame& response) noexcept;
+        [[nodiscard]] expected_void_t encode_connectionstate_response_packet(span_uint8_t dest,
+                                                                             const connectionstate_response_frame& response) noexcept;
         /// @brief Decodes a CONNECTIONSTATE_RESPONSE.
         /// @param packet The received octets, header included.
         /// @return The decoded frame, or the reason the octets could not be read.
@@ -424,8 +418,7 @@ namespace kmx::aio::knx
         /// @param dest The destination octets; must be large enough for the encoded frame.
         /// @param request The request to encode.
         /// @return Nothing, or the reason the frame could not be encoded.
-        [[nodiscard]] expected_void_t encode_disconnect_request_packet(
-            span_uint8_t dest, const disconnect_request_frame& request) noexcept;
+        [[nodiscard]] expected_void_t encode_disconnect_request_packet(span_uint8_t dest, const disconnect_request_frame& request) noexcept;
         /// @brief Decodes a DISCONNECT_REQUEST.
         /// @param packet The received octets, header included.
         /// @return The decoded frame, or the reason the octets could not be read.
@@ -435,8 +428,8 @@ namespace kmx::aio::knx
         /// @param dest The destination octets; must be large enough for the encoded frame.
         /// @param response The response to encode.
         /// @return Nothing, or the reason the frame could not be encoded.
-        [[nodiscard]] expected_void_t encode_disconnect_response_packet(
-            span_uint8_t dest, const disconnect_response_frame& response) noexcept;
+        [[nodiscard]] expected_void_t encode_disconnect_response_packet(span_uint8_t dest,
+                                                                        const disconnect_response_frame& response) noexcept;
         /// @brief Decodes a DISCONNECT_RESPONSE.
         /// @param packet The received octets, header included.
         /// @return The decoded frame, or the reason the octets could not be read.

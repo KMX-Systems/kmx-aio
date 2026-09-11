@@ -1,8 +1,12 @@
+/// @file src/kmx/aio/modbus/frame.cpp
+/// @brief Modbus TCP MBAP header, request PDU encoders and response and exception PDU decoders.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/modbus/error.hpp>
 #include <kmx/aio/modbus/frame.hpp>
+#ifndef PCH
+    #include <kmx/aio/modbus/error.hpp>
 
-#include <cstring>
+    #include <cstring>
+#endif
 
 namespace kmx::aio::modbus::frame
 {
@@ -37,7 +41,7 @@ namespace kmx::aio::modbus::frame
                     return 0u;
             }
         }
-    } // namespace detail
+    }
 
     // MBAP header
 
@@ -264,4 +268,4 @@ namespace kmx::aio::modbus::frame
         return {};
     }
 
-} // namespace kmx::aio::modbus::frame
+}

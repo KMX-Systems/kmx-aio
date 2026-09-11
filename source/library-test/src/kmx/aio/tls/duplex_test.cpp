@@ -1,4 +1,4 @@
-/// @file aio/tls/duplex_test.cpp
+/// @file src/kmx/aio/tls/duplex_test.cpp
 /// @brief The concurrency contract of tls::basic_stream, exercised over a live session.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 ///
@@ -12,29 +12,30 @@
 /// That is the exact shape that used to crash inside SSL_read: the reader and the writer are resumed
 /// on different scheduler workers and walk into the same ::SSL. A regression here is a segfault or a
 /// truncated transfer, not a quiet wrong answer.
-#include <catch2/catch_test_macros.hpp>
-
-#include <atomic>
-#include <chrono>
-#include <cstddef>
-#include <filesystem>
-#include <memory>
-#include <span>
-#include <string>
-#include <vector>
-
-#include <sys/socket.h>
-
 #if defined(KMX_AIO_FEATURE_READINESS)
-    #include <openssl/ssl.h>
+    #ifndef PCH
+        #include <kmx/aio/file_descriptor.hpp>
+        #include <kmx/aio/readiness/executor.hpp>
+        #include <kmx/aio/readiness/tcp/stream.hpp>
+        #include <kmx/aio/task.hpp>
+        #include <kmx/aio/test/executor_runner.hpp>
+        #include <kmx/aio/test/scoped_runner.hpp>
+        #include <kmx/aio/test/scoped_ssl_ctx.hpp>
+        #include <kmx/aio/tls/stream.hpp>
 
-    #include <kmx/aio/file_descriptor.hpp>
-    #include <kmx/aio/readiness/executor.hpp>
-    #include <kmx/aio/readiness/tcp/stream.hpp>
-    #include <kmx/aio/task.hpp>
-    #include <kmx/aio/test/executor_runner.hpp>
-    #include <kmx/aio/test/tls_certs.hpp>
-    #include <kmx/aio/tls/stream.hpp>
+        #include <catch2/catch_test_macros.hpp>
+        #include <openssl/ssl.h>
+
+        #include <atomic>
+        #include <chrono>
+        #include <cstddef>
+        #include <filesystem>
+        #include <memory>
+        #include <span>
+        #include <string>
+        #include <vector>
+        #include <sys/socket.h>
+    #endif
 
 namespace kmx::aio::test::tls::duplex_test
 {
@@ -45,7 +46,7 @@ namespace kmx::aio::test::tls::duplex_test
         using kmx::aio::test::scoped_runner;
         using kmx::aio::test::wait_for_flag;
 
-        using tls_stream = stream<readiness::tcp::stream>;
+        using session_t = stream<readiness::tcp::stream>;
 
         /// @brief How much the client sends, and expects to get back.
         /// @details Larger than a socket buffer on purpose. A total that fits in the kernel's buffers
@@ -105,7 +106,7 @@ namespace kmx::aio::test::tls::duplex_test
         /// @param server The accepting side of the session.
         /// @param handshaken Set once the handshake completed, so the test can report which step failed.
         /// @param finished Set when the echo loop has ended, however it ended.
-        [[nodiscard]] task<void> echo_side(std::shared_ptr<tls_stream> server, std::atomic_bool& handshaken,
+        [[nodiscard]] task<void> echo_side(std::shared_ptr<session_t> server, std::atomic_bool& handshaken,
                                            std::atomic_bool& finished) noexcept(false)
         {
             server->set_accept_state();
@@ -135,7 +136,7 @@ namespace kmx::aio::test::tls::duplex_test
         /// @param client The connecting side of the session.
         /// @param sent Total bytes handed to the TLS layer.
         /// @param finished Set when the writer has stopped, however it stopped.
-        [[nodiscard]] task<void> writer_side(std::shared_ptr<tls_stream> client, std::atomic_size_t& sent,
+        [[nodiscard]] task<void> writer_side(std::shared_ptr<session_t> client, std::atomic_size_t& sent,
                                              std::atomic_bool& finished) noexcept(false)
         {
             const std::vector<char> payload(chunk_bytes, 'k');
@@ -150,49 +151,54 @@ namespace kmx::aio::test::tls::duplex_test
             finished.store(true, std::memory_order_release);
         }
 
+        /// @brief The connecting side of the session, and the counters and flags it reports through.
+        struct client_side_params
+        {
+            std::shared_ptr<session_t> client {}; ///< The connecting side of the session.
+            readiness::executor& exec;            ///< The executor the writer is spawned into.
+            std::atomic_size_t& sent;             ///< Total bytes the writer handed over.
+            std::atomic_size_t& received;         ///< Total bytes read back.
+            std::atomic_bool& handshaken;         ///< Set once the handshake completed.
+            std::atomic_bool& finished;           ///< Set when the reader has stopped.
+        };
+
         /// @brief Handshakes, starts the writer, and reads the echo back on this coroutine.
         /// @details The writer is spawned rather than awaited, so from here on two coroutines are live
         ///          on one ::SSL - which is the arrangement under test.
-        /// @param client The connecting side of the session.
-        /// @param exec The executor the writer is spawned into.
-        /// @param sent Total bytes the writer handed over.
-        /// @param received Total bytes read back.
-        /// @param handshaken Set once the handshake completed.
-        /// @param finished Set when the reader has stopped.
-        [[nodiscard]] task<void> duplex_side(std::shared_ptr<tls_stream> client, readiness::executor& exec, std::atomic_size_t& sent,
-                                             std::atomic_size_t& received, std::atomic_bool& handshaken,
-                                             std::atomic_bool& finished) noexcept(false)
+        /// @param params The session, the executor, the byte counters and the status flags; taken by value, as the
+        ///               coroutine outlives the caller's temporary.
+        [[nodiscard]] task<void> client_side(const client_side_params params) noexcept(false)
         {
-            client->set_connect_state();
-            if (const auto result = co_await client->handshake(); result)
-                handshaken.store(true, std::memory_order_release);
+            params.client->set_connect_state();
+            if (const auto result = co_await params.client->handshake(); result)
+                params.handshaken.store(true, std::memory_order_release);
             else
             {
-                finished.store(true, std::memory_order_release);
+                params.finished.store(true, std::memory_order_release);
                 co_return;
             }
 
             std::atomic_bool writer_finished {false};
-            exec.spawn(writer_side(client, sent, writer_finished));
+            params.exec.spawn(writer_side(params.client, params.sent, writer_finished));
 
             std::vector<char> buffer(chunk_bytes);
-            while (received.load(std::memory_order_relaxed) < total_bytes)
+            while (params.received.load(std::memory_order_relaxed) < total_bytes)
             {
-                const auto count = co_await client->read(buffer);
+                const auto count = co_await params.client->read(buffer);
                 if (!count || (*count == 0u))
                     break;
 
-                received.fetch_add(*count, std::memory_order_relaxed);
+                params.received.fetch_add(*count, std::memory_order_relaxed);
             }
 
             // The writer holds a reference to writer_finished, which lives in this frame, so this
             // coroutine must outlive it.
             while (!writer_finished.load(std::memory_order_acquire))
-                static_cast<void>(co_await exec.async_timeout(1u));
+                static_cast<void>(co_await params.exec.async_timeout(1u));
 
-            finished.store(true, std::memory_order_release);
+            params.finished.store(true, std::memory_order_release);
         }
-    } // namespace detail
+    }
 
     TEST_CASE("a TLS session carries a read and a write at the same time", "[readiness][tls][stream][duplex][slow]")
     {
@@ -232,11 +238,16 @@ namespace kmx::aio::test::tls::duplex_test
         REQUIRE(exec->register_fd(fds[1]).has_value());
 
         {
-            auto server = std::make_shared<detail::tls_stream>(readiness::tcp::stream {*exec, file_descriptor {fds[0]}}, server_ctx.get());
-            auto client = std::make_shared<detail::tls_stream>(readiness::tcp::stream {*exec, file_descriptor {fds[1]}}, client_ctx.get());
+            auto server = std::make_shared<detail::session_t>(readiness::tcp::stream {*exec, file_descriptor {fds[0]}}, server_ctx.get());
+            auto client = std::make_shared<detail::session_t>(readiness::tcp::stream {*exec, file_descriptor {fds[1]}}, client_ctx.get());
 
             exec->spawn(detail::echo_side(std::move(server), server_handshaken, server_finished));
-            exec->spawn(detail::duplex_side(std::move(client), *exec, sent, received, client_handshaken, client_finished));
+            exec->spawn(detail::client_side({.client = std::move(client),
+                                             .exec = *exec,
+                                             .sent = sent,
+                                             .received = received,
+                                             .handshaken = client_handshaken,
+                                             .finished = client_finished}));
 
             const scoped_runner runner {*exec};
             CHECK(wait_for_flag(client_finished, detail::transfer_deadline));
@@ -250,5 +261,5 @@ namespace kmx::aio::test::tls::duplex_test
         CHECK(sent.load(std::memory_order_relaxed) == detail::total_bytes);
         CHECK(received.load(std::memory_order_relaxed) == detail::total_bytes);
     }
-} // namespace kmx::aio::test::tls::duplex_test
+}
 #endif // KMX_AIO_FEATURE_READINESS

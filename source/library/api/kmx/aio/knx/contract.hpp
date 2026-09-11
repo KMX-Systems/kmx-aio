@@ -1,5 +1,6 @@
-/// @file aio/knx/contract.hpp
+/// @file api/kmx/aio/knx/contract.hpp
 /// @brief Lightweight contract support for protocol invariants.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details
 /// These macros state invariants the surrounding code has already established — a length that a preceding
 /// `if` has just checked, an index the caller cannot have got wrong. They are hardening and documentation,
@@ -8,15 +9,14 @@
 ///
 /// Because they restate what is already guaranteed, they compile out under `NDEBUG` by default. Define
 /// `KMX_AIO_CONTRACTS_ENABLED` to `1` or `0` to force them on or off regardless.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_KNX)
-    #include <source_location>
     #ifndef PCH
         #include <cstdio>
         #include <cstdlib>
         #include <exception>
+        #include <source_location>
         #include <string_view>
     #endif
 
@@ -36,6 +36,7 @@ namespace kmx::aio::knx
                 std::fputs(condition, stderr);
                 std::fputc(' ', stderr);
             }
+
             std::fputs("at ", stderr);
             std::fputs(location.file_name(), stderr);
             std::fputc(':', stderr);

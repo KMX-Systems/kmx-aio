@@ -1,14 +1,18 @@
+/// @file src/kmx/aio/sample/someip/echo_server/manager.cpp
+/// @brief Completion-model SOME/IP echo server run: offers the service and echoes one method request back.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/someip/echo_server/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/someip/error.hpp>
+    #include <kmx/logger.hpp>
 
-#include <chrono>
-#include <cstdint>
-#include <iostream>
-#include <source_location>
-#include <utility>
-#include <vector>
-
-#include <kmx/aio/someip/error.hpp>
-#include <kmx/logger.hpp>
+    #include <chrono>
+    #include <cstdint>
+    #include <iostream>
+    #include <source_location>
+    #include <utility>
+    #include <vector>
+#endif
 
 namespace kmx::aio::sample::someip::echo_server
 {
@@ -34,7 +38,7 @@ namespace kmx::aio::sample::someip::echo_server
         {
             kmx::logger::log(kmx::logger::level::error, std::source_location::current(), "SOME/IP offer_service failed: {}",
                              offer_result.error().message());
-            (void) co_await server_.stop();
+            static_cast<void>(co_await server_.stop());
             exec.stop();
             co_return;
         }
@@ -61,6 +65,7 @@ namespace kmx::aio::sample::someip::echo_server
                                          tick.error().message());
                         break;
                     }
+
                     continue;
                 }
 

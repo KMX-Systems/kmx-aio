@@ -1,30 +1,36 @@
-/// @file kmx/aio/knx/tcp_tunnelling_interop_test.cpp
-/// @brief KNXnet/IP tunnelling over TCP against external peers: calimero-server for the in-tree client, xknx for the
-///        in-tree server.
+/// @file src/kmx/aio/knx/tcp_tunnelling_interop_test.cpp
+/// @brief KNXnet/IP tunnelling over TCP against external peers: calimero-server for the in-tree client, xknx for the in-tree server.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details script/feature/knx/interop/run-tcp-tunnelling-interop.sh starts the peer and passes its port in
 /// KMX_KNX_INTEROP_PORT; without it each case is skipped. Both exchanges are one switch-on each way: a request to 1/2/3
 /// that the server confirms, and - toward an external client - an indication to 1/2/4 in answer.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/knx/tcp_server.hpp>
+    #include <kmx/aio/completion/knx/tcp_transport.hpp>
+    #include <kmx/aio/completion/timer.hpp>
+    #include <kmx/aio/knx/cemi.hpp>
+    #include <kmx/aio/knx/cemi_frame.hpp>
+    #include <kmx/aio/knx/dpt.hpp>
+    #include <kmx/aio/knx/generic_server.hpp>
+    #include <kmx/aio/knx/server.hpp>
+    #include <kmx/aio/knx/telegram.hpp>
+    #include <kmx/aio/knx/tunnelling_client.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/knx/tcp_server.hpp>
-#include <kmx/aio/completion/knx/tcp_transport.hpp>
-#include <kmx/aio/completion/timer.hpp>
-#include <kmx/aio/knx/client.hpp>
-#include <kmx/aio/knx/server.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <array>
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
-#include <cstdint>
-#include <cstdlib>
-#include <mutex>
-#include <netinet/in.h>
-#include <stop_token>
-#include <string>
-#include <thread>
+    #include <array>
+    #include <atomic>
+    #include <chrono>
+    #include <condition_variable>
+    #include <cstdint>
+    #include <cstdlib>
+    #include <mutex>
+    #include <stop_token>
+    #include <string>
+    #include <thread>
+    #include <netinet/in.h>
+#endif
 
 namespace kmx::aio::test::knx::tcp_tunnelling_interop_test
 {
@@ -113,8 +119,11 @@ namespace kmx::aio::test::knx::tcp_tunnelling_interop_test
             const auto value = dpt::encode<1u>(true);
             REQUIRE(value.has_value());
             std::array<std::uint8_t, cemi::max_l_data_size> message {};
-            const auto size = cemi::encode(message, cemi_message_code::l_data_ind, individual_address {1u, 1u, 1u},
-                                           group_address {answer_group}, apci::group_value_write, value->apdu(), l_data_options {});
+            const auto size = cemi::encode(message, {.code = cemi_message_code::l_data_ind,
+                                                     .source = individual_address {1u, 1u, 1u},
+                                                     .destination = group_address {answer_group}.value(),
+                                                     .service = apci::group_value_write,
+                                                     .payload = value->apdu()});
             REQUIRE(size.has_value());
             return byte_buffer_t(message.begin(), message.begin() + static_cast<std::ptrdiff_t>(*size));
         }
@@ -139,9 +148,11 @@ namespace kmx::aio::test::knx::tcp_tunnelling_interop_test
                     outcome.confirmed =
                         (telegram->frame.message_code == cemi_message_code::l_data_con) && (telegram->frame.destination == request_group);
                 }
+
                 outcome.beat = (co_await client.heartbeat()).has_value();
                 outcome.disconnected = (co_await client.disconnect()).has_value();
             }
+
             executor.stop();
         }
 
@@ -168,18 +179,28 @@ namespace kmx::aio::test::knx::tcp_tunnelling_interop_test
             ended = true;
         }
 
-        /// @brief Waits for the exchange to finish and the peer to close its tunnel, then stops the server and the executor.
-        task<void> await_peer(completion::executor& executor, generic_server& server, completion::knx::tcp_server& tcp,
-                              server_outcome& outcome, const std::atomic_bool& serving_ended)
+        /// @brief The loop, the server and its accept loop an exchange with the external peer runs on.
+        struct server_side
         {
-            completion::timer pause {executor};
-            while (!outcome.answered || (server.active_channels() != 0u) || (tcp.connections() != 0u))
+            /// @brief The loop, which the exchange stops once it is over.
+            completion::executor& executor;
+            /// @brief The server the peer tunnels through.
+            generic_server& server;
+            /// @brief The accept loop serving the server.
+            completion::knx::tcp_server& tcp;
+        };
+
+        /// @brief Waits for the exchange to finish and the peer to close its tunnel, then stops the server and the executor.
+        task<void> await_peer(const server_side side, server_outcome& outcome, const std::atomic_bool& serving_ended)
+        {
+            completion::timer pause {side.executor};
+            while (!outcome.answered || (side.server.active_channels() != 0u) || (side.tcp.connections() != 0u))
                 static_cast<void>(co_await pause.wait(std::chrono::milliseconds {20}));
             outcome.released = true;
-            tcp.stop();
+            side.tcp.stop();
             while (!serving_ended)
                 static_cast<void>(co_await pause.wait(std::chrono::milliseconds {5}));
-            executor.stop();
+            side.executor.stop();
         }
     }
 
@@ -226,7 +247,7 @@ namespace kmx::aio::test::knx::tcp_tunnelling_interop_test
         REQUIRE(tcp.listen().has_value());
         std::atomic_bool serving_ended {};
         executor.spawn(detail::run_server(tcp, serving_ended));
-        executor.spawn(detail::await_peer(executor, server, tcp, outcome, serving_ended));
+        executor.spawn(detail::await_peer({executor, server, tcp}, outcome, serving_ended));
         detail::run_bounded(executor, detail::time_limit());
 
         INFO("channels=" << static_cast<int>(server.active_channels()) << " connections=" << tcp.connections());

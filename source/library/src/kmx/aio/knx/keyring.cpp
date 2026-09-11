@@ -1,14 +1,28 @@
+/// @file src/kmx/aio/knx/keyring.cpp
+/// @brief ETS keyring (.knxkeys) loader and the credential, routing and server configurations derived from it.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/knx/keyring.hpp>
+#ifndef PCH
+    #include <kmx/aio/basic_types.hpp>
+    #include <kmx/aio/ipv4.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/group_address.hpp>
+    #include <kmx/aio/knx/secure/common.hpp>
+    #include <kmx/aio/knx/secure/detail/ccm.hpp>
+    #include <kmx/aio/knx/secure/detail/crypto.hpp>
+    #include <kmx/aio/knx/secure/detail/keyring_format.hpp>
+    #include <kmx/aio/knx/secure/detail/xml_reader.hpp>
+    #include <kmx/aio/knx/secure/secret_string.hpp>
 
-#include <kmx/aio/knx/error.hpp>
-#include <kmx/aio/knx/secure/common.hpp>
-#include <kmx/aio/knx/secure/detail/keyring_format.hpp>
-
-#include <algorithm>
-#include <charconv>
-#include <span>
-#include <utility>
+    #include <algorithm>
+    #include <charconv>
+    #include <cstdint>
+    #include <optional>
+    #include <span>
+    #include <string>
+    #include <utility>
+    #include <vector>
+#endif
 
 namespace kmx::aio::knx::keyring
 {
@@ -54,8 +68,7 @@ namespace kmx::aio::knx::keyring
 
     /// @brief Moves a read value into a list, or reports why it could not be read.
     template <typename Value>
-    [[nodiscard]] static expected_void_t append(std::vector<Value>& destination,
-                                                std::expected<Value, std::error_code>&& read) noexcept(false)
+    [[nodiscard]] static expected_void_t append(std::vector<Value>& destination, expected_t<Value>&& read) noexcept(false)
     {
         if (!read.has_value())
             return std::unexpected(read.error());
@@ -107,6 +120,7 @@ namespace kmx::aio::knx::keyring
                 return malformed();
             value.latency_ms = *parsed;
         }
+
         return value;
     }
 
@@ -138,12 +152,14 @@ namespace kmx::aio::knx::keyring
                 return malformed();
             value.host = *host;
         }
+
         if (const auto* const user = find_attribute(event, "UserID"); user != nullptr)
         {
             value.user_id = parse_unsigned<std::uint8_t>(*user, 127u);
             if (!value.user_id.has_value())
                 return malformed();
         }
+
         return {};
     }
 
@@ -193,6 +209,7 @@ namespace kmx::aio::knx::keyring
                 return malformed();
             value.senders.push_back(*sender);
         }
+
         return value;
     }
 
@@ -231,6 +248,7 @@ namespace kmx::aio::knx::keyring
                 return malformed();
             value.sequence_number = *parsed;
         }
+
         return value;
     }
 
@@ -246,6 +264,7 @@ namespace kmx::aio::knx::keyring
             value.backbone_entry = std::move(*read);
             return {};
         }
+
         if ((path.size() == 2u) && (path[1u] == "Interface"))
             return append(value.interfaces, read_interface(event, context));
         if ((path.size() == 3u) && (path[1u] == "Interface") && (path[2u] == "Group"))
@@ -268,10 +287,12 @@ namespace kmx::aio::knx::keyring
                 path.pop_back();
                 continue;
             }
+
             path.push_back(event.name);
             if (const auto read = read_element(value, path, event, context); !read.has_value())
                 return std::unexpected(read.error());
         }
+
         return value;
     }
 
@@ -314,24 +335,6 @@ namespace kmx::aio::knx::keyring
         value->created_by = (created_by == nullptr) ? std::string {} : *created_by;
         value->created = *created;
         return value;
-    }
-
-    const interface_entry* document::find_interface(const individual_address address) const noexcept
-    {
-        const auto found = std::ranges::find(interfaces, address, &interface_entry::address);
-        return (found == interfaces.end()) ? nullptr : &*found;
-    }
-
-    const device* document::find_device(const individual_address address) const noexcept
-    {
-        const auto found = std::ranges::find(devices, address, &device::address);
-        return (found == devices.end()) ? nullptr : &*found;
-    }
-
-    const group_key* document::find_group_key(const group_address address) const noexcept
-    {
-        const auto found = std::ranges::find(group_keys, address, &group_key::address);
-        return (found == group_keys.end()) ? nullptr : &*found;
     }
 
     [[nodiscard]] static std::unexpected<std::error_code> refuse(const error reason) noexcept
@@ -388,36 +391,38 @@ namespace kmx::aio::knx::keyring
     }
 
     /// @brief Returns every tunnelling slot on @p host that carries what a secure tunnel needs, in document order.
-    [[nodiscard]] static std::vector<const interface_entry*> hosted_tunnels(const document& value, const individual_address host) noexcept(false)
+    [[nodiscard]] static std::vector<const interface_entry*> hosted_tunnels(const document& value,
+                                                                            const individual_address host) noexcept(false)
     {
         std::vector<const interface_entry*> hosted {};
         for (const auto& tunnel: value.interfaces)
-        {
             if (tunnel_credentials_present(&tunnel) && tunnel.host.has_value() && (*tunnel.host == host))
                 hosted.push_back(&tunnel);
-        }
         return hosted;
     }
 
     /// @brief Adds a tunnelling slot to the server's users: a new user, or one more tunnel address of a user it has.
-    [[nodiscard]] static expected_void_t add_tunnel(secure::server_configuration& configuration, const std::span<const interface_entry* const> hosted,
+    [[nodiscard]] static expected_void_t add_tunnel(secure::server_configuration& configuration,
+                                                    const std::span<const interface_entry* const> hosted,
                                                     const interface_entry& tunnel) noexcept(false)
     {
         const auto user = std::ranges::find(configuration.users, *tunnel.user_id, &secure::tunnelling_user::user_id);
         if (user != configuration.users.end())
         {
             // One user id is one password: a second slot under it has to carry the same one.
-            const auto first = std::ranges::find_if(hosted, [&tunnel](const interface_entry* const other) noexcept { return other->user_id == tunnel.user_id; });
+            const auto first = std::ranges::find_if(hosted, [&tunnel](const interface_entry* const other) noexcept
+                                                    { return other->user_id == tunnel.user_id; });
             if ((*first)->user_password.view() != tunnel.user_password.view())
                 return refuse(error::invalid_configuration);
             user->tunnel_addresses.push_back(tunnel.address);
             return {};
         }
+
         auto password_key = secure::derive_user_password_key(tunnel.user_password.view());
         if (!password_key.has_value())
             return std::unexpected(password_key.error());
-        configuration.users.push_back(
-            secure::tunnelling_user {.user_id = *tunnel.user_id, .password_key = std::move(*password_key), .tunnel_addresses = {tunnel.address}});
+        configuration.users.push_back(secure::tunnelling_user {
+            .user_id = *tunnel.user_id, .password_key = std::move(*password_key), .tunnel_addresses = {tunnel.address}});
         return {};
     }
 
@@ -442,10 +447,8 @@ namespace kmx::aio::knx::keyring
         configuration.device_authentication_code = std::move(*derived);
         configuration.serial_number = serial_number;
         for (const auto* const tunnel: hosted)
-        {
             if (const auto added = add_tunnel(configuration, hosted, *tunnel); !added.has_value())
                 return std::unexpected(added.error());
-        }
         return configuration;
     }
 }

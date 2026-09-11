@@ -1,22 +1,24 @@
-/// @file kmx/aio/knx/secure/session_test.cpp
+/// @file src/kmx/aio/knx/secure/session_test.cpp
 /// @brief The KNX IP Secure session services - codecs, handshake MACs and the session key - against xknx's vectors.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details The fixture is xknx's: a fixed client key pair, the server's public key, session id 1, the device
 /// authentication code "trustme" and the user password "secret". Every MAC, key and wrapper below is an octet string
 /// xknx computes for the same inputs.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
-#include <kmx/aio/knx/datagram.hpp>
-#include <kmx/aio/knx/error.hpp>
 #include <kmx/aio/knx/secure/session.hpp>
-#include <kmx/aio/knx/secure/wrapper.hpp>
-#include <kmx/aio/test/knx/secure_vectors.hpp>
+#ifndef PCH
+    #include <kmx/aio/knx/datagram.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/knx/secure/wrapper.hpp>
+    #include <kmx/aio/test/knx/secure_vectors.hpp>
 
-#include <algorithm>
-#include <array>
-#include <cstdint>
-#include <span>
-#include <variant>
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <algorithm>
+    #include <array>
+    #include <cstdint>
+    #include <span>
+    #include <variant>
+#endif
 
 namespace kmx::aio::test::knx::secure::session_test
 {
@@ -42,7 +44,7 @@ namespace kmx::aio::test::knx::secure::session_test
 
         /// @brief Returns the error a result carries, or no error.
         template <typename Value>
-        [[nodiscard]] std::error_code error_of(const std::expected<Value, std::error_code>& result) noexcept
+        [[nodiscard]] std::error_code error_of(const expected_t<Value>& result) noexcept
         {
             return result.has_value() ? std::error_code {} : result.error();
         }
@@ -161,7 +163,7 @@ namespace kmx::aio::test::knx::secure::session_test
         const auto server_wire = sv::hex("06 10 09 50 00 2e 00 01 00 00 00 00 00 00 00 fa aa aa aa aa af fe"
                                          "26 15 6d b5 c7 49 88 8f"
                                          "a3 73 c3 e0 b4 bd e4 49 7c 39 5e 4b 1c 2f 46 a1");
-        const auto wrapper = ks::decode_secure_wrapper_packet(server_wire);
+        const auto wrapper = ks::decode_wrapper_packet(server_wire);
         REQUIRE(wrapper.has_value());
         std::array<std::uint8_t, kn::frame::max_datagram_size> opened {};
         const auto opened_size = ks::open_wrapper(opened, *session_key, *wrapper);

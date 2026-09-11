@@ -120,20 +120,23 @@ kmx-aio-core
 ├── kmx-aio-someip
 ├── kmx-aio-opcua
 ├── kmx-aio-readiness
-│   └── kmx-aio-avb
+│   └── kmx-aio-avb (also on kmx-aio-completion)
 └── kmx-aio-completion
+    ├── kmx-aio-avb (also on kmx-aio-readiness)
     ├── kmx-aio-spdk
     └── kmx-aio-xdp
 ```
 
 Current implementation notes:
 
-- `kmx-aio-avb` depends on `kmx-aio-readiness` because readiness-specific AVB instantiations live there.
-- `kmx-aio-quic` depends on `kmx-aio-core` alone and carries one translation unit,
-  `src/kmx/aio/quic/transport.cpp`. The per-model explicit instantiations of the engine live with their
-  model: `src/kmx/aio/quic/engine.cpp` plus `base_engine.cpp` compile into `kmx-aio-readiness`, and
-  `src/kmx/aio/completion/quic/**` plus `base_engine.cpp` into `kmx-aio-completion`, each gated on
-  `project.enable_quic`.
+- `kmx-aio-avb` depends on `kmx-aio-readiness` and `kmx-aio-completion`: `src/kmx/aio/avb/generic_eth_socket.cpp`,
+  `gptp/generic_clock.cpp` and `srp/generic_client.cpp` instantiate the generic AVB components for both execution
+  models, and `readiness/avb/*` and `completion/avb/*` only alias them.
+- `kmx-aio-quic` depends on `kmx-aio-core` alone and carries the transport's translation units,
+  `src/kmx/aio/quic/{basic_endpoint,byte_buffer,stream,transport}.cpp`. The per-model explicit instantiations of the
+  engine live with their model: `src/kmx/aio/quic/generic_engine.cpp` plus `base_engine.cpp` and
+  `primary_base_impl.cpp` compile into `kmx-aio-readiness`, and `src/kmx/aio/completion/quic/**` plus
+  `base_engine.cpp` and `primary_base_impl.cpp` into `kmx-aio-completion`, each gated on `project.enable_quic`.
 - `kmx-aio-http3` is a codec-only artifact over `kmx-aio-core`, built when `project.enable_http3` and
   `project.enable_quic` are both on.
 - `kmx-aio-someip` is a standalone feature artifact defined by `source/library/prj/someip.qbs`.

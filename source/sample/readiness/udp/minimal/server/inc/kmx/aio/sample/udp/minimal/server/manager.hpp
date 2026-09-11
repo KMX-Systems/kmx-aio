@@ -1,12 +1,15 @@
+/// @file inc/kmx/aio/sample/udp/minimal/server/manager.hpp
+/// @brief Readiness-model minimal UDP server sample manager: one endpoint that echoes datagrams with an ECHO prefix.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
     #include <kmx/aio/readiness/executor.hpp>
     #include <kmx/aio/task.hpp>
     #include <kmx/logger.hpp>
-    #include <unistd.h>
 
     #include <atomic>
     #include <memory>
+    #include <unistd.h>
 #endif
 
 namespace kmx::aio::sample::udp::minimal::server
@@ -36,7 +39,7 @@ namespace kmx::aio::sample::udp::minimal::server
     public:
         explicit manager(config config = {}): config_(std::move(config)) {}
 
-        const metric_data& metrics() const noexcept { return metrics_; }
+        [[nodiscard]] const metric_data& metrics() const noexcept { return metrics_; }
 
         /// @brief Run the server
         [[nodiscard]] bool run() noexcept(false);
@@ -58,4 +61,4 @@ namespace kmx::aio::sample::udp::minimal::server
         static inline std::atomic<readiness::executor*> g_executor_ptr {};
     };
 
-} // namespace kmx::aio::sample::udp::minimal::server
+}

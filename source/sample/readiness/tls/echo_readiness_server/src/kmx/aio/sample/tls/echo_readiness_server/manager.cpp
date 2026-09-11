@@ -1,11 +1,17 @@
-#include <kmx/aio/readiness/tcp/listener.hpp>
+/// @file src/kmx/aio/sample/tls/echo_readiness_server/manager.cpp
+/// @brief Readiness-model TLS echo server: loads the certificate, handshakes each accepted client and echoes its data.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/tls/echo_readiness_server/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/readiness/tcp/listener.hpp>
 
-#include <csignal>
-#include <format>
-#include <iostream>
-#include <openssl/ssl.h>
-#include <span>
+    #include <openssl/ssl.h>
+
+    #include <csignal>
+    #include <format>
+    #include <iostream>
+    #include <span>
+#endif
 
 namespace kmx::aio::sample::tls::echo_readiness_server
 {

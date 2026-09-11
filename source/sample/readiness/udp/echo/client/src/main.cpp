@@ -1,7 +1,13 @@
-#include <exception>
-#include <kmx/aio/sample/udp/echo/client/manager.hpp>
-#include <kmx/logger.hpp>
-#include <source_location>
+/// @file src/main.cpp
+/// @brief Entry point of the readiness-model UDP echo client sample: runs the manager with default settings.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
+#ifndef PCH
+    #include <kmx/aio/sample/udp/echo/client/manager.hpp>
+    #include <kmx/logger.hpp>
+
+    #include <exception>
+    #include <source_location>
+#endif
 
 int main() noexcept
 {

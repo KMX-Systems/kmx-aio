@@ -1,104 +1,33 @@
-/// @file aio/gpu/executor.cpp
+/// @file src/kmx/aio/gpu/executor.cpp
 /// @brief GPU completion-model executor implementation.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <kmx/aio/allocator/slab.hpp>
-#include <kmx/aio/gpu/event.hpp>
 #include <kmx/aio/gpu/executor.hpp>
-#include <kmx/aio/exception.hpp>
-#include <kmx/aio/gpu/stream.hpp>
+#ifndef PCH
+    #include <kmx/aio/allocator/slab.hpp>
+    #include <kmx/aio/gpu/detail/cuda_category.hpp>
+    #include <kmx/aio/gpu/detail/current_executor.hpp>
+    #include <kmx/aio/gpu/event.hpp>
+    #include <kmx/aio/system_error.hpp>
 
-#include <algorithm>
-#include <condition_variable>
-#include <deque>
-#include <mutex>
-#include <pthread.h>
-#include <queue>
-#include <stop_token>
-#include <string>
-#include <system_error>
-#include <thread>
-#include <utility>
-#include <vector>
+    #include <algorithm>
+    #include <atomic>
+    #include <condition_variable>
+    #include <deque>
+    #include <mutex>
+    #include <queue>
+    #include <stop_token>
+    #include <string>
+    #include <system_error>
+    #include <thread>
+    #include <type_traits>
+    #include <utility>
+    #include <vector>
+    #include <pthread.h>
+    #include <sched.h>
+#endif
 
 namespace kmx::aio::gpu
 {
-    namespace internal
-    {
-        thread_local executor* tls_current_gpu_executor {};
-    } // namespace internal
-
-/// CUDA Error Category (Conditional)
-#if defined(KMX_AIO_FEATURE_CUDA)
-    class cuda_error_category: public std::error_category
-    {
-    public:
-        const char* name() const noexcept override { return "cuda"; }
-
-        std::string message(int ev) const override
-        {
-            switch (static_cast<::cudaError_t>(ev))
-            {
-                case cudaSuccess:
-                    return "CUDA operation succeeded";
-                case cudaErrorMemoryAllocation:
-                    return "CUDA out of memory";
-                case cudaErrorInitializationError:
-                    return "CUDA initialization failed";
-                case cudaErrorNotSupported:
-                    return "CUDA operation not supported";
-                case cudaErrorNotReady:
-                    return "CUDA resource not ready";
-                default:
-                    return "CUDA error code " + std::to_string(ev);
-            }
-        }
-    };
-
-    static const cuda_error_category cuda_category_instance;
-
-    /// @brief Returns the CUDA error category for use in std::system_error.
-    inline const std::error_category& cuda_category() noexcept
-    {
-        return cuda_category_instance;
-    }
-#endif
-
-    /// Statistics Implementation
-
-    void statistics::reset() noexcept
-    {
-        total_events_created.store(0u, std::memory_order_relaxed);
-        total_events_completed.store(0u, std::memory_order_relaxed);
-        total_tasks_spawned.store(0u, std::memory_order_relaxed);
-        total_tasks_completed.store(0u, std::memory_order_relaxed);
-        error_count.store(0u, std::memory_order_relaxed);
-        poll_timeout_count.store(0u, std::memory_order_relaxed);
-    }
-
-    /// Executor Implementation
-
-    /// Task Queue (Pending Coroutines)
-
-    class task_queue
-    {
-    public:
-        void enqueue(coroutine_handle_t h) noexcept
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            pending_.push_back(h);
-        }
-
-        std::vector<coroutine_handle_t> drain() noexcept
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            return std::exchange(pending_, {});
-        }
-
-    private:
-        std::mutex mutex_;
-        std::vector<coroutine_handle_t> pending_;
-    };
-
     /// Executor Implementation
 
     executor::executor(const executor_config& config) noexcept(false): config_(config), stats_()
@@ -130,13 +59,9 @@ namespace kmx::aio::gpu
 
         // Drive progress inline when no dedicated run() loop is active.
         if (!running_.load(std::memory_order_acquire))
-        {
             while (active_work_.load(std::memory_order_acquire) > 0u)
-            {
                 if (!poll_events())
                     std::this_thread::yield();
-            }
-        }
     }
 
     void executor::run(std::stop_token stop_token) noexcept(false)
@@ -210,15 +135,15 @@ namespace kmx::aio::gpu
         // Set the active GPU device for this executor.
         const auto ret_set = ::cudaSetDevice(static_cast<int>(config_.gpu_device));
         if (ret_set != cudaSuccess)
-            throw system_error(static_cast<int>(ret_set), cuda_category(),
-                                "cudaSetDevice failed for device " + std::to_string(config_.gpu_device));
+            throw system_error(static_cast<int>(ret_set), detail::cuda_category(),
+                               "cudaSetDevice failed for device " + std::to_string(config_.gpu_device));
 
         // Verify device is usable by querying basic properties.
         int device = -1;
         const auto ret_get = ::cudaGetDevice(&device);
         if ((ret_get != cudaSuccess) || (device != static_cast<int>(config_.gpu_device)))
-            throw system_error(static_cast<int>(ret_get), cuda_category(),
-                                "GPU device " + std::to_string(config_.gpu_device) + " verification failed");
+            throw system_error(static_cast<int>(ret_get), detail::cuda_category(),
+                               "GPU device " + std::to_string(config_.gpu_device) + " verification failed");
     }
 #else
     void executor::set_gpu_device() noexcept(false)
@@ -229,10 +154,10 @@ namespace kmx::aio::gpu
 
     void executor::resume_on_executor(const coroutine_handle_t handle) noexcept
     {
-        auto* const previous = internal::tls_current_gpu_executor;
-        internal::tls_current_gpu_executor = this;
+        auto* const previous = detail::current_executor;
+        detail::current_executor = this;
         handle.resume();
-        internal::tls_current_gpu_executor = previous;
+        detail::current_executor = previous;
     }
 
     bool executor::poll_events() noexcept
@@ -247,13 +172,11 @@ namespace kmx::aio::gpu
         }
 
         for (const auto handle: pending)
-        {
             if (handle)
             {
                 resume_on_executor(handle);
                 work_done = true;
             }
-        }
 
         // 2. Collect the events that have fired and retire them, then resume their coroutines with the
         //    lock released.
@@ -289,7 +212,7 @@ namespace kmx::aio::gpu
                     if (ret == cudaSuccess)
                         ready = true;
                     else if (ret != cudaErrorNotReady)
-                        throw system_error(static_cast<int>(ret), cuda_category(), "cudaEventQuery failed");
+                        throw system_error(static_cast<int>(ret), detail::cuda_category(), "cudaEventQuery failed");
 #else
                     ready = true;
 #endif
@@ -340,7 +263,7 @@ namespace kmx::aio::gpu
     {
         // Process pending GPU events (called from finalize to drain remaining work).
         const bool had_work = poll_events();
-        (void) had_work;
+        static_cast<void>(had_work);
     }
 
     void executor::finalize() noexcept
@@ -370,187 +293,6 @@ namespace kmx::aio::gpu
 #endif
     }
 
-    /// Stream Implementation
-
-    stream::stream() noexcept(false)
-    {
-#if defined(KMX_AIO_FEATURE_CUDA)
-        ::cudaStream_t s = nullptr;
-        const auto ret = ::cudaStreamCreate(&s);
-        if (ret != cudaSuccess)
-            throw system_error(static_cast<int>(ret), cuda_category(), "cudaStreamCreate failed");
-        handle_ = s;
-#else
-        handle_ = reinterpret_cast<void*>(0xDEADBEEF); // Mock handle (distinctive pattern)
-#endif
-    }
-
-    stream::~stream() noexcept
-    {
-        destroy();
-    }
-
-    stream::stream(stream&& other) noexcept: handle_(std::exchange(other.handle_, nullptr))
-    {
-    }
-
-    stream& stream::operator=(stream&& other) noexcept
-    {
-        if (this != &other)
-        {
-            destroy();
-            handle_ = std::exchange(other.handle_, nullptr);
-        }
-
-        return *this;
-    }
-
-    void stream::synchronize() noexcept(false)
-    {
-#if defined(KMX_AIO_FEATURE_CUDA)
-        if (handle_ == nullptr)
-            throw system_error(static_cast<int>(std::errc::invalid_argument), std::generic_category(), "stream handle is null");
-
-        const auto ret = ::cudaStreamSynchronize(static_cast<::cudaStream_t>(handle_));
-        if (ret != cudaSuccess)
-            throw system_error(static_cast<int>(ret), cuda_category(), "cudaStreamSynchronize failed");
-#endif
-    }
-
-    event stream::create_event() noexcept(false)
-    {
-        event e;
-#if defined(KMX_AIO_FEATURE_CUDA)
-        if (handle_ == nullptr)
-            throw system_error(static_cast<int>(std::errc::invalid_argument), std::generic_category(), "stream handle is null");
-        const auto ret_record = ::cudaEventRecord(static_cast<::cudaEvent_t>(e.handle_), static_cast<::cudaStream_t>(handle_));
-        if (ret_record != cudaSuccess)
-            throw system_error(static_cast<int>(ret_record), cuda_category(), "cudaEventRecord failed");
-#else
-        e.handle_ = reinterpret_cast<void*>(0xCAFEBABE); // Mock handle (distinctive pattern)
-#endif
-        return e;
-    }
-
-    void stream::destroy() noexcept
-    {
-        if (handle_ == nullptr)
-            return;
-
-#if defined(KMX_AIO_FEATURE_CUDA)
-        ::cudaStreamDestroy(static_cast<::cudaStream_t>(handle_));
-
-#endif
-
-        handle_ = nullptr;
-    }
-
-    /// Event Implementation
-
-    event::event() noexcept(false)
-    {
-#if defined(KMX_AIO_FEATURE_CUDA)
-        ::cudaEvent_t e = nullptr;
-        const auto ret = ::cudaEventCreate(&e);
-        if (ret != cudaSuccess)
-            throw system_error(static_cast<int>(ret), std::generic_category(), "cudaEventCreate failed");
-        handle_ = e;
-#else
-        handle_ = reinterpret_cast<void*>(1); // Mock handle
-#endif
-    }
-
-    event::~event() noexcept
-    {
-        destroy();
-    }
-
-    event::event(event&& other) noexcept: handle_(std::exchange(other.handle_, nullptr))
-    {
-    }
-
-    event& event::operator=(event&& other) noexcept
-    {
-        if (this != &other)
-        {
-            destroy();
-            handle_ = std::exchange(other.handle_, nullptr);
-        }
-
-        return *this;
-    }
-
-    event::awaiter event::operator co_await() noexcept
-    {
-        return awaiter {*this};
-    }
-
-    bool event::is_ready() const noexcept(false)
-    {
-#if defined(KMX_AIO_FEATURE_CUDA)
-        if (handle_ == nullptr)
-            throw system_error(static_cast<int>(std::errc::invalid_argument), std::generic_category(), "event handle is null");
-
-        const auto ret = ::cudaEventQuery(static_cast<::cudaEvent_t>(handle_));
-        if (ret == cudaSuccess)
-            return true;
-        if (ret == cudaErrorNotReady)
-            return false;
-
-        throw system_error(static_cast<int>(ret), cuda_category(), "cudaEventQuery failed");
-#else
-        return true; // Mock: always ready
-#endif
-    }
-
-    bool event::awaiter::await_ready() const noexcept
-    {
-        // Poll without throwing.
-#if defined(KMX_AIO_FEATURE_CUDA)
-        const auto ret = ::cudaEventQuery(static_cast<::cudaEvent_t>(event_.handle_));
-        return ret == cudaSuccess;
-#else
-        return true; // Mock
-#endif
-    }
-
-    void event::awaiter::await_suspend(coroutine_handle_t h) noexcept
-    {
-        auto* const exec = internal::tls_current_gpu_executor;
-        if (exec == nullptr)
-        {
-#if defined(KMX_AIO_FEATURE_CUDA)
-            while (true)
-            {
-                const auto ret = ::cudaEventQuery(static_cast<::cudaEvent_t>(event_.handle_));
-                if (ret == cudaSuccess)
-                    break;
-
-                if (ret != cudaErrorNotReady)
-                    break;
-
-                std::this_thread::yield();
-            }
-#endif
-            h.resume();
-            return;
-        }
-
-        exec->register_waiting_coroutine(event_.handle_, h);
-    }
-
-    void event::destroy() noexcept
-    {
-        if (handle_ == nullptr)
-            return;
-
-#if defined(KMX_AIO_FEATURE_CUDA)
-        ::cudaEventDestroy(static_cast<::cudaEvent_t>(handle_));
-#endif
-
-        handle_ = nullptr;
-    }
-
     template <typename T>
     executor::detached_task_wrapper executor::execute_task(task<T> t, std::shared_ptr<executor> self) noexcept
     {
@@ -559,7 +301,7 @@ namespace kmx::aio::gpu
             if constexpr (std::is_void_v<T>)
                 co_await t;
             else
-                (void) co_await t;
+                static_cast<void>(co_await t);
         }
         catch (...)
         {
@@ -578,7 +320,7 @@ namespace kmx::aio::gpu
         }
     }
 
-} // namespace kmx::aio::gpu
+}
 
 /// Explicit template instantiation for spawn()
 namespace kmx::aio::gpu
@@ -587,4 +329,4 @@ namespace kmx::aio::gpu
     template void executor::spawn(task<int> coro) noexcept(false);
     template executor::detached_task_wrapper executor::execute_task(task<void> t, std::shared_ptr<executor> self) noexcept;
     template executor::detached_task_wrapper executor::execute_task(task<int> t, std::shared_ptr<executor> self) noexcept;
-} // namespace kmx::aio::gpu
+}

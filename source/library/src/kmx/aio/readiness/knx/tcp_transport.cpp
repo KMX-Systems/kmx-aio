@@ -1,17 +1,18 @@
-/// @file kmx/aio/readiness/knx/tcp_transport.cpp
+/// @file src/kmx/aio/readiness/knx/tcp_transport.cpp
 /// @brief The compiled body of the epoll KNX TCP transport.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/readiness/knx/tcp_transport.hpp>
+#ifndef PCH
+    #include <kmx/aio/error_code.hpp>
+    #include <kmx/aio/knx/error.hpp>
+    #include <kmx/aio/readiness/tcp/connect.hpp>
 
-#include <kmx/aio/error_code.hpp>
-#include <kmx/aio/knx/error.hpp>
-#include <kmx/aio/readiness/tcp/connect.hpp>
-
-#include <cerrno>
-#include <chrono>
-#include <cstring>
-#include <system_error>
-#include <utility>
+    #include <cerrno>
+    #include <chrono>
+    #include <cstring>
+    #include <system_error>
+    #include <utility>
+#endif
 
 namespace kmx::aio::readiness::knx
 {
@@ -72,6 +73,7 @@ namespace kmx::aio::readiness::knx
                 co_return std::unexpected(connected.error());
             co_return refuse(kn::error::connection_failed);
         }
+
         connection_ = std::move(*connected);
         reassembler_.reset();
         co_return expected_void_t {};
@@ -117,6 +119,7 @@ namespace kmx::aio::readiness::knx
                 reassembler_.commit(static_cast<std::size_t>(received));
                 co_return expected_void_t {};
             }
+
             // An end in the middle of a frame truncates it; an end between frames is the peer closing the connection.
             if (received == 0)
                 co_return refuse(reassembler_.partial() ? kn::error::malformed_frame : kn::error::shutdown);
@@ -180,6 +183,7 @@ namespace kmx::aio::readiness::knx
                      !waited)
                 co_return std::unexpected(waited.error());
         }
+
         co_return payload.size();
     }
 

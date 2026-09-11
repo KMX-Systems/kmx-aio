@@ -1,14 +1,15 @@
-/// @file aio/error_code_test.cpp
+/// @file src/kmx/aio/error_code_test.cpp
 /// @brief Unit tests for the error_code vocabulary and its errno / std::error_code mappings.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
-
 #include <kmx/aio/error_code.hpp>
+#ifndef PCH
+    #include <catch2/catch_test_macros.hpp>
 
-#include <cerrno>
-#include <set>
-#include <string_view>
-#include <vector>
+    #include <cerrno>
+    #include <set>
+    #include <string_view>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::error_code_test::detail
 {
@@ -49,7 +50,7 @@ namespace kmx::aio::test::error_code_test::detail
         error_code::internal_error,
         error_code::unknown,
     };
-} // namespace kmx::aio::test::error_code_test::detail
+}
 
 namespace kmx::aio::test::error_code_test
 {
@@ -230,4 +231,4 @@ namespace kmx::aio::test::error_code_test
             CHECK(to_std_error_code(from_errno(err)) == expected);
         }
     }
-} // namespace kmx::aio::test::error_code_test
+}

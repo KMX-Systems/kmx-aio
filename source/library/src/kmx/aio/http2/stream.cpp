@@ -1,28 +1,40 @@
+/// @file src/kmx/aio/http2/stream.cpp
+/// @brief HTTP/2 stream state machine transitions on sent and received frames (RFC 9113 section 5.1).
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/http2/stream.hpp>
 
 namespace kmx::aio::http2
 {
 
+    /// @brief A frame crossing an idle stream, and the states each outcome leads to in this direction.
+    struct after_idle_params
+    {
+        /// @brief The frame's type.
+        frame_type type {};
+        /// @brief Whether the frame carried the END_STREAM flag.
+        bool end_stream {};
+        /// @brief The state to stay in when the frame moves nothing.
+        stream_state current {};
+        /// @brief The half-closed state this direction reaches when the headers ended the stream.
+        stream_state half_closed {};
+        /// @brief The reserved state this direction reaches on a PUSH_PROMISE.
+        stream_state reserved {};
+    };
+
     /// @brief The state an idle stream moves to when a frame crosses it.
-    /// @param type The frame's type.
-    /// @param end_stream Whether the frame carried the END_STREAM flag.
-    /// @param current The state to stay in when the frame moves nothing.
-    /// @param half_closed The half-closed state this direction reaches when the headers ended the stream.
-    /// @param reserved The reserved state this direction reaches on a PUSH_PROMISE.
+    /// @param params The frame, the current state and this direction's half-closed and reserved states.
     /// @return The state to move to.
     /// @reference RFC 9113 section 5.1, stream states.
-    [[nodiscard]] static constexpr stream_state after_idle(const frame_type type, const bool end_stream,
-                                                           const stream_state current, const stream_state half_closed,
-                                                           const stream_state reserved) noexcept
+    [[nodiscard]] static constexpr stream_state after_idle(const after_idle_params& params) noexcept
     {
-        switch (type)
+        switch (params.type)
         {
             case frame_type::headers:
-                return end_stream ? half_closed : stream_state::open;
+                return params.end_stream ? params.half_closed : stream_state::open;
             case frame_type::push_promise:
-                return reserved;
+                return params.reserved;
             default:
-                return current;
+                return params.current;
         }
     }
 
@@ -52,8 +64,8 @@ namespace kmx::aio::http2
     /// @param finished The state reached once this direction is done.
     /// @return The state to move to.
     /// @note A reset closes the stream whatever else the frame said.
-    [[nodiscard]] static constexpr stream_state after_data(const frame_type type, const bool end_stream,
-                                                           const stream_state current, const stream_state finished) noexcept
+    [[nodiscard]] static constexpr stream_state after_data(const frame_type type, const bool end_stream, const stream_state current,
+                                                           const stream_state finished) noexcept
     {
         if (type == frame_type::rst_stream)
             return stream_state::closed;
@@ -66,7 +78,11 @@ namespace kmx::aio::http2
         switch (state_)
         {
             case stream_state::idle:
-                state_ = after_idle(type, end_stream, state_, stream_state::half_closed_local, stream_state::reserved_local);
+                state_ = after_idle({.type = type,
+                                     .end_stream = end_stream,
+                                     .current = state_,
+                                     .half_closed = stream_state::half_closed_local,
+                                     .reserved = stream_state::reserved_local});
                 break;
             case stream_state::reserved_local:
                 state_ = after_reserved(type, state_, stream_state::half_closed_remote);
@@ -92,7 +108,11 @@ namespace kmx::aio::http2
         switch (state_)
         {
             case stream_state::idle:
-                state_ = after_idle(type, end_stream, state_, stream_state::half_closed_remote, stream_state::reserved_remote);
+                state_ = after_idle({.type = type,
+                                     .end_stream = end_stream,
+                                     .current = state_,
+                                     .half_closed = stream_state::half_closed_remote,
+                                     .reserved = stream_state::reserved_remote});
                 break;
             case stream_state::reserved_remote:
                 state_ = after_reserved(type, state_, stream_state::half_closed_local);
@@ -112,4 +132,4 @@ namespace kmx::aio::http2
         }
     }
 
-} // namespace kmx::aio::http2
+}

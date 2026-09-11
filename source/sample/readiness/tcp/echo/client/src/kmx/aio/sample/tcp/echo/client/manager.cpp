@@ -1,15 +1,20 @@
-#include <kmx/aio/error_code.hpp>
+/// @file src/kmx/aio/sample/tcp/echo/client/manager.cpp
+/// @brief Readiness-model TCP echo client stress test: non-blocking connects, random data both ways, live stats.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/tcp/echo/client/manager.hpp>
-#include <kmx/aio/sample/tcp/echo/common.hpp>
+#ifndef PCH
+    #include <kmx/aio/error_code.hpp>
+    #include <kmx/aio/sample/tcp/echo/common.hpp>
 
-#include <algorithm>
-#include <csignal>
-#include <iostream>
-#include <span>
-#include <string_view>
-#include <sys/socket.h>
-#include <thread>
-#include <vector>
+    #include <algorithm>
+    #include <csignal>
+    #include <iostream>
+    #include <span>
+    #include <string_view>
+    #include <thread>
+    #include <vector>
+    #include <sys/socket.h>
+#endif
 
 namespace kmx::aio::sample::tcp::echo::client
 {
@@ -357,7 +362,6 @@ namespace kmx::aio::sample::tcp::echo::client
             if (snapshot.empty())
                 std::cout << "(no active connections)\n";
             else
-            {
                 for (const auto& entry: snapshot)
                 {
                     std::string_view state = "-";
@@ -373,7 +377,6 @@ namespace kmx::aio::sample::tcp::echo::client
                     std::cout << std::format("Connection {:07}: TX {:>10} | RX {:>10} | EC {:05} | {}\n", entry.worker_id,
                                              common::format_bytes(entry.tx), common::format_bytes(entry.rx), entry.errors, state);
                 }
-            }
 
             std::cout << "────────────────────────────────────────────────────────────────────────\n";
             std::cout << std::format("Client Totals: TX {} | RX {} | EC {} | Completed {} | Total {} | OK {} | Fail {}\n",
@@ -404,4 +407,4 @@ namespace kmx::aio::sample::tcp::echo::client
         std::cout << "╚════════════════════════════════════════╝\n";
     }
 
-} // namespace kmx::aio::sample::tcp::echo::client
+}

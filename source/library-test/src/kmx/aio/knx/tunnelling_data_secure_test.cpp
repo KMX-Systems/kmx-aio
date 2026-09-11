@@ -1,27 +1,37 @@
-/// @file kmx/aio/knx/tunnelling_data_secure_test.cpp
+/// @file src/kmx/aio/knx/tunnelling_data_secure_test.cpp
 /// @brief KNX Data Secure end to end through a tunnel: the in-tree client secures, the in-tree server passes, a device opens.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 /// @details The server does not apply Data Secure, as a gateway does not: it hands the secured APDU to its handler untouched.
 /// The handler plays the bus device, with a Data Secure context of its own. It opens the client's switch-on and answers
 /// with a secured switch-off, which the client opens before handing it over.
-/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-#include <catch2/catch_test_macros.hpp>
+#ifndef PCH
+    #include <kmx/aio/completion/executor.hpp>
+    #include <kmx/aio/completion/knx/tcp_server.hpp>
+    #include <kmx/aio/completion/knx/tcp_transport.hpp>
+    #include <kmx/aio/completion/timer.hpp>
+    #include <kmx/aio/knx/apdu_payload.hpp>
+    #include <kmx/aio/knx/cemi.hpp>
+    #include <kmx/aio/knx/cemi_frame.hpp>
+    #include <kmx/aio/knx/data_secure.hpp>
+    #include <kmx/aio/knx/data_secure/context.hpp>
+    #include <kmx/aio/knx/data_secure/sequence_store.hpp>
+    #include <kmx/aio/knx/dpt.hpp>
+    #include <kmx/aio/knx/generic_server.hpp>
+    #include <kmx/aio/knx/keyring/document.hpp>
+    #include <kmx/aio/knx/server.hpp>
+    #include <kmx/aio/knx/telegram.hpp>
+    #include <kmx/aio/knx/tunnelling_client.hpp>
+    #include <kmx/aio/test/knx/secure_vectors.hpp>
 
-#include <kmx/aio/completion/executor.hpp>
-#include <kmx/aio/completion/knx/tcp_server.hpp>
-#include <kmx/aio/completion/knx/tcp_transport.hpp>
-#include <kmx/aio/completion/timer.hpp>
-#include <kmx/aio/knx/cemi.hpp>
-#include <kmx/aio/knx/client.hpp>
-#include <kmx/aio/knx/data_secure.hpp>
-#include <kmx/aio/knx/server.hpp>
-#include <kmx/aio/test/knx/secure_vectors.hpp>
+    #include <catch2/catch_test_macros.hpp>
 
-#include <array>
-#include <atomic>
-#include <chrono>
-#include <cstdint>
-#include <netinet/in.h>
-#include <vector>
+    #include <array>
+    #include <atomic>
+    #include <chrono>
+    #include <cstdint>
+    #include <vector>
+    #include <netinet/in.h>
+#endif
 
 namespace kmx::aio::test::knx::tunnelling_data_secure_test
 {
@@ -88,7 +98,7 @@ namespace kmx::aio::test::knx::tunnelling_data_secure_test
         }
 
         /// @brief Indicates whether a cEMI frame carries A_SecureService.
-        [[nodiscard]] bool carries_secure_service(const cspan_uint8_t cemi) noexcept
+        [[nodiscard]] bool protected_telegram(const cspan_uint8_t cemi) noexcept
         {
             const auto frame = kn::cemi::decode(cemi);
             return frame.has_value() && (frame->application_service == kn::apci::secure_service);
@@ -99,14 +109,17 @@ namespace kmx::aio::test::knx::tunnelling_data_secure_test
         {
             return [&server, &context, &observed](kn::server_event event) -> task<void>
             {
-                observed.secured_on_the_wire = carries_secure_service(event.cemi_bytes);
+                observed.secured_on_the_wire = protected_telegram(event.cemi_bytes);
                 const auto opened = context.open_frame(event.cemi_bytes);
                 const auto frame = opened.has_value() ? kn::cemi::decode(*opened) : std::unexpected(kn::error::malformed_frame);
                 observed.device_opened = frame.has_value() && (frame->application_service == kn::apci::group_value_write) &&
                                          (frame->compact_value == 1u) && (frame->source == tunnel_address);
                 std::array<std::uint8_t, kn::cemi::max_l_data_size> answer {};
-                const auto size = kn::cemi::encode(answer, kn::cemi_message_code::l_data_ind, device_address, kn::group_address {group},
-                                                   kn::apci::group_value_write, kn::apdu_payload::compact(0u), kn::l_data_options {});
+                const auto size = kn::cemi::encode(answer, {.code = kn::cemi_message_code::l_data_ind,
+                                                            .source = device_address,
+                                                            .destination = kn::group_address {group}.value(),
+                                                            .service = kn::apci::group_value_write,
+                                                            .payload = kn::apdu_payload::compact(0u)});
                 if (!size.has_value())
                     co_return;
                 const auto secured = context.secure_frame({answer.data(), *size});
@@ -126,6 +139,7 @@ namespace kmx::aio::test::knx::tunnelling_data_secure_test
                 completion::timer timer {executor};
                 static_cast<void>(co_await timer.wait(std::chrono::milliseconds {5}));
             }
+
             co_return true;
         }
 

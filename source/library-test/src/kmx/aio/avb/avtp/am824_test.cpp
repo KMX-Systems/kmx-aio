@@ -1,27 +1,27 @@
-/// @file avb/avtp/am824_test.cpp
+/// @file src/kmx/aio/avb/avtp/am824_test.cpp
 /// @brief Unit tests for AVTP AAF/AM824 framing helpers.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
-
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <span>
-#include <vector>
-
-#include <catch2/catch_test_macros.hpp>
-
 #include <kmx/aio/avb/avtp/am824.hpp>
+#ifndef PCH
+    #include <catch2/catch_test_macros.hpp>
+
+    #include <array>
+    #include <cstddef>
+    #include <cstdint>
+    #include <span>
+    #include <vector>
+#endif
 
 namespace kmx::aio::test::avb::avtp::am824_test
 {
-    using kmx::aio::avb::avb_timestamp_t;
     using kmx::aio::avb::stream_id_t;
+    using kmx::aio::avb::tai_timestamp_t;
     using kmx::aio::avb::avtp::build_am824_frame;
-    using kmx::aio::avb::avtp::expand_avtp_timestamp_32;
+    using kmx::aio::avb::avtp::expand_timestamp_32;
     using kmx::aio::avb::avtp::header_size;
     using kmx::aio::avb::avtp::parse_am824_frame;
     using kmx::aio::avb::avtp::subtype_aaf;
-    using kmx::aio::avb::avtp::to_avtp_timestamp_32;
+    using kmx::aio::avb::avtp::to_timestamp_32;
 
     TEST_CASE("avtp am824 build and parse roundtrip", "[avb][avtp][am824]")
     {
@@ -35,7 +35,7 @@ namespace kmx::aio::test::avb::avtp::am824_test
         };
 
         const std::uint8_t seq = 77u;
-        const avb_timestamp_t presentation_ns = 0x1234'5678'9ABC'DEF0ULL;
+        const tai_timestamp_t presentation_ns = 0x1234'5678'9ABC'DEF0ULL;
 
         const auto frame_res = build_am824_frame(sid, seq, presentation_ns, cspan_byte_t(payload));
         REQUIRE(frame_res.has_value());
@@ -47,7 +47,7 @@ namespace kmx::aio::test::avb::avtp::am824_test
         REQUIRE(parsed.stream_id.source_mac == sid.source_mac);
         REQUIRE(parsed.stream_id.unique_id == sid.unique_id);
         REQUIRE(parsed.sequence_num == seq);
-        REQUIRE(parsed.avtp_timestamp_32 == to_avtp_timestamp_32(presentation_ns));
+        REQUIRE(parsed.avtp_timestamp_32 == to_timestamp_32(presentation_ns));
         REQUIRE(parsed.payload.size() == payload.size());
 
         for (std::size_t i = 0u; i < payload.size(); ++i)
@@ -90,13 +90,13 @@ namespace kmx::aio::test::avb::avtp::am824_test
 
     TEST_CASE("avtp timestamp expansion handles nearby 32-bit wrap", "[avb][avtp][am824]")
     {
-        const avb_timestamp_t ref_forward = 0x0000'0001'FFFF'FFF0ULL;
-        const auto expanded_forward = expand_avtp_timestamp_32(0x0000'0020u, ref_forward);
+        const tai_timestamp_t ref_forward = 0x0000'0001'FFFF'FFF0ULL;
+        const auto expanded_forward = expand_timestamp_32(0x0000'0020u, ref_forward);
         REQUIRE(expanded_forward == 0x0000'0002'0000'0020ULL);
 
-        const avb_timestamp_t ref_backward = 0x0000'0002'0000'0010ULL;
-        const auto expanded_backward = expand_avtp_timestamp_32(0xFFFF'FFF0u, ref_backward);
+        const tai_timestamp_t ref_backward = 0x0000'0002'0000'0010ULL;
+        const auto expanded_backward = expand_timestamp_32(0xFFFF'FFF0u, ref_backward);
         REQUIRE(expanded_backward == 0x0000'0001'FFFF'FFF0ULL);
     }
 
-} // namespace kmx::aio::test::avb::avtp::am824_test
+}

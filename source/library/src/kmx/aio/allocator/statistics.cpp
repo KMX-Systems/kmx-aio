@@ -1,8 +1,10 @@
-/// @file aio/allocator/statistics.cpp
+/// @file src/kmx/aio/allocator/statistics.cpp
+/// @brief The compiled body of the process-wide coroutine-frame allocation statistics.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/allocator/statistics.hpp>
-
-#include <kmx/aio/allocator/detail/thread_state.hpp>
+#ifndef PCH
+    #include <kmx/aio/allocator/detail/thread_state.hpp>
+#endif
 
 namespace kmx::aio::allocator
 {
@@ -13,12 +15,9 @@ namespace kmx::aio::allocator
     {
         detail::reset_allocations();
     }
-} // namespace kmx::aio::allocator
 
-namespace kmx::aio
-{
-    allocator::statistics& get_allocator_statistics() noexcept
+    statistics& get_statistics() noexcept
     {
-        return allocator::g_statistics;
+        return g_statistics;
     }
-} // namespace kmx::aio
+}

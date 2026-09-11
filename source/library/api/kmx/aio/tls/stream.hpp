@@ -1,13 +1,13 @@
-/// @file aio/tls/stream.hpp
+/// @file api/kmx/aio/tls/stream.hpp
 /// @brief Generic TLS stream template using BoringSSL Memory BIOs.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
+    #include <kmx/aio/tls/basic_stream.hpp>
+
     #include <optional>
     #include <span>
     #include <utility>
-
-    #include <kmx/aio/tls/basic_stream.hpp>
 #endif
 
 namespace kmx::aio::tls
@@ -90,4 +90,4 @@ namespace kmx::aio::tls
         std::optional<InnerStream> inner_;
     };
 
-} // namespace kmx::aio::tls
+}

@@ -1,4 +1,4 @@
-/// @file aio/ipv6.hpp
+/// @file api/kmx/aio/ipv6.hpp
 /// @brief IPv6 address storage and view types.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
@@ -32,4 +32,4 @@ namespace kmx::aio::ipv6
     /// @return true if parsing succeeded, false otherwise.
     [[nodiscard]] bool parse_address(std::string_view text, storage_t& out) noexcept;
 
-} // namespace kmx::aio::ipv6
+}

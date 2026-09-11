@@ -1,11 +1,15 @@
+/// @file src/kmx/aio/someip/client.cpp
+/// @brief The compiled body of the backend-neutral SOME/IP client facade.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/someip/client.hpp>
-#include <kmx/aio/someip/error.hpp>
-#include <kmx/aio/someip/vsomeip_compat.hpp>
+#ifndef PCH
+    #include <kmx/aio/someip/error.hpp>
+    #include <kmx/aio/someip/vsomeip_compat/client_runtime.hpp>
 
-#include <optional>
-#include <unordered_set>
-#include <utility>
+    #include <optional>
+    #include <unordered_set>
+    #include <utility>
+#endif
 
 namespace kmx::aio::someip
 {
@@ -19,7 +23,7 @@ namespace kmx::aio::someip
         explicit impl(client_config cfg) noexcept: config(std::move(cfg)), runtime(config.application_name, config.config_file_path) {}
 
         client_config config;
-        compat::client_runtime runtime;
+        vsomeip_compat::client_runtime runtime;
         mutable statistics stats;
         bool started {};
         std::unordered_set<std::uint32_t> available_services;
@@ -57,7 +61,7 @@ namespace kmx::aio::someip
         if (!impl_->started)
             co_return std::unexpected(make_error_code(error::stopped));
 
-        (void) impl_->runtime.stop();
+        static_cast<void>(impl_->runtime.stop());
         impl_->started = false;
         impl_->available_services.clear();
         co_return expected_void_t {};
@@ -122,8 +126,13 @@ namespace kmx::aio::someip
         }
 #endif
 
-        const auto response =
-            impl_->runtime.call_method(service_id, instance_id, method_id, std::move(payload), impl_->config.connect_timeout);
+        const auto response = impl_->runtime.call_method({
+            .service_id = service_id,
+            .instance_id = instance_id,
+            .method_id = method_id,
+            .payload = std::move(payload),
+            .timeout = impl_->config.connect_timeout,
+        });
         if (!response.has_value())
             co_return std::unexpected(make_error_code(error::timed_out));
 
@@ -157,15 +166,15 @@ namespace kmx::aio::someip
     }
 
 #if !defined(KMX_AIO_HAS_VSOMEIP_HEADER)
-    void client::__kmx_test_inject_service_available(const service_id_t service_id, const instance_id_t instance_id) noexcept
+    void client::test_inject_service_available(const service_id_t service_id, const instance_id_t instance_id) noexcept
     {
         impl_->available_services.insert(service_key(service_id, instance_id));
     }
 
-    void client::__kmx_test_set_next_call_status(const std::uint32_t status) noexcept
+    void client::test_set_next_call_status(const std::uint32_t status) noexcept
     {
         impl_->next_call_status = status;
     }
 #endif
 
-} // namespace kmx::aio::someip
+}

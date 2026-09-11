@@ -1,19 +1,26 @@
-#include <kmx/aio/readiness/tcp/listener.hpp>
+/// @file src/kmx/aio/sample/tls/h2_alpn_server/manager.cpp
+/// @brief Readiness-model h2 ALPN server: selects h2, checks the preface and SETTINGS, sends a hard-coded response.
+/// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #include <kmx/aio/sample/tls/h2_alpn_server/manager.hpp>
+#ifndef PCH
+    #include <kmx/aio/readiness/tcp/listener.hpp>
 
-#include <array>
-#include <csignal>
-#include <openssl/err.h>
-#include <openssl/ssl.h>
-#include <span>
-#include <string_view>
+    #include <openssl/err.h>
+    #include <openssl/ssl.h>
 
-namespace kmx::aio::sample::tls::h2_alpn_readiness_server
+    #include <array>
+    #include <csignal>
+    #include <span>
+    #include <string_view>
+#endif
+
+namespace kmx::aio::sample::tls::h2_alpn_server
 {
-    static int alpn_select_cb(SSL*, const unsigned char** out, unsigned char* outlen, const unsigned char* in, unsigned inlen, void*)
+    static int select_protocol(SSL*, const unsigned char** out, unsigned char* outlen, const unsigned char* in, unsigned inlen, void*)
     {
         static const unsigned char alpn_h2[] = {2, 'h', '2'};
-        if (::SSL_select_next_proto((unsigned char**) out, outlen, alpn_h2, sizeof(alpn_h2), in, inlen) != OPENSSL_NPN_NEGOTIATED)
+        if (::SSL_select_next_proto(const_cast<unsigned char**>(out), outlen, alpn_h2, sizeof(alpn_h2), in, inlen) !=
+            OPENSSL_NPN_NEGOTIATED)
             return SSL_TLSEXT_ERR_NOACK;
 
         return SSL_TLSEXT_ERR_OK;
@@ -37,7 +44,7 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
         if (!ssl_ctx_)
             return false;
 
-        ::SSL_CTX_set_alpn_select_cb(ssl_ctx_, alpn_select_cb, nullptr);
+        ::SSL_CTX_set_alpn_select_cb(ssl_ctx_, select_protocol, nullptr);
 
         if (::SSL_CTX_use_certificate_chain_file(ssl_ctx_, config_.cert_file.c_str()) <= 0)
             return false;
@@ -193,4 +200,4 @@ namespace kmx::aio::sample::tls::h2_alpn_readiness_server
                 exec->stop();
         }
     }
-} // namespace kmx::aio::sample::tls::h2_alpn_readiness_server
+}

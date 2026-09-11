@@ -31,10 +31,17 @@ StaticLibrary {
         return libs;
     }
     install: true
+    // A qbs "**.cpp" matches only the named directory, not the ones below it, so each subdirectory is listed.
     files: [
         "../api/kmx/aio/someip/**.hpp",
         "../inc/kmx/aio/someip/**.hpp",
+        "../inc/kmx/aio/someip/detail/**.hpp",
+        "../inc/kmx/aio/someip/vsomeip_compat/**.hpp",
+        "../inc/kmx/aio/someip/vsomeip_compat/detail/**.hpp",
         "../src/kmx/aio/someip/**.cpp",
+        "../src/kmx/aio/someip/detail/**.cpp",
+        "../src/kmx/aio/someip/vsomeip_compat/**.cpp",
+        "../src/kmx/aio/someip/vsomeip_compat/detail/**.cpp",
     ]
 
     Export {

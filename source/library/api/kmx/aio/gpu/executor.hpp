@@ -1,22 +1,25 @@
-/// @file aio/gpu/executor.hpp
+/// @file api/kmx/aio/gpu/executor.hpp
 /// @brief GPU completion-model executor using CUDA streams and events.
 /// @copyright Copyright (C) 2026 - present KMX Systems. All rights reserved.
 #pragma once
 #include <kmx/aio/config.hpp>
 #if defined(KMX_AIO_FEATURE_CUDA)
     #ifndef PCH
+        #include <kmx/aio/executor_base.hpp>
+        #include <kmx/aio/gpu/basic_types.hpp>
+        #include <kmx/aio/gpu/statistics.hpp>
+        #include <kmx/aio/promise_base.hpp>
+        #include <kmx/aio/task.hpp>
+
         #include <atomic>
         #include <coroutine>
         #include <cstdint>
         #include <deque>
+        #include <exception>
         #include <memory>
         #include <mutex>
         #include <stop_token>
         #include <unordered_map>
-
-        #include <kmx/aio/executor_base.hpp>
-        #include <kmx/aio/gpu/basic_types.hpp>
-        #include <kmx/aio/task.hpp>
     #endif
 
 namespace kmx::aio::gpu
@@ -27,29 +30,7 @@ namespace kmx::aio::gpu
         std::uint32_t max_events = 256u; ///< Maximum GPU events to poll per cycle.
         std::uint32_t thread_count = 1u; ///< Number of worker threads for coroutine resumption.
         std::int16_t core_id = -1;       ///< CPU core affinity (-1 = no pinning). Range: -1 to 16000.
-        std::int16_t gpu_device {};     ///< GPU device index. Range: 0 to 128. Use std::int16_t for alignment.
-    };
-
-    /// @brief Statistics for GPU operations and executor performance.
-    struct statistics
-    {
-        std::atomic_uint64_t total_events_created {};   ///< Total GPU events created.
-        std::atomic_uint64_t total_events_completed {}; ///< Total GPU events signaled.
-        std::atomic_uint64_t total_tasks_spawned {};    ///< Total top-level tasks spawned.
-        std::atomic_uint64_t total_tasks_completed {};  ///< Total top-level tasks completed.
-        std::atomic_uint64_t error_count {};            ///< Total GPU errors encountered.
-        std::atomic_uint64_t poll_timeout_count {};     ///< Times event polling timed out.
-
-        /// @brief Default constructor (move-only, deletedcopy).
-        statistics() noexcept = default;
-
-        /// @brief Non-copyable (contains atomics).
-        statistics(const statistics&) = delete;
-        /// @brief Non-copyable (contains atomics).
-        statistics& operator=(const statistics&) = delete;
-
-        /// @brief Resets all counters to zero.
-        void reset() noexcept;
+        std::int16_t gpu_device {};      ///< GPU device index. Range: 0 to 128. Use std::int16_t for alignment.
     };
 
     /// @brief GPU completion-model executor using CUDA streams and events.
@@ -151,14 +132,14 @@ namespace kmx::aio::gpu
 
                 /// @brief Suspends before the body runs, so the caller decides when to start it.
                 /// @return An always-suspending awaiter.
-                std::suspend_always initial_suspend() const noexcept { return {}; }
+                [[nodiscard]] std::suspend_always initial_suspend() const noexcept { return {}; }
 
                 /// @brief Final awaiter that destroys the coroutine frame instead of resuming anyone.
                 struct final_awaiter
                 {
                     /// @brief Never completes synchronously, so @ref await_suspend always runs.
                     /// @return Always `false`.
-                    bool await_ready() const noexcept { return false; }
+                    [[nodiscard]] bool await_ready() const noexcept { return false; }
                     /// @brief Destroys the finished coroutine frame.
                     /// @param h The handle of the coroutine that just completed.
                     void await_suspend(std::coroutine_handle<promise_type> h) const noexcept { h.destroy(); }
@@ -168,7 +149,7 @@ namespace kmx::aio::gpu
 
                 /// @brief Returns the awaiter that tears the frame down.
                 /// @return The @ref final_awaiter.
-                final_awaiter final_suspend() const noexcept { return {}; }
+                [[nodiscard]] final_awaiter final_suspend() const noexcept { return {}; }
                 /// @brief Terminates: a detached task whose frame is about to be destroyed cannot propagate.
                 void unhandled_exception() noexcept { std::terminate(); }
                 /// @brief Completes the coroutine; the task itself returns nothing.
@@ -231,5 +212,5 @@ namespace kmx::aio::gpu
         void finalize() noexcept;
     };
 
-} // namespace kmx::aio::gpu
+}
 #endif // KMX_AIO_FEATURE_CUDA
